@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    // Disable incremental for the production build: nest-cli's `deleteOutDir`
+    // wipes dist/ but not a root-level .tsbuildinfo, so an incremental rebuild
+    // would skip re-emitting "unchanged" files (e.g. main.js) and leave dist/
+    // incomplete. A clean full emit every build is what `node dist/main` and the
+    // Docker image expect. (Dev `nest start --watch` still uses tsconfig.json's
+    // incremental.)
+    "incremental": false
+  },
+  "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
+}

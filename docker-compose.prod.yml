@@ -1,0 +1,147 @@
+# Production stack for Dokploy (deployment type: "Docker Compose").
+#
+# This single file deploys the whole app together: database + API + web.
+# Everything the student needs to fill in lives in environment variables —
+# see .env.production.example. URLs (DATABASE_URL, CORS_ORIGIN,
+# NEXT_PUBLIC_API_URL) are DERIVED here, so they should NOT be set by hand.
+#
+# Routing/HTTPS is handled by Dokploy's built-in Traefik proxy via the labels
+# below, driven by WEB_DOMAIN / API_DOMAIN. If certificates don't issue, you can
+# instead attach the domains from the Dokploy "Domains" tab (see docs/DEPLOYMENT.md).
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-crm_academy}
+      POSTGRES_USER: ${POSTGRES_USER:-crm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crm} -d ${POSTGRES_DB:-crm_academy}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      # Connects to the db service over the private internal network (port 5432).
+      DATABASE_URL: postgresql://${POSTGRES_USER:-crm}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-crm_academy}
+      # The deployed frontend origin, so the browser is allowed to call the API.
+      CORS_ORIGIN: https://${WEB_DOMAIN}
+      PORT: "3001"
+      # ─── Authentication (login + roles) ───
+      # JWT_SECRET is REQUIRED in production — the API refuses to start without it.
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN_SECONDS: ${JWT_EXPIRES_IN_SECONDS:-86400}
+      # Served over HTTPS in production → mark the auth cookie Secure.
+      COOKIE_SECURE: "true"
+      # First admin, created on the first run against an empty users table.
+      # ADMIN_PASSWORD is REQUIRED in production — the API refuses to bootstrap an
+      # admin with the public default password.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@crmacademy.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # Business timezone for date-sensitive logic (e.g. the "appointments today"
+      # counter). IANA name, e.g. Europe/Madrid.
+      BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-Europe/Madrid}
+      # Demo data is for first-run/local exploration only — never seed a real
+      # business deployment with sample contacts/appointments.
+      SEED_DEMO_DATA: "false"
+      # AI model + WhatsApp keys are normally configured PER AGENT from the UI.
+      # These are optional global fallbacks — leave them empty if you set them in the app.
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      AGENT_MODEL: ${AGENT_MODEL:-openai/gpt-4o-mini}
+      YCLOUD_API_KEY: ${YCLOUD_API_KEY:-}
+      YCLOUD_WEBHOOK_SECRET: ${YCLOUD_WEBHOOK_SECRET:-}
+      YCLOUD_WHATSAPP_NUMBER: ${YCLOUD_WHATSAPP_NUMBER:-}
+    healthcheck:
+      # Readiness: process up AND database reachable. node is in the image, so no
+      # curl/wget needed. start_period gives migrations time to run on first boot.
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3001/healthz/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - internal
+      - dokploy-network
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      # HTTP -> HTTPS redirect
+      - traefik.http.routers.crm-api-http.rule=Host(`${API_DOMAIN}`)
+      - traefik.http.routers.crm-api-http.entrypoints=web
+      - traefik.http.routers.crm-api-http.middlewares=crm-api-redirect
+      - traefik.http.middlewares.crm-api-redirect.redirectscheme.scheme=https
+      # HTTPS (Let's Encrypt cert issued automatically)
+      - traefik.http.routers.crm-api.rule=Host(`${API_DOMAIN}`)
+      - traefik.http.routers.crm-api.entrypoints=websecure
+      - traefik.http.routers.crm-api.tls.certresolver=letsencrypt
+      - traefik.http.services.crm-api.loadbalancer.server.port=3001
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the bundle at build time so the browser calls the right API.
+        NEXT_PUBLIC_API_URL: https://${API_DOMAIN}
+    restart: unless-stopped
+    depends_on:
+      # Wait until the API is actually ready (DB migrated) before starting web.
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3000',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - dokploy-network
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      # HTTP -> HTTPS redirect
+      - traefik.http.routers.crm-web-http.rule=Host(`${WEB_DOMAIN}`)
+      - traefik.http.routers.crm-web-http.entrypoints=web
+      - traefik.http.routers.crm-web-http.middlewares=crm-web-redirect
+      - traefik.http.middlewares.crm-web-redirect.redirectscheme.scheme=https
+      # HTTPS (Let's Encrypt cert issued automatically)
+      - traefik.http.routers.crm-web.rule=Host(`${WEB_DOMAIN}`)
+      - traefik.http.routers.crm-web.entrypoints=websecure
+      - traefik.http.routers.crm-web.tls.certresolver=letsencrypt
+      - traefik.http.services.crm-web.loadbalancer.server.port=3000
+
+volumes:
+  postgres_data:
+
+networks:
+  # Private network for api <-> db (not exposed to the internet).
+  internal:
+  # Shared network created by Dokploy; the Traefik proxy lives here.
+  dokploy-network:
+    external: true

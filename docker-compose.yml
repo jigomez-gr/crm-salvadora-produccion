@@ -1,0 +1,21 @@
+# ⚠️ SOLO DESARROLLO LOCAL — arranca únicamente la base de datos en tu ordenador
+# para poder ejecutar la app en local con `pnpm dev`.
+# Para DESPLEGAR en un servidor se usa OTRO archivo: docker-compose.prod.yml
+# Si solo quieres desplegar (no desarrollar en local), ignora este archivo.
+
+services:
+  db:
+    image: postgres:17
+    container_name: crm_academy_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: crm_academy
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: crm
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

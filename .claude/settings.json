@@ -1,0 +1,32 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/block-npm.cjs\"",
+            "timeout": 10,
+            "statusMessage": "Bloqueando npm/npx (este proyecto usa pnpm)"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/sync-agents-md.js\"",
+            "timeout": 10,
+            "statusMessage": "Sincronizando AGENTS.md"
+          }
+        ]
+      }
+    ]
+  }
+}

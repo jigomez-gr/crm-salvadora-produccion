@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.next/
+next-env.d.ts
+.env
+.env.*
+!.env.example
+!.env.production.example
+*.log
+.playwright-mcp/
+*.png
+*.exe
+# Local AI runtime state
+.atl/
