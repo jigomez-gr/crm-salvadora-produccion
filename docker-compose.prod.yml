@@ -14,7 +14,7 @@ services:
     image: postgres:17
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-crm_academy}
+      POSTGRES_DB: ${POSTGRES_DB:-crm_salvadora}
       POSTGRES_USER: ${POSTGRES_USER:-crm}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
@@ -23,7 +23,7 @@ services:
       - internal
     healthcheck:
       test:
-        ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crm} -d ${POSTGRES_DB:-crm_academy}"]
+        ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crm} -d ${POSTGRES_DB:-crm_salvadora}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -38,7 +38,7 @@ services:
     environment:
       NODE_ENV: production
       # Connects to the db service over the private internal network (port 5432).
-      DATABASE_URL: postgresql://${POSTGRES_USER:-crm}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-crm_academy}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-crm}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-crm_salvadora}
       # The deployed frontend origin, so the browser is allowed to call the API.
       CORS_ORIGIN: https://${WEB_DOMAIN}
       PORT: "3001"
@@ -51,7 +51,7 @@ services:
       # First admin, created on the first run against an empty users table.
       # ADMIN_PASSWORD is REQUIRED in production — the API refuses to bootstrap an
       # admin with the public default password.
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@crmacademy.local}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@crmsalvadora.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       # Business timezone for date-sensitive logic (e.g. the "appointments today"
       # counter). IANA name, e.g. Europe/Madrid.

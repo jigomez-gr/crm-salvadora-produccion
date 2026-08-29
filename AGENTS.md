@@ -1,4 +1,4 @@
-# CRM Academy — guide for Claude / AI agents
+# CRM Salvadora — guide for Claude / AI agents
 
 White-label business CRM with AI agents: an **actionable dashboard** (action
 queue + today's agenda + live KPIs, everything deep-linked) and **analytics**

@@ -12,7 +12,7 @@ import { apiFetch } from "@/lib/api";
 import type { PublicBranding } from "@/lib/types";
 
 const DEFAULT_BRANDING: PublicBranding = {
-  businessName: "CRM Academy",
+  businessName: "CRM Salvadora",
   brandColor: "#4f46e5",
   logoUrl: null,
 };

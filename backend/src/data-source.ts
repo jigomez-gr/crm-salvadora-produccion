@@ -29,7 +29,7 @@ export const AppDataSource = new DataSource({
   type: 'postgres',
   url:
     process.env.DATABASE_URL ||
-    'postgresql://crm:crm@localhost:5433/crm_academy',
+    'postgresql://crm:crm@localhost:5432/crm_salvadora',
   entities: [
     Contact,
     Appointment,

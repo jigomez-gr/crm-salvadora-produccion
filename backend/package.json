@@ -1,7 +1,7 @@
 {
-  "name": "crm-academy-backend",
+  "name": "crm-salvadora-backend",
   "version": "0.0.1",
-  "description": "CRM Academy Backend - NestJS + TypeORM + Mastra",
+  "description": "CRM Salvadora Backend - NestJS + TypeORM + Mastra",
   "private": true,
   "packageManager": "pnpm@10.30.3",
   "engines": {

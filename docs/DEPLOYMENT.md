@@ -120,7 +120,7 @@ WEB_DOMAIN=app.tudominio.com
 API_DOMAIN=api.tudominio.com
 
 # Base de datos (usa una contraseña larga e inventada)
-POSTGRES_DB=crm_academy
+POSTGRES_DB=crm_salvadora
 POSTGRES_USER=crm
 POSTGRES_PASSWORD=pon-aqui-una-contrasena-larga
 
@@ -260,7 +260,7 @@ asegurarte de que funciona.
 Crear una copia (genera un archivo `.dump` con fecha):
 
 ```bash
-docker exec $(docker ps -qf name=db) pg_dump -U crm -Fc crm_academy > backup_$(date +%F).dump
+docker exec $(docker ps -qf name=db) pg_dump -U crm -Fc crm_salvadora > backup_$(date +%F).dump
 ```
 
 Restaurar una copia (⚠️ **sobrescribe** los datos actuales — úsalo solo para
@@ -269,10 +269,10 @@ recuperar):
 ```bash
 # Copia el archivo .dump al contenedor y restáuralo
 docker cp backup_2026-01-15.dump $(docker ps -qf name=db):/tmp/restore.dump
-docker exec $(docker ps -qf name=db) pg_restore -U crm -d crm_academy --clean --if-exists /tmp/restore.dump
+docker exec $(docker ps -qf name=db) pg_restore -U crm -d crm_salvadora --clean --if-exists /tmp/restore.dump
 ```
 
-> Sustituye `crm` y `crm_academy` si cambiaste `POSTGRES_USER` / `POSTGRES_DB`.
+> Sustituye `crm` y `crm_salvadora` si cambiaste `POSTGRES_USER` / `POSTGRES_DB`.
 > Para automatizarlo, programa el comando de copia con `cron` en el VPS y sube el
 > archivo a un almacenamiento externo (que no esté en el mismo servidor).
 

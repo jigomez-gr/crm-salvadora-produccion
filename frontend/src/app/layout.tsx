@@ -9,8 +9,8 @@ import { BrandingProvider } from "@/contexts/BrandingContext";
 const geist = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "CRM Academy",
-  description: "CRM empresarial con Agentes de IA",
+  title: "CRM Salvadora",
+  description: "CRM Salvadora con Agentes de IA",
 };
 
 export default function RootLayout({

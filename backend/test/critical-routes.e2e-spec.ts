@@ -116,7 +116,7 @@ describe('Critical routes (e2e)', () => {
 
     it('forces a new user to change password, then enforces their role', async () => {
       const tempPassword = 'TempPass123!';
-      const email = 'e2e-employee@crmacademy.local';
+      const email = 'e2e-employee@crmsalvadora.local';
 
       // Admin creates an employee — the typed password is a temporary handoff.
       const created = await request(server())
@@ -160,7 +160,7 @@ describe('Critical routes (e2e)', () => {
 
     it('invalidates a live session the instant an admin resets that password', async () => {
       const pw = 'ResetMe123!';
-      const email = 'e2e-reset@crmacademy.local';
+      const email = 'e2e-reset@crmsalvadora.local';
 
       const created = await request(server())
         .post('/api/users')

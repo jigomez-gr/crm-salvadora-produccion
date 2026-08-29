@@ -6,10 +6,10 @@
 services:
   db:
     image: postgres:17
-    container_name: crm_academy_db
+    container_name: crm_salvadora_db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: crm_academy
+      POSTGRES_DB: crm_salvadora
       POSTGRES_USER: crm
       POSTGRES_PASSWORD: crm
     ports:

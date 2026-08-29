@@ -45,7 +45,7 @@ export class SettingsService {
   async update(dto: UpdateSettingsDto): Promise<AppSettings> {
     const settings = await this.get();
     if (dto.businessName !== undefined)
-      settings.businessName = dto.businessName.trim() || 'CRM Academy';
+      settings.businessName = dto.businessName.trim() || 'CRM Salvadora';
     if (dto.brandColor !== undefined) settings.brandColor = dto.brandColor;
     if (dto.logoUrl !== undefined)
       settings.logoUrl = dto.logoUrl === '' ? null : dto.logoUrl;

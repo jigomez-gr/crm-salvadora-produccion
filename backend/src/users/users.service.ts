@@ -68,14 +68,14 @@ export class UsersService implements OnModuleInit {
     const count = await this.usersRepo.count();
     if (count > 0) return;
 
-    const email = (process.env.ADMIN_EMAIL || 'admin@crmacademy.local')
+    const email = (process.env.ADMIN_EMAIL || 'admin@crmsalvadora.local')
       .trim()
       .toLowerCase();
     const password = process.env.ADMIN_PASSWORD || DEFAULT_ADMIN_PASSWORD;
     const usingDefaultPassword = !process.env.ADMIN_PASSWORD;
 
     // Never create a public-default-credential admin on a production deployment.
-    // Abort boot with a clear message instead of exposing admin@crmacademy.local
+    // Abort boot with a clear message instead of exposing admin@crmsalvadora.local
     // / Admin1234! on the internet.
     if (usingDefaultPassword && process.env.NODE_ENV === 'production') {
       throw new Error(

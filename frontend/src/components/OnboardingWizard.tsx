@@ -32,7 +32,7 @@ export function OnboardingWizard() {
       .then((s) => {
         if (cancelled || s.onboardingCompleted) return;
         setNeeded(true);
-        setBusinessName(s.businessName === "CRM Academy" ? "" : s.businessName);
+        setBusinessName(s.businessName === "CRM Salvadora" ? "" : s.businessName);
       })
       .catch(() => {});
     return () => {

@@ -27,9 +27,9 @@ export { NestMastraModule };
       ) => {
         const databaseUrl =
           process.env.DATABASE_URL ||
-          'postgresql://crm:crm@localhost:5432/crm_academy';
+          'postgresql://crm:crm@localhost:5432/crm_salvadora';
 
-        const store = new PostgresStore({ id: 'crm-academy', connectionString: databaseUrl });
+        const store = new PostgresStore({ id: 'crm-salvadora', connectionString: databaseUrl });
         const memory = new Memory({ storage: store });
 
         const logger = new Logger('AgentTools');

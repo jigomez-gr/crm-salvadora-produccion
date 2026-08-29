@@ -21,7 +21,7 @@ import { PaymentAccount } from '../common/entities/payment-account.entity';
 async function main() {
   const dataSource = new DataSource({
     type: 'postgres',
-    url: process.env.DATABASE_URL || 'postgresql://crm:crm@localhost:5433/crm_academy',
+    url: process.env.DATABASE_URL || 'postgresql://crm:crm@localhost:5432/crm_salvadora',
     entities: [
       Contact,
       Appointment,

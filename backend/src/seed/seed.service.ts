@@ -111,22 +111,22 @@ export class SeedService implements OnModuleInit {
       },
       {
         name: 'Laura Navarro (Shakti - Resp. Yoga)',
-        email: 'yoga@crmacademy.local',
+        email: 'yoga@crmsalvadora.local',
         role: UserRole.SERVICE_MANAGER,
       },
       {
         name: 'Marcos Benítez (Vikram - Maestro de Gong)',
-        email: 'gong@crmacademy.local',
+        email: 'gong@crmsalvadora.local',
         role: UserRole.SERVICE_MANAGER,
       },
       {
         name: 'Dra. Elena Salgado (Resp. Gestalt y Constelaciones)',
-        email: 'gestalt@crmacademy.local',
+        email: 'gestalt@crmsalvadora.local',
         role: UserRole.SERVICE_MANAGER,
       },
       {
         name: 'Silvia Morales (Resp. Encuentros y Retiros)',
-        email: 'eventos@crmacademy.local',
+        email: 'eventos@crmsalvadora.local',
         role: UserRole.SERVICE_MANAGER,
       },
     ];
@@ -164,7 +164,7 @@ export class SeedService implements OnModuleInit {
         scheduleText: 'Mañanas: Martes y Jueves (9:45, 11:15) | Tardes: Martes (17:00, 18:30, 20:00), Miércoles (20:15), Jueves (16:00, 17:30, 19:00)',
         flyerUrl: '/flyer-parque-granada.png',
         calendarId: 'cal-yoga',
-        managerId: managers['yoga@crmacademy.local'].id,
+        managerId: managers['yoga@crmsalvadora.local'].id,
         requiresApproval: false,
       },
       {
@@ -176,7 +176,7 @@ export class SeedService implements OnModuleInit {
         scheduleText: 'Lunes y Miércoles de 12:00 a 13:00',
         flyerUrl: '/flyer-parque-granada.png',
         calendarId: 'cal-pilates',
-        managerId: managers['yoga@crmacademy.local'].id,
+        managerId: managers['yoga@crmsalvadora.local'].id,
         requiresApproval: false,
       },
       {
@@ -188,7 +188,7 @@ export class SeedService implements OnModuleInit {
         scheduleText: 'Mañanas: Lunes y Viernes de 10:00 a 11:30 | Tardes: Lunes y Miércoles de 20:00 a 21:30',
         flyerUrl: '/flyer-parque-granada.png',
         calendarId: 'cal-ninjutsu',
-        managerId: managers['gong@crmacademy.local'].id,
+        managerId: managers['gong@crmsalvadora.local'].id,
         requiresApproval: false,
       },
       {
@@ -200,7 +200,7 @@ export class SeedService implements OnModuleInit {
         scheduleText: 'Mañanas: Lunes, Miércoles y Viernes de 7:15 a 8:15 | Tardes: Lunes y Miércoles de 19:00 a 20:00',
         flyerUrl: '/flyer-parque-granada.png',
         calendarId: 'cal-funcional',
-        managerId: managers['yoga@crmacademy.local'].id,
+        managerId: managers['yoga@crmsalvadora.local'].id,
         requiresApproval: false,
       },
       {
@@ -212,7 +212,7 @@ export class SeedService implements OnModuleInit {
         scheduleText: 'Martes y Jueves: Daruma (19:00-19:55) | Kaisai (20:00-20:55) | Kobudo (21:00-21:45)',
         flyerUrl: '/flyer-parque-granada.png',
         calendarId: 'cal-orientales',
-        managerId: managers['gong@crmacademy.local'].id,
+        managerId: managers['gong@crmsalvadora.local'].id,
         requiresApproval: false,
       },
       {
@@ -224,7 +224,7 @@ export class SeedService implements OnModuleInit {
         scheduleText: 'Miércoles de 17:30 a 19:00 | Viernes de 10:00 a 11:30',
         flyerUrl: '/flyer-parque-granada.png',
         calendarId: 'cal-taichi',
-        managerId: managers['yoga@crmacademy.local'].id,
+        managerId: managers['yoga@crmsalvadora.local'].id,
         requiresApproval: false,
       },
       {
@@ -236,7 +236,7 @@ export class SeedService implements OnModuleInit {
         scheduleText: 'Lunes de 20:00 a 21:00 | Jueves de 20:30 a 22:00',
         flyerUrl: '/flyer-parque-granada.png',
         calendarId: 'cal-iaido',
-        managerId: managers['gong@crmacademy.local'].id,
+        managerId: managers['gong@crmsalvadora.local'].id,
         requiresApproval: false,
       },
       {
@@ -248,7 +248,7 @@ export class SeedService implements OnModuleInit {
         scheduleText: 'Una sesión al mes en fin de semana (Sábados/Domingos)',
         flyerUrl: '/flyer-parque-granada.png',
         calendarId: 'cal-finde',
-        managerId: managers['eventos@crmacademy.local'].id,
+        managerId: managers['eventos@crmsalvadora.local'].id,
         requiresApproval: true,
       },
       {
@@ -653,12 +653,12 @@ export class SeedService implements OnModuleInit {
       },
       {
         name: 'Ana Beltrán (Recepción y Atención al Paciente)',
-        email: 'recepcion@crmacademy.local',
+        email: 'recepcion@crmsalvadora.local',
         role: UserRole.EMPLOYEE,
       },
       {
         name: 'Marcos Soto (Auxiliar Clínico y Triaje)',
-        email: 'auxiliar@crmacademy.local',
+        email: 'auxiliar@crmsalvadora.local',
         role: UserRole.EMPLOYEE,
       },
     ];

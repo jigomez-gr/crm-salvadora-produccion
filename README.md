@@ -1,4 +1,4 @@
-# CRM Academy
+# CRM Salvadora
 
 CRM empresarial *white-label* con agentes de IA: un panel (dashboard, contactos,
 calendario, conversaciones) y un **agente de reservas** que atiende por WhatsApp,
@@ -92,7 +92,7 @@ Esto levanta PostgreSQL en el puerto `5433` de tu ordenador. (Usa el archivo
 > 1. **Postgres gratis en la nube** (Neon, Supabase o Railway): crea una base de
 >    datos, copia su *connection string* y pégala en `DATABASE_URL` de
 >    `backend/.env`. Sáltate este paso 1.
-> 2. **Instalar PostgreSQL nativo** en tu ordenador y crear la base `crm_academy`.
+> 2. **Instalar PostgreSQL nativo** en tu ordenador y crear la base `crm_salvadora`.
 
 ### 2. Arranca el backend (API + agente)
 
@@ -127,7 +127,7 @@ Abre **`http://localhost:3000`** en el navegador. ¡Listo!
 > `backend/.env`.
 
 > 🔐 **Inicio de sesión.** La app tiene **login con roles**. La primera vez se
-> crea un administrador automáticamente: **`admin@crmacademy.local` / `Admin1234!`**
+> crea un administrador automáticamente: **`admin@crmsalvadora.local` / `Admin1234!`**
 > (cámbialo cuanto antes, o define `ADMIN_EMAIL` y `ADMIN_PASSWORD` en
 > `backend/.env` antes del primer arranque). Hay dos roles: **administrador**
 > (acceso total, incluida la gestión de usuarios) y **empleado** (todo menos la

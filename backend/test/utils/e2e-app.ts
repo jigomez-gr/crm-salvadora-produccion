@@ -19,7 +19,7 @@ import { Client } from 'pg';
  * the schema is built from the entities — no migrations needed for the test DB.
  */
 
-export const E2E_ADMIN_EMAIL = 'e2e-admin@crmacademy.local';
+export const E2E_ADMIN_EMAIL = 'e2e-admin@crmsalvadora.local';
 export const E2E_ADMIN_PASSWORD = 'E2eAdmin123!';
 
 const TEST_DB_NAME = 'crm_e2e_test';
@@ -28,7 +28,7 @@ const TEST_DB_NAME = 'crm_e2e_test';
 const BASE_URL =
   process.env.E2E_DATABASE_URL ||
   process.env.DATABASE_URL ||
-  'postgresql://crm:crm@localhost:5433/crm_academy';
+  'postgresql://crm:crm@localhost:5432/crm_salvadora';
 
 function withDatabase(name: string): string {
   const url = new URL(BASE_URL);

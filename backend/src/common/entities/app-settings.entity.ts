@@ -18,7 +18,7 @@ export class AppSettings {
   id: string;
 
   // Shown in the sidebar, the login screen and the browser title.
-  @Column({ default: 'CRM Academy' })
+  @Column({ default: 'CRM Salvadora' })
   businessName: string;
 
   // Primary brand colour (hex), used as the accent for the logo mark.
