@@ -10,6 +10,10 @@ next-env.d.ts
 *.log
 .playwright-mcp/
 *.png
+!frontend/public/*.png
 *.exe
 # Local AI runtime state
 .atl/
+backups/
+*.sql
+*.dump

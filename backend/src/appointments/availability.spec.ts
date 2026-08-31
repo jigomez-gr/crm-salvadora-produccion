@@ -157,4 +157,41 @@ describe('computeFreeSlots', () => {
       );
     }
   });
+
+  it('keeps group slot available when active appointments are below maxCapacity', () => {
+    const date = new Date('2025-01-06T00:00:00.000Z'); // Monday
+    // 5 existing appointments for yoga class (maxCapacity = 23)
+    const existing = Array.from({ length: 5 }, (_, i) => ({
+      ...makeAppt('2025-01-06T09:00:00.000Z', '2025-01-06T10:00:00.000Z'),
+      id: `yoga-appt-${i + 1}`,
+    }));
+
+    const slots = computeFreeSlots(date, 60, workingHours, existing, {
+      ...UTC_OPTS,
+      maxCapacity: 23,
+    });
+
+    const starts = slots.map((s) => s.startsAt.toISOString());
+    expect(starts).toContain('2025-01-06T09:00:00.000Z');
+  });
+
+  it('excludes group slot when active appointments reach maxCapacity', () => {
+    const date = new Date('2025-01-06T00:00:00.000Z'); // Monday
+    // 23 existing appointments for yoga class (maxCapacity = 23)
+    const existing = Array.from({ length: 23 }, (_, i) => ({
+      ...makeAppt('2025-01-06T09:00:00.000Z', '2025-01-06T10:00:00.000Z'),
+      id: `yoga-appt-${i + 1}`,
+    }));
+
+    const slots = computeFreeSlots(date, 60, workingHours, existing, {
+      ...UTC_OPTS,
+      maxCapacity: 23,
+    });
+
+    const starts = slots.map((s) => s.startsAt.toISOString());
+    expect(starts).not.toContain('2025-01-06T09:00:00.000Z');
+    // Other slots without 23 appointments should still be available
+    expect(starts).toContain('2025-01-06T10:00:00.000Z');
+  });
 });
+

@@ -8,6 +8,7 @@ import { useBranding } from "@/contexts/BrandingContext";
 import { Sidebar } from "@/components/Sidebar";
 import { ForcePasswordChange } from "@/components/ForcePasswordChange";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
+import { FooterLegal } from "@/components/FooterLegal";
 
 function FullScreenLoader() {
   return (
@@ -103,7 +104,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
         />
       )}
 
-      <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
+      <main className="min-w-0 flex-1 overflow-y-auto flex flex-col justify-between">
+        <div className="flex-1">{children}</div>
+        <FooterLegal dark={false} className="mt-auto bg-neutral-50/70 border-t border-neutral-200 py-6" />
+      </main>
       {/* First-run setup overlay — only renders itself when an admin still
           needs onboarding. */}
       {user.role === "admin" && <OnboardingWizard />}

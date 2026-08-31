@@ -581,8 +581,8 @@ export class AppointmentsService {
   }
 
   /**
-   * Reject a booking that overlaps an existing non-cancelled appointment on the SAME calendar
-   * OR across any service managed by the same responsible manager.
+   * Reject a booking that exceeds the capacity for an existing non-cancelled appointment slot
+   * on the SAME calendar OR across any service managed by the same responsible manager.
    */
   private async checkOverlap(
     repo: Repository<Appointment>,
@@ -593,8 +593,12 @@ export class AppointmentsService {
     serviceId?: string | null,
   ): Promise<void> {
     let managerServiceIds: string[] = [];
+    let maxCapacity = 1;
     if (serviceId) {
       const targetService = await this.servicesRepo.findOne({ where: { id: serviceId } });
+      if (targetService?.maxCapacity && targetService.maxCapacity > 0) {
+        maxCapacity = targetService.maxCapacity;
+      }
       if (targetService?.managerId) {
         const sharedServices = await this.servicesRepo.find({
           where: { managerId: targetService.managerId },
@@ -623,10 +627,12 @@ export class AppointmentsService {
 
     if (excludeId) qb.andWhere('a.id != :excludeId', { excludeId });
     const conflicts = await qb.getCount();
-    if (conflicts > 0) {
-      throw new ConflictException(
-        'Ese horario ya está ocupado en este calendario o por el responsable del servicio. Elige otro hueco libre.',
-      );
+    if (conflicts >= maxCapacity) {
+      const message =
+        maxCapacity > 1
+          ? `Ese horario ya ha alcanzado el aforo máximo permitido (${maxCapacity} plazas ocupadas). Elige otro hueco libre.`
+          : 'Ese horario ya está ocupado en este calendario o por el responsable del servicio. Elige otro hueco libre.';
+      throw new ConflictException(message);
     }
   }
 
@@ -683,8 +689,12 @@ export class AppointmentsService {
     const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
 
     let managerServiceIds: string[] = [];
+    let maxCapacity = 1;
     if (serviceId) {
       const targetService = await this.servicesRepo.findOne({ where: { id: serviceId } });
+      if (targetService?.maxCapacity && targetService.maxCapacity > 0) {
+        maxCapacity = targetService.maxCapacity;
+      }
       if (targetService?.calendarId) calendarId = targetService.calendarId;
       if (targetService?.managerId) {
         const sharedServices = await this.servicesRepo.find({
@@ -717,6 +727,7 @@ export class AppointmentsService {
     return computeFreeSlots(date, durationMinutes, workingHours, existing, {
       timezone,
       now,
+      maxCapacity,
     });
   }
 

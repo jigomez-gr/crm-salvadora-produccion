@@ -12,12 +12,16 @@ export interface AvailabilityOptions {
   timezone: string;
   /** Reference instant — slots starting at or before this are excluded */
   now: Date;
+  /** Maximum simultaneous appointments allowed per slot (defaults to 1) */
+  maxCapacity?: number;
 }
 
 /**
  * Returns free slots for a given date and duration, given working hours config
  * and existing appointments. Slots are generated at 30-minute intervals in the
  * business timezone, and slots in the past (relative to `now`) are excluded.
+ * When maxCapacity > 1, slots remain open until overlapping active appointments
+ * reach maxCapacity.
  */
 export function computeFreeSlots(
   date: Date,
@@ -26,7 +30,8 @@ export function computeFreeSlots(
   existingAppointments: Appointment[],
   options: AvailabilityOptions,
 ): TimeSlot[] {
-  const { timezone, now } = options;
+  const { timezone, now, maxCapacity = 1 } = options;
+  const effectiveMaxCapacity = Math.max(1, maxCapacity);
 
   // Resolve the requested calendar day in the business timezone
   const zoned = new TZDate(date.getTime(), timezone);
@@ -61,11 +66,13 @@ export function computeFreeSlots(
 
     const isPast = slotStart.getTime() <= now.getTime();
 
-    const hasConflict = activeAppts.some(
+    const overlappingCount = activeAppts.filter(
       (a) =>
         new Date(a.startsAt).getTime() < slotEnd.getTime() &&
         new Date(a.endsAt).getTime() > slotStart.getTime(),
-    );
+    ).length;
+
+    const hasConflict = overlappingCount >= effectiveMaxCapacity;
 
     if (!isPast && !hasConflict) {
       slots.push({ startsAt: slotStart, endsAt: slotEnd });

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ApiError } from "@/lib/api";
 import { readableTextColor } from "@/lib/color";
+import { FooterLegal } from "@/components/FooterLegal";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -109,6 +110,8 @@ export default function LoginPage() {
           </Button>
         </form>
       </div>
+
+      <FooterLegal dark={false} className="mt-8 bg-transparent border-0" />
     </div>
   );
 }

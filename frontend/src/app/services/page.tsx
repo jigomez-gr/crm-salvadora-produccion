@@ -173,7 +173,7 @@ export default function ServicesPage() {
       description: form.description.trim() || undefined,
       serviceType: form.serviceType,
       eventDatesText: form.eventDatesText.trim() || undefined,
-      maxCapacity: form.maxCapacity ? Number(form.maxCapacity) : undefined,
+      maxCapacity: form.maxCapacity ? Number(form.maxCapacity) : (editingService ? null : undefined),
       minQuorum: form.minQuorum ? Number(form.minQuorum) : undefined,
       durationMinutes: Number(form.durationMinutes),
       price: form.price.trim() || undefined,
@@ -330,6 +330,22 @@ export default function ServicesPage() {
                       Duración:
                     </span>
                     <span className="font-semibold text-neutral-800">{s.durationMinutes} min</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-neutral-600">
+                    <span className="flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5 text-neutral-400" />
+                      Aforo por turno:
+                    </span>
+                    <span className="font-semibold text-neutral-800">
+                      {s.maxCapacity && s.maxCapacity > 1 ? (
+                        <span className="inline-flex items-center gap-1 text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded text-xs font-medium border border-indigo-100">
+                          👥 {s.maxCapacity} personas (Grupal)
+                        </span>
+                      ) : (
+                        <span className="text-neutral-700 text-xs">👤 1 persona (Individual)</span>
+                      )}
+                    </span>
                   </div>
 
                   <div className="flex items-center justify-between text-neutral-600">
@@ -565,33 +581,81 @@ export default function ServicesPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {form.serviceType === "recurring" ? (
             <div>
-              <label className="mb-1 block text-xs font-medium text-neutral-700">
-                Duración (minutos) <span className="text-red-500">*</span>
-              </label>
-              <Input
-                type="number"
-                min="5"
-                step="5"
-                value={form.durationMinutes}
-                onChange={(e) => setForm((f) => ({ ...f, durationMinutes: Number(e.target.value) }))}
-              />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-neutral-700">
+                    Duración (minutos) <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    type="number"
+                    min="5"
+                    step="5"
+                    value={form.durationMinutes}
+                    onChange={(e) => setForm((f) => ({ ...f, durationMinutes: Number(e.target.value) }))}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-neutral-700">
+                    Precio (€)
+                  </label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.price}
+                    onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                    placeholder="ej. 35.00"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-neutral-700 flex items-center gap-1">
+                    <Users className="h-3 w-3 text-indigo-600" />
+                    Aforo (Plazas por slot)
+                  </label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={form.maxCapacity}
+                    onChange={(e) => setForm((f) => ({ ...f, maxCapacity: e.target.value }))}
+                    placeholder="1 (individual) o 23, 30..."
+                  />
+                </div>
+              </div>
+              <p className="mt-1.5 text-[11px] text-neutral-500">
+                💡 <strong>Aforo por slot:</strong> Indica cuántas personas pueden reservar el mismo horario a la vez (déjalo en <strong>1</strong> para cita individual 1 a 1, o pon <strong>23, 30...</strong> para clases de yoga o grupales).
+              </p>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-neutral-700">
-                Precio (€)
-              </label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.price}
-                onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-                placeholder="ej. 35.00"
-              />
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-neutral-700">
+                  Duración (minutos) <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="number"
+                  min="5"
+                  step="5"
+                  value={form.durationMinutes}
+                  onChange={(e) => setForm((f) => ({ ...f, durationMinutes: Number(e.target.value) }))}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-neutral-700">
+                  Precio (€)
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.price}
+                  onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                  placeholder="ej. 35.00"
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           <div>
             <label className="mb-1 block text-xs font-medium text-neutral-700">

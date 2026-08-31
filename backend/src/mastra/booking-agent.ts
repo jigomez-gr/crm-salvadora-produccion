@@ -30,6 +30,7 @@ export interface BookingAgentDeps {
     workingHours: any[],
     timezone: string,
     calendarId?: string,
+    serviceId?: string,
   ) => Promise<{ startsAt: string; endsAt: string }[]>;
   bookAppointment: (
     contactId: string,
@@ -209,6 +210,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         workingHours,
         timezone,
         calendarId,
+        svc?.id,
       );
       const fmt = (iso: string) =>
         new Date(iso).toLocaleTimeString('es-ES', {

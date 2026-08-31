@@ -5,6 +5,7 @@ import { useState, Suspense } from "react";
 import Link from "next/link";
 import { SimuladorDiagnosticoModal, ModalityType } from "@/components/SimuladorDiagnosticoModal";
 import { Sparkles, ArrowLeft, ShieldCheck, Stethoscope, Camera, CheckCircle2 } from "lucide-react";
+import { FooterLegal } from "@/components/FooterLegal";
 
 function getQueryParam(
   searchParams: ReturnType<typeof useSearchParams>,
@@ -211,6 +212,8 @@ function SimuladorIaContent() {
           </div>
         </div>
       </main>
+
+      <FooterLegal dark={false} className="mt-12 bg-white/60 border-t border-neutral-200" />
 
       {/* Simulator Modal */}
       <SimuladorDiagnosticoModal
