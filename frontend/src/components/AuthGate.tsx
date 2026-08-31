@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu } from "lucide-react";
+import { Menu, LogOut } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranding } from "@/contexts/BrandingContext";
 import { Sidebar } from "@/components/Sidebar";
@@ -28,7 +28,7 @@ function FullScreenLoader() {
  * This is UX, not the security boundary: the API enforces auth on every request.
  */
 export function AuthGate({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, logout } = useAuth();
   const branding = useBranding();
   const pathname = usePathname();
   const router = useRouter();
@@ -74,20 +74,33 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-full flex-col md:flex-row">
-      {/* Mobile top bar with a hamburger — hidden from md up (static sidebar). */}
-      <header className="flex h-14 flex-shrink-0 items-center gap-3 border-b border-neutral-200 bg-white px-4 md:hidden">
+      {/* Mobile top bar with a hamburger and quick logout — hidden from md up (static sidebar). */}
+      <header className="flex h-14 flex-shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-4 md:hidden">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen(true)}
+            aria-label="Abrir menú"
+            aria-expanded={mobileNavOpen}
+            className="rounded-md p-1.5 text-neutral-600 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <span className="truncate text-sm font-semibold text-neutral-900">
+            {branding.businessName}
+          </span>
+        </div>
         <button
           type="button"
-          onClick={() => setMobileNavOpen(true)}
-          aria-label="Abrir menú"
-          aria-expanded={mobileNavOpen}
-          className="rounded-md p-1.5 text-neutral-600 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          onClick={async () => {
+            await logout();
+            router.replace("/login");
+          }}
+          aria-label="Cerrar sesión"
+          className="rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700"
         >
-          <Menu className="h-5 w-5" />
+          <LogOut className="h-4 w-4" />
         </button>
-        <span className="truncate text-sm font-semibold text-neutral-900">
-          {branding.businessName}
-        </span>
       </header>
 
       <Sidebar

@@ -47,11 +47,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
+    <div className="flex min-h-screen w-full flex-col items-center justify-center bg-neutral-50 px-4 py-8 sm:px-6">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center text-center">
           <div
-            className="mb-3 flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl"
+            className="mb-3 flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl shadow-sm"
             style={{ backgroundColor: branding.brandColor }}
           >
             {branding.logoUrl ? (
@@ -68,7 +68,7 @@ export default function LoginPage() {
               />
             )}
           </div>
-          <h1 className="text-lg font-semibold text-neutral-900">
+          <h1 className="text-xl font-bold tracking-tight text-neutral-900">
             {branding.businessName}
           </h1>
           <p className="mt-1 text-sm text-neutral-500">
@@ -78,10 +78,10 @@ export default function LoginPage() {
 
         <form
           onSubmit={handleSubmit}
-          className="space-y-4 rounded-xl border border-neutral-200 bg-white p-6 shadow-sm"
+          className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm sm:p-8"
         >
           <div>
-            <label className="mb-1 block text-xs font-medium text-neutral-700">
+            <label className="mb-1 block text-xs font-semibold text-neutral-700">
               Correo electrónico
             </label>
             <Input
@@ -89,12 +89,13 @@ export default function LoginPage() {
               autoComplete="username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="tucorreo@ejemplo.com"
+              placeholder="admin@crmsalvadora.local"
+              className="h-11 text-base sm:text-sm"
               autoFocus
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-neutral-700">
+            <label className="mb-1 block text-xs font-semibold text-neutral-700">
               Contraseña
             </label>
             <Input
@@ -103,19 +104,26 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
+              className="h-11 text-base sm:text-sm"
             />
           </div>
 
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {error && (
+            <div className="rounded-lg bg-red-50 p-2.5 text-xs text-red-600">
+              {error}
+            </div>
+          )}
 
-          <Button type="submit" className="w-full" disabled={submitting}>
+          <Button type="submit" className="h-11 w-full text-base sm:text-sm font-medium" disabled={submitting}>
             <LogIn className="h-4 w-4" />
             {submitting ? "Entrando…" : "Entrar"}
           </Button>
         </form>
       </div>
 
-      <FooterLegal dark={false} className="mt-8 bg-transparent border-0" />
+      <div className="mt-8 w-full max-w-sm text-center">
+        <FooterLegal dark={false} className="bg-transparent border-0" />
+      </div>
     </div>
   );
 }
