@@ -1,7 +1,9 @@
 # Production stack for Dokploy (deployment type: "Docker Compose").
 #
-# Traefik routing is configured directly via container labels
-# bypassing Dokploy's UI domain IP verification.
+# Traefik routing is managed 100% dynamically by Dokploy from the "Domains" tab:
+# - Service Name: web
+# - Container Port: 3000
+# - Next.js proxies /api/* internally to http://api:3001
 
 services:
   db:
@@ -72,18 +74,6 @@ services:
     networks:
       - internal
       - dokploy-network
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=dokploy-network"
-      # HTTP (Port 80)
-      - "traefik.http.routers.crm-salvadora-web-http.rule=Host(`crm-salvadoraconesa.jigretera.com`)"
-      - "traefik.http.routers.crm-salvadora-web-http.entrypoints=web"
-      # HTTPS (Port 443)
-      - "traefik.http.routers.crm-salvadora-web.rule=Host(`crm-salvadoraconesa.jigretera.com`)"
-      - "traefik.http.routers.crm-salvadora-web.entrypoints=websecure"
-      - "traefik.http.routers.crm-salvadora-web.tls=true"
-      - "traefik.http.routers.crm-salvadora-web.tls.certresolver=letsencrypt"
-      - "traefik.http.services.crm-salvadora-web.loadbalancer.server.port=3000"
 
 volumes:
   postgres_data:
