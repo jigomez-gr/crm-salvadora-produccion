@@ -245,6 +245,7 @@ export class AgentRunnerService {
     let effectiveContactId = contactId;
     let effectivePhone = phone;
     let effectiveName = contactName;
+    let effectiveEmail: string | undefined;
 
     // If contact is not passed directly (e.g. Widget / Web), resolve from conversation
     if (!effectiveContactId) {
@@ -253,13 +254,26 @@ export class AgentRunnerService {
         .catch(() => null);
       if (conv?.contactId) {
         effectiveContactId = conv.contactId;
-        const c = await this.contactsService
-          .findById(conv.contactId)
-          .catch(() => null);
-        if (c) {
-          effectivePhone = effectivePhone || c.phone;
-          effectiveName = effectiveName || c.name;
-        }
+      }
+    }
+
+    if (effectiveContactId) {
+      const c = await this.contactsService
+        .findById(effectiveContactId)
+        .catch(() => null);
+      if (c) {
+        effectivePhone = effectivePhone || c.phone;
+        effectiveName = effectiveName || c.name;
+        effectiveEmail = c.email || undefined;
+      }
+    } else if (effectivePhone) {
+      const c = await this.contactsService
+        .findByPhone(effectivePhone)
+        .catch(() => null);
+      if (c) {
+        effectiveContactId = c.id;
+        effectiveName = effectiveName || c.name;
+        effectiveEmail = c.email || undefined;
       }
     }
 
@@ -281,6 +295,7 @@ export class AgentRunnerService {
           effectiveContactId = playgroundContact.id;
           effectivePhone = playgroundContact.phone;
           effectiveName = playgroundContact.name;
+          effectiveEmail = playgroundContact.email || undefined;
         }
       } catch {
         // non-fatal playground fallback
@@ -293,6 +308,7 @@ export class AgentRunnerService {
         contactId: effectiveContactId,
         phone: effectivePhone,
         name: nameKnown ? effectiveName : undefined,
+        email: effectiveEmail,
         nameKnown,
       });
     }

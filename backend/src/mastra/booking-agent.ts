@@ -138,13 +138,45 @@ function findMatchingService(
 export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   const findContactByPhoneTool = createTool({
     id: 'findContactByPhone',
-    description: 'Look up a contact by their phone number',
+    description:
+      'Search for an existing contact or registered client in the CRM by their phone number. Use this when a user gives their phone number or mentions they are already a client.',
     inputSchema: z.object({
-      phone: z.string().describe('Phone number to look up'),
+      phone: z.string().describe('Phone / mobile number to look up (e.g. 645332323 or +34645332323)'),
     }),
-    execute: async (inputData) => {
-      const contact = await deps.findContactByPhone(inputData.phone);
-      return { contact };
+    execute: async (inputData, context) => {
+      const normalized = normalizePhoneLoose(inputData.phone);
+      const contact = await deps.findContactByPhone(normalized);
+      if (contact) {
+        const threadId = (context as any)?.requestContext?.get?.('threadId');
+        if (threadId && deps.linkThreadContact) {
+          await deps.linkThreadContact(threadId, contact.id).catch(() => null);
+        }
+        try {
+          (context as any)?.requestContext?.set?.('customer', {
+            contactId: contact.id,
+            phone: contact.phone,
+            name: contact.name,
+            email: contact.email,
+            nameKnown: true,
+          });
+        } catch {}
+        return {
+          found: true,
+          contact: {
+            id: contact.id,
+            name: contact.name,
+            phone: contact.phone,
+            email: contact.email,
+            status: contact.status,
+            tags: contact.tags,
+          },
+          message: `Cliente identificado: ${contact.name} (${contact.phone}, email: ${contact.email || 'no especificado'}). Ya está registrado como ${contact.status === 'active' ? 'Cliente' : 'Contacto'}.`,
+        };
+      }
+      return {
+        found: false,
+        message: 'No se encontró ningún contacto registrado con ese teléfono.',
+      };
     },
   });
 
@@ -712,7 +744,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     instructions: async ({ requestContext }) => {
       const config = (requestContext as any)?.get?.('agentConfig') as any;
       const customer = (requestContext as any)?.get?.('customer') as
-        | { contactId?: string; phone?: string; name?: string; nameKnown?: boolean }
+        | { contactId?: string; phone?: string; name?: string; email?: string; nameKnown?: boolean }
         | undefined;
       const timezone = config?.timezone || 'Europe/Madrid';
       const now = new Date().toLocaleString('es-ES', {
@@ -763,11 +795,18 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       // Who the agent is talking to.
       let customerBlock: string;
       if (customer?.nameKnown && customer?.name && customer?.phone) {
-        customerBlock = `== Cliente actual ==\nEstás hablando con ${customer.name} (teléfono: ${customer.phone}). Salúdale por su nombre. Si aún no tienes su email en la ficha, pídeselo amablemente antes de reservar.`;
+        customerBlock = `== Cliente actual (Registrado) ==
+Estás hablando con tu cliente/alumno ${customer.name} (teléfono: ${customer.phone}, email: ${customer.email || 'registrado'}).
+- Salúdale cordialmente por su nombre.
+- Al ser ya un cliente registrado en el CRM, YA TIENES SUS DATOS. NO le vuelvas a pedir su nombre ni su correo para nuevas reservas o consultas.
+- Si pide reservar una clase o cita, llama directamente a 'bookAppointment' usando su nombre, teléfono y correo guardados.`;
       } else if (customer?.phone) {
-        customerBlock = `== Cliente actual ==\nEstás hablando por WhatsApp con un cliente cuyo teléfono es ${customer.phone}, pero aún no tienes su nombre completo ni su correo electrónico. Antes de reservar la cita, pídele amablemente su nombre y apellidos y su email.`;
+        customerBlock = `== Cliente actual ==
+Estás hablando con un cliente cuyo teléfono es ${customer.phone}, pero aún no tienes su nombre completo ni su correo electrónico. Antes de reservar la cita, pídele amablemente su nombre y apellidos y su email.`;
       } else {
-        customerBlock = `== Cliente actual ==\nEs un visitante de la web/landing (aún no identificado). Para poder tramitar su reserva, pídele amablemente su Nombre y Apellidos, Teléfono móvil y Correo electrónico (email), y formaliza la reserva con 'bookAppointment' indicando estos datos.`;
+        customerBlock = `== Visitante Web / No identificado ==
+Si el cliente menciona su número de móvil o dice que ya es cliente, busca sus datos con 'findContactByPhone' para identificarlo de inmediato.
+Si es una persona nueva, pídele amablemente su Nombre y Apellidos, Teléfono móvil y Correo electrónico (email) para formalizar la reserva con 'bookAppointment'.`;
       }
 
       const flow = `== Cómo atender ==

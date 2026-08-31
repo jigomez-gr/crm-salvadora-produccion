@@ -234,9 +234,18 @@ export class ContactsService {
         where: { id: contactId },
       });
       if (!contact) return;
+
+      // Formalize contact as full active customer upon booking their appointment
+      contact.status = ContactStatus.ACTIVE;
+      if (!contact.tags) contact.tags = [];
+      if (!contact.tags.includes('cliente')) {
+        contact.tags.push('cliente');
+      }
+
       const next = nextStageOnBooking(contact.pipelineStage);
-      if (!next || next === contact.pipelineStage) return;
-      contact.pipelineStage = next;
+      if (next && next !== contact.pipelineStage) {
+        contact.pipelineStage = next;
+      }
       const saved = await this.contactsRepo.save(contact);
       this.emitUpdated(saved);
     } catch {
