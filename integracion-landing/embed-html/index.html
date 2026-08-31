@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demo Integración Burbuja CRM Salvadora</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      margin: 0;
+      padding: 40px 20px;
+      background-color: #f9fafb;
+      color: #111827;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .card {
+      background: white;
+      max-width: 600px;
+      width: 100%;
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+      border: 1px solid #e5e7eb;
+    }
+    h1 {
+      font-size: 24px;
+      margin-top: 0;
+      color: #4f46e5;
+    }
+    p {
+      line-height: 1.6;
+      color: #4b5563;
+    }
+    code {
+      background: #f3f4f6;
+      padding: 3px 6px;
+      border-radius: 6px;
+      font-size: 14px;
+      color: #374151;
+    }
+    .badge {
+      display: inline-block;
+      background: #e0e7ff;
+      color: #3730a3;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <div class="badge">Integración en 1 Línea</div>
+    <h1>Centro de Yoga y Bienestar Salvadora</h1>
+    <p>Esta es una página de ejemplo para probar la <strong>Burbuja Flotante de Chat con IA</strong> conectada directamente con tu CRM en producción.</p>
+    <p>Mira en la <strong>esquina inferior derecha</strong>: verás la burbuja flotante del asistente lista para atender a tus pacientes y clientes por chat y derivar citas a WhatsApp.</p>
+    <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+    <p style="font-size: 13px; color: #6b7280;">Para añadirla a tu web sólo tienes que pegar este script antes del cierre de <code>&lt;/body&gt;</code>:</p>
+    <pre style="background: #1e293b; color: #f8fafc; padding: 14px; border-radius: 8px; font-size: 12px; overflow-x: auto;"><code>&lt;script 
+  src="https://crm-salvadoraconesa.jigretera.com/api/widget/embed.js" 
+  data-agent="booking" 
+  data-color="#4f46e5"
+  defer&gt;
+&lt;/script&gt;</code></pre>
+  </div>
+
+  <!-- SCRIPT DE INTEGRACIÓN DEL WIDGET (PRODUCCIÓN) -->
+  <script 
+    src="https://crm-salvadoraconesa.jigretera.com/api/widget/embed.js" 
+    data-agent="booking" 
+    data-color="#4f46e5" 
+    data-title="Centro de Yoga y Bienestar Salvadora"
+    data-welcome="¡Hola! 👋 Soy tu asistente de reservas y citas. ¿En qué puedo ayudarte?"
+    defer>
+  </script>
+
+</body>
+</html>
