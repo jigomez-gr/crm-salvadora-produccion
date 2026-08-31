@@ -3,6 +3,7 @@ import { createTool } from '@mastra/core/tools';
 import { Memory } from '@mastra/memory';
 import { z } from 'zod';
 import { TZDate } from '@date-fns/tz';
+import { normalizePhoneLoose } from '../common/phone';
 
 // A single reusable agent template serves every configured agent. The concrete
 // business persona, model and credentials are resolved per request from the
@@ -157,9 +158,10 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       email: z.string().optional().describe("Customer's email address"),
     }),
     execute: async (inputData, context) => {
-      const contact = await deps.createContact(inputData.phone, inputData.name);
+      const normalizedPhone = normalizePhoneLoose(inputData.phone);
+      const contact = await deps.createContact(normalizedPhone, inputData.name, inputData.email);
       if (contact?.id && inputData.email) {
-        await deps.updateContact(contact.id, { email: inputData.email });
+        await deps.updateContact(contact.id, { email: inputData.email, phone: normalizedPhone });
       }
       const threadId = (context as any)?.requestContext?.get?.('threadId');
       if (contact?.id && threadId && deps.linkThreadContact) {
@@ -168,7 +170,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       try {
         (context as any)?.requestContext?.set?.('customer', {
           contactId: contact?.id,
-          phone: contact?.phone || inputData.phone,
+          phone: contact?.phone || normalizedPhone,
           name: contact?.name || inputData.name,
           nameKnown: true,
         });
@@ -177,7 +179,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         contact: {
           id: contact?.id,
           name: contact?.name || inputData.name,
-          phone: contact?.phone || inputData.phone,
+          phone: contact?.phone || normalizedPhone,
           email: inputData.email || contact?.email,
         },
         message: 'Contacto registrado correctamente en el CRM con nombre, teléfono y correo.',
@@ -199,6 +201,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       const customer = getCustomer(context);
       let contactId = customer?.contactId;
       const threadId = (context as any)?.requestContext?.get?.('threadId');
+      const normalizedPhone = inputData.phone ? normalizePhoneLoose(inputData.phone) : undefined;
 
       if (!contactId && threadId && deps.getThreadContact) {
         const threadContact = await deps.getThreadContact(threadId).catch(() => null);
@@ -207,10 +210,10 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         }
       }
 
-      if (!contactId && inputData.phone) {
-        const contact = await deps.createContact(inputData.phone, inputData.name);
+      if (!contactId && normalizedPhone) {
+        const contact = await deps.createContact(normalizedPhone, inputData.name, inputData.email);
         if (contact?.id && inputData.email) {
-          await deps.updateContact(contact.id, { email: inputData.email });
+          await deps.updateContact(contact.id, { email: inputData.email, phone: normalizedPhone });
         }
         if (contact?.id && threadId && deps.linkThreadContact) {
           await deps.linkThreadContact(threadId, contact.id).catch(() => null);
@@ -218,7 +221,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         try {
           (context as any)?.requestContext?.set?.('customer', {
             contactId: contact?.id,
-            phone: contact?.phone || inputData.phone,
+            phone: contact?.phone || normalizedPhone,
             name: contact?.name || inputData.name,
             nameKnown: true,
           });
@@ -227,7 +230,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           contact: {
             id: contact?.id,
             name: contact?.name || inputData.name,
-            phone: contact?.phone || inputData.phone,
+            phone: contact?.phone || normalizedPhone,
             email: inputData.email || contact?.email,
           },
           message: 'Contacto registrado y guardado correctamente en el CRM.',
@@ -244,6 +247,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       const contact = await deps.updateContact(contactId, {
         name: inputData.name,
         email: inputData.email,
+        phone: normalizedPhone,
       });
 
       if (threadId && deps.linkThreadContact) {
@@ -412,7 +416,11 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       let contactId = customer?.contactId;
       const threadId = (context as any)?.requestContext?.get?.('threadId');
 
-      const phoneToUse = inputData.customerPhone || customer?.phone;
+      const phoneToUse = inputData.customerPhone
+        ? normalizePhoneLoose(inputData.customerPhone)
+        : customer?.phone
+        ? normalizePhoneLoose(customer.phone)
+        : undefined;
       const nameToUse = inputData.customerName || customer?.name;
       const emailToUse = inputData.customerEmail;
 
