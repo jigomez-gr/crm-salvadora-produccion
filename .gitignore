@@ -16,4 +16,5 @@ next-env.d.ts
 .atl/
 backups/
 *.sql
+!docs/*.sql
 *.dump
