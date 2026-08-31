@@ -3,17 +3,16 @@ const path = require('path');
 const fs = require('fs');
 
 console.log('=====================================================');
-console.log(' Starting CRM Salvadora Full-Stack (Nixpacks / Node) ');
+console.log(' Starting CRM Salvadora Full-Stack (Docker/Dokploy)  ');
 console.log('=====================================================');
 
 const backendDir = path.join(__dirname, 'backend');
 const frontendDir = path.join(__dirname, 'frontend');
-const backendPort = process.env.BACKEND_PORT || '3099';
+const backendPort = '3001';
 const frontendPort = process.env.PORT || '3000';
 
-// 1. Start NestJS Backend
-console.log(`[Backend] Starting NestJS on port ${backendPort} in ${backendDir}...`);
-console.log(`[Backend] Using DATABASE_URL: ${process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/:([^:@]+)@/, ':***@') : 'Default (172.17.0.1:5433)'}`);
+// 1. Start NestJS Backend on port 3001
+console.log(`[Backend] Starting NestJS on port ${backendPort}...`);
 
 const backend = spawn('node', ['dist/main.js'], {
   cwd: backendDir,
@@ -34,7 +33,7 @@ backend.on('exit', (code, signal) => {
   console.error(`[Backend] Process exited with code ${code} signal ${signal}`);
 });
 
-// 2. Start Next.js Frontend
+// 2. Start Next.js Frontend on port 3000
 let frontendCmd = 'node';
 let frontendArgs = ['server.js'];
 
@@ -52,7 +51,7 @@ if (fs.existsSync(path.join(frontendDir, 'server.js'))) {
   frontendArgs = ['start'];
 }
 
-console.log(`[Frontend] Starting Next.js (${frontendCmd} ${frontendArgs.join(' ')}) on port ${frontendPort} in ${frontendDir}...`);
+console.log(`[Frontend] Starting Next.js on port ${frontendPort}...`);
 
 const frontend = spawn(frontendCmd, frontendArgs, {
   cwd: frontendDir,
