@@ -20,20 +20,13 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - internal
-    healthcheck:
-      test:
-        ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-crm_salvadora}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   api:
     build:
       context: ./backend
     restart: unless-stopped
     depends_on:
-      db:
-        condition: service_healthy
+      - db
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -69,18 +62,6 @@ services:
       YCLOUD_API_KEY: ${YCLOUD_API_KEY:-}
       YCLOUD_WEBHOOK_SECRET: ${YCLOUD_WEBHOOK_SECRET:-}
       YCLOUD_WHATSAPP_NUMBER: ${YCLOUD_WHATSAPP_NUMBER:-}
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "require('http').get('http://127.0.0.1:3001/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
     networks:
       - internal
       - dokploy-network
@@ -107,20 +88,7 @@ services:
         NEXT_PUBLIC_API_URL: https://${API_DOMAIN:-${WEB_DOMAIN:-crm-salvadoraconesa.jigretera.com}}
     restart: unless-stopped
     depends_on:
-      api:
-        condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "require('http').get('http://127.0.0.1:3000',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))",
-        ]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
+      - api
     networks:
       - dokploy-network
     labels:
