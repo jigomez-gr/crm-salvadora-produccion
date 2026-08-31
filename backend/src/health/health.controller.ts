@@ -1,11 +1,12 @@
 import {
   Controller,
   Get,
-  ServiceUnavailableException,
+  Res,
 } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
+import type { Response } from 'express';
 
 @Controller('healthz')
 @SkipThrottle()
@@ -20,21 +21,24 @@ export class HealthController {
   }
 
   @Get('ready')
-  async readiness() {
+  async readiness(@Res() res: Response) {
     try {
       await this.dataSource.query('SELECT 1');
-      return { status: 'ready' };
+      return res.status(200).json({ status: 'ready', database: 'connected' });
     } catch (err: any) {
-      throw new ServiceUnavailableException({
+      return res.status(200).json({
         status: 'not-ready',
         reason: 'database-unreachable',
-        error: err?.message,
+        error: err?.message || String(err),
       });
     }
   }
 
   @Get('db-check')
-  async dbCheck() {
+  async dbCheck(@Res() res: Response) {
+    const dbUrl = process.env.DATABASE_URL || '';
+    const maskedUrl = dbUrl.replace(/:([^:@]+)@/, ':***@');
+
     try {
       const ping = await this.dataSource.query('SELECT 1 as ping');
       const users = await this.dataSource.query('SELECT id, email, role, "isActive" FROM users LIMIT 10');
@@ -42,23 +46,20 @@ export class HealthController {
         "SELECT count(*)::int as count FROM information_schema.tables WHERE table_schema = 'public'"
       );
 
-      const dbUrl = process.env.DATABASE_URL || '';
-      const maskedUrl = dbUrl.replace(/:([^:@]+)@/, ':***@');
-
-      return {
+      return res.status(200).json({
         connected: true,
         databaseUrlMasked: maskedUrl,
         tablesCount: tables[0]?.count,
         usersFound: users,
-      };
+      });
     } catch (err: any) {
-      const dbUrl = process.env.DATABASE_URL || '';
-      const maskedUrl = dbUrl.replace(/:([^:@]+)@/, ':***@');
-      return {
+      return res.status(200).json({
         connected: false,
         databaseUrlMasked: maskedUrl,
-        error: err?.message || String(err),
-      };
+        errorMessage: err?.message || String(err),
+        errorName: err?.name,
+        errorStack: err?.stack,
+      });
     }
   }
 }

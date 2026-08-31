@@ -8,15 +8,18 @@ console.log('=====================================================');
 
 const backendDir = path.join(__dirname, 'backend');
 const frontendDir = path.join(__dirname, 'frontend');
+const backendPort = process.env.BACKEND_PORT || '3099';
+const frontendPort = process.env.PORT || '3000';
 
-// 1. Start NestJS Backend on port 3001
-console.log(`[Backend] Starting NestJS in ${backendDir}...`);
+// 1. Start NestJS Backend on isolated internal port 3099
+console.log(`[Backend] Starting NestJS on port ${backendPort} in ${backendDir}...`);
 const backend = spawn('node', ['dist/main.js'], {
   cwd: backendDir,
   stdio: 'inherit',
   env: {
     ...process.env,
-    PORT: process.env.BACKEND_PORT || '3001',
+    PORT: backendPort,
+    BACKEND_PORT: backendPort,
     NODE_ENV: 'production',
   },
 });
@@ -51,7 +54,7 @@ if (fs.existsSync(path.join(frontendDir, 'server.js'))) {
   frontendArgs = ['start'];
 }
 
-console.log(`[Frontend] Starting Next.js (${frontendCmd} ${frontendArgs.join(' ')}) in ${frontendDir}...`);
+console.log(`[Frontend] Starting Next.js (${frontendCmd} ${frontendArgs.join(' ')}) on port ${frontendPort} in ${frontendDir}...`);
 
 const frontend = spawn(frontendCmd, frontendArgs, {
   cwd: frontendDir,
@@ -59,10 +62,10 @@ const frontend = spawn(frontendCmd, frontendArgs, {
   shell: true,
   env: {
     ...process.env,
-    PORT: process.env.PORT || '3000',
+    PORT: frontendPort,
     HOSTNAME: '0.0.0.0',
     NODE_ENV: 'production',
-    INTERNAL_API_URL: 'http://127.0.0.1:3001',
+    INTERNAL_API_URL: `http://127.0.0.1:${backendPort}`,
   },
 });
 
