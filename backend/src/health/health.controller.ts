@@ -7,17 +7,6 @@ import { SkipThrottle } from '@nestjs/throttler';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
-/**
- * Health endpoints for the reverse proxy / orchestrator. PUBLIC by design (no
- * auth) and exempt from rate limiting.
- *
- * Mounted at the ROOT (outside the `/api` global prefix — see main.ts) under the
- * `healthz` namespace so they never collide with @mastra/nestjs, which provides
- * its own `/api/health`, `/api/ready`, `/api/info` plus an `/api/*` catch-all.
- *
- * - GET /healthz        → liveness (process is up)
- * - GET /healthz/ready  → readiness (DB reachable) — 503 if not
- */
 @Controller('healthz')
 @SkipThrottle()
 export class HealthController {
@@ -35,11 +24,41 @@ export class HealthController {
     try {
       await this.dataSource.query('SELECT 1');
       return { status: 'ready' };
-    } catch {
+    } catch (err: any) {
       throw new ServiceUnavailableException({
         status: 'not-ready',
         reason: 'database-unreachable',
+        error: err?.message,
       });
+    }
+  }
+
+  @Get('db-check')
+  async dbCheck() {
+    try {
+      const ping = await this.dataSource.query('SELECT 1 as ping');
+      const users = await this.dataSource.query('SELECT id, email, role, "isActive" FROM users LIMIT 10');
+      const tables = await this.dataSource.query(
+        "SELECT count(*)::int as count FROM information_schema.tables WHERE table_schema = 'public'"
+      );
+
+      const dbUrl = process.env.DATABASE_URL || '';
+      const maskedUrl = dbUrl.replace(/:([^:@]+)@/, ':***@');
+
+      return {
+        connected: true,
+        databaseUrlMasked: maskedUrl,
+        tablesCount: tables[0]?.count,
+        usersFound: users,
+      };
+    } catch (err: any) {
+      const dbUrl = process.env.DATABASE_URL || '';
+      const maskedUrl = dbUrl.replace(/:([^:@]+)@/, ':***@');
+      return {
+        connected: false,
+        databaseUrlMasked: maskedUrl,
+        error: err?.message || String(err),
+      };
     }
   }
 }
