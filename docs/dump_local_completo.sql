@@ -1,5 +1,5 @@
 -- =============================================================================
--- CRM SALVADORA - COPIA EXACTA Y COMPLETA DE TODA LA BASE DE DATOS LOCAL
+-- CRM SALVADORA - COPIA COMPLETA DE TODA LA BASE DE DATOS LOCAL CON PRIMARY KEYS
 -- =============================================================================
 
 DROP SCHEMA IF EXISTS public CASCADE;
@@ -41,7 +41,9 @@ CREATE TABLE "agent_configs" (
     "remindersEnabled" BOOLEAN DEFAULT false NOT NULL,
     "reminderTemplateName" VARCHAR,
     "reminderTemplateLanguage" VARCHAR DEFAULT 'es'::character varying NOT NULL,
-    "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL
+    "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT "PK_25aa11529ad4eedde0691d59192" PRIMARY KEY (id),
+    CONSTRAINT "UQ_fe5ccd63f8f02f608140d37f955" UNIQUE ("agentKey")
 );
 
 CREATE TABLE "app_settings" (
@@ -51,7 +53,8 @@ CREATE TABLE "app_settings" (
     "logoUrl" TEXT,
     "onboardingCompleted" BOOLEAN DEFAULT false NOT NULL,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
-    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL
+    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT "PK_4800b266ba790931744b3e53a74" PRIMARY KEY (id)
 );
 
 CREATE TABLE "appointment_reminders" (
@@ -61,7 +64,9 @@ CREATE TABLE "appointment_reminders" (
     "status" "appointment_reminders_status_enum" DEFAULT 'pending'::appointment_reminders_status_enum NOT NULL,
     "providerMessageId" VARCHAR,
     "sentAt" TIMESTAMP WITH TIME ZONE,
-    "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL
+    "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT "PK_a6128daa14ae7146de0a1ec4119" PRIMARY KEY (id),
+    CONSTRAINT "UQ_a2a304e63cdbacfacf60091a70c" UNIQUE ("appointmentId", "offsetLabel")
 );
 
 CREATE TABLE "appointments" (
@@ -108,7 +113,8 @@ CREATE TABLE "appointments" (
     "cancelledBy" VARCHAR,
     "cancellationReason" TEXT,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
-    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL
+    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT "PK_4a437a9a27e948726b8bb3e36ad" PRIMARY KEY (id)
 );
 
 CREATE TABLE "audit_logs" (
@@ -121,7 +127,8 @@ CREATE TABLE "audit_logs" (
     "summary" TEXT NOT NULL,
     "ip" VARCHAR,
     "metadata" JSONB,
-    "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL
+    "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT "PK_1bb179d048bbc581caa3b013439" PRIMARY KEY (id)
 );
 
 CREATE TABLE "calcom_account" (
@@ -131,7 +138,8 @@ CREATE TABLE "calcom_account" (
     "enabled" BOOLEAN DEFAULT true NOT NULL,
     "defaultEventTypeId" VARCHAR,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
-    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL
+    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT "PK_09011dfaccd338612113b73c092" PRIMARY KEY (id)
 );
 
 CREATE TABLE "calls" (
@@ -154,7 +162,8 @@ CREATE TABLE "calls" (
     "notes" TEXT,
     "contactId" UUID,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
-    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL
+    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT "PK_d9171d91f8dd1a649659f1b6a20" PRIMARY KEY (id)
 );
 
 CREATE TABLE "contacts" (
@@ -173,7 +182,9 @@ CREATE TABLE "contacts" (
     "optedOutAt" TIMESTAMP WITH TIME ZONE,
     "anonymizedAt" TIMESTAMP WITH TIME ZONE,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
-    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL
+    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT "PK_b99cd40cfd66a99f1571f4f72e6" PRIMARY KEY (id),
+    CONSTRAINT "UQ_84cae51c485079bdd8cdf1d828f" UNIQUE (phone)
 );
 
 CREATE TABLE "conversations" (
@@ -189,7 +200,8 @@ CREATE TABLE "conversations" (
     "lastMessageDirection" VARCHAR,
     "messageCount" INTEGER DEFAULT 0 NOT NULL,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
-    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL
+    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT "PK_d88b0481628ea95674b333780f7" PRIMARY KEY ("threadId")
 );
 
 CREATE TABLE "email_account" (
@@ -202,7 +214,8 @@ CREATE TABLE "email_account" (
     "smtpUser" VARCHAR,
     "smtpPassword" VARCHAR,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
-    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL
+    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT "PK_21a4813c9e9dd0de067dc542c57" PRIMARY KEY (id)
 );
 
 CREATE TABLE "email_messages" (
@@ -215,7 +228,8 @@ CREATE TABLE "email_messages" (
     "error" TEXT,
     "sentByEmail" VARCHAR,
     "providerMessageId" VARCHAR,
-    "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL
+    "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT "PK_922cad79d5a315f5d1d06b077da" PRIMARY KEY (id)
 );
 
 CREATE TABLE "knowledge_chunks" (
@@ -224,7 +238,8 @@ CREATE TABLE "knowledge_chunks" (
     "agentKey" VARCHAR NOT NULL,
     "chunkIndex" INTEGER NOT NULL,
     "content" TEXT NOT NULL,
-    "searchVector" TSVECTOR
+    "searchVector" TSVECTOR,
+    CONSTRAINT "PK_81af684d79d321813c41019a5cd" PRIMARY KEY (id)
 );
 
 CREATE TABLE "knowledge_documents" (
@@ -236,7 +251,8 @@ CREATE TABLE "knowledge_documents" (
     "sizeBytes" INTEGER NOT NULL,
     "charCount" INTEGER NOT NULL,
     "content" TEXT NOT NULL,
-    "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL
+    "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT "PK_402a3c43fb263aa5289670e4e21" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_agent_versions" (
@@ -266,7 +282,8 @@ CREATE TABLE "mastra_agent_versions" (
     "changedFields" JSONB,
     "changeMessage" TEXT,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_agent_versions_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_agents" (
@@ -280,7 +297,8 @@ CREATE TABLE "mastra_agents" (
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "updatedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_agents_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_ai_spans" (
@@ -329,7 +347,8 @@ CREATE TABLE "mastra_ai_spans" (
     "startedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
     "endedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
     "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "public_mastra_ai_spans_traceid_spanid_pk" PRIMARY KEY ("traceId", "spanId")
 );
 
 CREATE TABLE "mastra_background_tasks" (
@@ -355,14 +374,16 @@ CREATE TABLE "mastra_background_tasks" (
     "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
     "startedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
     "suspendedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    "completedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "completedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_background_tasks_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_channel_config" (
     "platform" TEXT NOT NULL,
     "data" JSONB NOT NULL,
     "updatedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_channel_config_pkey" PRIMARY KEY (platform)
 );
 
 CREATE TABLE "mastra_channel_installations" (
@@ -377,7 +398,8 @@ CREATE TABLE "mastra_channel_installations" (
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "updatedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_channel_installations_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_dataset_items" (
@@ -395,7 +417,8 @@ CREATE TABLE "mastra_dataset_items" (
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "updatedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_dataset_items_pkey" PRIMARY KEY (id, "datasetVersion")
 );
 
 CREATE TABLE "mastra_dataset_versions" (
@@ -403,7 +426,8 @@ CREATE TABLE "mastra_dataset_versions" (
     "datasetId" TEXT NOT NULL,
     "version" INTEGER NOT NULL,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_dataset_versions_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_datasets" (
@@ -422,7 +446,8 @@ CREATE TABLE "mastra_datasets" (
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "updatedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_datasets_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_experiment_results" (
@@ -443,7 +468,8 @@ CREATE TABLE "mastra_experiment_results" (
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "startedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
     "completedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_experiment_results_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_experiments" (
@@ -468,7 +494,8 @@ CREATE TABLE "mastra_experiments" (
     "startedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
     "completedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
     "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_experiments_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_favorites" (
@@ -476,7 +503,8 @@ CREATE TABLE "mastra_favorites" (
     "entityType" TEXT NOT NULL,
     "entityId" TEXT NOT NULL,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_favorites_pkey" PRIMARY KEY ("userId", "entityType", "entityId")
 );
 
 CREATE TABLE "mastra_mcp_client_versions" (
@@ -489,7 +517,8 @@ CREATE TABLE "mastra_mcp_client_versions" (
     "changedFields" JSONB,
     "changeMessage" TEXT,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_mcp_client_versions_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_mcp_clients" (
@@ -501,7 +530,8 @@ CREATE TABLE "mastra_mcp_clients" (
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "updatedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_mcp_clients_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_mcp_server_versions" (
@@ -522,7 +552,8 @@ CREATE TABLE "mastra_mcp_server_versions" (
     "changedFields" JSONB,
     "changeMessage" TEXT,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_mcp_server_versions_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_mcp_servers" (
@@ -534,7 +565,8 @@ CREATE TABLE "mastra_mcp_servers" (
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "updatedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_mcp_servers_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_messages" (
@@ -545,7 +577,8 @@ CREATE TABLE "mastra_messages" (
     "type" TEXT NOT NULL,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "resourceId" TEXT,
-    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_messages_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_notifications" (
@@ -631,7 +664,8 @@ CREATE TABLE "mastra_observational_memory" (
     "lastReflectionAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
     "lastBufferedAtTimeZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
     "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_observational_memory_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_prompt_block_versions" (
@@ -646,7 +680,8 @@ CREATE TABLE "mastra_prompt_block_versions" (
     "changedFields" JSONB,
     "changeMessage" TEXT,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_prompt_block_versions_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_prompt_blocks" (
@@ -658,7 +693,8 @@ CREATE TABLE "mastra_prompt_blocks" (
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "updatedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_prompt_blocks_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_resources" (
@@ -668,7 +704,8 @@ CREATE TABLE "mastra_resources" (
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "updatedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_resources_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_schedule_triggers" (
@@ -681,7 +718,8 @@ CREATE TABLE "mastra_schedule_triggers" (
     "error" TEXT,
     "trigger_kind" TEXT NOT NULL,
     "parent_trigger_id" TEXT,
-    "metadata" JSONB
+    "metadata" JSONB,
+    CONSTRAINT "mastra_schedule_triggers_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_schedules" (
@@ -697,7 +735,8 @@ CREATE TABLE "mastra_schedules" (
     "updated_at" BIGINT NOT NULL,
     "metadata" JSONB,
     "owner_type" TEXT,
-    "owner_id" TEXT
+    "owner_id" TEXT,
+    CONSTRAINT "mastra_schedules_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_scorer_definition_versions" (
@@ -715,7 +754,8 @@ CREATE TABLE "mastra_scorer_definition_versions" (
     "changedFields" JSONB,
     "changeMessage" TEXT,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_scorer_definition_versions_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_scorer_definitions" (
@@ -727,7 +767,8 @@ CREATE TABLE "mastra_scorer_definitions" (
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "updatedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_scorer_definitions_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_scorers" (
@@ -762,7 +803,8 @@ CREATE TABLE "mastra_scorers" (
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "updatedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_scorers_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_skill_blobs" (
@@ -771,7 +813,8 @@ CREATE TABLE "mastra_skill_blobs" (
     "size" INTEGER NOT NULL,
     "mimeType" TEXT,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_skill_blobs_pkey" PRIMARY KEY (hash)
 );
 
 CREATE TABLE "mastra_skill_versions" (
@@ -793,7 +836,8 @@ CREATE TABLE "mastra_skill_versions" (
     "changedFields" JSONB,
     "changeMessage" TEXT,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_skill_versions_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_skills" (
@@ -806,7 +850,8 @@ CREATE TABLE "mastra_skills" (
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "updatedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_skills_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_threads" (
@@ -817,7 +862,8 @@ CREATE TABLE "mastra_threads" (
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "updatedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_threads_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_tool_provider_connections" (
@@ -830,7 +876,8 @@ CREATE TABLE "mastra_tool_provider_connections" (
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "updatedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_tool_provider_connections_pkey" PRIMARY KEY ("authorId", "providerId", "connectionId")
 );
 
 CREATE TABLE "mastra_workflow_snapshot" (
@@ -841,7 +888,8 @@ CREATE TABLE "mastra_workflow_snapshot" (
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "updatedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "public_mastra_workflow_snapshot_workflow_name_run_id_key" UNIQUE (workflow_name, run_id)
 );
 
 CREATE TABLE "mastra_workspace_versions" (
@@ -861,7 +909,8 @@ CREATE TABLE "mastra_workspace_versions" (
     "changedFields" JSONB,
     "changeMessage" TEXT,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_workspace_versions_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "mastra_workspaces" (
@@ -873,7 +922,8 @@ CREATE TABLE "mastra_workspaces" (
     "createdAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "updatedAt" TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     "createdAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now()
+    "updatedAtZ" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT "mastra_workspaces_pkey" PRIMARY KEY (id)
 );
 
 CREATE TABLE "messages" (
@@ -891,7 +941,9 @@ CREATE TABLE "messages" (
     "mediaId" VARCHAR,
     "mediaMimeType" VARCHAR,
     "mediaFilename" VARCHAR,
-    "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL
+    "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT "PK_18325f38ae6de43878487eff986" PRIMARY KEY (id),
+    CONSTRAINT "UQ_1ec186b83e617b0b8afe592a8c6" UNIQUE ("externalId")
 );
 
 CREATE TABLE "payment_account" (
@@ -903,7 +955,8 @@ CREATE TABLE "payment_account" (
     "enableCard" BOOLEAN DEFAULT true NOT NULL,
     "enableBizum" BOOLEAN DEFAULT true NOT NULL,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
-    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL
+    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT "PK_bb95477ae48c741a9c1445babfd" PRIMARY KEY (id)
 );
 
 CREATE TABLE "services" (
@@ -931,7 +984,8 @@ CREATE TABLE "services" (
     "calEventTypeId" INTEGER,
     "isActive" BOOLEAN DEFAULT true NOT NULL,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
-    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL
+    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT "PK_ba2d347a3168a296416c6c5ccb2" PRIMARY KEY (id)
 );
 
 CREATE TABLE "users" (
@@ -944,7 +998,9 @@ CREATE TABLE "users" (
     "mustChangePassword" BOOLEAN DEFAULT false NOT NULL,
     "passwordChangedAt" TIMESTAMP WITH TIME ZONE,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
-    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL
+    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT "PK_a3ffb1c0c8416b9fc6f907b7433" PRIMARY KEY (id),
+    CONSTRAINT "UQ_97672ac88f789774dd47f7c8be3" UNIQUE (email)
 );
 
 CREATE TABLE "vapi_accounts" (
@@ -972,7 +1028,8 @@ CREATE TABLE "vapi_accounts" (
     "maxDurationSeconds" INTEGER DEFAULT 900 NOT NULL,
     "isActive" BOOLEAN DEFAULT true NOT NULL,
     "createdAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
-    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL
+    "updatedAt" TIMESTAMP WITHOUT TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT "PK_a659b3ac79365dd25696231747f" PRIMARY KEY (id)
 );
 
 -- ==========================================
@@ -1020,7 +1077,7 @@ Servicios y Actividades principales del centro:
 
 Pautas de reserva:
 - Todos los servicios se abonan presencialmente en el centro.
-- Cuando un cliente pida cita u horarios, usa checkAvailability y bookAppointment. Informa siempre de forma clara y amable.', 'whatsapp', '[{"id":"d3b4566d-e1da-430c-be1f-b2bd1d0a0bad","name":"Hatha Yoga Terapéutico (1 clase semanal)","price":"25.00","calendarId":"cal-hatha-yoga","maxCapacity":20,"paymentType":"in_person","serviceType":"recurring","eventEndDate":null,"eventDatesText":null,"eventStartDate":null,"requiresReason":false,"durationMinutes":90,"requiresApproval":false,"allowedModalities":["in_person"]},{"id":"15f33ff9-210c-45ab-b6fd-e660854505b4","name":"Hatha Yoga Terapéutico (2 clases semanales)","price":"42.00","calendarId":"cal-hatha-yoga","maxCapacity":20,"paymentType":"in_person","serviceType":"recurring","eventEndDate":null,"eventDatesText":null,"eventStartDate":null,"requiresReason":false,"durationMinutes":90,"requiresApproval":false,"allowedModalities":["in_person"]},{"id":"8d243111-8e4c-40e3-ac5a-b4301fe6cfb9","name":"Meditaciones Guiadas","price":"15.00","calendarId":"cal-meditacion","maxCapacity":28,"paymentType":"in_person","serviceType":"recurring","eventEndDate":null,"eventDatesText":null,"eventStartDate":null,"requiresReason":false,"durationMinutes":30,"requiresApproval":false,"allowedModalities":["in_person"]},{"id":"076c81be-6ce8-4f14-87a9-f507b01ba465","name":"Terapia Gestalt (Sesión Individual)","price":"35.00","calendarId":"cal-gestalt","maxCapacity":1,"paymentType":"in_person","serviceType":"recurring","eventEndDate":null,"eventDatesText":null,"eventStartDate":null,"requiresReason":false,"durationMinutes":60,"requiresApproval":false,"allowedModalities":["in_person","virtual"]},{"id":"3886172f-4a00-4af7-9d5f-5c4015e07f9c","name":"Baño de Gong y Meditación Sonora","price":"16.00","calendarId":"cal-gong-mensual","maxCapacity":30,"paymentType":"in_person","serviceType":"event","eventEndDate":"2026-09-26T20:00:00.000Z","eventDatesText":"Sábado 26 de Septiembre de 2026","eventStartDate":"2026-09-26T18:00:00.000Z","requiresReason":false,"durationMinutes":120,"requiresApproval":false,"allowedModalities":["in_person"]},{"id":"f929b07c-3505-42b8-907f-be7a1bca9af6","name":"Puja de Gongs (Noche Sagrada de Sonido - 11h)","price":"95.00","calendarId":"cal-puja-gongs","maxCapacity":30,"paymentType":"in_person","serviceType":"event","eventEndDate":"2026-11-29T08:00:00.000Z","eventDatesText":"Sábado 28 de Noviembre de 2026 (Noche de 21:00 a 08:00)","eventStartDate":"2026-11-28T21:00:00.000Z","requiresReason":false,"durationMinutes":660,"requiresApproval":false,"allowedModalities":["in_person"]},{"id":"85254e72-a7dd-4fdb-a1e0-607b27ef63a7","name":"Constelaciones Familiares","price":"60.00","calendarId":"cal-constelaciones","maxCapacity":25,"paymentType":"in_person","serviceType":"event","eventEndDate":"2026-09-27T14:00:00.000Z","eventDatesText":"Domingo 27 de Septiembre de 2026 (Tentativa)","eventStartDate":"2026-09-27T10:00:00.000Z","requiresReason":false,"durationMinutes":240,"requiresApproval":false,"allowedModalities":["in_person"]},{"id":"5f0693fa-adf1-4e65-a8ea-e4eda92ff942","name":"Encuentro de Mujeres (Primavera)","price":"45.00","calendarId":"cal-encuentro-mujeres","maxCapacity":25,"paymentType":"in_person","serviceType":"event","eventEndDate":"2027-05-15T16:00:00.000Z","eventDatesText":"Sábado 15 de Mayo de 2027 (Primavera)","eventStartDate":"2027-05-15T10:00:00.000Z","requiresReason":false,"durationMinutes":360,"requiresApproval":false,"allowedModalities":["in_person"]},{"id":"6bfc9e2b-bef8-42d5-9c25-bd3b7554229a","name":"Retiro de Ayuno Terapéutico","price":null,"calendarId":"cal-ayuno-terapeutico","maxCapacity":20,"paymentType":"in_person","serviceType":"event","eventEndDate":"2026-10-12T16:00:00.000Z","eventDatesText":"Del 9 al 12 de Octubre de 2026 (Puente de Octubre)","eventStartDate":"2026-10-09T16:00:00.000Z","requiresReason":false,"durationMinutes":1440,"requiresApproval":false,"allowedModalities":["in_person"]},{"id":"469fa9b9-227d-4168-bda7-cac5cf3e7f46","name":"Bienestar Experience (Longevidad y Bienestar Integral)","price":"25.00","calendarId":"cal-bienestar-experience","maxCapacity":1,"paymentType":"in_person","serviceType":"recurring","eventEndDate":null,"eventDatesText":null,"eventStartDate":null,"requiresReason":false,"durationMinutes":60,"requiresApproval":false,"allowedModalities":["in_person","virtual"]},{"id":"3993614b-aa86-422e-b05f-6a58d43867c5","name":"Iaidō (Esgrima Japonesa)","price":"0.00","calendarId":"cal-iaido","maxCapacity":20,"paymentType":"in_person","serviceType":"recurring","eventEndDate":null,"eventDatesText":null,"eventStartDate":null,"requiresReason":false,"durationMinutes":60,"requiresApproval":false,"allowedModalities":["in_person"]}]'::jsonb, '[{"day":1,"open":"08:30","close":"21:30"},{"day":2,"open":"08:30","close":"21:30"},{"day":3,"open":"08:30","close":"21:30"},{"day":4,"open":"08:30","close":"21:30"},{"day":5,"open":"08:30","close":"21:30"},{"day":6,"open":"09:00","close":"20:00"},{"day":0,"open":"10:00","close":"14:00"}]'::jsonb, 'cálido, consciente y profesional', 'Europe/Madrid', 'openai/gpt-4.1-mini', 'sk-or-placeholder', NULL, NULL, NULL, true, false, NULL, 'es', '2026-08-29T12:38:23.798Z');
+- Cuando un cliente pida cita u horarios, usa checkAvailability y bookAppointment. Informa siempre de forma clara y amable.', 'whatsapp', '[{"id":"d3b4566d-e1da-430c-be1f-b2bd1d0a0bad","name":"Hatha Yoga Terapéutico (1 clase semanal)","price":"25.00","calendarId":"cal-hatha-yoga","maxCapacity":20,"paymentType":"in_person","serviceType":"recurring","eventEndDate":null,"eventDatesText":null,"eventStartDate":null,"requiresReason":false,"durationMinutes":90,"requiresApproval":false,"allowedModalities":["in_person"]},{"id":"15f33ff9-210c-45ab-b6fd-e660854505b4","name":"Hatha Yoga Terapéutico (2 clases semanales)","price":"42.00","calendarId":"cal-hatha-yoga","maxCapacity":20,"paymentType":"in_person","serviceType":"recurring","eventEndDate":null,"eventDatesText":null,"eventStartDate":null,"requiresReason":false,"durationMinutes":90,"requiresApproval":false,"allowedModalities":["in_person"]},{"id":"8d243111-8e4c-40e3-ac5a-b4301fe6cfb9","name":"Meditaciones Guiadas","price":"15.00","calendarId":"cal-meditacion","maxCapacity":28,"paymentType":"in_person","serviceType":"recurring","eventEndDate":null,"eventDatesText":null,"eventStartDate":null,"requiresReason":false,"durationMinutes":30,"requiresApproval":false,"allowedModalities":["in_person"]},{"id":"076c81be-6ce8-4f14-87a9-f507b01ba465","name":"Terapia Gestalt (Sesión Individual)","price":"35.00","calendarId":"cal-gestalt","maxCapacity":1,"paymentType":"in_person","serviceType":"recurring","eventEndDate":null,"eventDatesText":null,"eventStartDate":null,"requiresReason":false,"durationMinutes":60,"requiresApproval":false,"allowedModalities":["in_person","virtual"]},{"id":"3886172f-4a00-4af7-9d5f-5c4015e07f9c","name":"Baño de Gong y Meditación Sonora","price":"16.00","calendarId":"cal-gong-mensual","maxCapacity":30,"paymentType":"in_person","serviceType":"event","eventEndDate":"2026-09-26T20:00:00.000Z","eventDatesText":"Sábado 26 de Septiembre de 2026","eventStartDate":"2026-09-26T18:00:00.000Z","requiresReason":false,"durationMinutes":120,"requiresApproval":false,"allowedModalities":["in_person"]},{"id":"f929b07c-3505-42b8-907f-be7a1bca9af6","name":"Puja de Gongs (Noche Sagrada de Sonido - 11h)","price":"95.00","calendarId":"cal-puja-gongs","maxCapacity":30,"paymentType":"in_person","serviceType":"event","eventEndDate":"2026-11-29T08:00:00.000Z","eventDatesText":"Sábado 28 de Noviembre de 2026 (Noche de 21:00 a 08:00)","eventStartDate":"2026-11-28T21:00:00.000Z","requiresReason":false,"durationMinutes":660,"requiresApproval":false,"allowedModalities":["in_person"]},{"id":"85254e72-a7dd-4fdb-a1e0-607b27ef63a7","name":"Constelaciones Familiares","price":"60.00","calendarId":"cal-constelaciones","maxCapacity":25,"paymentType":"in_person","serviceType":"event","eventEndDate":"2026-09-27T14:00:00.000Z","eventDatesText":"Domingo 27 de Septiembre de 2026 (Tentativa)","eventStartDate":"2026-09-27T10:00:00.000Z","requiresReason":false,"durationMinutes":240,"requiresApproval":false,"allowedModalities":["in_person"]},{"id":"5f0693fa-adf1-4e65-a8ea-e4eda92ff942","name":"Encuentro de Mujeres (Primavera)","price":"45.00","calendarId":"cal-encuentro-mujeres","maxCapacity":25,"paymentType":"in_person","serviceType":"event","eventEndDate":"2027-05-15T16:00:00.000Z","eventDatesText":"Sábado 15 de Mayo de 2027 (Primavera)","eventStartDate":"2027-05-15T10:00:00.000Z","requiresReason":false,"durationMinutes":360,"requiresApproval":false,"allowedModalities":["in_person"]},{"id":"6bfc9e2b-bef8-42d5-9c25-bd3b7554229a","name":"Retiro de Ayuno Terapéutico","price":null,"calendarId":"cal-ayuno-terapeutico","maxCapacity":20,"paymentType":"in_person","serviceType":"event","eventEndDate":"2026-10-12T16:00:00.000Z","eventDatesText":"Del 9 al 12 de Octubre de 2026 (Puente de Octubre)","eventStartDate":"2026-10-09T16:00:00.000Z","requiresReason":false,"durationMinutes":1440,"requiresApproval":false,"allowedModalities":["in_person"]},{"id":"469fa9b9-227d-4168-bda7-cac5cf3e7f46","name":"Bienestar Experience (Longevidad y Bienestar Integral)","price":"25.00","calendarId":"cal-bienestar-experience","maxCapacity":1,"paymentType":"in_person","serviceType":"recurring","eventEndDate":null,"eventDatesText":null,"eventStartDate":null,"requiresReason":false,"durationMinutes":60,"requiresApproval":false,"allowedModalities":["in_person","virtual"]},{"id":"3993614b-aa86-422e-b05f-6a58d43867c5","name":"Iaidō (Esgrima Japonesa)","price":"0.00","calendarId":"cal-iaido","maxCapacity":20,"paymentType":"in_person","serviceType":"recurring","eventEndDate":null,"eventDatesText":null,"eventStartDate":null,"requiresReason":false,"durationMinutes":60,"requiresApproval":false,"allowedModalities":["in_person"]}]'::jsonb, '[{"day":1,"open":"08:30","close":"21:30"},{"day":2,"open":"08:30","close":"21:30"},{"day":3,"open":"08:30","close":"21:30"},{"day":4,"open":"08:30","close":"21:30"},{"day":5,"open":"08:30","close":"21:30"},{"day":6,"open":"09:00","close":"20:00"},{"day":0,"open":"10:00","close":"14:00"}]'::jsonb, 'cálido, consciente y profesional', 'Europe/Madrid', 'openai/gpt-4.1-mini', 'sk-or-placeholder', NULL, 'ycloud-placeholder', NULL, true, false, NULL, 'es', '2026-08-29T12:38:23.798Z');
 
 -- ==========================================
 -- Datos: app_settings (1 registros)
@@ -1131,7 +1188,7 @@ INSERT INTO "conversations" ("threadId", "agentKey", "contactId", "channel", "ha
 -- ==========================================
 -- Datos: email_account (1 registros)
 -- ==========================================
-INSERT INTO "email_account" ("id", "fromName", "fromAddress", "smtpHost", "smtpPort", "smtpSecure", "smtpUser", "smtpPassword", "createdAt", "updatedAt") VALUES ('692a1d61-30b8-4bf9-addc-cf831687d6f2', 'Clínica', 'jigretera@gmail.com', 'smtp.gmail.com', 587, false, 'jigretera@gmail.com', 'moulqbjwksjrzdcg', '2026-08-30T04:48:35.538Z', '2026-08-30T04:48:35.538Z');
+INSERT INTO "email_account" ("id", "fromName", "fromAddress", "smtpHost", "smtpPort", "smtpSecure", "smtpUser", "smtpPassword", "createdAt", "updatedAt", "smtpPass") VALUES ('692a1d61-30b8-4bf9-addc-cf831687d6f2', 'Clínica', 'jigretera@gmail.com', 'smtp.gmail.com', 587, false, 'jigretera@gmail.com', 'moulqbjwksjrzdcg', '2026-08-30T04:48:35.538Z', '2026-08-30T04:48:35.538Z', 'smtp-placeholder');
 
 -- ==========================================
 -- Datos: knowledge_chunks (21 registros)
@@ -1504,7 +1561,7 @@ INSERT INTO "messages" ("id", "contactId", "threadId", "direction", "channel", "
 -- ==========================================
 -- Datos: payment_account (1 registros)
 -- ==========================================
-INSERT INTO "payment_account" ("id", "publishableKey", "secretKey", "webhookSecret", "currency", "enableCard", "enableBizum", "createdAt", "updatedAt") VALUES ('607facac-ac88-45cc-b67a-fc56a43e69c0', NULL, NULL, NULL, 'eur', true, true, '2026-08-30T04:48:35.539Z', '2026-08-30T04:48:35.539Z');
+INSERT INTO "payment_account" ("id", "publishableKey", "secretKey", "webhookSecret", "currency", "enableCard", "enableBizum", "createdAt", "updatedAt", "stripeSecretKey") VALUES ('607facac-ac88-45cc-b67a-fc56a43e69c0', NULL, NULL, NULL, 'eur', true, true, '2026-08-30T04:48:35.539Z', '2026-08-30T04:48:35.539Z', 'sk-placeholder');
 
 -- ==========================================
 -- Datos: services (13 registros)
