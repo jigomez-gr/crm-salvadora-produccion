@@ -37,10 +37,10 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
-      # Connects to the db service over the private internal network (port 5432).
-      DATABASE_URL: postgresql://${POSTGRES_USER:-crm}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-crm_salvadora}
+      # Connects to external DATABASE_URL if set, otherwise internal db service.
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-crm}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-crm_salvadora}}
       # The deployed frontend origin, so the browser is allowed to call the API.
-      CORS_ORIGIN: https://${WEB_DOMAIN}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://${WEB_DOMAIN}}
       PORT: "3001"
       # ─── Authentication (login + roles) ───
       # JWT_SECRET is REQUIRED in production — the API refuses to start without it.
@@ -59,6 +59,18 @@ services:
       # Demo data is for first-run/local exploration only — never seed a real
       # business deployment with sample contacts/appointments.
       SEED_DEMO_DATA: "false"
+      # Stripe Payments
+      STRIPE_PUBLIC_KEY: ${STRIPE_PUBLIC_KEY:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      # Business Email SMTP
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-}
+      ANALIZA_IA_URL: ${ANALIZA_IA_URL:-}
       # AI model + WhatsApp keys are normally configured PER AGENT from the UI.
       # These are optional global fallbacks — leave them empty if you set them in the app.
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
