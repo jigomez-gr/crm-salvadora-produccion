@@ -119,11 +119,19 @@ describe('computeFreeSlots', () => {
     expect(starts).not.toContain('2025-01-10T13:00:00.000Z');
   });
 
-  it('handles 30-minute slots correctly', () => {
+  it('handles 30-minute step slots correctly when stepMinutes is specified', () => {
     const date = new Date('2025-01-06T00:00:00.000Z'); // Monday
-    const slots = computeFreeSlots(date, 30, workingHours, [], UTC_OPTS);
+    const slots = computeFreeSlots(date, 30, workingHours, [], { ...UTC_OPTS, stepMinutes: 30 });
     // 09:00 to 17:00 with 30-min slots = 16 slots
     expect(slots).toHaveLength(16);
+  });
+
+  it('generates slots for fixed-schedule class times like 09:45 and 11:15', () => {
+    const date = new Date('2025-01-06T00:00:00.000Z'); // Monday
+    const slots = computeFreeSlots(date, 90, workingHours, [], UTC_OPTS);
+    const starts = slots.map((s) => s.startsAt.toISOString());
+    expect(starts).toContain('2025-01-06T09:45:00.000Z');
+    expect(starts).toContain('2025-01-06T11:15:00.000Z');
   });
 
   it('excludes slots in the past relative to now', () => {
@@ -133,7 +141,7 @@ describe('computeFreeSlots', () => {
     const starts = slots.map((s) => s.startsAt.toISOString());
     expect(starts).not.toContain('2025-01-06T09:00:00.000Z');
     expect(starts).not.toContain('2025-01-06T13:30:00.000Z'); // 13:30 <= now? no, 13:30 < 13:35 -> excluded
-    expect(starts[0]).toBe('2025-01-06T14:00:00.000Z');
+    expect(starts[0]).toBe('2025-01-06T13:45:00.000Z');
   });
 
   it('generates slots as business-local wall-clock times (Europe/Madrid, CET +1)', () => {

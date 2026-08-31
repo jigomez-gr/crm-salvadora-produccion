@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
+import { Repository, Between, ILike } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Contact } from '../common/entities/contact.entity';
 import {
@@ -125,6 +125,12 @@ export class AppointmentsService {
         where: { name: dto.service },
         relations: ['manager'],
       });
+      if (!serviceEntity) {
+        serviceEntity = await this.servicesRepo.findOne({
+          where: { name: ILike(`%${dto.service}%`) },
+          relations: ['manager'],
+        });
+      }
     }
 
     if (serviceEntity && (!dto.endsAt || endsAt <= startsAt)) {
