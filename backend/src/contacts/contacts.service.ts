@@ -290,7 +290,11 @@ export class ContactsService {
     return this.contactsRepo.findOne({ where: { phone } });
   }
 
-  async upsertByPhone(phone: string, name?: string): Promise<Contact> {
+  async upsertByPhone(
+    phone: string,
+    name?: string,
+    extra?: { source?: string; email?: string; tags?: string[] },
+  ): Promise<Contact> {
     // Best-effort E.164 so the same person isn't duplicated across channels.
     const normalized = normalizePhoneLoose(phone);
     let contact = await this.findByPhone(normalized);
@@ -298,14 +302,34 @@ export class ContactsService {
       contact = this.contactsRepo.create({
         phone: normalized,
         name: name || normalized,
-        // A contact first seen on WhatsApp starts as a lead from that channel,
-        // at the top of the "Nuevo" pipeline column.
-        source: 'whatsapp',
+        email: extra?.email || null,
+        tags: extra?.tags ?? ['lead_landing_web'],
+        source: extra?.source ?? 'landing',
         pipelineStage: PipelineStage.NEW,
         boardPosition: Date.now(),
       });
       await this.contactsRepo.save(contact);
       this.emitUpdated(contact);
+    } else {
+      let changed = false;
+      if (name && (contact.name === contact.phone || !contact.name || contact.name === normalized)) {
+        contact.name = name;
+        changed = true;
+      }
+      if (extra?.email && !contact.email) {
+        contact.email = extra.email;
+        changed = true;
+      }
+      if (extra?.tags && extra.tags.length > 0) {
+        const existingTags = new Set(contact.tags || []);
+        for (const t of extra.tags) existingTags.add(t);
+        contact.tags = Array.from(existingTags);
+        changed = true;
+      }
+      if (changed) {
+        await this.contactsRepo.save(contact);
+        this.emitUpdated(contact);
+      }
     }
     return contact;
   }

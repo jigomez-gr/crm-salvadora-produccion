@@ -153,11 +153,12 @@ export class WidgetController {
     let contactName = dto.name;
 
     if (dto.phone) {
-      const contact = await this.contactsService.upsertByPhone(dto.phone, dto.name);
+      const contact = await this.contactsService.upsertByPhone(dto.phone, dto.name, {
+        email: dto.email,
+        source: 'landing',
+        tags: ['lead_landing_web'],
+      });
       contactId = contact.id;
-      if (dto.email && !contact.email) {
-        await this.contactsService.update(contact.id, { email: dto.email });
-      }
       contactName = contact.name || contactName;
       await this.messagesService.linkContact(threadId, contact.id);
     } else {

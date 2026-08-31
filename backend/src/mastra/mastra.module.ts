@@ -60,8 +60,12 @@ export { NestMastraModule };
           findContactByPhone: async (phone: string) => {
             return contactsService.findByPhone(phone);
           },
-          createContact: async (phone: string, name?: string) => {
-            return contactsService.upsertByPhone(phone, name);
+          createContact: async (phone: string, name?: string, email?: string) => {
+            return contactsService.upsertByPhone(phone, name, {
+              email,
+              source: 'landing',
+              tags: ['lead_landing_web'],
+            });
           },
           updateContact: async (
             contactId: string,
