@@ -32,10 +32,14 @@ export default function LoginPage() {
       await login(email.trim(), password);
       router.replace("/");
     } catch (err) {
-      if (err instanceof ApiError && err.status === 429) {
-        setError("Demasiados intentos. Espera un minuto e inténtalo de nuevo.");
+      if (err instanceof ApiError) {
+        if (err.status === 429) {
+          setError("Demasiados intentos. Espera un minuto e inténtalo de nuevo.");
+        } else {
+          setError(err.message || "Credenciales inválidas. Revisa tu correo y contraseña.");
+        }
       } else {
-        setError("Credenciales inválidas. Revisa tu correo y contraseña.");
+        setError("Error de conexión. Revisa tu red o intenta de nuevo.");
       }
     } finally {
       setSubmitting(false);
