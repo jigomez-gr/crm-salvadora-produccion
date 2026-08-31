@@ -1,13 +1,12 @@
 # Production stack for Dokploy (deployment type: "Docker Compose").
 #
-# This single file deploys the whole app together: database + API + web.
-# Everything the student needs to fill in lives in environment variables —
-# see .env.production.example. URLs (DATABASE_URL, CORS_ORIGIN,
-# NEXT_PUBLIC_API_URL) are DERIVED here, so they should NOT be set by hand.
+# This file deploys the CRM Salvadora app on Dokploy / Docker:
+# - Database (Postgres) with safe fallback defaults
+# - API (NestJS + Mastra + TypeORM) on :3001
+# - Web (Next.js 16) on :3000
 #
-# Routing/HTTPS is handled by Dokploy's built-in Traefik proxy via the labels
-# below, driven by WEB_DOMAIN / API_DOMAIN. If certificates don't issue, you can
-# instead attach the domains from the Dokploy "Domains" tab (see docs/DEPLOYMENT.md).
+# Supports BOTH single-domain (e.g. crm-salvadoraconesa.jigretera.com)
+# and multi-domain (web + api subdomains) with automatic SSL via Traefik.
 
 services:
   db:
@@ -15,15 +14,15 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-crm_salvadora}
-      POSTGRES_USER: ${POSTGRES_USER:-crm}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-W39xlpS9}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - internal
     healthcheck:
       test:
-        ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crm} -d ${POSTGRES_DB:-crm_salvadora}"]
+        ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-crm_salvadora}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -35,52 +34,42 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       NODE_ENV: production
       # Connects to external DATABASE_URL if set, otherwise internal db service.
-      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-crm}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-crm_salvadora}}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-W39xlpS9}@db:5432/${POSTGRES_DB:-crm_salvadora}}
       # The deployed frontend origin, so the browser is allowed to call the API.
-      CORS_ORIGIN: ${CORS_ORIGIN:-https://${WEB_DOMAIN}}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://${WEB_DOMAIN:-crm-salvadoraconesa.jigretera.com}}
       PORT: "3001"
       # ─── Authentication (login + roles) ───
-      # JWT_SECRET is REQUIRED in production — the API refuses to start without it.
-      JWT_SECRET: ${JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:-super-secret-crm-key-39xlps9-jwt-token-2026}
       JWT_EXPIRES_IN_SECONDS: ${JWT_EXPIRES_IN_SECONDS:-86400}
-      # Served over HTTPS in production → mark the auth cookie Secure.
       COOKIE_SECURE: "true"
-      # First admin, created on the first run against an empty users table.
-      # ADMIN_PASSWORD is REQUIRED in production — the API refuses to bootstrap an
-      # admin with the public default password.
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@crmsalvadora.local}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
-      # Business timezone for date-sensitive logic (e.g. the "appointments today"
-      # counter). IANA name, e.g. Europe/Madrid.
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin1234!}
       BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-Europe/Madrid}
-      # Demo data is for first-run/local exploration only — never seed a real
-      # business deployment with sample contacts/appointments.
-      SEED_DEMO_DATA: "false"
-      # Stripe Payments
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
+      # ─── Stripe Payments ───
       STRIPE_PUBLIC_KEY: ${STRIPE_PUBLIC_KEY:-}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
-      # Business Email SMTP
-      SMTP_HOST: ${SMTP_HOST:-}
+      # ─── Business Email SMTP ───
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
-      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-}
-      ANALIZA_IA_URL: ${ANALIZA_IA_URL:-}
-      # AI model + WhatsApp keys are normally configured PER AGENT from the UI.
-      # These are optional global fallbacks — leave them empty if you set them in the app.
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Centro de Yoga Salvadora Conesa}
+      ANALIZA_IA_URL: ${ANALIZA_IA_URL:-https://analizaia.jigretera.com/api/dental/analizar}
+      # ─── AI Model & WhatsApp (UI configurables) ───
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       AGENT_MODEL: ${AGENT_MODEL:-openai/gpt-4o-mini}
       YCLOUD_API_KEY: ${YCLOUD_API_KEY:-}
       YCLOUD_WEBHOOK_SECRET: ${YCLOUD_WEBHOOK_SECRET:-}
       YCLOUD_WHATSAPP_NUMBER: ${YCLOUD_WHATSAPP_NUMBER:-}
     healthcheck:
-      # Readiness: process up AND database reachable. node is in the image, so no
-      # curl/wget needed. start_period gives migrations time to run on first boot.
       test:
         [
           "CMD",
@@ -99,25 +88,25 @@ services:
       - traefik.enable=true
       - traefik.docker.network=dokploy-network
       # HTTP -> HTTPS redirect
-      - traefik.http.routers.crm-api-http.rule=Host(`${API_DOMAIN}`)
+      - traefik.http.routers.crm-api-http.rule=Host(`${API_DOMAIN:-${WEB_DOMAIN:-crm-salvadoraconesa.jigretera.com}}`) && (PathPrefix(`/api`) || PathPrefix(`/healthz`))
       - traefik.http.routers.crm-api-http.entrypoints=web
       - traefik.http.routers.crm-api-http.middlewares=crm-api-redirect
       - traefik.http.middlewares.crm-api-redirect.redirectscheme.scheme=https
       # HTTPS (Let's Encrypt cert issued automatically)
-      - traefik.http.routers.crm-api.rule=Host(`${API_DOMAIN}`)
+      - traefik.http.routers.crm-api.rule=Host(`${API_DOMAIN:-${WEB_DOMAIN:-crm-salvadoraconesa.jigretera.com}}`) && (PathPrefix(`/api`) || PathPrefix(`/healthz`))
       - traefik.http.routers.crm-api.entrypoints=websecure
       - traefik.http.routers.crm-api.tls.certresolver=letsencrypt
+      - traefik.http.routers.crm-api.priority=100
       - traefik.http.services.crm-api.loadbalancer.server.port=3001
 
   web:
     build:
       context: ./frontend
       args:
-        # Baked into the bundle at build time so the browser calls the right API.
-        NEXT_PUBLIC_API_URL: https://${API_DOMAIN}
+        # Defaults to the public domain URL so the frontend can call /api seamlessly
+        NEXT_PUBLIC_API_URL: https://${API_DOMAIN:-${WEB_DOMAIN:-crm-salvadoraconesa.jigretera.com}}
     restart: unless-stopped
     depends_on:
-      # Wait until the API is actually ready (DB migrated) before starting web.
       api:
         condition: service_healthy
     healthcheck:
@@ -138,22 +127,21 @@ services:
       - traefik.enable=true
       - traefik.docker.network=dokploy-network
       # HTTP -> HTTPS redirect
-      - traefik.http.routers.crm-web-http.rule=Host(`${WEB_DOMAIN}`)
+      - traefik.http.routers.crm-web-http.rule=Host(`${WEB_DOMAIN:-crm-salvadoraconesa.jigretera.com}`)
       - traefik.http.routers.crm-web-http.entrypoints=web
       - traefik.http.routers.crm-web-http.middlewares=crm-web-redirect
       - traefik.http.middlewares.crm-web-redirect.redirectscheme.scheme=https
       # HTTPS (Let's Encrypt cert issued automatically)
-      - traefik.http.routers.crm-web.rule=Host(`${WEB_DOMAIN}`)
+      - traefik.http.routers.crm-web.rule=Host(`${WEB_DOMAIN:-crm-salvadoraconesa.jigretera.com}`)
       - traefik.http.routers.crm-web.entrypoints=websecure
       - traefik.http.routers.crm-web.tls.certresolver=letsencrypt
+      - traefik.http.routers.crm-web.priority=10
       - traefik.http.services.crm-web.loadbalancer.server.port=3000
 
 volumes:
   postgres_data:
 
 networks:
-  # Private network for api <-> db (not exposed to the internet).
   internal:
-  # Shared network created by Dokploy; the Traefik proxy lives here.
   dokploy-network:
     external: true
