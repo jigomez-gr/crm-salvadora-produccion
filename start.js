@@ -11,8 +11,10 @@ const frontendDir = path.join(__dirname, 'frontend');
 const backendPort = process.env.BACKEND_PORT || '3099';
 const frontendPort = process.env.PORT || '3000';
 
-// 1. Start NestJS Backend on isolated internal port 3099
+// 1. Start NestJS Backend
 console.log(`[Backend] Starting NestJS on port ${backendPort} in ${backendDir}...`);
+console.log(`[Backend] Using DATABASE_URL: ${process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/:([^:@]+)@/, ':***@') : 'Default (172.17.0.1:5433)'}`);
+
 const backend = spawn('node', ['dist/main.js'], {
   cwd: backendDir,
   stdio: 'inherit',
@@ -25,17 +27,14 @@ const backend = spawn('node', ['dist/main.js'], {
 });
 
 backend.on('error', (err) => {
-  console.error('[Backend] Process error:', err);
+  console.error('[Backend] Fatal spawn error:', err);
 });
 
 backend.on('exit', (code, signal) => {
-  console.log(`[Backend] Process exited with code ${code} signal ${signal}`);
-  if (code !== 0) {
-    process.exit(code || 1);
-  }
+  console.error(`[Backend] Process exited with code ${code} signal ${signal}`);
 });
 
-// 2. Start Next.js Frontend on port 3000
+// 2. Start Next.js Frontend
 let frontendCmd = 'node';
 let frontendArgs = ['server.js'];
 
@@ -49,7 +48,6 @@ if (fs.existsSync(path.join(frontendDir, 'server.js'))) {
   frontendCmd = 'node';
   frontendArgs = [path.join(frontendDir, '.next', 'standalone', 'frontend', 'server.js')];
 } else {
-  // Use pnpm start inside frontend
   frontendCmd = 'pnpm';
   frontendArgs = ['start'];
 }
@@ -70,14 +68,11 @@ const frontend = spawn(frontendCmd, frontendArgs, {
 });
 
 frontend.on('error', (err) => {
-  console.error('[Frontend] Fatal error:', err);
+  console.error('[Frontend] Fatal spawn error:', err);
 });
 
 frontend.on('exit', (code, signal) => {
-  console.log(`[Frontend] Process exited with code ${code} signal ${signal}`);
-  if (code !== 0) {
-    process.exit(code || 1);
-  }
+  console.error(`[Frontend] Process exited with code ${code} signal ${signal}`);
 });
 
 function cleanup() {

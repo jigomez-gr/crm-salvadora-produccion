@@ -45,23 +45,17 @@ import { EmailModule } from './email/email.module';
 import { PaymentsModule } from './payments/payments.module';
 import { CalcomModule } from './calcom/calcom.module';
 import { AgentsModule } from './agents/agents.module';
-// IMPORTANT: AgentsModule (which imports AppMastraModule with NestMastraModule) MUST be last.
-// NestMastraModule mounts catch-all routes under /api; importing it earlier returns 404s
-// for routes registered after it.
 
 @Module({
   imports: [
     EventEmitterModule.forRoot(),
-    // Cron scheduling (appointment reminders). Sends are gated per-agent.
     ScheduleModule.forRoot(),
-    // Rate limiting: cap requests per IP to blunt brute-force and abuse (e.g.
-    // someone hammering the public webhook or the LLM playground). 120 req/min.
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 120 }]),
     TypeOrmModule.forRoot({
       type: 'postgres',
       url:
         process.env.DATABASE_URL ||
-        'postgresql://crm:crm@localhost:5432/crm_salvadora',
+        'postgresql://postgres:W39xlpS9@172.17.0.1:5433/crm_salvadora',
       entities: [
         Contact,
         Appointment,
@@ -82,47 +76,41 @@ import { AgentsModule } from './agents/agents.module';
         Call,
         VapiAccount,
       ],
-      migrations: [join(__dirname, 'migrations', '*.{js,ts}')],
-      // Auto-sync schema to ensure services, knowledge, payments and call tables exist
-      synchronize: true,
+      synchronize: false,
       migrationsRun: false,
+      retryAttempts: 10,
+      retryDelay: 3000,
+      extra: {
+        connectionTimeoutMillis: 5000,
+      },
     }),
     ContactsModule,
     AppointmentsModule,
     ServicesModule,
     ConversationsModule,
     DashboardModule,
-    // Reports/analytics + audit trail + settings APIs — kept well before
-    // AgentsModule (Mastra's `/api/*` catch-all) so their routes aren't shadowed.
     ReportsModule,
     AuditModule,
     SettingsModule,
-    // Agent knowledge base (Mastra-free). Before AgentsModule so its routes
-    // aren't shadowed by the Mastra catch-all; AgentsModule injects its service.
     KnowledgeModule,
-    // Business email (SMTP) — Mastra-free, before AgentsModule's catch-all.
     EmailModule,
-    // Payments (Stripe Checkout, Bizum, Webhooks) — Mastra-free, before AgentsModule
     PaymentsModule,
-    // Cal.com integration — Mastra-free, before AgentsModule
     CalcomModule,
-    // VAPI voice agent & calls channel — before AgentsModule
     VapiModule,
     CallsModule,
-    EventsModule,
-    WhatsappModule,
     SeedModule,
     RemindersModule,
-    // Health endpoints — before AgentsModule so /api/health isn't shadowed.
     HealthModule,
-    // Auth + user management. Imported before AgentsModule (Mastra's catch-all).
     AuthModule,
     UsersModule,
-    AgentsModule, // MUST be last — see comment above
+    WhatsappModule,
+    AgentsModule,
   ],
   providers: [
-    // Apply the rate limiter globally to every route.
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}
