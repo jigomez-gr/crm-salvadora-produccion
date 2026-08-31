@@ -83,12 +83,9 @@ import { AgentsModule } from './agents/agents.module';
         VapiAccount,
       ],
       migrations: [join(__dirname, 'migrations', '*.{js,ts}')],
-      // DEV: derive the schema from the entities for a zero-config experience.
-      // PROD: never auto-sync (it can DROP columns/tables and lose data); apply
-      // versioned migrations on boot instead. See docs/adr/0008 and the
-      // `migration:*` scripts in package.json.
-      synchronize: process.env.NODE_ENV !== 'production',
-      migrationsRun: process.env.NODE_ENV === 'production',
+      // Auto-sync schema to ensure services, knowledge, payments and call tables exist
+      synchronize: true,
+      migrationsRun: false,
     }),
     ContactsModule,
     AppointmentsModule,

@@ -29,9 +29,9 @@ async function bootstrap() {
   configureApp(app);
 
   const port = process.env.PORT || 3001;
-  await app.listen(port);
-  console.log(`Backend running on http://localhost:${port}`);
-  console.log(`Dashboard metrics: http://localhost:${port}/api/dashboard/metrics`);
+  await app.listen(port, '0.0.0.0');
+  console.log(`Backend running on http://0.0.0.0:${port}`);
+  console.log(`Dashboard metrics: http://0.0.0.0:${port}/api/dashboard/metrics`);
 }
 
 bootstrap();
