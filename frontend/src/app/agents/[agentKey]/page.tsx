@@ -18,7 +18,7 @@ import {
   Star,
 } from "lucide-react";
 import Link from "next/link";
-import { apiFetch, apiUrl } from "@/lib/api";
+import { apiFetch, apiUrl, ApiError } from "@/lib/api";
 import {
   Agent,
   KnowledgeList,
