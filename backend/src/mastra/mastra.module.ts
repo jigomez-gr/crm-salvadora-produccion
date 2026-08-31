@@ -6,9 +6,11 @@ import { PostgresStore } from '@mastra/pg';
 import { ContactsModule } from '../contacts/contacts.module';
 import { AppointmentsModule } from '../appointments/appointments.module';
 import { PaymentsModule } from '../payments/payments.module';
+import { ConversationsModule } from '../conversations/conversations.module';
 import { ContactsService } from '../contacts/contacts.service';
 import { AppointmentsService } from '../appointments/appointments.service';
 import { PaymentsService } from '../payments/payments.service';
+import { MessagesService } from '../conversations/messages.service';
 import { createBookingAgent, TEMPLATE_AGENT_ID } from './booking-agent';
 
 export { NestMastraModule };
@@ -18,12 +20,19 @@ export { NestMastraModule };
     ContactsModule,
     AppointmentsModule,
     PaymentsModule,
+    ConversationsModule,
     NestMastraModule.registerAsync({
-      imports: [ContactsModule, AppointmentsModule, PaymentsModule],
+      imports: [
+        ContactsModule,
+        AppointmentsModule,
+        PaymentsModule,
+        ConversationsModule,
+      ],
       useFactory: (
         contactsService: ContactsService,
         appointmentsService: AppointmentsService,
         paymentsService: PaymentsService,
+        messagesService: MessagesService,
       ) => {
         const databaseUrl =
           process.env.DATABASE_URL ||
@@ -56,9 +65,21 @@ export { NestMastraModule };
           },
           updateContact: async (
             contactId: string,
-            fields: { name?: string; email?: string },
+            fields: { name?: string; email?: string; phone?: string },
           ) => {
             return contactsService.update(contactId, fields);
+          },
+          linkThreadContact: async (threadId: string, contactId: string) => {
+            return messagesService.linkContact(threadId, contactId);
+          },
+          getThreadContact: async (threadId: string) => {
+            const conv = await messagesService
+              .getConversation(threadId)
+              .catch(() => null);
+            if (conv?.contactId) {
+              return contactsService.findById(conv.contactId).catch(() => null);
+            }
+            return null;
           },
           getAvailableSlots: traced('getAvailableSlots', async (
             date: string,

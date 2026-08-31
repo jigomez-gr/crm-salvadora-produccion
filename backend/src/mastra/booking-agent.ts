@@ -46,6 +46,8 @@ export interface BookingAgentDeps {
   ) => Promise<any>;
   listContactAppointments: (contactId: string) => Promise<any[]>;
   cancelAppointment: (appointmentId: string) => Promise<any>;
+  linkThreadContact?: (threadId: string, contactId: string) => Promise<void>;
+  getThreadContact?: (threadId: string) => Promise<any>;
   createPaymentLink?: (params: {
     appointmentId?: string;
     contactId?: string;
@@ -157,6 +159,10 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       if (contact?.id && inputData.email) {
         await deps.updateContact(contact.id, { email: inputData.email });
       }
+      const threadId = (context as any)?.requestContext?.get?.('threadId');
+      if (contact?.id && threadId && deps.linkThreadContact) {
+        await deps.linkThreadContact(threadId, contact.id).catch(() => null);
+      }
       try {
         (context as any)?.requestContext?.set?.('customer', {
           contactId: contact?.id,
@@ -165,7 +171,15 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           nameKnown: true,
         });
       } catch {}
-      return { contact, message: 'Contacto registrado correctamente en el CRM.' };
+      return {
+        contact: {
+          id: contact?.id,
+          name: contact?.name || inputData.name,
+          phone: contact?.phone || inputData.phone,
+          email: inputData.email || contact?.email,
+        },
+        message: 'Contacto registrado correctamente en el CRM con nombre, teléfono y correo.',
+      };
     },
   });
 
@@ -182,10 +196,22 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     execute: async (inputData, context) => {
       const customer = getCustomer(context);
       let contactId = customer?.contactId;
+      const threadId = (context as any)?.requestContext?.get?.('threadId');
+
+      if (!contactId && threadId && deps.getThreadContact) {
+        const threadContact = await deps.getThreadContact(threadId).catch(() => null);
+        if (threadContact?.id) {
+          contactId = threadContact.id;
+        }
+      }
+
       if (!contactId && inputData.phone) {
         const contact = await deps.createContact(inputData.phone, inputData.name);
         if (contact?.id && inputData.email) {
           await deps.updateContact(contact.id, { email: inputData.email });
+        }
+        if (contact?.id && threadId && deps.linkThreadContact) {
+          await deps.linkThreadContact(threadId, contact.id).catch(() => null);
         }
         try {
           (context as any)?.requestContext?.set?.('customer', {
@@ -195,18 +221,33 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
             nameKnown: true,
           });
         } catch {}
-        return { contact, message: 'Contacto registrado correctamente en el CRM.' };
+        return {
+          contact: {
+            id: contact?.id,
+            name: contact?.name || inputData.name,
+            phone: contact?.phone || inputData.phone,
+            email: inputData.email || contact?.email,
+          },
+          message: 'Contacto registrado y guardado correctamente en el CRM.',
+        };
       }
+
       if (!contactId) {
         return {
           error:
             'No hay un cliente identificado todavía. Por favor, solicita el número de teléfono móvil para registrarlo en el CRM.',
         };
       }
+
       const contact = await deps.updateContact(contactId, {
         name: inputData.name,
         email: inputData.email,
       });
+
+      if (threadId && deps.linkThreadContact) {
+        await deps.linkThreadContact(threadId, contactId).catch(() => null);
+      }
+
       try {
         (context as any)?.requestContext?.set?.('customer', {
           ...customer,
@@ -215,7 +256,14 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           nameKnown: !!(inputData.name || customer?.nameKnown),
         });
       } catch {}
-      return { contact, message: 'Datos del cliente actualizados en el CRM.' };
+      return {
+        contact: {
+          id: contactId,
+          name: inputData.name || contact?.name,
+          email: inputData.email || contact?.email,
+        },
+        message: 'Datos del cliente actualizados y confirmados en el CRM.',
+      };
     },
   });
 
@@ -347,6 +395,15 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       const config = getConfig(context);
       const customer = getCustomer(context);
       let contactId = customer?.contactId;
+      const threadId = (context as any)?.requestContext?.get?.('threadId');
+
+      if (!contactId && threadId && deps.getThreadContact) {
+        const threadContact = await deps.getThreadContact(threadId).catch(() => null);
+        if (threadContact?.id) {
+          contactId = threadContact.id;
+        }
+      }
+
       if (!contactId && customer?.phone) {
         try {
           const fallback = await deps.createContact(
@@ -354,6 +411,9 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
             customer.name,
           );
           contactId = fallback?.id;
+          if (contactId && threadId && deps.linkThreadContact) {
+            await deps.linkThreadContact(threadId, contactId).catch(() => null);
+          }
           if (contactId) {
             try {
               (context as any)?.requestContext?.set?.('customer', {

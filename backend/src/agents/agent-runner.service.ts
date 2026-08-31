@@ -236,6 +236,8 @@ export class AgentRunnerService {
         process.env.OPENROUTER_API_KEY = agentConfig.openrouterApiKey;
       }
     }
+    requestContext.set('threadId', threadId);
+
     // Tell the agent who it is talking to so it never asks for the phone and
     // never has to handle the contact id itself (the booking/list tools read it
     // from here). A new WhatsApp contact starts with name === phone, so treat
@@ -243,6 +245,23 @@ export class AgentRunnerService {
     let effectiveContactId = contactId;
     let effectivePhone = phone;
     let effectiveName = contactName;
+
+    // If contact is not passed directly (e.g. Widget / Web), resolve from conversation
+    if (!effectiveContactId) {
+      const conv = await this.messagesService
+        .getConversation(threadId)
+        .catch(() => null);
+      if (conv?.contactId) {
+        effectiveContactId = conv.contactId;
+        const c = await this.contactsService
+          .findById(conv.contactId)
+          .catch(() => null);
+        if (c) {
+          effectivePhone = effectivePhone || c.phone;
+          effectiveName = effectiveName || c.name;
+        }
+      }
+    }
 
     if (channel === MessageChannel.PLAYGROUND && !effectiveContactId) {
       try {

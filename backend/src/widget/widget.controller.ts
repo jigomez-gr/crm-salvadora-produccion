@@ -159,6 +159,17 @@ export class WidgetController {
         await this.contactsService.update(contact.id, { email: dto.email });
       }
       contactName = contact.name || contactName;
+      await this.messagesService.linkContact(threadId, contact.id);
+    } else {
+      const conv = await this.messagesService.getConversation(threadId).catch(() => null);
+      if (conv?.contactId) {
+        contactId = conv.contactId;
+        const contact = await this.contactsService.findById(conv.contactId).catch(() => null);
+        if (contact) {
+          contactName = contactName || contact.name;
+          dto.phone = dto.phone || contact.phone;
+        }
+      }
     }
 
     let inboundMessage = dto.message;

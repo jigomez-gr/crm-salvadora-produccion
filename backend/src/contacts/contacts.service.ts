@@ -282,6 +282,10 @@ export class ContactsService {
     return contact;
   }
 
+  async findById(id: string): Promise<Contact | null> {
+    return this.contactsRepo.findOne({ where: { id } });
+  }
+
   async findByPhone(phone: string): Promise<Contact | null> {
     return this.contactsRepo.findOne({ where: { phone } });
   }

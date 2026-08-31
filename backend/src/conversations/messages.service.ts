@@ -249,6 +249,19 @@ export class MessagesService {
     await this.conversationsRepo.update({ threadId }, { unreadCount: 0 });
   }
 
+  /** Link a conversation and its messages to a contact ID */
+  async linkContact(threadId: string, contactId: string): Promise<void> {
+    await this.ensureConversation(threadId);
+    await this.conversationsRepo.update({ threadId }, { contactId });
+    await this.messagesRepo
+      .createQueryBuilder()
+      .update(Message)
+      .set({ contactId })
+      .where('threadId = :threadId AND contactId IS NULL', { threadId })
+      .execute()
+      .catch(() => null);
+  }
+
   async existsByExternalId(externalId: string): Promise<boolean> {
     const count = await this.messagesRepo.count({ where: { externalId } });
     return count > 0;
