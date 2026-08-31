@@ -115,6 +115,30 @@ export class ContactsService {
     private readonly events: EventEmitter2,
   ) {}
 
+  async onModuleInit(): Promise<void> {
+    try {
+      const contactsWithAppts = await this.contactsRepo
+        .createQueryBuilder('c')
+        .innerJoin('appointments', 'a', 'a.contactId = c.id')
+        .where('c.status = :leadStatus', { leadStatus: ContactStatus.LEAD })
+        .getMany();
+
+      for (const contact of contactsWithAppts) {
+        contact.status = ContactStatus.ACTIVE;
+        if (!contact.tags) contact.tags = [];
+        if (!contact.tags.includes('cliente')) {
+          contact.tags.push('cliente');
+        }
+        if (contact.pipelineStage === PipelineStage.NEW || contact.pipelineStage === PipelineStage.CONTACTED) {
+          contact.pipelineStage = PipelineStage.BOOKED;
+        }
+        await this.contactsRepo.save(contact);
+      }
+    } catch {
+      // Non-fatal init sync
+    }
+  }
+
   /**
    * Tell interested listeners (the SSE stream) that a contact changed, so the
    * pipeline board and contacts list refresh live. PII-free: only the id + stage.
