@@ -741,6 +741,13 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Miércoles: 20:15
   * Jueves: 9:45, 11:15, 16:30, 17:30 y 19:00
   Cuando un cliente solicite una clase de yoga en cualquiera de sus horarios oficiales (como el martes a las 9:45), consulta y ofrece ese horario exacto.
+- MEDITACIONES GUIADAS (ACTIVIDAD GRUPAL):
+  Para las Meditaciones Guiadas (30 min de duración, de 9:15 a 9:45):
+  * Horarios oficiales: Martes y Jueves de 9:15 a 9:45 (sesión de 30 minutos).
+  * Modalidad: Actividad grupal presencial (aforo de hasta 28 personas).
+  * Precio: 15€/mes (pago en el centro).
+  * ¡Condición especial!: Son GRATUITAS para los alumnos del centro de Yoga.
+  Cuando un cliente solicite meditación o pregunte por ella, ofrécele los martes o jueves a las 9:15 y formaliza su plaza con 'bookAppointment'.
 - REQUISITO OBLIGATORIO PARA TODAS LAS CITAS Y RESERVAS:
   Para formalizar cualquier cita o reserva, es IMPRESCINDIBLE disponer de:
   1. Nombre y apellidos (nombre completo).
