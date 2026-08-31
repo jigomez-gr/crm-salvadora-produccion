@@ -203,7 +203,7 @@ export class AppointmentsService {
           BOOKING_LOCK_KEY,
         ]);
         const repo = manager.getRepository(Appointment);
-        await this.checkOverlap(repo, startsAt, endsAt, undefined, calendarId, serviceId);
+        await this.checkOverlap(repo, startsAt, endsAt, undefined, calendarId, serviceId, serviceName);
         const appt = repo.create({
           ...dto,
           service: serviceName,
@@ -597,21 +597,46 @@ export class AppointmentsService {
     excludeId?: string,
     calendarId = 'default',
     serviceId?: string | null,
+    serviceName?: string | null,
   ): Promise<void> {
     let managerServiceIds: string[] = [];
-    let maxCapacity = 1;
+    let targetService: Service | null = null;
+
     if (serviceId) {
-      const targetService = await this.servicesRepo.findOne({ where: { id: serviceId } });
-      if (targetService?.maxCapacity && targetService.maxCapacity > 0) {
-        maxCapacity = targetService.maxCapacity;
+      targetService = await this.servicesRepo
+        .findOne({ where: { id: serviceId } })
+        .catch(() => null);
+    }
+    if (!targetService && serviceName) {
+      targetService = await this.servicesRepo
+        .findOne({ where: { name: serviceName } })
+        .catch(() => null);
+      if (!targetService) {
+        targetService = await this.servicesRepo
+          .findOne({ where: { name: ILike(`%${serviceName}%`) } })
+          .catch(() => null);
       }
-      if (targetService?.managerId) {
-        const sharedServices = await this.servicesRepo.find({
-          where: { managerId: targetService.managerId },
-          select: ['id'],
-        });
-        managerServiceIds = sharedServices.map((s) => s.id);
-      }
+    }
+
+    const isYogaOrGroup =
+      /yoga|meditaci|gong|taller|grupal/i.test(
+        serviceName || targetService?.name || '',
+      ) ||
+      (targetService?.maxCapacity && targetService.maxCapacity > 1);
+
+    let maxCapacity = 1;
+    if (targetService?.maxCapacity && targetService.maxCapacity > 0) {
+      maxCapacity = targetService.maxCapacity;
+    } else if (isYogaOrGroup) {
+      maxCapacity = 20;
+    }
+
+    if (targetService?.managerId) {
+      const sharedServices = await this.servicesRepo.find({
+        where: { managerId: targetService.managerId },
+        select: ['id'],
+      });
+      managerServiceIds = sharedServices.map((s) => s.id);
     }
 
     const qb = repo
@@ -622,7 +647,19 @@ export class AppointmentsService {
       .andWhere('a.startsAt < :endsAt', { endsAt })
       .andWhere('a.endsAt > :startsAt', { startsAt });
 
-    if (managerServiceIds.length > 0) {
+    if (isYogaOrGroup || maxCapacity > 1) {
+      // For group sessions, check conflicts against the same group service/class
+      if (targetService?.id) {
+        qb.andWhere('(a.serviceId = :svcId OR a.service ILIKE :svcName)', {
+          svcId: targetService.id,
+          svcName: `%${serviceName || targetService.name}%`,
+        });
+      } else if (serviceName) {
+        qb.andWhere('a.service ILIKE :svcName', {
+          svcName: `%${serviceName}%`,
+        });
+      }
+    } else if (managerServiceIds.length > 0) {
       qb.andWhere(
         '(a.calendarId = :calendarId OR a.serviceId IN (:...managerServiceIds))',
         { calendarId, managerServiceIds },
@@ -688,6 +725,7 @@ export class AppointmentsService {
     now = new Date(),
     calendarId = 'default',
     serviceId?: string,
+    serviceName?: string,
   ): Promise<TimeSlot[]> {
     // Day window in the business timezone
     const zoned = new TZDate(date.getTime(), timezone);
@@ -695,20 +733,43 @@ export class AppointmentsService {
     const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
 
     let managerServiceIds: string[] = [];
-    let maxCapacity = 1;
+    let targetService: Service | null = null;
     if (serviceId) {
-      const targetService = await this.servicesRepo.findOne({ where: { id: serviceId } });
-      if (targetService?.maxCapacity && targetService.maxCapacity > 0) {
-        maxCapacity = targetService.maxCapacity;
+      targetService = await this.servicesRepo
+        .findOne({ where: { id: serviceId } })
+        .catch(() => null);
+    }
+    if (!targetService && serviceName) {
+      targetService = await this.servicesRepo
+        .findOne({ where: { name: serviceName } })
+        .catch(() => null);
+      if (!targetService) {
+        targetService = await this.servicesRepo
+          .findOne({ where: { name: ILike(`%${serviceName}%`) } })
+          .catch(() => null);
       }
-      if (targetService?.calendarId) calendarId = targetService.calendarId;
-      if (targetService?.managerId) {
-        const sharedServices = await this.servicesRepo.find({
-          where: { managerId: targetService.managerId },
-          select: ['id'],
-        });
-        managerServiceIds = sharedServices.map((s) => s.id);
-      }
+    }
+
+    const isYogaOrGroup =
+      /yoga|meditaci|gong|taller|grupal/i.test(
+        serviceName || targetService?.name || '',
+      ) ||
+      (targetService?.maxCapacity && targetService.maxCapacity > 1);
+
+    let maxCapacity = 1;
+    if (targetService?.maxCapacity && targetService.maxCapacity > 0) {
+      maxCapacity = targetService.maxCapacity;
+    } else if (isYogaOrGroup) {
+      maxCapacity = 20;
+    }
+
+    if (targetService?.calendarId) calendarId = targetService.calendarId;
+    if (targetService?.managerId) {
+      const sharedServices = await this.servicesRepo.find({
+        where: { managerId: targetService.managerId },
+        select: ['id'],
+      });
+      managerServiceIds = sharedServices.map((s) => s.id);
     }
 
     const qb = this.appointmentsRepo
@@ -719,7 +780,18 @@ export class AppointmentsService {
       })
       .andWhere('a.status != :cancelled', { cancelled: AppointmentStatus.CANCELLED });
 
-    if (managerServiceIds.length > 0) {
+    if (isYogaOrGroup || maxCapacity > 1) {
+      if (targetService?.id) {
+        qb.andWhere('(a.serviceId = :svcId OR a.service ILIKE :svcName)', {
+          svcId: targetService.id,
+          svcName: `%${serviceName || targetService.name}%`,
+        });
+      } else if (serviceName) {
+        qb.andWhere('a.service ILIKE :svcName', {
+          svcName: `%${serviceName}%`,
+        });
+      }
+    } else if (managerServiceIds.length > 0) {
       qb.andWhere(
         '(a.calendarId = :calendarId OR a.serviceId IN (:...managerServiceIds))',
         { calendarId, managerServiceIds },

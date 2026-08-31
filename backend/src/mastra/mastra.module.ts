@@ -88,6 +88,7 @@ export { NestMastraModule };
             timezone: string,
             calendarId?: string,
             serviceId?: string,
+            serviceName?: string,
           ) => {
             const slots = await appointmentsService.getAvailableSlots(
               new Date(date),
@@ -97,6 +98,7 @@ export { NestMastraModule };
               new Date(),
               calendarId || 'default',
               serviceId,
+              serviceName,
             );
             return slots.map((s) => ({
               startsAt: s.startsAt.toISOString(),
