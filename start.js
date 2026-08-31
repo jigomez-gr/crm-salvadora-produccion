@@ -3,13 +3,13 @@ const path = require('path');
 const fs = require('fs');
 
 console.log('=====================================================');
-console.log(' Starting CRM Salvadora Full-Stack (Backend + Web)   ');
+console.log(' Starting CRM Salvadora Full-Stack (Nixpacks / Node) ');
 console.log('=====================================================');
 
 const backendDir = path.join(__dirname, 'backend');
 const frontendDir = path.join(__dirname, 'frontend');
 
-// 1. Start NestJS Backend
+// 1. Start NestJS Backend on port 3001
 console.log(`[Backend] Starting NestJS in ${backendDir}...`);
 const backend = spawn('node', ['dist/main.js'], {
   cwd: backendDir,
@@ -22,7 +22,7 @@ const backend = spawn('node', ['dist/main.js'], {
 });
 
 backend.on('error', (err) => {
-  console.error('[Backend] Fatal error:', err);
+  console.error('[Backend] Process error:', err);
 });
 
 backend.on('exit', (code, signal) => {
@@ -32,29 +32,37 @@ backend.on('exit', (code, signal) => {
   }
 });
 
-// 2. Locate Next.js standalone server.js
-let frontendServerFile = path.join(frontendDir, 'server.js');
-let frontendCwd = frontendDir;
+// 2. Start Next.js Frontend on port 3000
+let frontendCmd = 'node';
+let frontendArgs = ['server.js'];
 
-if (!fs.existsSync(frontendServerFile)) {
-  const nested = path.join(frontendDir, 'frontend', 'server.js');
-  if (fs.existsSync(nested)) {
-    frontendServerFile = nested;
-    frontendCwd = path.join(frontendDir, 'frontend');
-  }
+if (fs.existsSync(path.join(frontendDir, 'server.js'))) {
+  frontendCmd = 'node';
+  frontendArgs = ['server.js'];
+} else if (fs.existsSync(path.join(frontendDir, '.next', 'standalone', 'server.js'))) {
+  frontendCmd = 'node';
+  frontendArgs = [path.join(frontendDir, '.next', 'standalone', 'server.js')];
+} else if (fs.existsSync(path.join(frontendDir, '.next', 'standalone', 'frontend', 'server.js'))) {
+  frontendCmd = 'node';
+  frontendArgs = [path.join(frontendDir, '.next', 'standalone', 'frontend', 'server.js')];
+} else {
+  // Use pnpm start inside frontend
+  frontendCmd = 'pnpm';
+  frontendArgs = ['start'];
 }
 
-console.log(`[Frontend] Starting Next.js: ${frontendServerFile} in ${frontendCwd}...`);
+console.log(`[Frontend] Starting Next.js (${frontendCmd} ${frontendArgs.join(' ')}) in ${frontendDir}...`);
 
-const frontend = spawn('node', [frontendServerFile], {
-  cwd: frontendCwd,
+const frontend = spawn(frontendCmd, frontendArgs, {
+  cwd: frontendDir,
   stdio: 'inherit',
+  shell: true,
   env: {
     ...process.env,
     PORT: process.env.PORT || '3000',
     HOSTNAME: '0.0.0.0',
     NODE_ENV: 'production',
-    INTERNAL_API_URL: 'http://localhost:3001',
+    INTERNAL_API_URL: 'http://127.0.0.1:3001',
   },
 });
 

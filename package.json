@@ -1,0 +1,11 @@
+{
+  "name": "crm-salvadora",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.30.3",
+  "scripts": {
+    "build": "pnpm --filter crm-salvadora-backend build && pnpm --filter frontend build",
+    "start": "node start.js"
+  },
+  "dependencies": {}
+}

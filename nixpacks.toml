@@ -1,0 +1,14 @@
+[phases.setup]
+nixPkgs = ["nodejs_22", "pnpm"]
+
+[phases.install]
+cmds = ["pnpm install"]
+
+[phases.build]
+cmds = [
+  "cd backend && pnpm build",
+  "cd frontend && pnpm build"
+]
+
+[start]
+cmd = "node start.js"
