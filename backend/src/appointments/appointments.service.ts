@@ -113,23 +113,30 @@ export class AppointmentsService {
   async create(dto: CreateAppointmentDto): Promise<Appointment> {
     const startsAt = new Date(dto.startsAt);
     let endsAt = dto.endsAt ? new Date(dto.endsAt) : startsAt;
-
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     let serviceEntity: Service | null = null;
-    if (dto.serviceId) {
-      serviceEntity = await this.servicesRepo.findOne({
-        where: { id: dto.serviceId },
-        relations: ['manager'],
-      });
-    } else if (dto.service) {
-      serviceEntity = await this.servicesRepo.findOne({
-        where: { name: dto.service },
-        relations: ['manager'],
-      });
-      if (!serviceEntity) {
-        serviceEntity = await this.servicesRepo.findOne({
-          where: { name: ILike(`%${dto.service}%`) },
+    if (dto.serviceId && UUID_REGEX.test(dto.serviceId)) {
+      serviceEntity = await this.servicesRepo
+        .findOne({
+          where: { id: dto.serviceId },
           relations: ['manager'],
-        });
+        })
+        .catch(() => null);
+    }
+    if (!serviceEntity && dto.service) {
+      serviceEntity = await this.servicesRepo
+        .findOne({
+          where: { name: dto.service },
+          relations: ['manager'],
+        })
+        .catch(() => null);
+      if (!serviceEntity) {
+        serviceEntity = await this.servicesRepo
+          .findOne({
+            where: { name: ILike(`%${dto.service}%`) },
+            relations: ['manager'],
+          })
+          .catch(() => null);
       }
     }
 
@@ -141,7 +148,8 @@ export class AppointmentsService {
 
     const calendarId = dto.calendarId || serviceEntity?.calendarId || 'default';
     const serviceName = dto.service || serviceEntity?.name || 'General';
-    const serviceId = serviceEntity?.id ?? dto.serviceId ?? null;
+    const serviceId =
+      serviceEntity?.id ?? (dto.serviceId && UUID_REGEX.test(dto.serviceId) ? dto.serviceId : null);
     const price = dto.price !== undefined ? dto.price : (serviceEntity?.price ?? null);
     const defaultStatus = serviceEntity?.requiresApproval
       ? AppointmentStatus.PENDING_APPROVAL
@@ -243,10 +251,11 @@ export class AppointmentsService {
       appt.endsAt = newEnd;
     }
 
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (dto.serviceId !== undefined) {
-      appt.serviceId = dto.serviceId || null;
-      if (dto.serviceId) {
-        const svc = await this.servicesRepo.findOne({ where: { id: dto.serviceId } });
+      appt.serviceId = dto.serviceId && UUID_REGEX.test(dto.serviceId) ? dto.serviceId : null;
+      if (dto.serviceId && UUID_REGEX.test(dto.serviceId)) {
+        const svc = await this.servicesRepo.findOne({ where: { id: dto.serviceId } }).catch(() => null);
         if (svc) {
           appt.service = svc.name;
           if (dto.calendarId === undefined) appt.calendarId = svc.calendarId;
@@ -599,10 +608,11 @@ export class AppointmentsService {
     serviceId?: string | null,
     serviceName?: string | null,
   ): Promise<void> {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     let managerServiceIds: string[] = [];
     let targetService: Service | null = null;
 
-    if (serviceId) {
+    if (serviceId && UUID_REGEX.test(serviceId)) {
       targetService = await this.servicesRepo
         .findOne({ where: { id: serviceId } })
         .catch(() => null);
@@ -732,9 +742,10 @@ export class AppointmentsService {
     const dayStart = new TZDate(zoned.getFullYear(), zoned.getMonth(), zoned.getDate(), 0, 0, timezone);
     const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
 
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     let managerServiceIds: string[] = [];
     let targetService: Service | null = null;
-    if (serviceId) {
+    if (serviceId && UUID_REGEX.test(serviceId)) {
       targetService = await this.servicesRepo
         .findOne({ where: { id: serviceId } })
         .catch(() => null);
