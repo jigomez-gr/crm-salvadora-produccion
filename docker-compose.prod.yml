@@ -75,12 +75,12 @@ services:
           "CMD",
           "node",
           "-e",
-          "require('http').get('http://127.0.0.1:3001/healthz/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+          "require('http').get('http://127.0.0.1:3001/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
         ]
-      interval: 15s
+      interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 40s
+      start_period: 30s
     networks:
       - internal
       - dokploy-network

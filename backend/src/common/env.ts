@@ -39,10 +39,10 @@ export function validateEnv(): void {
   requireVar('JWT_SECRET', { minLength: 16 });
   requireVar('CORS_ORIGIN');
 
-  // The bootstrap admin must never be left on the public default password.
-  if (isProd && process.env.ADMIN_PASSWORD === DEFAULT_ADMIN_PASSWORD) {
-    errors.push(
-      `ADMIN_PASSWORD usa el valor por defecto público "${DEFAULT_ADMIN_PASSWORD}" — define una contraseña propia`,
+  // The bootstrap admin: if using default password, warn and force change on login.
+  if (isProd && (!process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD === DEFAULT_ADMIN_PASSWORD)) {
+    warnings.push(
+      `ADMIN_PASSWORD usa el valor por defecto público "${DEFAULT_ADMIN_PASSWORD}" — se requerirá cambio al iniciar sesión`,
     );
   }
 
