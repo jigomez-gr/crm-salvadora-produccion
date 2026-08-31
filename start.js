@@ -1,10 +1,18 @@
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
-console.log('--- Starting CRM Salvadora Full-Stack (Backend + Frontend) ---');
+console.log('=====================================================');
+console.log(' Starting CRM Salvadora Full-Stack (Backend + Web)   ');
+console.log('=====================================================');
 
-// 1. Start NestJS Backend on port 3001
-const backend = spawn('node', ['backend/dist/main.js'], {
+const backendDir = path.join(__dirname, 'backend');
+const frontendDir = path.join(__dirname, 'frontend');
+
+// 1. Start NestJS Backend
+console.log(`[Backend] Starting NestJS in ${backendDir}...`);
+const backend = spawn('node', ['dist/main.js'], {
+  cwd: backendDir,
   stdio: 'inherit',
   env: {
     ...process.env,
@@ -14,18 +22,32 @@ const backend = spawn('node', ['backend/dist/main.js'], {
 });
 
 backend.on('error', (err) => {
-  console.error('Backend process error:', err);
+  console.error('[Backend] Fatal error:', err);
 });
 
 backend.on('exit', (code, signal) => {
-  console.log(`Backend process exited with code ${code} signal ${signal}`);
+  console.log(`[Backend] Process exited with code ${code} signal ${signal}`);
   if (code !== 0) {
     process.exit(code || 1);
   }
 });
 
-// 2. Start Next.js Frontend on port 3000
-const frontend = spawn('node', ['frontend/server.js'], {
+// 2. Locate Next.js standalone server.js
+let frontendServerFile = path.join(frontendDir, 'server.js');
+let frontendCwd = frontendDir;
+
+if (!fs.existsSync(frontendServerFile)) {
+  const nested = path.join(frontendDir, 'frontend', 'server.js');
+  if (fs.existsSync(nested)) {
+    frontendServerFile = nested;
+    frontendCwd = path.join(frontendDir, 'frontend');
+  }
+}
+
+console.log(`[Frontend] Starting Next.js: ${frontendServerFile} in ${frontendCwd}...`);
+
+const frontend = spawn('node', [frontendServerFile], {
+  cwd: frontendCwd,
   stdio: 'inherit',
   env: {
     ...process.env,
@@ -37,18 +59,18 @@ const frontend = spawn('node', ['frontend/server.js'], {
 });
 
 frontend.on('error', (err) => {
-  console.error('Frontend process error:', err);
+  console.error('[Frontend] Fatal error:', err);
 });
 
 frontend.on('exit', (code, signal) => {
-  console.log(`Frontend process exited with code ${code} signal ${signal}`);
+  console.log(`[Frontend] Process exited with code ${code} signal ${signal}`);
   if (code !== 0) {
     process.exit(code || 1);
   }
 });
 
 function cleanup() {
-  console.log('Shutting down services...');
+  console.log('Shutting down CRM Salvadora services...');
   try { backend.kill('SIGTERM'); } catch {}
   try { frontend.kill('SIGTERM'); } catch {}
   process.exit(0);
