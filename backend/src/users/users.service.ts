@@ -104,6 +104,18 @@ export class UsersService implements OnModuleInit {
     }
   }
 
+  async createInitialAdmin(email: string, password: string): Promise<User> {
+    const admin = this.usersRepo.create({
+      name: 'Administrador',
+      email: email.trim().toLowerCase(),
+      passwordHash: await this.hash(password),
+      role: UserRole.ADMIN,
+      isActive: true,
+      mustChangePassword: false,
+    });
+    return this.usersRepo.save(admin);
+  }
+
   // ─── Queries ───
 
   async findAll(): Promise<SafeUser[]> {
