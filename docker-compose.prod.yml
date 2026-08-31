@@ -1,12 +1,8 @@
 # Production stack for Dokploy (deployment type: "Docker Compose").
 #
-# This file deploys the CRM Salvadora app on Dokploy / Docker:
-# - Database (Postgres) with safe fallback defaults
-# - API (NestJS + Mastra + TypeORM) on :3001
-# - Web (Next.js 16) on :3000
-#
-# Supports BOTH single-domain (e.g. crm-salvadoraconesa.jigretera.com)
-# and multi-domain (web + api subdomains) with automatic SSL via Traefik.
+# Traefik routing is managed dynamically by Dokploy from the "Domains" tab:
+# - Service: web (Port: 3000)
+# - Next.js proxies /api/* internally to http://api:3001
 
 services:
   db:
@@ -31,10 +27,8 @@ services:
       - "host.docker.internal:host-gateway"
     environment:
       NODE_ENV: production
-      # Connects to external DATABASE_URL if set, otherwise internal db service.
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-W39xlpS9}@db:5432/${POSTGRES_DB:-crm_salvadora}}
-      # The deployed frontend origin, so the browser is allowed to call the API.
-      CORS_ORIGIN: ${CORS_ORIGIN:-https://${WEB_DOMAIN:-crm-salvadoraconesa.jigretera.com}}
+      CORS_ORIGIN: "*"
       PORT: "3001"
       # ─── Authentication (login + roles) ───
       JWT_SECRET: ${JWT_SECRET:-super-secret-crm-key-39xlps9-jwt-token-2026}
@@ -65,46 +59,20 @@ services:
     networks:
       - internal
       - dokploy-network
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=dokploy-network
-      # HTTP -> HTTPS redirect
-      - traefik.http.routers.crm-api-http.rule=Host(`${API_DOMAIN:-${WEB_DOMAIN:-crm-salvadoraconesa.jigretera.com}}`) && (PathPrefix(`/api`) || PathPrefix(`/healthz`))
-      - traefik.http.routers.crm-api-http.entrypoints=web
-      - traefik.http.routers.crm-api-http.middlewares=crm-api-redirect
-      - traefik.http.middlewares.crm-api-redirect.redirectscheme.scheme=https
-      # HTTPS (Let's Encrypt cert issued automatically)
-      - traefik.http.routers.crm-api.rule=Host(`${API_DOMAIN:-${WEB_DOMAIN:-crm-salvadoraconesa.jigretera.com}}`) && (PathPrefix(`/api`) || PathPrefix(`/healthz`))
-      - traefik.http.routers.crm-api.entrypoints=websecure
-      - traefik.http.routers.crm-api.tls.certresolver=letsencrypt
-      - traefik.http.routers.crm-api.priority=100
-      - traefik.http.services.crm-api.loadbalancer.server.port=3001
 
   web:
     build:
       context: ./frontend
-      args:
-        # Defaults to the public domain URL so the frontend can call /api seamlessly
-        NEXT_PUBLIC_API_URL: https://${API_DOMAIN:-${WEB_DOMAIN:-crm-salvadoraconesa.jigretera.com}}
     restart: unless-stopped
     depends_on:
       - api
+    environment:
+      INTERNAL_API_URL: http://api:3001
+      NODE_ENV: production
+      PORT: "3000"
     networks:
+      - internal
       - dokploy-network
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=dokploy-network
-      # HTTP -> HTTPS redirect
-      - traefik.http.routers.crm-web-http.rule=Host(`${WEB_DOMAIN:-crm-salvadoraconesa.jigretera.com}`)
-      - traefik.http.routers.crm-web-http.entrypoints=web
-      - traefik.http.routers.crm-web-http.middlewares=crm-web-redirect
-      - traefik.http.middlewares.crm-web-redirect.redirectscheme.scheme=https
-      # HTTPS (Let's Encrypt cert issued automatically)
-      - traefik.http.routers.crm-web.rule=Host(`${WEB_DOMAIN:-crm-salvadoraconesa.jigretera.com}`)
-      - traefik.http.routers.crm-web.entrypoints=websecure
-      - traefik.http.routers.crm-web.tls.certresolver=letsencrypt
-      - traefik.http.routers.crm-web.priority=10
-      - traefik.http.services.crm-web.loadbalancer.server.port=3000
 
 volumes:
   postgres_data:
