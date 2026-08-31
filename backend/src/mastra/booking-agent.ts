@@ -20,10 +20,10 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1';
 // live here; config comes from requestContext.
 export interface BookingAgentDeps {
   findContactByPhone: (phone: string) => Promise<any | null>;
-  createContact: (phone: string, name?: string) => Promise<any>;
+  createContact: (phone: string, name?: string, email?: string) => Promise<any>;
   updateContact: (
     contactId: string,
-    fields: { name?: string; email?: string },
+    fields: { name?: string; email?: string; phone?: string },
   ) => Promise<any>;
   getAvailableSlots: (
     date: string,
@@ -383,6 +383,18 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       startsAt: z
         .string()
         .describe('Start time of the appointment in ISO format (or event date)'),
+      customerName: z
+        .string()
+        .optional()
+        .describe("Customer's full name (nombre y apellidos)"),
+      customerPhone: z
+        .string()
+        .optional()
+        .describe("Customer's mobile phone number"),
+      customerEmail: z
+        .string()
+        .optional()
+        .describe("Customer's email address"),
       modality: z
         .enum(['in_person', 'phone', 'virtual'])
         .optional()
@@ -400,6 +412,10 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       let contactId = customer?.contactId;
       const threadId = (context as any)?.requestContext?.get?.('threadId');
 
+      const phoneToUse = inputData.customerPhone || customer?.phone;
+      const nameToUse = inputData.customerName || customer?.name;
+      const emailToUse = inputData.customerEmail;
+
       if (!contactId && threadId && deps.getThreadContact) {
         const threadContact = await deps.getThreadContact(threadId).catch(() => null);
         if (threadContact?.id) {
@@ -407,11 +423,12 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         }
       }
 
-      if (!contactId && customer?.phone) {
+      if (!contactId && phoneToUse) {
         try {
           const fallback = await deps.createContact(
-            customer.phone,
-            customer.name,
+            phoneToUse,
+            nameToUse,
+            emailToUse,
           );
           contactId = fallback?.id;
           if (contactId && threadId && deps.linkThreadContact) {
@@ -422,6 +439,9 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
               (context as any)?.requestContext?.set?.('customer', {
                 ...customer,
                 contactId,
+                phone: phoneToUse,
+                name: nameToUse,
+                nameKnown: true,
               });
             } catch {}
           }
@@ -429,6 +449,16 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           // fallback failed
         }
       }
+
+      if (contactId && (nameToUse || emailToUse)) {
+        await deps
+          .updateContact(contactId, {
+            name: nameToUse,
+            email: emailToUse,
+          })
+          .catch(() => null);
+      }
+
       if (!contactId) {
         return {
           error:
