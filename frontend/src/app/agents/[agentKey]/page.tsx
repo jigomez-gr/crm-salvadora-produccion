@@ -1159,12 +1159,16 @@ function PlaygroundTab({ agentKey }: { agentKey: string }) {
         ...m,
         { role: "assistant", body: res.reply, ts: new Date().toISOString() },
       ]);
-    } catch {
+    } catch (err) {
+      const errMsg =
+        err instanceof ApiError && err.message
+          ? `Error: ${err.message}`
+          : "No se pudo obtener respuesta. Revisa tu clave de OpenRouter en la pestaña Configuración.";
       setMessages((m) => [
         ...m,
         {
           role: "assistant",
-          body: "No se pudo obtener respuesta. ¿Está el backend en ejecución?",
+          body: errMsg,
           ts: new Date().toISOString(),
         },
       ]);
