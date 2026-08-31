@@ -232,6 +232,9 @@ export class AgentRunnerService {
     const requestContext = new RequestContext<Record<string, any>>();
     if (agentConfig) {
       requestContext.set('agentConfig', agentConfig);
+      if (agentConfig.openrouterApiKey && agentConfig.openrouterApiKey !== 'sk-or-placeholder') {
+        process.env.OPENROUTER_API_KEY = agentConfig.openrouterApiKey;
+      }
     }
     // Tell the agent who it is talking to so it never asks for the phone and
     // never has to handle the contact id itself (the booking/list tools read it

@@ -645,13 +645,21 @@ ${flow}`;
     // config (OpenRouter). Falls back to env vars when the config has none.
     model: ({ requestContext }) => {
       const config = (requestContext as any)?.get?.('agentConfig') as any;
-      const apiKey = config?.openrouterApiKey || process.env.OPENROUTER_API_KEY || '';
+      const apiKey =
+        config?.openrouterApiKey && config.openrouterApiKey !== 'sk-or-placeholder'
+          ? config.openrouterApiKey
+          : (process.env.OPENROUTER_API_KEY || '');
       const modelId = config?.model || process.env.AGENT_MODEL || DEFAULT_MODEL;
       return {
         providerId: 'openrouter',
         modelId,
         url: OPENROUTER_URL,
         apiKey,
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://crm-salvadoraconesa.jigretera.com',
+          'X-Title': 'CRM Salvadora',
+        },
       } as any;
     },
     tools: {
