@@ -302,7 +302,7 @@ export default function DemoLandingPage() {
     }
     setSessionId(currentSess);
 
-    fetch("http://localhost:3001/api/widget/config/booking")
+    fetch("/api/widget/config/booking")
       .then((r) => r.json())
       .then((data) => {
         if (data.businessName) setBusinessName(data.businessName);
@@ -349,7 +349,7 @@ export default function DemoLandingPage() {
     setIsTyping(true);
 
     try {
-      const res = await fetch("http://localhost:3001/api/widget/chat/booking", {
+      const res = await fetch("/api/widget/chat/booking", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -398,7 +398,7 @@ export default function DemoLandingPage() {
 
     setWaLoading(true);
     try {
-      const res = await fetch("http://localhost:3001/api/widget/handoff-whatsapp/booking", {
+      const res = await fetch("/api/widget/handoff-whatsapp/booking", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

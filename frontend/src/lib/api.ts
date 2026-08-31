@@ -1,4 +1,9 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const BASE_URL =
+  typeof window !== "undefined"
+    ? ""
+    : (process.env.INTERNAL_API_URL ||
+       process.env.NEXT_PUBLIC_API_URL ||
+       "http://127.0.0.1:3001");
 
 // Error thrown by apiFetch on a non-2xx response. Carries the HTTP status and
 // the backend's message so callers (e.g. the login form) can show it.
@@ -16,7 +21,7 @@ export async function apiFetch<T>(
   options?: RequestInit
 ): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
-    // Send/receive the httpOnly auth cookie cross-origin (:3000 → :3001).
+    // Send/receive the httpOnly auth cookie cross-origin or same-origin.
     credentials: "include",
     headers: { "Content-Type": "application/json", ...options?.headers },
     ...options,
