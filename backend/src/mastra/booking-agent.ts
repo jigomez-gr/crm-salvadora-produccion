@@ -2,6 +2,7 @@ import { Agent } from '@mastra/core/agent';
 import { createTool } from '@mastra/core/tools';
 import { Memory } from '@mastra/memory';
 import { z } from 'zod';
+import { TZDate } from '@date-fns/tz';
 
 // A single reusable agent template serves every configured agent. The concrete
 // business persona, model and credentials are resolved per request from the
@@ -480,12 +481,25 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       }
 
       try {
+        const timezone = config?.timezone || 'Europe/Madrid';
         const status =
           svc.requiresApproval !== false ? 'pending_approval' : 'scheduled';
-        const effectiveStartsAt =
+        const rawStartsAt =
           svc.serviceType === 'event' && svc.eventStartDate
             ? new Date(svc.eventStartDate).toISOString()
             : inputData.startsAt;
+
+        // Ensure date is correctly parsed in business timezone if no offset was provided
+        let effectiveStartsAt = rawStartsAt;
+        const trimmed = rawStartsAt?.trim() || '';
+        if (trimmed && !trimmed.endsWith('Z') && !/[+-]\d{2}(:\d{2})?$/.test(trimmed)) {
+          const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/);
+          if (match) {
+            const [, y, m, d, h, min, s] = match;
+            const zoned = new TZDate(Number(y), Number(m) - 1, Number(d), Number(h), Number(min), Number(s || 0), timezone);
+            effectiveStartsAt = new Date(zoned.getTime()).toISOString();
+          }
+        }
 
         const effectiveModality =
           inputData.modality ||
@@ -568,12 +582,14 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           requiresApproval: status === 'pending_approval',
           message,
         };
-      } catch (err) {
-        // e.g. the slot was taken between checking availability and booking.
+      } catch (err: any) {
+        console.error('CRITICAL: bookAppointment failed with error:', err);
+        const errorMsg =
+          err?.message ||
+          err?.response?.message ||
+          (typeof err === 'string' ? err : 'Error al guardar la cita en la base de datos.');
         return {
-          error:
-            (err as { message?: string })?.message ||
-            'No se pudo reservar ese horario; puede que acabe de ocuparse. Ofrece otro hueco.',
+          error: errorMsg,
         };
       }
     },
