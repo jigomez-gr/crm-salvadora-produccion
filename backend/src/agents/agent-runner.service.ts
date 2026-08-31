@@ -323,14 +323,12 @@ export class AgentRunnerService {
         maxSteps: AGENT_MAX_STEPS,
       });
 
-      // Log only tool *names* — never the payloads, which contain customer PII
-      // (names, phone numbers, message text).
       for (const step of (result as any).steps ?? []) {
-        for (const tr of step.toolResults ?? []) {
-          this.logger.debug(`toolResult: ${tr?.toolName ?? 'unknown'}`);
-        }
         for (const tc of step.toolCalls ?? []) {
-          this.logger.debug(`toolCall: ${tc?.toolName ?? 'unknown'}`);
+          this.logger.log(`[ToolCall] ${tc?.toolName}: ${JSON.stringify(tc?.args || {})}`);
+        }
+        for (const tr of step.toolResults ?? []) {
+          this.logger.log(`[ToolResult] ${tr?.toolName}: ${JSON.stringify(tr?.result || {})}`);
         }
       }
 
