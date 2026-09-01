@@ -943,6 +943,15 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Próxima edición: Puente de Octubre (Del 9 al 12 de Octubre de 2026, 4 días / 3 noches).
   * Precio: 180€ (o según tipo de hospedaje y habitación elegida).
   * Cuando un cliente pregunte o pida inscribirse, informa de las fechas del puente de octubre y formaliza su plaza con 'bookAppointment'.
+- IAIDŌ (ESGRIMA JAPONESA TRADICIONAL):
+  * Modalidad: Arte marcial presencial tradicional de desenvainado y manejo de la katana.
+  * Horarios oficiales de clases:
+    - Lunes: 20:00 a 21:00 (1 hora).
+    - Jueves: 20:30 a 22:00 (1 hora y media).
+  * Lugar: Club Social Parque Granada (Calle Holanda 1, Fuenlabrada).
+  * Condición especial: ¡Primera clase de prueba GRATIS!
+  * Información y reservas por WhatsApp: 695 172 625.
+  * Cuando una persona pregunte o pida probar, ofrécele los horarios de Lunes (20:00) o Jueves (20:30), explícale que su primera clase es gratuita y formaliza su cita de prueba con 'bookAppointment'.
 - REQUISITO OBLIGATORIO PARA TODAS LAS CITAS Y RESERVAS:
   Para formalizar cualquier cita o reserva, es IMPRESCINDIBLE disponer de:
   1. Nombre y apellidos (nombre completo).

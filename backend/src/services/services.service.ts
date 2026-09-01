@@ -330,6 +330,39 @@ export class ServicesService implements OnModuleInit {
         await this.serviceRepo.save(participarConstelacionesSvc);
       }
 
+      // 3g. Ensure Iaidō exists
+      let iaidoSvc = await this.serviceRepo.findOne({
+        where: [{ name: ILike('%iaido%') }, { name: ILike('%iaidō%') }, { name: ILike('%esgrima japonesa%') }],
+      });
+      if (!iaidoSvc) {
+        iaidoSvc = await this.serviceRepo.save(
+          this.serviceRepo.create({
+            name: 'Iaidō (Esgrima Japonesa Tradicional)',
+            description:
+              'Arte marcial tradicional japonés de desenvainado y manejo de la katana. Práctica de katas, concentración, precisión y presencia. Horarios: Lunes de 20:00 a 21:00 y Jueves de 20:30 a 22:00. Lugar: Club Social Parque Granada. Primera clase de prueba gratuita. Información y reservas por WhatsApp: 695 172 625.',
+            serviceType: ServiceType.RECURRING,
+            durationMinutes: 90,
+            price: '35.00',
+            maxCapacity: 15,
+            calendarId: 'cal-iaido',
+            managerId: manager.id,
+            requiresApproval: false,
+            allowedModalities: ['in_person'],
+            reminderNotes:
+              'Para la primera clase de prueba gratuita, acudir con ropa deportiva cómoda o chándal y calcetines. El material de práctica inicial lo facilita la escuela. Rogamos puntualidad.',
+            isActive: true,
+          }),
+        );
+      } else {
+        iaidoSvc.description =
+          'Arte marcial tradicional japonés de desenvainado y manejo de la katana. Práctica de katas, concentración, precisión y presencia. Horarios: Lunes de 20:00 a 21:00 y Jueves de 20:30 a 22:00. Lugar: Club Social Parque Granada. Primera clase de prueba gratuita. Información y reservas por WhatsApp: 695 172 625.';
+        iaidoSvc.reminderNotes =
+          'Para la primera clase de prueba gratuita, acudir con ropa deportiva cómoda o chándal y calcetines. El material de práctica inicial lo facilita la escuela. Rogamos puntualidad.';
+        iaidoSvc.managerId = manager.id;
+        iaidoSvc.isActive = true;
+        await this.serviceRepo.save(iaidoSvc);
+      }
+
       // 4. Update agent config services JSON
       const agentConfig = await this.agentConfigRepo.findOne({ where: { agentKey: 'booking' } });
       if (agentConfig && Array.isArray(agentConfig.services)) {
