@@ -8,12 +8,18 @@ import { AnalizaIaService } from './analiza-ia.service';
 import { AppointmentsController } from './appointments.controller';
 import { AuthModule } from '../auth/auth.module';
 import { CalcomModule } from '../calcom/calcom.module';
+import { EmailModule } from '../email/email.module';
+import { YCloudModule } from '../whatsapp/ycloud.module';
+import { AgentsConfigModule } from '../agents/agents-config.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Appointment, Service, Contact]),
     AuthModule,
     CalcomModule,
+    EmailModule,
+    YCloudModule,
+    AgentsConfigModule,
   ],
   providers: [AppointmentsService, AnalizaIaService],
   controllers: [AppointmentsController],

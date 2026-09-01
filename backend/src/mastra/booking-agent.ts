@@ -782,6 +782,14 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Precio: 15€/mes (pago en el centro).
   * ¡Condición especial!: Son GRATUITAS para los alumnos del centro de Yoga.
   Cuando un cliente solicite meditación o pregunte por ella, ofrécele los martes o jueves a las 9:15 y formaliza su plaza con 'bookAppointment'.
+- TERAPIA GESTALT (SESIÓN INDIVIDUAL):
+  * Modalidad: Puede ser Presencial u Online (videollamada). Pregúntale SIEMPRE al alumno/cliente qué modalidad prefiere (presencial u online).
+  * Duración: 60 minutos (1 hora).
+  * Precio: 35€ por sesión (pago en el centro o previa confirmación).
+  * Aforo: Es una sesión individual (solo 1 persona por horario).
+  * Horario: Se acuerda individualmente entre alumno y profesor. Consulta disponibilidad con 'checkAvailability'.
+  * APROBACIÓN OBLIGATORIA: Las citas de Terapia Gestalt requieren la aprobación previa del terapeuta/profesor responsable (**Jose Ignacio Gomez Raya**).
+  * Al formalizar con 'bookAppointment', explícale con amabilidad al cliente que su solicitud de cita ha quedado registrada como **solicitud pendiente de confirmación** y que el terapeuta responsable le confirmará la cita (por email o WhatsApp) en cuanto la revise.
 - REQUISITO OBLIGATORIO PARA TODAS LAS CITAS Y RESERVAS:
   Para formalizar cualquier cita o reserva, es IMPRESCINDIBLE disponer de:
   1. Nombre y apellidos (nombre completo).

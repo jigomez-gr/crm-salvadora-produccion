@@ -26,6 +26,9 @@ import {
 } from './dto/appointment.dto';
 import { generateDoctorReportPdfBuffer } from './pdf-report.generator';
 import { AnalizaIaService, AiAnalysisResponse } from './analiza-ia.service';
+import { EmailService } from '../email/email.service';
+import { YCloudClient } from '../whatsapp/ycloud-client.service';
+import { AgentsConfigService } from '../agents/agents-config.service';
 
 // Advisory-lock key that serializes all booking writes (single bookable
 // resource). Arbitrary constant; when multi-resource lands, key it per resource.
@@ -44,6 +47,9 @@ export class AppointmentsService {
     private readonly calcomService: CalcomService,
     private readonly eventEmitter: EventEmitter2,
     private readonly analizaIaService: AnalizaIaService,
+    private readonly emailService: EmailService,
+    private readonly ycloudClient: YCloudClient,
+    private readonly agentsConfigService: AgentsConfigService,
   ) {}
 
   async findAll(
@@ -539,14 +545,224 @@ export class AppointmentsService {
     appt.status = AppointmentStatus.SCHEDULED;
     appt.acceptedAt = new Date();
     appt.acceptedBy = acceptedBy;
+
+    // Resolve service entity and manager
+    let serviceEntity: Service | null = null;
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (appt.serviceId && UUID_REGEX.test(appt.serviceId)) {
+      serviceEntity = await this.servicesRepo
+        .findOne({
+          where: { id: appt.serviceId },
+          relations: ['manager'],
+        })
+        .catch(() => null);
+    }
+    if (!serviceEntity && appt.service) {
+      serviceEntity = await this.servicesRepo
+        .findOne({
+          where: { name: appt.service },
+          relations: ['manager'],
+        })
+        .catch(() => null);
+    }
+
+    // Cal.com sync upon approval if virtual and not yet generated
+    if (appt.modality === 'virtual' && !appt.calMeetingUrl && appt.contact) {
+      try {
+        const calResult = await this.calcomService.createBooking({
+          startsAt: appt.startsAt,
+          endsAt: appt.endsAt,
+          serviceName: appt.service,
+          contact: {
+            name: appt.contact.name,
+            phone: appt.contact.phone,
+            email: appt.contact.email,
+          },
+          managerEmail: serviceEntity?.manager?.email || null,
+          managerName: serviceEntity?.manager?.name || acceptedBy || null,
+          reason: appt.reason,
+          eventTypeId: serviceEntity?.calEventTypeId,
+        });
+
+        appt.calBookingId = calResult.bookingId;
+        appt.calBookingUid = calResult.bookingUid;
+        appt.calMeetingUrl = calResult.meetingUrl;
+        appt.calStatus = calResult.status;
+      } catch (err) {
+        this.logger.error(`Error syncing with Cal.com on approval: ${err}`);
+      }
+    }
+
     const saved = await this.appointmentsRepo.save(appt);
     this.eventEmitter.emit('appointment.created', saved);
+
+    // Notify student via Email and/or WhatsApp
+    await this.notifyStudentDecision(
+      saved,
+      'accepted',
+      serviceEntity?.manager?.name || acceptedBy || 'Jose Ignacio Gomez Raya',
+    );
+
     return saved;
   }
 
   /** Reject an appointment (responsible manager rejection) */
   async reject(id: string, rejectedBy: string, reason?: string): Promise<Appointment> {
-    return this.cancel(id, rejectedBy, reason || 'Rechazada por el responsable del servicio');
+    const defaultReason = reason || 'No disponible en ese horario. Por favor solicita otra hora.';
+    const cancelled = await this.cancel(id, rejectedBy, defaultReason);
+
+    let serviceEntity: Service | null = null;
+    if (cancelled.service) {
+      serviceEntity = await this.servicesRepo
+        .findOne({
+          where: { name: cancelled.service },
+          relations: ['manager'],
+        })
+        .catch(() => null);
+    }
+
+    // Notify student via Email and/or WhatsApp
+    await this.notifyStudentDecision(
+      cancelled,
+      'rejected',
+      serviceEntity?.manager?.name || rejectedBy || 'Jose Ignacio Gomez Raya',
+      defaultReason,
+    );
+
+    return cancelled;
+  }
+
+  private async notifyStudentDecision(
+    appt: Appointment,
+    decision: 'accepted' | 'rejected',
+    managerName: string,
+    rejectionReason?: string,
+  ): Promise<void> {
+    try {
+      const contact =
+        appt.contact ||
+        (await this.contactsRepo.findOne({ where: { id: appt.contactId } }));
+      if (!contact) return;
+
+      const startsAtDate = new Date(appt.startsAt);
+      const formattedDate = startsAtDate.toLocaleDateString('es-ES', {
+        timeZone: 'Europe/Madrid',
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      });
+      const formattedTime = startsAtDate.toLocaleTimeString('es-ES', {
+        timeZone: 'Europe/Madrid',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      const isVirtual = appt.modality === 'virtual';
+      const modalityText = isVirtual
+        ? 'Online (Videollamada)'
+        : 'Presencial en el centro';
+      const meetingLinkText =
+        isVirtual && appt.calMeetingUrl
+          ? `\nEnlace de videollamada Cal.com: ${appt.calMeetingUrl}`
+          : '';
+
+      if (decision === 'accepted') {
+        const subject = `✅ Tu cita de ${appt.service} ha sido confirmada`;
+        const emailHtml = `
+          <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 24px;">
+            <h2 style="color: #10b981; margin-top: 0;">¡Tu cita ha sido confirmada!</h2>
+            <p>Hola <strong>${contact.name}</strong>,</p>
+            <p>Nos complace informarte de que tu solicitud de cita para <strong>${appt.service}</strong> ha sido <strong>aprobada y confirmada</strong> por el terapeuta/profesor responsable (<strong>${managerName}</strong>).</p>
+            <div style="background-color: #f9fafb; padding: 16px; border-radius: 6px; margin: 20px 0;">
+              <p style="margin: 6px 0;">📅 <strong>Fecha:</strong> ${formattedDate}</p>
+              <p style="margin: 6px 0;">⏰ <strong>Hora:</strong> ${formattedTime}</p>
+              <p style="margin: 6px 0;">📍 <strong>Modalidad:</strong> ${modalityText}</p>
+              ${
+                isVirtual && appt.calMeetingUrl
+                  ? `<p style="margin: 6px 0;">🔗 <strong>Videollamada:</strong> <a href="${appt.calMeetingUrl}" style="color: #2563eb;">Acceder a la sesión</a></p>`
+                  : ''
+              }
+              ${
+                appt.price
+                  ? `<p style="margin: 6px 0;">💶 <strong>Precio:</strong> ${appt.price} €</p>`
+                  : ''
+              }
+            </div>
+            <p>¡Te esperamos!</p>
+          </div>
+        `;
+
+        if (contact.email) {
+          await this.emailService
+            .sendNotification(contact.email, contact.name, subject, emailHtml)
+            .catch(() => null);
+        }
+
+        if (contact.phone) {
+          const config = await this.agentsConfigService
+            .findByKey('booking')
+            .catch(() => null);
+          const fromNumber =
+            config?.whatsappPhoneNumber ||
+            process.env.YCLOUD_FROM_PHONE ||
+            '+34600000000';
+          const whatsappMsg = `¡Hola ${contact.name}! Te confirmamos que tu solicitud para *${appt.service}* el *${formattedDate}* a las *${formattedTime}* ha sido *aprobada y confirmada* por el responsable (${managerName}).\n\nModalidad: ${modalityText}${meetingLinkText}\n\n¡Nos vemos pronto!`;
+          await this.ycloudClient
+            .sendTextMessage(
+              fromNumber,
+              contact.phone,
+              whatsappMsg,
+              config?.ycloudApiKey,
+            )
+            .catch(() => null);
+        }
+      } else {
+        const reasonText =
+          rejectionReason ||
+          'El horario solicitado no está disponible en este momento.';
+        const subject = `Información sobre tu solicitud de cita de ${appt.service}`;
+        const emailHtml = `
+          <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 24px;">
+            <h2 style="color: #ef4444; margin-top: 0;">Solicitud de cita no confirmada</h2>
+            <p>Hola <strong>${contact.name}</strong>,</p>
+            <p>Lamentamos comunicarte que tu solicitud de cita para <strong>${appt.service}</strong> el <strong>${formattedDate}</strong> a las <strong>${formattedTime}</strong> no ha podido ser confirmada.</p>
+            <p><strong>Motivo:</strong> ${reasonText}</p>
+            <p>Por favor, responde a este mensaje o visita nuestra web para seleccionar otro día u hora que te venga bien.</p>
+            <p>Disculpa las molestias.</p>
+          </div>
+        `;
+
+        if (contact.email) {
+          await this.emailService
+            .sendNotification(contact.email, contact.name, subject, emailHtml)
+            .catch(() => null);
+        }
+
+        if (contact.phone) {
+          const config = await this.agentsConfigService
+            .findByKey('booking')
+            .catch(() => null);
+          const fromNumber =
+            config?.whatsappPhoneNumber ||
+            process.env.YCLOUD_FROM_PHONE ||
+            '+34600000000';
+          const whatsappMsg = `Hola ${contact.name}. Lamentamos comunicarte que tu solicitud para *${appt.service}* el *${formattedDate}* a las *${formattedTime}* no ha podido ser confirmada.\n\nMotivo: ${reasonText}\n\nPor favor, indícanos qué otro día u hora te vendría bien para intentar agendarla de nuevo.`;
+          await this.ycloudClient
+            .sendTextMessage(
+              fromNumber,
+              contact.phone,
+              whatsappMsg,
+              config?.ycloudApiKey,
+            )
+            .catch(() => null);
+        }
+      }
+    } catch (err) {
+      this.logger.error(
+        `Error notifying student of appointment decision: ${err}`,
+      );
+    }
   }
 
   /** Logical cancellation — preserves the row (and its history) instead of deleting. */

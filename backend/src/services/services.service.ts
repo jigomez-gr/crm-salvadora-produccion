@@ -1,13 +1,15 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Not, Repository } from 'typeorm';
+import { In, Not, Repository, ILike } from 'typeorm';
+import * as bcrypt from 'bcryptjs';
 import { Service, ServiceType } from '../common/entities/service.entity';
 import { User, UserRole } from '../common/entities/user.entity';
 import { Appointment, AppointmentStatus } from '../common/entities/appointment.entity';
+import { AgentConfig } from '../common/entities/agent-config.entity';
 import { CreateServiceDto, UpdateServiceDto } from './dto/service.dto';
 
 @Injectable()
-export class ServicesService {
+export class ServicesService implements OnModuleInit {
   constructor(
     @InjectRepository(Service)
     private readonly serviceRepo: Repository<Service>,
@@ -15,7 +17,80 @@ export class ServicesService {
     private readonly userRepo: Repository<User>,
     @InjectRepository(Appointment)
     private readonly appointmentRepo: Repository<Appointment>,
+    @InjectRepository(AgentConfig)
+    private readonly agentConfigRepo: Repository<AgentConfig>,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    try {
+      // 1. Ensure Jose Ignacio Gomez Raya exists as SERVICE_MANAGER
+      let manager = await this.userRepo.findOne({
+        where: [{ email: 'jigomez@hotmail.com' }, { name: ILike('%Jose Ignacio Gomez%') }],
+      });
+
+      if (!manager) {
+        const passwordHash = await bcrypt.hash('Admin1234!', 10);
+        manager = await this.userRepo.save(
+          this.userRepo.create({
+            name: 'Jose Ignacio Gomez Raya',
+            email: 'jigomez@hotmail.com',
+            passwordHash,
+            role: UserRole.SERVICE_MANAGER,
+            isActive: true,
+          }),
+        );
+      } else {
+        manager.name = 'Jose Ignacio Gomez Raya';
+        manager.role = UserRole.SERVICE_MANAGER;
+        manager.isActive = true;
+        await this.userRepo.save(manager);
+      }
+
+      // 2. Ensure Terapia Gestalt service exists with requiresApproval=true and managerId
+      let gestaltSvc = await this.serviceRepo.findOne({
+        where: [{ name: ILike('%gestalt%') }],
+      });
+
+      if (gestaltSvc) {
+        gestaltSvc.managerId = manager.id;
+        gestaltSvc.requiresApproval = true;
+        gestaltSvc.maxCapacity = 1;
+        gestaltSvc.durationMinutes = 60;
+        gestaltSvc.price = '35.00';
+        gestaltSvc.allowedModalities = ['in_person', 'virtual'];
+        gestaltSvc.isActive = true;
+        gestaltSvc.description =
+          'Sesión individual de psicoterapia Gestalt presencial u online. Enfoque humanista y toma de conciencia. Horario convenido individualmente entre terapeuta y alumno/paciente. Requiere aprobación previa por parte del terapeuta responsable (Jose Ignacio Gomez Raya). Precio: 35€ por sesión de 1 hora. Pago en el centro.';
+        await this.serviceRepo.save(gestaltSvc);
+      }
+
+      // 3. Update agent config services JSON
+      const agentConfig = await this.agentConfigRepo.findOne({ where: { agentKey: 'booking' } });
+      if (agentConfig && Array.isArray(agentConfig.services)) {
+        let changed = false;
+        agentConfig.services = agentConfig.services.map((s: any) => {
+          if (/gestalt/i.test(s.name || '')) {
+            changed = true;
+            return {
+              ...s,
+              managerId: manager.id,
+              requiresApproval: true,
+              maxCapacity: 1,
+              durationMinutes: 60,
+              price: '35.00',
+              allowedModalities: ['in_person', 'virtual'],
+            };
+          }
+          return s;
+        });
+        if (changed) {
+          await this.agentConfigRepo.save(agentConfig);
+        }
+      }
+    } catch {
+      // Non-fatal on init
+    }
+  }
 
   private async enrichService(service: Service): Promise<Service> {
     const attendeesCount = await this.appointmentRepo.count({
