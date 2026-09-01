@@ -638,13 +638,27 @@ export class AppointmentsService {
         ? 'El horario solicitado no está disponible. Por favor, indícanos otra fecha u horario.'
         : 'No disponible en ese horario.');
 
-    const cancelled = await this.cancel(id, rejectedBy, defaultReason);
+    let appt: Appointment;
+    if (requestReschedule) {
+      // Keep appointment in PENDING_APPROVAL status so it remains visible as pending in the calendar and CRM
+      appt = await this.findOne(id);
+      appt.status = AppointmentStatus.PENDING_APPROVAL;
+      const notePrefix = proposedTimes
+        ? `[Propuesta de cambio de fecha enviada: ${proposedTimes}]`
+        : `[Petición de nueva fecha enviada: ${defaultReason}]`;
+      appt.reason = `${notePrefix} ${appt.reason || ''}`.trim();
+      appt = await this.appointmentsRepo.save(appt);
+      this.eventEmitter.emit('appointment.created', appt);
+    } else {
+      // Definite rejection -> cancelled
+      appt = await this.cancel(id, rejectedBy, defaultReason);
+    }
 
     let serviceEntity: Service | null = null;
-    if (cancelled.service) {
+    if (appt.service) {
       serviceEntity = await this.servicesRepo
         .findOne({
-          where: { name: cancelled.service },
+          where: { name: appt.service },
           relations: ['manager'],
         })
         .catch(() => null);
@@ -652,14 +666,14 @@ export class AppointmentsService {
 
     // Notify student via Email and/or WhatsApp and update conversation thread
     await this.notifyStudentDecision(
-      cancelled,
+      appt,
       requestReschedule ? 'reschedule_requested' : 'rejected',
       serviceEntity?.manager?.name || rejectedBy || 'Jose Ignacio Gomez Raya',
       defaultReason,
       proposedTimes,
     );
 
-    return cancelled;
+    return appt;
   }
 
   private async notifyStudentDecision(
