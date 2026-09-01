@@ -181,8 +181,8 @@ export class AppointmentsService {
     // Load contact info for virtual meeting synchronization
     const contact = await this.contactsRepo.findOne({ where: { id: dto.contactId } });
 
-    // Sincronización automática con Cal.com para citas virtuales
-    if (modality === 'virtual' && contact) {
+    // Sincronización automática con Cal.com para citas virtuales (solo si ya está confirmada / no requiere aprobación)
+    if (modality === 'virtual' && contact && status !== AppointmentStatus.PENDING_APPROVAL) {
       try {
         const calResult = await this.calcomService.createBooking({
           startsAt,

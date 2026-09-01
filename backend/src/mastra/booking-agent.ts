@@ -550,6 +550,16 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         };
       }
 
+      if (
+        svc.allowedModalities &&
+        svc.allowedModalities.length > 1 &&
+        !inputData.modality
+      ) {
+        return {
+          error: `Para tramitar la sesión de ${svc.name}, debes preguntar OBLIGATORIAMENTE al cliente si prefiere la modalidad Presencial (en el centro) u Online (videollamada). No llames a bookAppointment sin que el cliente haya elegido la modalidad.`,
+        };
+      }
+
       try {
         const timezone = config?.timezone || 'Europe/Madrid';
         const status =
@@ -624,13 +634,19 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
                 svc.eventDatesText || 'fechas programadas'
               }) ha sido registrada.`
             : status === 'pending_approval'
-            ? 'Solicitud de cita registrada pendiente de confirmación.'
+            ? `Solicitud de cita para ${svc.name} registrada correctamente (Modalidad: ${
+                effectiveModality === 'virtual' ? 'Online por videollamada' : 'Presencial en el centro'
+              }). Queda pendiente de aprobación por el terapeuta responsable (Jose Ignacio Gomez Raya). En cuanto la revise y apruebe, recibirás la confirmación oficial${
+                effectiveModality === 'virtual' ? ' y el enlace de la videollamada' : ''
+              } por correo o WhatsApp.`
             : 'Cita reservada y confirmada.';
 
-        if (effectiveModality === 'virtual' && appointment?.calMeetingUrl) {
-          message += ` Tu enlace de videollamada Cal.com para unirte a la cita es: ${appointment.calMeetingUrl}`;
-        } else if (effectiveModality === 'phone') {
-          message += ` (Modalidad: Consulta Telefónica).`;
+        if (status !== 'pending_approval') {
+          if (effectiveModality === 'virtual' && appointment?.calMeetingUrl) {
+            message += ` Tu enlace de videollamada Cal.com para unirte a la cita es: ${appointment.calMeetingUrl}`;
+          } else if (effectiveModality === 'phone') {
+            message += ` (Modalidad: Consulta Telefónica).`;
+          }
         }
 
         if (svc.minQuorum) {
