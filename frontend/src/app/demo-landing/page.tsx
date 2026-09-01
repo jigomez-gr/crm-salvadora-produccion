@@ -348,8 +348,13 @@ export default function DemoLandingPage() {
     setInputValue("");
     setIsTyping(true);
 
+    const API_BASE =
+      typeof window !== "undefined" && window.location.origin.includes("crm-")
+        ? ""
+        : (process.env.NEXT_PUBLIC_API_URL || "https://crm-salvadoraconesa.jigretera.com");
+
     try {
-      const res = await fetch("/api/widget/chat/booking", {
+      const res = await fetch(`${API_BASE}/api/widget/chat/booking`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -397,8 +402,13 @@ export default function DemoLandingPage() {
     if (!waPhone.trim()) return;
 
     setWaLoading(true);
+    const API_BASE =
+      typeof window !== "undefined" && window.location.origin.includes("crm-")
+        ? ""
+        : (process.env.NEXT_PUBLIC_API_URL || "https://crm-salvadoraconesa.jigretera.com");
+
     try {
-      const res = await fetch("/api/widget/handoff-whatsapp/booking", {
+      const res = await fetch(`${API_BASE}/api/widget/handoff-whatsapp/booking`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
