@@ -49,7 +49,7 @@ export interface BookingAgentDeps {
     reason?: string,
   ) => Promise<any>;
   listContactAppointments: (contactId: string) => Promise<any[]>;
-  cancelAppointment: (appointmentId: string) => Promise<any>;
+  cancelAppointment: (appointmentId: string, reason?: string) => Promise<any>;
   linkThreadContact?: (threadId: string, contactId: string) => Promise<void>;
   getThreadContact?: (threadId: string) => Promise<any>;
   createPaymentLink?: (params: {
@@ -842,13 +842,24 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
 
   const cancelAppointmentTool = createTool({
     id: 'cancelAppointment',
-    description: 'Cancel an existing appointment',
+    description: 'Cancel an existing appointment and record the cancellation reason',
     inputSchema: z.object({
       appointmentId: z.string().describe('ID of the appointment to cancel'),
+      reason: z
+        .string()
+        .optional()
+        .describe('Reason or motive for the cancellation provided by the customer'),
     }),
     execute: async (inputData) => {
-      const appointment = await deps.cancelAppointment(inputData.appointmentId);
-      return { appointment };
+      const appointment = await deps.cancelAppointment(
+        inputData.appointmentId,
+        inputData.reason,
+      );
+      return {
+        appointment,
+        message:
+          'Cita cancelada correctamente. Se ha notificado al alumno por correo y/o WhatsApp con el motivo registrado.',
+      };
     },
   });
 
@@ -952,6 +963,19 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Condición especial: ¡Primera clase de prueba GRATIS!
   * Información y reservas por WhatsApp: 695 172 625.
   * Cuando una persona pregunte o pida probar, ofrécele los horarios de Lunes (20:00) o Jueves (20:30), explícale que su primera clase es gratuita y formaliza su cita de prueba con 'bookAppointment'.
+- CANCELACIÓN DE CITAS Y RESERVAS:
+  1. Si un alumno o cliente solicita cancelar una cita (sea de Yoga, Gong, Constelaciones, Terapias, etc.):
+  2. Llama OBLIGATORIAMENTE a 'listContactAppointments' (pasando su teléfono o email) para obtener el listado de sus citas activas o pendientes.
+  3. Muestra al cliente sus citas de forma clara (nombre de la actividad, día y hora) para que identifique con total precisión cuál de ellas desea cancelar.
+  4. Solicita amablemente el MOTIVO de la cancelación (por ejemplo: "¿Podrías indicarme brevemente el motivo de la cancelación?").
+  5. En cuanto el cliente confirme qué cita anula y aporte el motivo (o lo exprese), ejecuta 'cancelAppointment' pasando el 'appointmentId' y el 'reason'.
+  6. Confírmale al cliente que su cita ha quedado cancelada con éxito y que el sistema le envía la confirmación oficial por correo electrónico y/o WhatsApp.
+- REPROGRAMACIÓN O CAMBIO DE FECHA DE CITAS:
+  1. Si el alumno desea cambiar de día u hora su cita:
+  2. Llama a 'listContactAppointments' para revisar su cita actual.
+  3. Pregunta qué nuevo día y franja horaria prefiere y consulta la disponibilidad real con 'checkAvailability'.
+  4. Anula la cita anterior con 'cancelAppointment' (indicando en motivo "Reprogramada a nueva fecha") y formaliza la nueva reserva con 'bookAppointment'.
+  5. Confirma al alumno el nuevo horario formalizado.
 - REQUISITO OBLIGATORIO PARA TODAS LAS CITAS Y RESERVAS:
   Para formalizar cualquier cita o reserva, es IMPRESCINDIBLE disponer de:
   1. Nombre y apellidos (nombre completo).

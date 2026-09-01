@@ -729,7 +729,7 @@ export class AppointmentsService {
 
   private async notifyStudentDecision(
     appt: Appointment,
-    decision: 'accepted' | 'rejected' | 'reschedule_requested',
+    decision: 'accepted' | 'rejected' | 'reschedule_requested' | 'cancelled',
     managerName: string,
     rejectionReason?: string,
     proposedTimes?: string,
@@ -961,6 +961,65 @@ export class AppointmentsService {
             )
             .catch(() => null);
         }
+      } else if (decision === 'cancelled') {
+        const reasonText =
+          rejectionReason || appt.cancellationReason || 'Cancelación solicitada por el alumno o por el centro.';
+        const subject = `❌ Cancelación de tu cita: ${appt.service} - ${formattedDate}`;
+        const emailHtml = `
+          <div style="font-family: Arial, sans-serif; color: #1f2937; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 10px; padding: 24px; background-color: #ffffff;">
+            <div style="text-align: center; margin-bottom: 20px; border-bottom: 1px solid #f3f4f6; padding-bottom: 16px;">
+              <h2 style="color: #ef4444; margin: 0; font-size: 22px;">Cita Cancelada</h2>
+              <p style="margin: 6px 0 0 0; color: #6b7280; font-size: 14px;">Centro de Yoga Salvadora Conesa & Club Social Parque Granada</p>
+            </div>
+            
+            <p style="font-size: 15px;">Hola <strong>${contact.name || 'Alumno'}</strong>,</p>
+            <p style="font-size: 14px; color: #374151;">Te confirmamos que tu cita para <strong>${appt.service}</strong> ha sido cancelada correctamente.</p>
+            
+            <div style="background-color: #fef2f2; border: 1px solid #fee2e2; padding: 16px; border-radius: 8px; margin: 16px 0;">
+              <p style="margin: 6px 0; color: #991b1b;">📌 <strong>Servicio / Actividad:</strong> ${appt.service}</p>
+              <p style="margin: 6px 0; color: #991b1b;">📅 <strong>Fecha anulada:</strong> ${formattedDate}</p>
+              <p style="margin: 6px 0; color: #991b1b;">⏰ <strong>Horario:</strong> ${formattedTime}</p>
+              <p style="margin: 6px 0; color: #991b1b;">📝 <strong>Motivo de cancelación:</strong> ${reasonText}</p>
+            </div>
+
+            <p style="font-size: 13px; color: #6b7280; margin-top: 20px; border-top: 1px solid #f3f4f6; padding-top: 14px;">Si deseas volver a reservar plaza o consultar nuevos horarios, puedes responder a este correo o escribirnos por WhatsApp al <strong>695 172 625</strong>.</p>
+            <p style="margin-top: 12px; font-weight: bold; color: #374151;">¡Esperamos verte pronto!</p>
+          </div>
+        `;
+
+        chatMessageText = `Hola ${contact.name || ''}. Te confirmamos que tu cita para *${appt.service}* del *${formattedDate}* a las *${formattedTime}* ha sido cancelada.\n\n📝 *Motivo:* ${reasonText}\n\nSi deseas reprogramar o reservar en otro horario, indícanoslo y te ayudamos encantados.`;
+
+        if (contact.email) {
+          await this.emailService
+            .sendNotification(
+              contact.email,
+              contact.name,
+              subject,
+              emailHtml,
+              chatMessageText,
+              undefined,
+              contact.id,
+            )
+            .catch(() => null);
+        }
+
+        if (contact.phone) {
+          const config = await this.agentsConfigService
+            .findByKey('booking')
+            .catch(() => null);
+          const fromNumber =
+            config?.whatsappPhoneNumber ||
+            process.env.YCLOUD_FROM_PHONE ||
+            '+34600000000';
+          await this.ycloudClient
+            .sendTextMessage(
+              fromNumber,
+              contact.phone,
+              chatMessageText,
+              config?.ycloudApiKey,
+            )
+            .catch(() => null);
+        }
       } else {
         const reasonText =
           rejectionReason ||
@@ -1014,50 +1073,41 @@ export class AppointmentsService {
 
       // Sincronizar y registrar el mensaje en la conversación del CRM / Inbox
       try {
-        const cleanPhone = (contact.phone || '').replace(/[^0-9]/g, '');
-        let conv = await this.conversationsRepo.findOne({
+        const conv = await this.conversationsRepo.findOne({
           where: [{ contactId: contact.id }],
           order: { updatedAt: 'DESC' },
         });
-
-        if (!conv && cleanPhone) {
-          conv = await this.conversationsRepo
-            .createQueryBuilder('c')
-            .where('c.threadId LIKE :p', { p: `%${cleanPhone}%` })
-            .orderBy('c.updatedAt', 'DESC')
-            .getOne();
-        }
 
         const threadId =
           conv?.threadId ||
           (contact.phone ? `booking:${contact.phone}` : `booking:${contact.id}`);
         const channel =
-          conv?.channel === 'whatsapp' || contact.phone
+          conv?.channel === MessageChannel.WHATSAPP || contact.phone
             ? MessageChannel.WHATSAPP
-            : MessageChannel.PLAYGROUND;
+            : MessageChannel.WIDGET;
 
-        const savedMsg = await this.messagesService.saveMessage({
-          contactId: contact.id,
-          threadId,
-          direction: MessageDirection.OUTBOUND,
-          channel,
-          body: chatMessageText,
-          status: MessageStatus.SENT,
-        });
+        if (chatMessageText) {
+          const savedMsg = await this.messagesService.saveMessage({
+            contactId: contact.id,
+            threadId,
+            direction: MessageDirection.OUTBOUND,
+            channel,
+            body: chatMessageText,
+            status: MessageStatus.SENT,
+          });
 
-        this.eventEmitter.emit('message.received', {
-          id: savedMsg.id,
-          threadId,
-          body: chatMessageText,
-        });
-        this.eventEmitter.emit('messages.created', savedMsg);
+          this.eventEmitter.emit('message.received', {
+            id: savedMsg.id,
+            threadId,
+            body: chatMessageText,
+          });
+          this.eventEmitter.emit('messages.created', savedMsg);
+        }
       } catch (convErr) {
-        this.logger.warn(`Could not sync message to conversation thread: ${convErr}`);
+        this.logger.debug(`Could not append decision message to conversation: ${convErr}`);
       }
     } catch (err) {
-      this.logger.error(
-        `Error notifying student of appointment decision: ${err}`,
-      );
+      this.logger.error(`Error notifying student about appointment ${appt.id}: ${err}`);
     }
   }
 
@@ -1082,6 +1132,23 @@ export class AppointmentsService {
       }
 
       this.eventEmitter.emit('appointment.created', appt);
+
+      // Notify student via Email and WhatsApp
+      let serviceEntity: Service | null = null;
+      if (appt.service) {
+        serviceEntity = await this.servicesRepo
+          .findOne({
+            where: { name: appt.service },
+            relations: ['manager'],
+          })
+          .catch(() => null);
+      }
+      this.notifyStudentDecision(
+        appt,
+        'cancelled',
+        serviceEntity?.manager?.name || cancelledBy || 'Jose Ignacio Gomez Raya',
+        reason,
+      ).catch(() => null);
     }
     return appt;
   }
