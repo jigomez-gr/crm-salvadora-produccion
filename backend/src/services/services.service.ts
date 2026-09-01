@@ -64,10 +64,46 @@ export class ServicesService implements OnModuleInit {
         await this.serviceRepo.save(gestaltSvc);
       }
 
-      // 3. Update agent config services JSON
+      // 3. Ensure Bienestar Experience service exists with requiresApproval=true and managerId
+      let bienestarSvc = await this.serviceRepo.findOne({
+        where: [{ name: ILike('%bienestar experience%') }, { name: ILike('%bienestar integral%') }],
+      });
+
+      if (bienestarSvc) {
+        bienestarSvc.managerId = manager.id;
+        bienestarSvc.requiresApproval = true;
+        bienestarSvc.maxCapacity = 1;
+        bienestarSvc.durationMinutes = 60;
+        bienestarSvc.price = bienestarSvc.price || '25.00';
+        bienestarSvc.allowedModalities = ['in_person', 'virtual'];
+        bienestarSvc.isActive = true;
+        bienestarSvc.description =
+          'Programa y sesiones de asesoramiento personalizado presencial y online en longevidad, bienestar integral, nutrición, biohacking, meditación y psicología positiva. Horario convenido individualmente. Requiere aprobación previa del responsable (Jose Ignacio Gomez Raya). Precio: 25€ por sesión de 1 hora. Pago en el centro.';
+        await this.serviceRepo.save(bienestarSvc);
+      } else {
+        bienestarSvc = await this.serviceRepo.save(
+          this.serviceRepo.create({
+            name: 'Bienestar Experience (Longevidad y Bienestar Integral)',
+            description:
+              'Programa y sesiones de asesoramiento personalizado presencial y online en longevidad, bienestar integral, nutrición, biohacking, meditación y psicología positiva. Horario convenido individualmente. Requiere aprobación previa del responsable (Jose Ignacio Gomez Raya). Precio: 25€ por sesión de 1 hora. Pago en el centro.',
+            serviceType: ServiceType.RECURRING,
+            durationMinutes: 60,
+            price: '25.00',
+            maxCapacity: 1,
+            calendarId: 'cal-bienestar-experience',
+            managerId: manager.id,
+            requiresApproval: true,
+            allowedModalities: ['in_person', 'virtual'],
+            isActive: true,
+          }),
+        );
+      }
+
+      // 4. Update agent config services JSON
       const agentConfig = await this.agentConfigRepo.findOne({ where: { agentKey: 'booking' } });
       if (agentConfig && Array.isArray(agentConfig.services)) {
         let changed = false;
+        let hasBienestar = false;
         agentConfig.services = agentConfig.services.map((s: any) => {
           if (/gestalt/i.test(s.name || '')) {
             changed = true;
@@ -81,8 +117,30 @@ export class ServicesService implements OnModuleInit {
               allowedModalities: ['in_person', 'virtual'],
             };
           }
+          if (/bienestar/i.test(s.name || '')) {
+            changed = true;
+            hasBienestar = true;
+            return {
+              ...s,
+              managerId: manager.id,
+              requiresApproval: true,
+              maxCapacity: 1,
+              durationMinutes: 60,
+              price: s.price || '25.00',
+              allowedModalities: ['in_person', 'virtual'],
+            };
+          }
           return s;
         });
+
+        if (!hasBienestar && bienestarSvc) {
+          agentConfig.services.push({
+            name: bienestarSvc.name,
+            durationMinutes: 60,
+          });
+          changed = true;
+        }
+
         if (changed) {
           await this.agentConfigRepo.save(agentConfig);
         }

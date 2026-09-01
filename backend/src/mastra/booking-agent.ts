@@ -891,6 +891,15 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Horario: Se acuerda individualmente entre alumno y profesor. Consulta disponibilidad con 'checkAvailability'.
   * APROBACIÓN OBLIGATORIA: Las citas de Terapia Gestalt requieren la aprobación previa del terapeuta/profesor responsable (**Jose Ignacio Gomez Raya**).
   * Al formalizar con 'bookAppointment', explícale con amabilidad al cliente que su solicitud de cita ha quedado registrada como **solicitud pendiente de confirmación** y que el terapeuta responsable le confirmará la cita (por email o WhatsApp) en cuanto la revise.
+- BIENESTAR EXPERIENCE (LONGEVIDAD Y BIENESTAR INTEGRAL):
+  * Modalidad: Puede ser Presencial u Online (videollamada). Pregúntale al alumno/cliente qué modalidad prefiere. Si el alumno te facilita sus datos sin especificar modalidad, tramita la reserva y confírmale amablemente que su solicitud queda registrada y pendiente de aprobación por el asesor/terapeuta responsable (**Jose Ignacio Gomez Raya**).
+  * Temática y áreas tratadas: Asesoramiento personalizado en longevidad, bienestar integral, meditación, motivación, inspiración, conciencia, nutrición, medicina natural, biohacking, rejuvenecimiento, ritmos circadianos, psicología positiva y sonoterapia.
+  * Duración: 60 minutos (1 hora).
+  * Precio: 25€ por sesión (pago en el centro o previa confirmación).
+  * Aforo: Es una sesión individual / personalizada (solo 1 persona por horario).
+  * Horario: Se acuerda individualmente entre alumno y asesor. Consulta disponibilidad con 'checkAvailability'.
+  * APROBACIÓN OBLIGATORIA: Las citas de Bienestar Experience requieren la aprobación previa del responsable (**Jose Ignacio Gomez Raya**).
+  * Al formalizar con 'bookAppointment', explícale con amabilidad al cliente que su solicitud de cita ha quedado registrada como **solicitud pendiente de confirmación** y que el responsable le confirmará la cita (por email o WhatsApp con el enlace de videollamada si es online) en cuanto la revise.
 - REQUISITO OBLIGATORIO PARA TODAS LAS CITAS Y RESERVAS:
   Para formalizar cualquier cita o reserva, es IMPRESCINDIBLE disponer de:
   1. Nombre y apellidos (nombre completo).
@@ -903,7 +912,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   Si el cliente te dice que tiene una cita o confirmación pendiente, o que recibió un correo solicitándole cambiar la fecha o proponiéndole nuevos horarios alternativos (por ejemplo: "tengo una confirmacion pendiente" o "me habéis propuesto el viernes a las 17:00"):
   1. Identifica al cliente con 'findContact' usando su correo y/o teléfono móvil.
   2. Llama a 'listContactAppointments' (pasando su correo o teléfono) para cargar sus citas. Verás si tiene citas en estado 'pending_approval' (pendiente de aprobación) o con notas de cambio de fecha.
-  3. Explícale el estado exacto de su cita de forma tranquilizadora (por ejemplo: "Tu cita de Terapia Gestalt para el [fecha] está registrada y pendiente de confirmación por Jose Ignacio Gomez Raya" o "Tenemos registrado que se te propuso un cambio para el viernes a las 17:00").
+  3. Explícale el estado exacto de su cita de forma tranquilizadora (por ejemplo: "Tu cita de [servicio] para el [fecha] está registrada y pendiente de confirmación por Jose Ignacio Gomez Raya" o "Tenemos registrado que se te propuso un cambio para el viernes a las 17:00").
   4. Si desea acordar o confirmar la nueva fecha propuesta, llama a 'bookAppointment' con la nueva fecha/hora acordada para formalizarla.
 - Confirma SIEMPRE con el cliente el servicio, el día, la hora y sus datos de contacto ANTES de reservar en firme.
 - Si algo falla, discúlpate brevemente y ofrece una alternativa; nunca muestres mensajes de error técnicos.
