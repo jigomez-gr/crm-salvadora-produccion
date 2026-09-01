@@ -972,10 +972,13 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   6. Confírmale al cliente que su cita ha quedado cancelada con éxito y que el sistema le envía la confirmación oficial por correo electrónico y/o WhatsApp.
 - REPROGRAMACIÓN O CAMBIO DE FECHA DE CITAS:
   1. Si el alumno desea cambiar de día u hora su cita:
-  2. Llama a 'listContactAppointments' para revisar su cita actual.
+  2. Llama a 'listContactAppointments' para revisar su cita actual y su estado.
   3. Pregunta qué nuevo día y franja horaria prefiere y consulta la disponibilidad real con 'checkAvailability'.
-  4. Anula la cita anterior con 'cancelAppointment' (indicando en motivo "Reprogramada a nueva fecha") y formaliza la nueva reserva con 'bookAppointment'.
-  5. Confirma al alumno el nuevo horario formalizado.
+  4. Para servicios que requieren aprobación previa del instructor/terapeuta (como Bienestar Experience o Terapia Gestalt):
+     * Al reprogramar, la cita entra de nuevo en el **circuito de aprobación** (estado pendiente de aprobación) en la nueva fecha solicitada.
+     * Explícale con amabilidad al cliente que su solicitud de cambio de horario ha quedado registrada y **pendiente de aprobación por el instructor responsable (Jose Ignacio Gomez Raya)**, y que en cuanto la confirme recibirá el correo/WhatsApp oficial con el enlace y detalles.
+  5. Para actividades regulares o eventos (Yoga, Baño de Gong, Iaidō):
+     * Se anula la cita previa y se confirma de inmediato el nuevo horario agendado.
 - REQUISITO OBLIGATORIO PARA TODAS LAS CITAS Y RESERVAS:
   Para formalizar cualquier cita o reserva, es IMPRESCINDIBLE disponer de:
   1. Nombre y apellidos (nombre completo).
