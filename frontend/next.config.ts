@@ -7,22 +7,6 @@ const backendUrl =
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${backendUrl}/api/:path*`,
-      },
-      {
-        source: "/healthz/:path*",
-        destination: `${backendUrl}/healthz/:path*`,
-      },
-      {
-        source: "/healthz",
-        destination: `${backendUrl}/healthz`,
-      },
-    ];
-  },
 };
 
 export default nextConfig;
