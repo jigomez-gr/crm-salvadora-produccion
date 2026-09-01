@@ -17,6 +17,7 @@ const CANDIDATE_URLS = [
 let cachedWorkingUrl: string | null = null;
 
 async function forwardRequest(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+  const origin = req.headers.get("origin") || "*";
   const { path } = await params;
   const subpath = path.join("/");
   const search = req.nextUrl.search || "";
@@ -27,7 +28,7 @@ async function forwardRequest(req: NextRequest, { params }: { params: Promise<{ 
   headers.delete("host");
 
   let body: ArrayBuffer | undefined = undefined;
-  if (method !== "GET" && method !== "HEAD") {
+  if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
     body = await req.arrayBuffer();
   }
 
@@ -49,10 +50,15 @@ async function forwardRequest(req: NextRequest, { params }: { params: Promise<{ 
         cache: "no-store",
       });
 
-      // If we get a response (even 401, 403, 404, 200), this backend is ALIVE
+      // If we get a response, this backend is ALIVE
       cachedWorkingUrl = base;
 
       const resHeaders = new Headers(res.headers);
+      resHeaders.set("Access-Control-Allow-Origin", origin);
+      resHeaders.set("Access-Control-Allow-Credentials", "true");
+      resHeaders.set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
+      resHeaders.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept");
+
       const resBody = await res.arrayBuffer();
 
       return new NextResponse(resBody, {
@@ -72,8 +78,28 @@ async function forwardRequest(req: NextRequest, { params }: { params: Promise<{ 
       message: `No se pudo conectar con el backend. Último error: ${lastError?.message || "Conexión rechazada"}`,
       candidatesTried: urlsToTry,
     },
-    { status: 503 }
+    {
+      status: 503,
+      headers: {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Credentials": "true",
+      },
+    }
   );
+}
+
+export async function OPTIONS(req: NextRequest) {
+  const origin = req.headers.get("origin") || "*";
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Credentials": "true",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept",
+      "Access-Control-Max-Age": "86400",
+    },
+  });
 }
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
@@ -89,9 +115,6 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ path: str
   return forwardRequest(req, ctx);
 }
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
-  return forwardRequest(req, ctx);
-}
-export async function OPTIONS(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   return forwardRequest(req, ctx);
 }
 export async function HEAD(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
