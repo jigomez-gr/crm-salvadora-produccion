@@ -550,16 +550,6 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         };
       }
 
-      if (
-        svc.allowedModalities &&
-        svc.allowedModalities.length > 1 &&
-        !inputData.modality
-      ) {
-        return {
-          error: `Para tramitar la sesión de ${svc.name}, debes preguntar OBLIGATORIAMENTE al cliente si prefiere la modalidad Presencial (en el centro) u Online (videollamada). No llames a bookAppointment sin que el cliente haya elegido la modalidad.`,
-        };
-      }
-
       try {
         const timezone = config?.timezone || 'Europe/Madrid';
         const status =
@@ -799,7 +789,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * ¡Condición especial!: Son GRATUITAS para los alumnos del centro de Yoga.
   Cuando un cliente solicite meditación o pregunte por ella, ofrécele los martes o jueves a las 9:15 y formaliza su plaza con 'bookAppointment'.
 - TERAPIA GESTALT (SESIÓN INDIVIDUAL):
-  * Modalidad: Puede ser Presencial u Online (videollamada). Pregúntale SIEMPRE al alumno/cliente qué modalidad prefiere (presencial u online).
+  * Modalidad: Puede ser Presencial u Online (videollamada). Pregúntale al alumno/cliente qué modalidad prefiere. Si el alumno te facilita sus datos sin especificar modalidad, tramita la reserva y confírmale amablemente que su solicitud queda registrada y pendiente de aprobación por el terapeuta responsable (**Jose Ignacio Gomez Raya**).
   * Duración: 60 minutos (1 hora).
   * Precio: 35€ por sesión (pago en el centro o previa confirmación).
   * Aforo: Es una sesión individual (solo 1 persona por horario).
