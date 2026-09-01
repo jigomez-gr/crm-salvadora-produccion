@@ -913,6 +913,18 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Horario: Se acuerda individualmente entre alumno y asesor. Consulta disponibilidad con 'checkAvailability'.
   * APROBACIÓN OBLIGATORIA: Las citas de Bienestar Experience requieren la aprobación previa del responsable (**Jose Ignacio Gomez Raya**).
   * Al formalizar con 'bookAppointment', explícale con amabilidad al cliente que su solicitud de cita ha quedado registrada como **solicitud pendiente de confirmación** y que el responsable le confirmará la cita (por email o WhatsApp con el enlace de videollamada si es online) en cuanto la revise.
+- ENCUENTRO DE MUJERES (PRIMAVERA - JORNADA VIVENCIAL):
+  * Modalidad: Actividad grupal presencial (aforo máximo: 25 personas).
+  * Propósito y temática: Jornada sagrada femenina de empoderamiento, arquetipos, sanación de memorias, meditación, danza y autocuidado.
+  * Fecha oficial: Sábado 15 de Mayo de 2027 (de 10:00 a 16:00).
+  * Precio: 45€ por asistente (pago en el centro).
+  * Cuando una persona pregunte o pida plaza, informa de la fecha y formaliza con 'bookAppointment'.
+- RETIRO DE AYUNO TERAPÉUTICO Y SENDERISMO CONSCIENTE:
+  * Modalidad: Retiro presencial de fin de semana / puente en la naturaleza (aforo máximo: 20 personas).
+  * Propósito y actividades: Depuración celular profunda, caldos y tisanas biológicas, caminatas conscientes en la naturaleza, descanso digestivo, charlas de nutrición y reconexión holística.
+  * Próxima edición: Puente de Octubre (Del 9 al 12 de Octubre de 2026, 4 días / 3 noches).
+  * Precio: 180€ (o según tipo de hospedaje y habitación elegida).
+  * Cuando un cliente pregunte o pida inscribirse, informa de las fechas del puente de octubre y formaliza su plaza con 'bookAppointment'.
 - REQUISITO OBLIGATORIO PARA TODAS LAS CITAS Y RESERVAS:
   Para formalizar cualquier cita o reserva, es IMPRESCINDIBLE disponer de:
   1. Nombre y apellidos (nombre completo).

@@ -99,11 +99,81 @@ export class ServicesService implements OnModuleInit {
         );
       }
 
+      // 3b. Ensure Encuentro de Mujeres exists
+      let mujeresSvc = await this.serviceRepo.findOne({
+        where: [{ name: ILike('%mujeres%') }, { name: ILike('%femenino%') }],
+      });
+      if (!mujeresSvc) {
+        mujeresSvc = await this.serviceRepo.save(
+          this.serviceRepo.create({
+            name: 'Encuentro de Mujeres (Primavera)',
+            description:
+              'Jornada y círculo femenino de empoderamiento, arquetipos, sanación de memorias, meditación y autocuidado. Fecha prevista: Sábado 15 de Mayo de 2027 (10:00 a 16:00). Aforo: 25 personas. Precio: 45€. Pago en el centro.',
+            serviceType: ServiceType.EVENT,
+            eventDatesText: 'Sábado 15 de Mayo de 2027 (10:00 a 16:00)',
+            eventStartDate: new Date('2027-05-15T10:00:00.000Z'),
+            eventEndDate: new Date('2027-05-15T16:00:00.000Z'),
+            durationMinutes: 360,
+            price: '45.00',
+            maxCapacity: 25,
+            calendarId: 'cal-encuentro-mujeres',
+            managerId: manager.id,
+            requiresApproval: false,
+            allowedModalities: ['in_person'],
+            reminderNotes:
+              'Llevar ropa cómoda y holgada, cojín de meditación o esterilla si lo deseas, cuaderno/diario personal para notas y comida ligera para compartir en el descanso.',
+            isActive: true,
+          }),
+        );
+      } else {
+        mujeresSvc.reminderNotes =
+          mujeresSvc.reminderNotes ||
+          'Llevar ropa cómoda y holgada, cojín de meditación o esterilla si lo deseas, cuaderno/diario personal para notas y comida ligera para compartir en el descanso.';
+        mujeresSvc.isActive = true;
+        await this.serviceRepo.save(mujeresSvc);
+      }
+
+      // 3c. Ensure Retiro de Ayuno exists
+      let ayunoSvc = await this.serviceRepo.findOne({
+        where: [{ name: ILike('%ayuno%') }],
+      });
+      if (!ayunoSvc) {
+        ayunoSvc = await this.serviceRepo.save(
+          this.serviceRepo.create({
+            name: 'Retiro de Ayuno Terapéutico',
+            description:
+              'Retiro semestral (Otoño y Primavera) de depuración celular, ayuno consciente con caldos y tisanas, senderismo suave en la naturaleza, descanso y reconexión holística. Próxima edición: Puente de Octubre (Del 9 al 12 de Octubre de 2026). Aforo: 20 plazas. Pago en el centro.',
+            serviceType: ServiceType.EVENT,
+            eventDatesText: 'Del 9 al 12 de Octubre de 2026 (Puente de Octubre)',
+            eventStartDate: new Date('2026-10-09T16:00:00.000Z'),
+            eventEndDate: new Date('2026-10-12T16:00:00.000Z'),
+            durationMinutes: 1440,
+            price: '180.00',
+            maxCapacity: 20,
+            calendarId: 'cal-ayuno-terapeutico',
+            managerId: manager.id,
+            requiresApproval: false,
+            allowedModalities: ['in_person'],
+            reminderNotes:
+              'Llevar ropa cómoda de abrigo para la naturaleza, calzado de senderismo/montaña, botella de agua reutilizable, libreta de notas, bañador y toalla grande para saunas/baños termales si aplica.',
+            isActive: true,
+          }),
+        );
+      } else {
+        ayunoSvc.reminderNotes =
+          ayunoSvc.reminderNotes ||
+          'Llevar ropa cómoda de abrigo para la naturaleza, calzado de senderismo/montaña, botella de agua reutilizable, libreta de notas, bañador y toalla grande para saunas/baños termales si aplica.';
+        ayunoSvc.isActive = true;
+        await this.serviceRepo.save(ayunoSvc);
+      }
+
       // 4. Update agent config services JSON
       const agentConfig = await this.agentConfigRepo.findOne({ where: { agentKey: 'booking' } });
       if (agentConfig && Array.isArray(agentConfig.services)) {
         let changed = false;
         let hasBienestar = false;
+        let hasMujeres = false;
+        let hasAyuno = false;
         agentConfig.services = agentConfig.services.map((s: any) => {
           if (/gestalt/i.test(s.name || '')) {
             changed = true;
@@ -130,6 +200,12 @@ export class ServicesService implements OnModuleInit {
               allowedModalities: ['in_person', 'virtual'],
             };
           }
+          if (/mujeres|femenino/i.test(s.name || '')) {
+            hasMujeres = true;
+          }
+          if (/ayuno/i.test(s.name || '')) {
+            hasAyuno = true;
+          }
           return s;
         });
 
@@ -137,6 +213,22 @@ export class ServicesService implements OnModuleInit {
           agentConfig.services.push({
             name: bienestarSvc.name,
             durationMinutes: 60,
+          });
+          changed = true;
+        }
+
+        if (!hasMujeres && mujeresSvc) {
+          agentConfig.services.push({
+            name: mujeresSvc.name,
+            durationMinutes: 360,
+          });
+          changed = true;
+        }
+
+        if (!hasAyuno && ayunoSvc) {
+          agentConfig.services.push({
+            name: ayunoSvc.name,
+            durationMinutes: 1440,
           });
           changed = true;
         }
