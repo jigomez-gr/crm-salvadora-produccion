@@ -167,6 +167,145 @@ export class ServicesService implements OnModuleInit {
         await this.serviceRepo.save(ayunoSvc);
       }
 
+      // 3d. Ensure Baño de Gong exists
+      let gongSvc = await this.serviceRepo.findOne({
+        where: [{ name: ILike('%baño de gong%') }, { name: ILike('%meditación sonora%') }],
+      });
+      if (!gongSvc) {
+        gongSvc = await this.serviceRepo.save(
+          this.serviceRepo.create({
+            name: 'Baño de Gong y Meditación Sonora',
+            description:
+              'Sesión mensual de 2 horas (a finales de mes). Preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima fecha: Sábado 26 de Septiembre de 2026 (18:00 a 20:00). Aforo: 30 personas. Precio: 16€. Pago en el centro.',
+            serviceType: ServiceType.EVENT,
+            eventDatesText: 'Sábado 26 de Septiembre de 2026 (18:00 a 20:00)',
+            eventStartDate: new Date('2026-09-26T18:00:00.000Z'),
+            eventEndDate: new Date('2026-09-26T20:00:00.000Z'),
+            durationMinutes: 120,
+            price: '16.00',
+            maxCapacity: 30,
+            calendarId: 'cal-gong-mensual',
+            managerId: manager.id,
+            requiresApproval: false,
+            allowedModalities: ['in_person'],
+            reminderNotes:
+              'Llevar ropa cómoda de abrigo, calcetines cálidos y, si lo deseas, tu propia manta o cojín para disfrutar de la experiencia sonora con el máximo confort.',
+            isActive: true,
+          }),
+        );
+      } else {
+        gongSvc.managerId = manager.id;
+        gongSvc.reminderNotes =
+          gongSvc.reminderNotes ||
+          'Llevar ropa cómoda de abrigo, calcetines cálidos y, si lo deseas, tu propia manta o cojín para disfrutar de la experiencia sonora con el máximo confort.';
+        gongSvc.isActive = true;
+        await this.serviceRepo.save(gongSvc);
+      }
+
+      // 3e. Ensure Puja de Gongs exists
+      let pujaSvc = await this.serviceRepo.findOne({
+        where: [{ name: ILike('%puja%') }],
+      });
+      if (!pujaSvc) {
+        pujaSvc = await this.serviceRepo.save(
+          this.serviceRepo.create({
+            name: 'Puja de Gongs (Noche Sagrada de Sonido - 11h)',
+            description:
+              'Evento anual de inmersión y transformación sonora durante toda la noche (11 horas continuas de sonido). Fecha prevista: Sábado 28 de Noviembre de 2026 (21:00 a 08:00). Aforo: 30 personas. Precio: 95€. Pago en el centro.',
+            serviceType: ServiceType.EVENT,
+            eventDatesText: 'Sábado 28 de Noviembre de 2026 (21:00 a 08:00)',
+            eventStartDate: new Date('2026-11-28T21:00:00.000Z'),
+            eventEndDate: new Date('2026-11-29T08:00:00.000Z'),
+            durationMinutes: 660,
+            price: '95.00',
+            maxCapacity: 30,
+            calendarId: 'cal-puja-gongs',
+            managerId: manager.id,
+            requiresApproval: false,
+            allowedModalities: ['in_person'],
+            reminderNotes:
+              'Traer esterilla cómoda o colchoneta fina, saco de dormir o mantas, almohada/cojín, botella de agua y ropa cómoda para toda la noche.',
+            isActive: true,
+          }),
+        );
+      } else {
+        pujaSvc.managerId = manager.id;
+        pujaSvc.reminderNotes =
+          pujaSvc.reminderNotes ||
+          'Traer esterilla cómoda o colchoneta fina, saco de dormir o mantas, almohada/cojín, botella de agua y ropa cómoda para toda la noche.';
+        pujaSvc.isActive = true;
+        await this.serviceRepo.save(pujaSvc);
+      }
+
+      // 3f. Ensure Constelaciones Familiares (Constelar y Participar) exist
+      let constelarSvc = await this.serviceRepo.findOne({
+        where: [{ name: ILike('%constelaciones%constelar%') }, { name: 'Constelaciones Familiares (Constelar)' }],
+      });
+      if (!constelarSvc) {
+        constelarSvc = await this.serviceRepo.save(
+          this.serviceRepo.create({
+            name: 'Constelaciones Familiares (Constelar / Asunto Propio)',
+            description:
+              'Taller vivencial mensual de sanación de vínculos y patrones familiares. Modalidad para trabajar un asunto o síntoma personal propio. Próxima fecha: Domingo 27 de Septiembre de 2026 (10:00 a 14:00). Precio: 60€. Aforo: 25 personas. Pago en el centro.',
+            serviceType: ServiceType.EVENT,
+            eventDatesText: 'Domingo 27 de Septiembre de 2026 (10:00 a 14:00)',
+            eventStartDate: new Date('2026-09-27T10:00:00.000Z'),
+            eventEndDate: new Date('2026-09-27T14:00:00.000Z'),
+            durationMinutes: 240,
+            price: '60.00',
+            maxCapacity: 25,
+            calendarId: 'cal-constelaciones',
+            managerId: manager.id,
+            requiresApproval: false,
+            allowedModalities: ['in_person'],
+            reminderNotes:
+              'Llevar ropa cómoda, cuaderno para notas si lo deseas y botella de agua. Rogamos acudir 10 minutos antes para comenzar puntualmente.',
+            isActive: true,
+          }),
+        );
+      } else {
+        constelarSvc.managerId = manager.id;
+        constelarSvc.reminderNotes =
+          constelarSvc.reminderNotes ||
+          'Llevar ropa cómoda, cuaderno para notas si lo deseas y botella de agua. Rogamos acudir 10 minutos antes para comenzar puntualmente.';
+        constelarSvc.isActive = true;
+        await this.serviceRepo.save(constelarSvc);
+      }
+
+      let participarConstelacionesSvc = await this.serviceRepo.findOne({
+        where: [{ name: ILike('%constelaciones%participar%') }, { name: ILike('%constelaciones%representante%') }],
+      });
+      if (!participarConstelacionesSvc) {
+        participarConstelacionesSvc = await this.serviceRepo.save(
+          this.serviceRepo.create({
+            name: 'Constelaciones Familiares (Participante / Representante)',
+            description:
+              'Taller vivencial mensual de sanación de vínculos familiares. Modalidad para participar como representante u observador en el campo de trabajo. Próxima fecha: Domingo 27 de Septiembre de 2026 (10:00 a 14:00). Precio: 20€. Aforo: 25 personas. Pago en el centro.',
+            serviceType: ServiceType.EVENT,
+            eventDatesText: 'Domingo 27 de Septiembre de 2026 (10:00 a 14:00)',
+            eventStartDate: new Date('2026-09-27T10:00:00.000Z'),
+            eventEndDate: new Date('2026-09-27T14:00:00.000Z'),
+            durationMinutes: 240,
+            price: '20.00',
+            maxCapacity: 25,
+            calendarId: 'cal-constelaciones',
+            managerId: manager.id,
+            requiresApproval: false,
+            allowedModalities: ['in_person'],
+            reminderNotes:
+              'Llevar ropa cómoda, libreta de notas si lo deseas y botella de agua. Rogamos puntualidad a las 10:00.',
+            isActive: true,
+          }),
+        );
+      } else {
+        participarConstelacionesSvc.managerId = manager.id;
+        participarConstelacionesSvc.reminderNotes =
+          participarConstelacionesSvc.reminderNotes ||
+          'Llevar ropa cómoda, libreta de notas si lo deseas y botella de agua. Rogamos puntualidad a las 10:00.';
+        participarConstelacionesSvc.isActive = true;
+        await this.serviceRepo.save(participarConstelacionesSvc);
+      }
+
       // 4. Update agent config services JSON
       const agentConfig = await this.agentConfigRepo.findOne({ where: { agentKey: 'booking' } });
       if (agentConfig && Array.isArray(agentConfig.services)) {
@@ -174,6 +313,11 @@ export class ServicesService implements OnModuleInit {
         let hasBienestar = false;
         let hasMujeres = false;
         let hasAyuno = false;
+        let hasGong = false;
+        let hasPuja = false;
+        let hasConstelar = false;
+        let hasParticiparConst = false;
+
         agentConfig.services = agentConfig.services.map((s: any) => {
           if (/gestalt/i.test(s.name || '')) {
             changed = true;
@@ -206,6 +350,18 @@ export class ServicesService implements OnModuleInit {
           if (/ayuno/i.test(s.name || '')) {
             hasAyuno = true;
           }
+          if (/baño de gong|sonora/i.test(s.name || '')) {
+            hasGong = true;
+          }
+          if (/puja/i.test(s.name || '')) {
+            hasPuja = true;
+          }
+          if (/constelar|asunto propio/i.test(s.name || '')) {
+            hasConstelar = true;
+          }
+          if (/participar|representante/i.test(s.name || '')) {
+            hasParticiparConst = true;
+          }
           return s;
         });
 
@@ -229,6 +385,38 @@ export class ServicesService implements OnModuleInit {
           agentConfig.services.push({
             name: ayunoSvc.name,
             durationMinutes: 1440,
+          });
+          changed = true;
+        }
+
+        if (!hasGong && gongSvc) {
+          agentConfig.services.push({
+            name: gongSvc.name,
+            durationMinutes: 120,
+          });
+          changed = true;
+        }
+
+        if (!hasPuja && pujaSvc) {
+          agentConfig.services.push({
+            name: pujaSvc.name,
+            durationMinutes: 660,
+          });
+          changed = true;
+        }
+
+        if (!hasConstelar && constelarSvc) {
+          agentConfig.services.push({
+            name: constelarSvc.name,
+            durationMinutes: 240,
+          });
+          changed = true;
+        }
+
+        if (!hasParticiparConst && participarConstelacionesSvc) {
+          agentConfig.services.push({
+            name: participarConstelacionesSvc.name,
+            durationMinutes: 240,
           });
           changed = true;
         }

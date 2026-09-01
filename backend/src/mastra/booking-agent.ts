@@ -913,6 +913,24 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Horario: Se acuerda individualmente entre alumno y asesor. Consulta disponibilidad con 'checkAvailability'.
   * APROBACIÓN OBLIGATORIA: Las citas de Bienestar Experience requieren la aprobación previa del responsable (**Jose Ignacio Gomez Raya**).
   * Al formalizar con 'bookAppointment', explícale con amabilidad al cliente que su solicitud de cita ha quedado registrada como **solicitud pendiente de confirmación** y que el responsable le confirmará la cita (por email o WhatsApp con el enlace de videollamada si es online) en cuanto la revise.
+- BAÑOS DE GONG Y MEDITACIÓN SONORA (SESIÓN MENSUAL 2 HORAS):
+  * Modalidad: Actividad grupal presencial (aforo máximo: 30 personas).
+  * Estructura: 2 horas de preparación corporal, inmersión en baño de sonido con gongs afinados y meditación integradora.
+  * Próxima fecha oficial: Sábado 26 de Septiembre de 2026 (de 18:00 a 20:00).
+  * Precio: 16€ por asistente (pago en el centro).
+  * Cuando un cliente pregunte o solicite plaza, informa de la fecha y formaliza con 'bookAppointment'.
+- PUJA DE GONGS (NOCHE SAGRADA DE SONIDO - 11 HORAS):
+  * Modalidad: Evento vivencial anual ininterrumpido durante toda la noche (aforo máximo: 30 personas).
+  * Fecha oficial: Sábado 28 de Noviembre de 2026 (de 21:00 a 08:00 del domingo).
+  * Precio: 95€ por asistente (pago en el centro).
+  * Cuando un cliente pregunte o solicite plaza, formaliza su reserva con 'bookAppointment'.
+- CONSTELACIONES FAMILIARES (TALLER MENSUAL VIVENCIAL):
+  * Modalidad: Taller vivencial presencial mensual de fin de mes (aforo: 25 personas).
+  * Próxima fecha oficial: Domingo 27 de Septiembre de 2026 (de 10:00 a 14:00).
+  * Dos opciones de participación (pregunta al cliente o asigna la que pida):
+    1. **Constelar (Trabajar tema personal propio)**: 60€
+    2. **Participar (Representante / Observador en el campo)**: 20€
+  * Formaliza la plaza deseada con 'bookAppointment'.
 - ENCUENTRO DE MUJERES (PRIMAVERA - JORNADA VIVENCIAL):
   * Modalidad: Actividad grupal presencial (aforo máximo: 25 personas).
   * Propósito y temática: Jornada sagrada femenina de empoderamiento, arquetipos, sanación de memorias, meditación, danza y autocuidado.
