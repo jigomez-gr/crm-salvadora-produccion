@@ -133,12 +133,17 @@ export class CalcomService {
       .filter(Boolean)
       .join('\n');
 
-    const generatedUid = `cal-${randomBytes(6).toString('hex')}`;
-    const fallbackMeetingUrl = `https://app.cal.com/video/${generatedUid}`;
+    const safeServiceName = (params.serviceName || 'sesion')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '-');
+    const generatedUid = `v-${randomBytes(6).toString('hex')}`;
+    const fallbackMeetingUrl = `https://meet.jit.si/salvadora-${safeServiceName}-${generatedUid}`;
 
     if (!account.enabled || !apiKey) {
       this.logger.log(
-        `Cal.com API key not set or integration disabled; generating virtual room URL: ${fallbackMeetingUrl}`,
+        `Cal.com API key not set or integration disabled; using direct video meeting URL: ${fallbackMeetingUrl}`,
       );
       return {
         bookingId: generatedUid,
@@ -197,7 +202,7 @@ export class CalcomService {
       if (!res.ok) {
         const errorText = await res.text();
         this.logger.warn(
-          `Cal.com API returned ${res.status}: ${errorText}. Falling back to standard virtual room.`,
+          `Cal.com API returned ${res.status}: ${errorText}. Falling back to functional video room: ${fallbackMeetingUrl}`,
         );
         return {
           bookingId: generatedUid,
