@@ -23,6 +23,7 @@ import {
   UpdateAppointmentDto,
   UploadPatientAttachmentDto,
   RunAiAnalysisDto,
+  RejectAppointmentDto,
 } from './dto/appointment.dto';
 import { AppointmentStatus } from '../common/entities/appointment.entity';
 import { UserRole } from '../common/entities/user.entity';
@@ -108,9 +109,15 @@ export class AppointmentsController {
   async reject(
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
-    @Body('reason') reason?: string,
+    @Body() dto?: RejectAppointmentDto,
   ) {
-    return this.appointmentsService.reject(id, user.name || user.email || user.id, reason);
+    return this.appointmentsService.reject(
+      id,
+      user.name || user.email || user.id,
+      dto?.reason,
+      dto?.requestReschedule,
+      dto?.proposedTimes,
+    );
   }
 
   @Post(':id/response-document')
@@ -127,6 +134,7 @@ export class AppointmentsController {
       notes?: string;
       customFields?: Record<string, string>;
       markCompleted?: boolean;
+      acceptAndSave?: boolean;
     },
   ) {
     const signer = user.name || user.email || 'Responsable';

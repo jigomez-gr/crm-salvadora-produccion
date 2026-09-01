@@ -144,3 +144,17 @@ export class RunAiAnalysisDto {
   @IsString()
   patientName?: string;
 }
+
+export class RejectAppointmentDto {
+  @IsOptional()
+  @IsString()
+  reason?: string;
+
+  @IsOptional()
+  requestReschedule?: boolean;
+
+  @IsOptional()
+  @IsString()
+  proposedTimes?: string;
+}
+

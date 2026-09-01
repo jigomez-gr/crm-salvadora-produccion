@@ -56,16 +56,34 @@ export class EmailService {
     const envUser = process.env.SMTP_USER || 'jigretera@gmail.com';
     const envPass = process.env.SMTP_PASS || 'moulqbjwksjrzdcg';
     const envFrom = process.env.SMTP_FROM_EMAIL || 'jigretera@gmail.com';
-    const envFromName = process.env.SMTP_FROM_NAME || 'Clínica';
+    const envFromName = process.env.SMTP_FROM_NAME || 'Centro de Yoga Salvadora Conesa';
 
-    if (!existing.smtpHost || !existing.smtpPassword || !existing.smtpUser) {
+    let needsSave = false;
+    if (!existing.smtpHost) {
       existing.smtpHost = envHost;
+      needsSave = true;
+    }
+    if (!existing.smtpPort) {
       existing.smtpPort = envPort;
-      existing.smtpSecure = false;
+      needsSave = true;
+    }
+    if (!existing.smtpUser) {
       existing.smtpUser = envUser;
+      needsSave = true;
+    }
+    if (!existing.smtpPassword) {
       existing.smtpPassword = envPass;
+      needsSave = true;
+    }
+    if (!existing.fromAddress) {
       existing.fromAddress = envFrom;
+      needsSave = true;
+    }
+    if (!existing.fromName) {
       existing.fromName = envFromName;
+      needsSave = true;
+    }
+    if (needsSave) {
       existing = await this.accountRepo.save(existing);
     }
     return existing;
@@ -244,6 +262,7 @@ export class EmailService {
     html: string,
     text?: string,
     attachment?: { filename: string; content: Buffer; contentType: string; cid?: string },
+    contactId?: string,
   ): Promise<{ ok: boolean; messageId?: string; error?: string }> {
     const acc = await this.getAccount();
     if (!this.isConfigured(acc)) {
@@ -276,11 +295,45 @@ export class EmailService {
         attachments,
       });
 
-      this.logger.log(`Doctor notification email sent to ${toAddress} (messageId: ${info.messageId})`);
+      this.logger.log(`Notification email sent to ${toAddress} (messageId: ${info.messageId})`);
+
+      if (contactId) {
+        try {
+          const record = this.messageRepo.create({
+            contactId,
+            toAddress,
+            subject,
+            body: text || html.replace(/<[^>]+>/g, ' ').trim(),
+            sentByEmail: acc.fromAddress,
+            status: EmailMessageStatus.SENT,
+            providerMessageId: info.messageId ?? null,
+          });
+          await this.messageRepo.save(record);
+        } catch (dbErr) {
+          this.logger.warn(`Could not log sent EmailMessage: ${dbErr}`);
+        }
+      }
+
       return { ok: true, messageId: info.messageId };
     } catch (err) {
       const errorMsg = this.friendlyError(err);
-      this.logger.warn(`Doctor notification email failed to ${toAddress}: ${errorMsg}`);
+      this.logger.warn(`Notification email failed to ${toAddress}: ${errorMsg}`);
+
+      if (contactId) {
+        try {
+          const record = this.messageRepo.create({
+            contactId,
+            toAddress,
+            subject,
+            body: text || html.replace(/<[^>]+>/g, ' ').trim(),
+            sentByEmail: acc.fromAddress,
+            status: EmailMessageStatus.FAILED,
+            error: errorMsg,
+          });
+          await this.messageRepo.save(record);
+        } catch {}
+      }
+
       return { ok: false, error: errorMsg };
     }
   }

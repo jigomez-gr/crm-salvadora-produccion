@@ -50,6 +50,7 @@ import { apiFetch, ApiError, apiUrl } from "@/lib/api";
 import { Appointment, Contact, ContactPage, Service } from "@/lib/types";
 import { useEvents } from "@/hooks/useEvents";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/contexts/ToastContext";
 import { ResponseDocumentModal } from "@/components/ResponseDocumentModal";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -113,7 +114,12 @@ function AppointmentModal({
   defaultStart?: Date;
   onSave: (data: ApptFormData) => Promise<void>;
   onAccept?: (id: string) => Promise<void>;
-  onReject?: (id: string) => Promise<void>;
+  onReject?: (
+    id: string,
+    reason?: string,
+    requestReschedule?: boolean,
+    proposedTimes?: string
+  ) => Promise<void>;
   onOpenResponseDoc?: (a: Appointment) => void;
 }) {
   const toLocal = (iso: string) =>
@@ -222,6 +228,33 @@ function AppointmentModal({
     }
   }
 
+  const [showRejectPrompt, setShowRejectPrompt] = useState(false);
+  const [isRescheduleMode, setIsRescheduleMode] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [proposedTimes, setProposedTimes] = useState("");
+  const [rejecting, setRejecting] = useState(false);
+
+  const isPending = initial?.status === "pending_approval" || form.status === "pending_approval";
+
+  async function handleRejectPromptConfirm() {
+    if (!initial || !onReject) return;
+    setRejecting(true);
+    try {
+      await onReject(
+        initial.id,
+        rejectionReason.trim() || undefined,
+        isRescheduleMode,
+        proposedTimes.trim() || undefined
+      );
+      setShowRejectPrompt(false);
+      onClose();
+    } catch {
+      // handled in parent
+    } finally {
+      setRejecting(false);
+    }
+  }
+
   return (
     <Modal
       open={open}
@@ -229,6 +262,75 @@ function AppointmentModal({
       title={initial ? "Detalles / Editar Cita" : "Nueva Cita"}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Banner de Cita Pendiente de Aprobación */}
+        {initial && isPending && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50/90 p-4 space-y-3 shadow-xs">
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-amber-700 shrink-0" />
+              <div>
+                <h4 className="text-xs font-bold text-amber-950 uppercase tracking-wide">
+                  Cita Pendiente de Aprobación del Responsable
+                </h4>
+                <p className="text-[11px] text-amber-800">
+                  Esta solicitud de cita requiere validación por el profesor o terapeuta antes de emitir la confirmación definitiva al alumno.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <Button
+                type="button"
+                disabled={saving || rejecting}
+                onClick={async () => {
+                  if (onAccept && initial) {
+                    setSaving(true);
+                    try {
+                      await onAccept(initial.id);
+                      onClose();
+                    } finally {
+                      setSaving(false);
+                    }
+                  }
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-xs"
+              >
+                <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                Continuar, aceptar y guardar la cita
+              </Button>
+
+              <Button
+                type="button"
+                disabled={saving || rejecting}
+                onClick={() => {
+                  setIsRescheduleMode(true);
+                  setRejectionReason("");
+                  setProposedTimes("");
+                  setShowRejectPrompt(true);
+                }}
+                className="bg-amber-500 hover:bg-amber-600 text-white text-xs shadow-xs"
+              >
+                <Clock className="h-4 w-4 mr-1.5" />
+                Rechazar pidiendo otra fecha
+              </Button>
+
+              <Button
+                type="button"
+                variant="danger"
+                disabled={saving || rejecting}
+                onClick={() => {
+                  setIsRescheduleMode(false);
+                  setRejectionReason("");
+                  setShowRejectPrompt(true);
+                }}
+                className="text-xs bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"
+              >
+                <Trash2 className="h-4 w-4 mr-1.5" />
+                Rechazar cita
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Atender / Documento de Respuesta Banner (if existing appointment) */}
         {initial && onOpenResponseDoc && (
           <div className="rounded-xl border border-indigo-200 bg-gradient-to-r from-indigo-50/80 to-purple-50/60 p-3.5 flex items-center justify-between gap-3 shadow-sm">
@@ -713,15 +815,142 @@ function AppointmentModal({
 
         {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
 
-        <div className="flex justify-end gap-2 pt-1">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-neutral-100">
           <Button type="button" variant="secondary" onClick={onClose}>
-            Cancelar
+            Cerrar
           </Button>
-          <Button type="submit" disabled={saving}>
-            {saving ? "Guardando…" : "Guardar"}
-          </Button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {initial && isPending ? (
+              <>
+                <Button
+                  type="button"
+                  variant="danger"
+                  disabled={saving || rejecting}
+                  onClick={() => {
+                    setIsRescheduleMode(false);
+                    setRejectionReason("");
+                    setShowRejectPrompt(true);
+                  }}
+                  className="text-xs bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Rechazar cita
+                </Button>
+
+                <Button
+                  type="button"
+                  disabled={saving || rejecting}
+                  onClick={() => {
+                    setIsRescheduleMode(true);
+                    setRejectionReason("");
+                    setProposedTimes("");
+                    setShowRejectPrompt(true);
+                  }}
+                  className="text-xs bg-amber-500 hover:bg-amber-600 text-white shadow-xs"
+                >
+                  <Clock className="h-4 w-4 mr-1" />
+                  Rechazar pidiendo otra fecha
+                </Button>
+
+                <Button
+                  type="button"
+                  disabled={saving || rejecting}
+                  onClick={async () => {
+                    if (onAccept && initial) {
+                      setSaving(true);
+                      try {
+                        await onAccept(initial.id);
+                        onClose();
+                      } finally {
+                        setSaving(false);
+                      }
+                    }
+                  }}
+                  className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs"
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-1" />
+                  Continuar, aceptar y guardar la cita
+                </Button>
+              </>
+            ) : (
+              <Button type="submit" disabled={saving}>
+                {saving ? "Guardando…" : "Guardar"}
+              </Button>
+            )}
+          </div>
         </div>
       </form>
+
+      {/* Rejection / Reschedule prompt modal */}
+      {showRejectPrompt && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl space-y-4">
+            <h3 className="text-base font-bold text-neutral-900">
+              {isRescheduleMode
+                ? "Rechazar solicitando otra fecha al alumno"
+                : "Rechazar cita"}
+            </h3>
+            <p className="text-xs text-neutral-600">
+              {isRescheduleMode
+                ? "Se cancelará la cita actual y se enviará un mensaje por correo y WhatsApp al alumno para acordar una nueva fecha u horario."
+                : "Se cancelará la cita y se notificará el motivo al alumno por correo y WhatsApp."}
+            </p>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-neutral-700">
+                Motivo del rechazo / no disponibilidad:
+              </label>
+              <input
+                type="text"
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="ej. Franja horaria completa / Fuera de agenda"
+                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+
+            {isRescheduleMode && (
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-neutral-700">
+                  Propuesta de horarios alternativos (opcional):
+                </label>
+                <input
+                  type="text"
+                  value={proposedTimes}
+                  onChange={(e) => setProposedTimes(e.target.value)}
+                  placeholder="ej. Viernes a las 17:00 o Lunes a las 11:00"
+                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={rejecting}
+                onClick={() => setShowRejectPrompt(false)}
+              >
+                Volver
+              </Button>
+              <Button
+                type="button"
+                variant={isRescheduleMode ? "primary" : "danger"}
+                disabled={rejecting}
+                onClick={handleRejectPromptConfirm}
+                className={isRescheduleMode ? "bg-amber-600 hover:bg-amber-700 text-white" : ""}
+              >
+                {rejecting
+                  ? "Procesando..."
+                  : isRescheduleMode
+                  ? "Enviar petición de cambio"
+                  : "Confirmar rechazo"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Interactive Crop & AI Analysis Modal */}
       {cropModalOpen && (
@@ -1033,10 +1262,14 @@ function AppointmentListView({
   appointments,
   onAppointmentClick,
   onOpenResponseDoc,
+  onAccept,
+  onOpenRejectDialog,
 }: {
   appointments: Appointment[];
   onAppointmentClick: (a: Appointment) => void;
   onOpenResponseDoc: (a: Appointment) => void;
+  onAccept?: (id: string) => Promise<void>;
+  onOpenRejectDialog?: (a: Appointment, isReschedule: boolean) => void;
 }) {
   const [tab, setTab] = useState<"all" | "today" | "upcoming" | "past" | "pending">("all");
   const [search, setSearch] = useState("");
@@ -1150,7 +1383,12 @@ function AppointmentListView({
             return (
               <div
                 key={a.id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 hover:bg-neutral-50/70 transition-colors"
+                className={cn(
+                  "flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 transition-colors",
+                  a.status === "pending_approval"
+                    ? "bg-amber-50/40 hover:bg-amber-50/70 border-l-4 border-amber-400"
+                    : "hover:bg-neutral-50/70"
+                )}
               >
                 <div className="flex-1 min-w-0 space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -1234,7 +1472,40 @@ function AppointmentListView({
                   )}
                 </div>
 
-                <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
+                <div className="flex flex-wrap items-center gap-2 flex-shrink-0 self-end sm:self-center">
+                  {/* Quick Approval Actions for pending appointments */}
+                  {a.status === "pending_approval" && (
+                    <div className="flex items-center gap-1.5 mr-1">
+                      <button
+                        type="button"
+                        onClick={() => onAccept && onAccept(a.id)}
+                        className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 shadow-xs transition-colors"
+                        title="Aceptar y confirmar cita"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Aceptar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onOpenRejectDialog && onOpenRejectDialog(a, true)}
+                        className="inline-flex items-center gap-1 rounded-md bg-amber-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 shadow-xs transition-colors"
+                        title="Rechazar solicitando otra fecha al alumno"
+                      >
+                        <Clock className="h-3.5 w-3.5" />
+                        Pedir otra fecha
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onOpenRejectDialog && onOpenRejectDialog(a, false)}
+                        className="inline-flex items-center gap-1 rounded-md bg-red-50 text-red-700 border border-red-200 px-2 py-1.5 text-xs font-semibold hover:bg-red-100 transition-colors"
+                        title="Rechazar cita"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Rechazar
+                      </button>
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => onOpenResponseDoc(a)}
@@ -1348,6 +1619,22 @@ function CalendarPageInner() {
       ? format(current, "MMMM yyyy", { locale: es })
       : `${format(startOfWeek(current, { weekStartsOn: 1 }), "d MMM", { locale: es })} – ${format(endOfWeek(current, { weekStartsOn: 1 }), "d MMM yyyy", { locale: es })}`;
 
+  const toast = useToast();
+  const [quickRejectState, setQuickRejectState] = useState<{
+    open: boolean;
+    appointment?: Appointment;
+    isReschedule: boolean;
+    reason: string;
+    proposedTimes: string;
+    loading: boolean;
+  }>({
+    open: false,
+    isReschedule: false,
+    reason: "",
+    proposedTimes: "",
+    loading: false,
+  });
+
   async function handleSave(data: ApptFormData) {
     const price = data.price.trim()
       ? data.price.trim()
@@ -1369,23 +1656,79 @@ function CalendarPageInner() {
         method: "PATCH",
         body: JSON.stringify(payload),
       });
+      toast.success("Cita actualizada correctamente.");
     } else {
       await apiFetch("/api/appointments", {
         method: "POST",
         body: JSON.stringify(payload),
       });
+      toast.success("Cita creada correctamente.");
     }
     await refreshRange();
   }
 
   async function handleAccept(id: string) {
-    await apiFetch(`/api/appointments/${id}/accept`, { method: "POST" });
-    await refreshRange();
+    try {
+      await apiFetch(`/api/appointments/${id}/accept`, { method: "POST" });
+      toast.success(
+        "¡Cita aceptada y confirmada! Se ha enviado el email y WhatsApp de confirmación y actualizado la conversación."
+      );
+      await refreshRange();
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Error al aceptar la cita."
+      );
+    }
   }
 
-  async function handleReject(id: string) {
-    await apiFetch(`/api/appointments/${id}/reject`, { method: "POST" });
-    await refreshRange();
+  async function handleReject(
+    id: string,
+    reason?: string,
+    requestReschedule?: boolean,
+    proposedTimes?: string
+  ) {
+    try {
+      await apiFetch(`/api/appointments/${id}/reject`, {
+        method: "POST",
+        body: JSON.stringify({
+          reason,
+          requestReschedule,
+          proposedTimes,
+        }),
+      });
+      toast.success(
+        requestReschedule
+          ? "Solicitud de cambio de fecha enviada al alumno por correo y WhatsApp."
+          : "Cita rechazada y notificada al alumno."
+      );
+      await refreshRange();
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Error al procesar el rechazo."
+      );
+    }
+  }
+
+  async function handleQuickRejectConfirm() {
+    if (!quickRejectState.appointment) return;
+    setQuickRejectState((s) => ({ ...s, loading: true }));
+    try {
+      await handleReject(
+        quickRejectState.appointment.id,
+        quickRejectState.reason.trim() || undefined,
+        quickRejectState.isReschedule,
+        quickRejectState.proposedTimes.trim() || undefined
+      );
+      setQuickRejectState({
+        open: false,
+        isReschedule: false,
+        reason: "",
+        proposedTimes: "",
+        loading: false,
+      });
+    } catch {
+      setQuickRejectState((s) => ({ ...s, loading: false }));
+    }
   }
 
   function openCreate(day: Date) {
@@ -1532,6 +1875,17 @@ function CalendarPageInner() {
             appointments={appointments}
             onAppointmentClick={openEdit}
             onOpenResponseDoc={(a) => setResponseDocAppt(a)}
+            onAccept={handleAccept}
+            onOpenRejectDialog={(a, isReschedule) => {
+              setQuickRejectState({
+                open: true,
+                appointment: a,
+                isReschedule,
+                reason: "",
+                proposedTimes: "",
+                loading: false,
+              });
+            }}
           />
         ) : view === "month" ? (
           <MonthView
@@ -1571,6 +1925,95 @@ function CalendarPageInner() {
           appointment={responseDocAppt}
           onSuccess={() => refreshRange()}
         />
+      )}
+
+      {/* Quick reject / reschedule dialog from list */}
+      {quickRejectState.open && quickRejectState.appointment && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl space-y-4">
+            <h3 className="text-base font-bold text-neutral-900">
+              {quickRejectState.isReschedule
+                ? "Rechazar solicitando otra fecha al alumno"
+                : "Rechazar cita"}
+            </h3>
+            <p className="text-xs text-neutral-600">
+              {quickRejectState.isReschedule
+                ? `Para la cita de ${quickRejectState.appointment.contact?.name || "el alumno"} (${quickRejectState.appointment.service}): se cancelará y se enviará la petición de nueva fecha por correo y WhatsApp.`
+                : `Se cancelará la cita de ${quickRejectState.appointment.contact?.name || "el alumno"} y se enviará la notificación con el motivo indicado.`}
+            </p>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-neutral-700">
+                Motivo de no disponibilidad / rechazo:
+              </label>
+              <input
+                type="text"
+                value={quickRejectState.reason}
+                onChange={(e) =>
+                  setQuickRejectState((s) => ({ ...s, reason: e.target.value }))
+                }
+                placeholder="ej. Horario no disponible / Agenda completa"
+                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+
+            {quickRejectState.isReschedule && (
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-neutral-700">
+                  Propuesta de horarios alternativos (opcional):
+                </label>
+                <input
+                  type="text"
+                  value={quickRejectState.proposedTimes}
+                  onChange={(e) =>
+                    setQuickRejectState((s) => ({
+                      ...s,
+                      proposedTimes: e.target.value,
+                    }))
+                  }
+                  placeholder="ej. Viernes a las 17:00 o Lunes a las 11:00"
+                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={quickRejectState.loading}
+                onClick={() =>
+                  setQuickRejectState({
+                    open: false,
+                    isReschedule: false,
+                    reason: "",
+                    proposedTimes: "",
+                    loading: false,
+                  })
+                }
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant={quickRejectState.isReschedule ? "primary" : "danger"}
+                disabled={quickRejectState.loading}
+                onClick={handleQuickRejectConfirm}
+                className={
+                  quickRejectState.isReschedule
+                    ? "bg-amber-600 hover:bg-amber-700 text-white"
+                    : ""
+                }
+              >
+                {quickRejectState.loading
+                  ? "Procesando..."
+                  : quickRejectState.isReschedule
+                  ? "Enviar petición de cambio"
+                  : "Confirmar rechazo"}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -23,12 +23,20 @@ import {
   CreateAppointmentDto,
   UpdateAppointmentDto,
   RunAiAnalysisDto,
+  RejectAppointmentDto,
 } from './dto/appointment.dto';
 import { generateDoctorReportPdfBuffer } from './pdf-report.generator';
 import { AnalizaIaService, AiAnalysisResponse } from './analiza-ia.service';
 import { EmailService } from '../email/email.service';
 import { YCloudClient } from '../whatsapp/ycloud-client.service';
 import { AgentsConfigService } from '../agents/agents-config.service';
+import { MessagesService } from '../conversations/messages.service';
+import { Conversation } from '../common/entities/conversation.entity';
+import {
+  MessageChannel,
+  MessageDirection,
+  MessageStatus,
+} from '../common/entities/message.entity';
 
 // Advisory-lock key that serializes all booking writes (single bookable
 // resource). Arbitrary constant; when multi-resource lands, key it per resource.
@@ -44,12 +52,15 @@ export class AppointmentsService {
     private readonly servicesRepo: Repository<Service>,
     @InjectRepository(Contact)
     private readonly contactsRepo: Repository<Contact>,
+    @InjectRepository(Conversation)
+    private readonly conversationsRepo: Repository<Conversation>,
     private readonly calcomService: CalcomService,
     private readonly eventEmitter: EventEmitter2,
     private readonly analizaIaService: AnalizaIaService,
     private readonly emailService: EmailService,
     private readonly ycloudClient: YCloudClient,
     private readonly agentsConfigService: AgentsConfigService,
+    private readonly messagesService: MessagesService,
   ) {}
 
   async findAll(
@@ -321,10 +332,17 @@ export class AppointmentsService {
       notes?: string;
       customFields?: Record<string, string>;
       markCompleted?: boolean;
+      acceptAndSave?: boolean;
     },
     signedByName: string,
   ): Promise<Appointment> {
-    const appt = await this.findOne(id);
+    let appt = await this.findOne(id);
+
+    // If appointment is pending_approval and doc is being accepted/completed, run accept flow first
+    if (appt.status === AppointmentStatus.PENDING_APPROVAL || docData.acceptAndSave) {
+      appt = await this.accept(id, signedByName);
+    }
+
     appt.responseDocument = {
       templateKey: docData.templateKey || 'clinical_diagnosis',
       title: docData.title || 'Informe de Consulta / Diagnóstico',
@@ -596,7 +614,7 @@ export class AppointmentsService {
     const saved = await this.appointmentsRepo.save(appt);
     this.eventEmitter.emit('appointment.created', saved);
 
-    // Notify student via Email and/or WhatsApp
+    // Notify student via Email and/or WhatsApp and update conversation thread
     await this.notifyStudentDecision(
       saved,
       'accepted',
@@ -607,8 +625,19 @@ export class AppointmentsService {
   }
 
   /** Reject an appointment (responsible manager rejection) */
-  async reject(id: string, rejectedBy: string, reason?: string): Promise<Appointment> {
-    const defaultReason = reason || 'No disponible en ese horario. Por favor solicita otra hora.';
+  async reject(
+    id: string,
+    rejectedBy: string,
+    reason?: string,
+    requestReschedule?: boolean,
+    proposedTimes?: string,
+  ): Promise<Appointment> {
+    const defaultReason =
+      reason ||
+      (requestReschedule
+        ? 'El horario solicitado no está disponible. Por favor, indícanos otra fecha u horario.'
+        : 'No disponible en ese horario.');
+
     const cancelled = await this.cancel(id, rejectedBy, defaultReason);
 
     let serviceEntity: Service | null = null;
@@ -621,12 +650,13 @@ export class AppointmentsService {
         .catch(() => null);
     }
 
-    // Notify student via Email and/or WhatsApp
+    // Notify student via Email and/or WhatsApp and update conversation thread
     await this.notifyStudentDecision(
       cancelled,
-      'rejected',
+      requestReschedule ? 'reschedule_requested' : 'rejected',
       serviceEntity?.manager?.name || rejectedBy || 'Jose Ignacio Gomez Raya',
       defaultReason,
+      proposedTimes,
     );
 
     return cancelled;
@@ -634,9 +664,10 @@ export class AppointmentsService {
 
   private async notifyStudentDecision(
     appt: Appointment,
-    decision: 'accepted' | 'rejected',
+    decision: 'accepted' | 'rejected' | 'reschedule_requested',
     managerName: string,
     rejectionReason?: string,
+    proposedTimes?: string,
   ): Promise<void> {
     try {
       const contact =
@@ -667,6 +698,8 @@ export class AppointmentsService {
           ? `\nEnlace de videollamada Cal.com: ${appt.calMeetingUrl}`
           : '';
 
+      let chatMessageText = '';
+
       if (decision === 'accepted') {
         const subject = `✅ Tu cita de ${appt.service} ha sido confirmada`;
         const emailHtml = `
@@ -680,7 +713,7 @@ export class AppointmentsService {
               <p style="margin: 6px 0;">📍 <strong>Modalidad:</strong> ${modalityText}</p>
               ${
                 isVirtual && appt.calMeetingUrl
-                  ? `<p style="margin: 6px 0;">🔗 <strong>Videollamada:</strong> <a href="${appt.calMeetingUrl}" style="color: #2563eb;">Acceder a la sesión</a></p>`
+                  ? `<p style="margin: 6px 0;">🔗 <strong>Videollamada:</strong> <a href="${appt.calMeetingUrl}" style="color: #2563eb;">Acceder a la videollamada</a></p>`
                   : ''
               }
               ${
@@ -689,13 +722,23 @@ export class AppointmentsService {
                   : ''
               }
             </div>
-            <p>¡Te esperamos!</p>
+            <p>¡Te esperamos con mucho gusto!</p>
           </div>
         `;
 
+        chatMessageText = `¡Hola ${contact.name}! Te confirmamos que tu solicitud para *${appt.service}* el *${formattedDate}* a las *${formattedTime}* ha sido *aprobada y confirmada* por el responsable (${managerName}).\n\nModalidad: ${modalityText}${meetingLinkText}\n\n¡Nos vemos pronto!`;
+
         if (contact.email) {
           await this.emailService
-            .sendNotification(contact.email, contact.name, subject, emailHtml)
+            .sendNotification(
+              contact.email,
+              contact.name,
+              subject,
+              emailHtml,
+              chatMessageText,
+              undefined,
+              contact.id,
+            )
             .catch(() => null);
         }
 
@@ -707,12 +750,65 @@ export class AppointmentsService {
             config?.whatsappPhoneNumber ||
             process.env.YCLOUD_FROM_PHONE ||
             '+34600000000';
-          const whatsappMsg = `¡Hola ${contact.name}! Te confirmamos que tu solicitud para *${appt.service}* el *${formattedDate}* a las *${formattedTime}* ha sido *aprobada y confirmada* por el responsable (${managerName}).\n\nModalidad: ${modalityText}${meetingLinkText}\n\n¡Nos vemos pronto!`;
           await this.ycloudClient
             .sendTextMessage(
               fromNumber,
               contact.phone,
-              whatsappMsg,
+              chatMessageText,
+              config?.ycloudApiKey,
+            )
+            .catch(() => null);
+        }
+      } else if (decision === 'reschedule_requested') {
+        const reasonText =
+          rejectionReason ||
+          'El horario solicitado no está disponible en este momento.';
+        const subject = `🔄 Solicitud de otra fecha para tu cita de ${appt.service}`;
+        const emailHtml = `
+          <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 24px;">
+            <h2 style="color: #f59e0b; margin-top: 0;">Solicitud de otra fecha / horario</h2>
+            <p>Hola <strong>${contact.name}</strong>,</p>
+            <p>Para tu solicitud de cita de <strong>${appt.service}</strong> prevista para el <strong>${formattedDate}</strong> a las <strong>${formattedTime}</strong>, el terapeuta/profesor responsable (<strong>${managerName}</strong>) te solicita elegir otra fecha u horario alternativo.</p>
+            <p><strong>Motivo:</strong> ${reasonText}</p>
+            ${
+              proposedTimes
+                ? `<p><strong>Propuesta de horarios alternativos:</strong> ${proposedTimes}</p>`
+                : ''
+            }
+            <p>Por favor, responde a este correo o por WhatsApp indicándonos qué otro día y hora te vendría bien para reservarte la plaza.</p>
+            <p>Disculpa las molestias y muchas gracias por tu flexibilidad.</p>
+          </div>
+        `;
+
+        chatMessageText = `Hola ${contact.name}. Para tu solicitud de *${appt.service}* el *${formattedDate}* a las *${formattedTime}*, el terapeuta/responsable (${managerName}) te solicita cambiar de fecha u horario.\n\n*Motivo:* ${reasonText}${proposedTimes ? `\n*Horarios sugeridos:* ${proposedTimes}` : ''}\n\nPor favor, responde a este mensaje indicándome qué otro día y hora te vendría mejor para intentar formalizarla.`;
+
+        if (contact.email) {
+          await this.emailService
+            .sendNotification(
+              contact.email,
+              contact.name,
+              subject,
+              emailHtml,
+              chatMessageText,
+              undefined,
+              contact.id,
+            )
+            .catch(() => null);
+        }
+
+        if (contact.phone) {
+          const config = await this.agentsConfigService
+            .findByKey('booking')
+            .catch(() => null);
+          const fromNumber =
+            config?.whatsappPhoneNumber ||
+            process.env.YCLOUD_FROM_PHONE ||
+            '+34600000000';
+          await this.ycloudClient
+            .sendTextMessage(
+              fromNumber,
+              contact.phone,
+              chatMessageText,
               config?.ycloudApiKey,
             )
             .catch(() => null);
@@ -726,16 +822,26 @@ export class AppointmentsService {
           <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 24px;">
             <h2 style="color: #ef4444; margin-top: 0;">Solicitud de cita no confirmada</h2>
             <p>Hola <strong>${contact.name}</strong>,</p>
-            <p>Lamentamos comunicarte que tu solicitud de cita para <strong>${appt.service}</strong> el <strong>${formattedDate}</strong> a las <strong>${formattedTime}</strong> no ha podido ser confirmada.</p>
+            <p>Lamentamos comunicarte que tu solicitud de cita para <strong>${appt.service}</strong> el <strong>${formattedDate}</strong> a las <strong>${formattedTime}</strong> no ha podido ser confirmada por el responsable (<strong>${managerName}</strong>).</p>
             <p><strong>Motivo:</strong> ${reasonText}</p>
             <p>Por favor, responde a este mensaje o visita nuestra web para seleccionar otro día u hora que te venga bien.</p>
             <p>Disculpa las molestias.</p>
           </div>
         `;
 
+        chatMessageText = `Hola ${contact.name}. Lamentamos comunicarte que tu solicitud para *${appt.service}* el *${formattedDate}* a las *${formattedTime}* no ha podido ser confirmada.\n\nMotivo: ${reasonText}\n\nPor favor, indícanos si deseas consultar otro día u horario para agendarla.`;
+
         if (contact.email) {
           await this.emailService
-            .sendNotification(contact.email, contact.name, subject, emailHtml)
+            .sendNotification(
+              contact.email,
+              contact.name,
+              subject,
+              emailHtml,
+              chatMessageText,
+              undefined,
+              contact.id,
+            )
             .catch(() => null);
         }
 
@@ -747,16 +853,58 @@ export class AppointmentsService {
             config?.whatsappPhoneNumber ||
             process.env.YCLOUD_FROM_PHONE ||
             '+34600000000';
-          const whatsappMsg = `Hola ${contact.name}. Lamentamos comunicarte que tu solicitud para *${appt.service}* el *${formattedDate}* a las *${formattedTime}* no ha podido ser confirmada.\n\nMotivo: ${reasonText}\n\nPor favor, indícanos qué otro día u hora te vendría bien para intentar agendarla de nuevo.`;
           await this.ycloudClient
             .sendTextMessage(
               fromNumber,
               contact.phone,
-              whatsappMsg,
+              chatMessageText,
               config?.ycloudApiKey,
             )
             .catch(() => null);
         }
+      }
+
+      // Sincronizar y registrar el mensaje en la conversación del CRM / Inbox
+      try {
+        const cleanPhone = (contact.phone || '').replace(/[^0-9]/g, '');
+        let conv = await this.conversationsRepo.findOne({
+          where: [{ contactId: contact.id }],
+          order: { updatedAt: 'DESC' },
+        });
+
+        if (!conv && cleanPhone) {
+          conv = await this.conversationsRepo
+            .createQueryBuilder('c')
+            .where('c.threadId LIKE :p', { p: `%${cleanPhone}%` })
+            .orderBy('c.updatedAt', 'DESC')
+            .getOne();
+        }
+
+        const threadId =
+          conv?.threadId ||
+          (contact.phone ? `booking:${contact.phone}` : `booking:${contact.id}`);
+        const channel =
+          conv?.channel === 'whatsapp' || contact.phone
+            ? MessageChannel.WHATSAPP
+            : MessageChannel.PLAYGROUND;
+
+        const savedMsg = await this.messagesService.saveMessage({
+          contactId: contact.id,
+          threadId,
+          direction: MessageDirection.OUTBOUND,
+          channel,
+          body: chatMessageText,
+          status: MessageStatus.SENT,
+        });
+
+        this.eventEmitter.emit('message.received', {
+          id: savedMsg.id,
+          threadId,
+          body: chatMessageText,
+        });
+        this.eventEmitter.emit('messages.created', savedMsg);
+      } catch (convErr) {
+        this.logger.warn(`Could not sync message to conversation thread: ${convErr}`);
       }
     } catch (err) {
       this.logger.error(

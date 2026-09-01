@@ -160,6 +160,87 @@ export function ResponseDocumentModal({
     }
   }
 
+  const isPending = appointment.status === "pending_approval";
+  const [rejecting, setRejecting] = useState(false);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [isRescheduleMode, setIsRescheduleMode] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [proposedTimes, setProposedTimes] = useState("");
+
+  async function handleAcceptAndSave() {
+    setSaving(true);
+    try {
+      const payload = {
+        templateKey,
+        title,
+        symptoms,
+        diagnosis,
+        treatment,
+        recommendations,
+        notes,
+        markCompleted: false,
+        acceptAndSave: true,
+      };
+
+      const updated = await apiFetch<Appointment>(
+        `/api/appointments/${appointment.id}/response-document`,
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+        }
+      );
+
+      // Also ensure accept endpoint is explicitly invoked if needed
+      await apiFetch<Appointment>(`/api/appointments/${appointment.id}/accept`, {
+        method: "POST",
+      }).catch(() => null);
+
+      toast.success(
+        "¡Cita aceptada y confirmada! Se ha enviado el email y WhatsApp de confirmación y actualizado la conversación."
+      );
+      if (onSuccess) onSuccess({ ...updated, status: "scheduled" });
+      onClose();
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Error al aceptar y guardar la cita."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRejectConfirm() {
+    setRejecting(true);
+    try {
+      const updated = await apiFetch<Appointment>(
+        `/api/appointments/${appointment.id}/reject`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            reason: rejectionReason.trim() || undefined,
+            requestReschedule: isRescheduleMode,
+            proposedTimes: proposedTimes.trim() || undefined,
+          }),
+        }
+      );
+
+      toast.success(
+        isRescheduleMode
+          ? "Solicitud de cambio de fecha enviada al alumno por correo y WhatsApp."
+          : "Cita rechazada y notificada al alumno."
+      );
+      setShowRejectDialog(false);
+      if (onSuccess) onSuccess(updated);
+      onClose();
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Error al procesar la solicitud."
+      );
+    } finally {
+      setRejecting(false);
+    }
+  }
+
   async function handleSave(markCompleted: boolean = true) {
     setSaving(true);
     try {
@@ -605,36 +686,162 @@ export function ResponseDocumentModal({
         </div>
 
         {/* Footer Actions - Screen only */}
-        <div className="flex items-center justify-between border-t border-neutral-200 bg-neutral-50/80 px-6 py-4 print:hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-neutral-200 bg-neutral-50/80 px-6 py-4 print:hidden">
           <div className="flex items-center gap-2">
             <Button type="button" variant="secondary" onClick={onClose}>
               Cerrar
             </Button>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={saving}
-              onClick={() => handleSave(false)}
-            >
-              <Save className="h-4 w-4 mr-1.5" />
-              Guardar Borrador
-            </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {isPending ? (
+              <>
+                <Button
+                  type="button"
+                  variant="danger"
+                  disabled={saving || rejecting}
+                  onClick={() => {
+                    setIsRescheduleMode(false);
+                    setRejectionReason("");
+                    setShowRejectDialog(true);
+                  }}
+                  className="bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"
+                >
+                  <X className="h-4 w-4 mr-1.5" />
+                  Rechazar cita
+                </Button>
 
-            <Button
-              type="button"
-              variant="primary"
-              disabled={saving}
-              onClick={() => handleSave(true)}
-            >
-              <CheckCircle2 className="h-4 w-4 mr-1.5" />
-              {saving ? "Guardando..." : "Guardar y Completar Cita"}
-            </Button>
+                <Button
+                  type="button"
+                  disabled={saving || rejecting}
+                  onClick={() => {
+                    setIsRescheduleMode(true);
+                    setRejectionReason("");
+                    setProposedTimes("");
+                    setShowRejectDialog(true);
+                  }}
+                  className="bg-amber-500 text-white hover:bg-amber-600 shadow-sm"
+                >
+                  <Clock className="h-4 w-4 mr-1.5" />
+                  Rechazar pidiendo otra fecha
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={saving || rejecting}
+                  onClick={() => handleSave(false)}
+                >
+                  <Save className="h-4 w-4 mr-1.5" />
+                  Guardar Borrador
+                </Button>
+
+                <Button
+                  type="button"
+                  disabled={saving || rejecting}
+                  onClick={handleAcceptAndSave}
+                  className="bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm font-semibold"
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                  {saving ? "Guardando y aprobando..." : "Continuar, aceptar y guardar la cita"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={saving}
+                  onClick={() => handleSave(false)}
+                >
+                  <Save className="h-4 w-4 mr-1.5" />
+                  Guardar Borrador
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="primary"
+                  disabled={saving}
+                  onClick={() => handleSave(true)}
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                  {saving ? "Guardando..." : "Guardar y Completar Cita"}
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Rejection / Reschedule confirmation dialog */}
+      {showRejectDialog && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl space-y-4">
+            <h3 className="text-base font-bold text-neutral-900">
+              {isRescheduleMode
+                ? "Rechazar solicitando otra fecha al alumno"
+                : "Rechazar cita"}
+            </h3>
+            <p className="text-xs text-neutral-600">
+              {isRescheduleMode
+                ? "Se cancelará la cita actual y se notificará automáticamente al alumno por correo y WhatsApp invitándole a elegir otro día u horario."
+                : "Se cancelará la cita y se notificará al alumno por correo y WhatsApp con el motivo indicado."}
+            </p>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-neutral-700">
+                Motivo del rechazo / no disponibilidad:
+              </label>
+              <input
+                type="text"
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="ej. Franja horaria completa / Fuera de agenda"
+                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+
+            {isRescheduleMode && (
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-neutral-700">
+                  Propuesta de horarios alternativos (opcional):
+                </label>
+                <input
+                  type="text"
+                  value={proposedTimes}
+                  onChange={(e) => setProposedTimes(e.target.value)}
+                  placeholder="ej. Viernes a las 17:00 o Lunes a las 11:00"
+                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={rejecting}
+                onClick={() => setShowRejectDialog(false)}
+              >
+                Volver
+              </Button>
+              <Button
+                type="button"
+                variant={isRescheduleMode ? "primary" : "danger"}
+                disabled={rejecting}
+                onClick={handleRejectConfirm}
+                className={isRescheduleMode ? "bg-amber-600 hover:bg-amber-700 text-white" : ""}
+              >
+                {rejecting
+                  ? "Procesando..."
+                  : isRescheduleMode
+                  ? "Enviar petición de cambio"
+                  : "Confirmar rechazo"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
