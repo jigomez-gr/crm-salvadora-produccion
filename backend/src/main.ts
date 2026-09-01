@@ -41,38 +41,6 @@ async function bootstrap() {
     await app.listen(port, '0.0.0.0');
     console.log(`Backend running on http://0.0.0.0:${port}`);
     console.log(`Dashboard metrics: http://0.0.0.0:${port}/api/dashboard/metrics`);
-
-    // Dual-port support for Dokploy: if primary is 3001, also listen on 3000 so Swarm port 3000 works
-    if (port === 3001) {
-      try {
-        const http = await import('http');
-        const bridge = http.createServer((req, res) => {
-          const proxyReq = http.request(
-            {
-              host: '127.0.0.1',
-              port: 3001,
-              path: req.url,
-              method: req.method,
-              headers: req.headers,
-            },
-            (proxyRes) => {
-              res.writeHead(proxyRes.statusCode || 200, proxyRes.headers);
-              proxyRes.pipe(res, { end: true });
-            },
-          );
-          req.pipe(proxyReq, { end: true });
-          proxyReq.on('error', () => {
-            res.writeHead(502);
-            res.end();
-          });
-        });
-        bridge.listen(3000, '0.0.0.0', () => {
-          console.log('Dokploy Swarm bridge listener active on http://0.0.0.0:3000');
-        });
-      } catch (bridgeErr) {
-        console.warn('Bridge listener on 3000 skipped:', bridgeErr);
-      }
-    }
   } catch (err) {
     console.error('Error during backend startup:', err);
   }
