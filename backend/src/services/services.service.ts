@@ -145,6 +145,58 @@ export class ServicesService implements OnModuleInit {
           await this.agentConfigRepo.save(agentConfig);
         }
       }
+
+      // 5. Update reminderNotes for all known yoga/center services if not set
+      const allServices = await this.serviceRepo.find();
+      for (const s of allServices) {
+        let changed = false;
+        if (!s.reminderNotes) {
+          if (/yoga/i.test(s.name)) {
+            s.reminderNotes =
+              'Llevar ropa cómoda deportiva, toalla o esterilla propia (el centro también dispone de material) y llegar 5-10 minutos antes del inicio de la clase.';
+            changed = true;
+          } else if (/meditaci/i.test(s.name)) {
+            s.reminderNotes =
+              'Llevar ropa cómoda. Rogamos máxima puntualidad (9:15) para no interrumpir el centramiento y silencio de la sala.';
+            changed = true;
+          } else if (/baño de gong|sonora/i.test(s.name)) {
+            s.reminderNotes =
+              'Llevar ropa cómoda de abrigo, calcetines cálidos y, si lo deseas, tu propia manta o cojín para disfrutar de la experiencia sonora con el máximo confort.';
+            changed = true;
+          } else if (/puja/i.test(s.name)) {
+            s.reminderNotes =
+              'Traer esterilla cómoda o colchoneta fina, saco de dormir o mantas, almohada/cojín, botella de agua y ropa cómoda para toda la noche.';
+            changed = true;
+          } else if (/constelaci/i.test(s.name)) {
+            s.reminderNotes =
+              'Llevar ropa cómoda, cuaderno para notas si lo deseas y botella de agua.';
+            changed = true;
+          } else if (/gestalt/i.test(s.name)) {
+            s.reminderNotes =
+              'Para sesión presencial: acudir 5 minutos antes al centro. Para sesión online: conectarse puntualmente al enlace de videollamada desde un lugar tranquilo y privado con buena conexión.';
+            changed = true;
+          } else if (/bienestar/i.test(s.name)) {
+            s.reminderNotes =
+              'Para sesión presencial: acudir con puntualidad. Para sesión online: conectarse puntualmente al enlace de videollamada con cámara y audio activados.';
+            changed = true;
+          } else if (/pilates|funcional/i.test(s.name)) {
+            s.reminderNotes =
+              'Llevar ropa deportiva, toalla de entrenamiento y botella de agua.';
+            changed = true;
+          } else if (/iaido|tai chi|ninjutsu|orientales/i.test(s.name)) {
+            s.reminderNotes =
+              'Llevar ropa deportiva holgada o uniforme de práctica. Calzado limpio de sala o práctica descalzo.';
+            changed = true;
+          } else {
+            s.reminderNotes =
+              'Llevar ropa cómoda y acudir con 5-10 minutos de antelación al inicio de la sesión.';
+            changed = true;
+          }
+        }
+        if (changed) {
+          await this.serviceRepo.save(s);
+        }
+      }
     } catch {
       // Non-fatal on init
     }
@@ -232,6 +284,7 @@ export class ServicesService implements OnModuleInit {
       allowedModalities: dto.allowedModalities || ['in_person'],
       requiresReason: dto.requiresReason ?? false,
       calEventTypeId: dto.calEventTypeId !== undefined ? dto.calEventTypeId : null,
+      reminderNotes: dto.reminderNotes !== undefined ? dto.reminderNotes : null,
       price: dto.price !== undefined ? (dto.price === '' ? null : dto.price) : null,
     });
 
@@ -271,6 +324,7 @@ export class ServicesService implements OnModuleInit {
     if (dto.allowedModalities !== undefined) service.allowedModalities = dto.allowedModalities;
     if (dto.requiresReason !== undefined) service.requiresReason = dto.requiresReason;
     if (dto.calEventTypeId !== undefined) service.calEventTypeId = dto.calEventTypeId;
+    if (dto.reminderNotes !== undefined) service.reminderNotes = dto.reminderNotes || null;
     if (dto.isActive !== undefined) service.isActive = dto.isActive;
 
     const saved = await this.serviceRepo.save(service);

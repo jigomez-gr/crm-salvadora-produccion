@@ -292,6 +292,13 @@ export class AppointmentsService {
 
     const withContact = await this.findOne(saved.id);
     this.eventEmitter.emit('appointment.created', withContact);
+
+    // If appointment is confirmed (SCHEDULED) directly (e.g. Yoga, Meditacion, Gong, etc.), send full confirmation Email & WhatsApp
+    if (saved.status === AppointmentStatus.SCHEDULED) {
+      const managerName = serviceEntity?.manager?.name || 'Centro de Yoga Salvadora Conesa';
+      this.notifyStudentDecision(withContact, 'accepted', managerName).catch(() => null);
+    }
+
     return withContact;
   }
 
@@ -729,7 +736,38 @@ export class AppointmentsService {
         (await this.contactsRepo.findOne({ where: { id: appt.contactId } }));
       if (!contact) return;
 
+      // Load serviceEntity for full details, description, reminderNotes and manager info
+      let serviceEntity: Service | null = null;
+      if (appt.serviceId) {
+        serviceEntity = await this.servicesRepo
+          .findOne({
+            where: { id: appt.serviceId },
+            relations: ['manager'],
+          })
+          .catch(() => null);
+      }
+      if (!serviceEntity && appt.service) {
+        serviceEntity = await this.servicesRepo
+          .findOne({
+            where: { name: appt.service },
+            relations: ['manager'],
+          })
+          .catch(() => null);
+        if (!serviceEntity) {
+          serviceEntity = await this.servicesRepo
+            .findOne({
+              where: { name: ILike(`%${appt.service}%`) },
+              relations: ['manager'],
+            })
+            .catch(() => null);
+        }
+      }
+
+      const effectiveManager =
+        serviceEntity?.manager?.name || managerName || 'Jose Ignacio Gomez Raya';
+
       const startsAtDate = new Date(appt.startsAt);
+      const endsAtDate = appt.endsAt ? new Date(appt.endsAt) : null;
       const formattedDate = startsAtDate.toLocaleDateString('es-ES', {
         timeZone: 'Europe/Madrid',
         weekday: 'long',
@@ -737,50 +775,102 @@ export class AppointmentsService {
         month: 'long',
         year: 'numeric',
       });
-      const formattedTime = startsAtDate.toLocaleTimeString('es-ES', {
+      const formattedStartTime = startsAtDate.toLocaleTimeString('es-ES', {
         timeZone: 'Europe/Madrid',
         hour: '2-digit',
         minute: '2-digit',
       });
+      const formattedEndTime = endsAtDate
+        ? endsAtDate.toLocaleTimeString('es-ES', {
+            timeZone: 'Europe/Madrid',
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : '';
+      const formattedTime = formattedEndTime
+        ? `${formattedStartTime} a ${formattedEndTime}`
+        : formattedStartTime;
 
       const isVirtual = appt.modality === 'virtual';
       const modalityText = isVirtual
         ? 'Online (Videollamada)'
         : 'Presencial en el centro';
-      const meetingLinkText =
-        isVirtual && appt.calMeetingUrl
-          ? `\nEnlace de videollamada Cal.com: ${appt.calMeetingUrl}`
-          : '';
 
       let chatMessageText = '';
 
       if (decision === 'accepted') {
-        const subject = `✅ Tu cita de ${appt.service} ha sido confirmada`;
+        const subject = `✅ Confirmación de tu cita: ${appt.service} - ${formattedDate}`;
+
+        const reminderSectionHtml = serviceEntity?.reminderNotes
+          ? `
+            <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 14px 16px; border-radius: 6px; margin: 18px 0;">
+              <p style="margin: 0; color: #92400e; font-weight: bold; font-size: 14px;">💡 Recordatorio y recomendaciones:</p>
+              <p style="margin: 6px 0 0 0; color: #78350f; font-size: 13px; line-height: 1.5;">${serviceEntity.reminderNotes}</p>
+            </div>
+          `
+          : '';
+
+        const locationHtml = isVirtual
+          ? `
+            <p style="margin: 6px 0;">📍 <strong>Modalidad:</strong> Online (Videollamada)</p>
+            ${
+              appt.calMeetingUrl
+                ? `<div style="margin: 12px 0 8px 0;">
+                     <a href="${appt.calMeetingUrl}" style="background-color: #2563eb; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 14px;">🎥 Acceder a la Videollamada</a>
+                   </div>
+                   <p style="margin: 4px 0; font-size: 12px; color: #6b7280;">Enlace de acceso: <a href="${appt.calMeetingUrl}" style="color: #2563eb;">${appt.calMeetingUrl}</a></p>
+                   <p style="margin: 4px 0; font-size: 12px; color: #6b7280;">(Por favor, conéctate 5 minutos antes con cámara y micrófono activados).</p>`
+                : ''
+            }
+          `
+          : `
+            <p style="margin: 6px 0;">📍 <strong>Modalidad:</strong> Presencial en el centro</p>
+            <p style="margin: 6px 0;">🏢 <strong>Ubicación:</strong> Club Social Parque Granada (Escuela Salvadora Conesa), Calle Holanda 1, 28942 Fuenlabrada, Madrid</p>
+          `;
+
+        const serviceDescHtml = serviceEntity?.description
+          ? `<p style="margin: 8px 0; font-size: 13px; color: #4b5563; line-height: 1.4;"><strong>Detalles de la sesión / actividad:</strong> ${serviceEntity.description}</p>`
+          : '';
+
         const emailHtml = `
-          <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 24px;">
-            <h2 style="color: #10b981; margin-top: 0;">¡Tu cita ha sido confirmada!</h2>
-            <p>Hola <strong>${contact.name}</strong>,</p>
-            <p>Nos complace informarte de que tu solicitud de cita para <strong>${appt.service}</strong> ha sido <strong>aprobada y confirmada</strong> por el terapeuta/profesor responsable (<strong>${managerName}</strong>).</p>
-            <div style="background-color: #f9fafb; padding: 16px; border-radius: 6px; margin: 20px 0;">
+          <div style="font-family: Arial, sans-serif; color: #1f2937; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 10px; padding: 24px; background-color: #ffffff;">
+            <div style="text-align: center; margin-bottom: 20px; border-bottom: 1px solid #f3f4f6; padding-bottom: 16px;">
+              <h2 style="color: #10b981; margin: 0; font-size: 22px;">¡Tu cita está confirmada!</h2>
+              <p style="margin: 6px 0 0 0; color: #6b7280; font-size: 14px;">Centro de Yoga Salvadora Conesa & Club Social Parque Granada</p>
+            </div>
+            
+            <p style="font-size: 15px;">Hola <strong>${contact.name || 'Alumno'}</strong>,</p>
+            <p style="font-size: 14px; color: #374151;">Nos complace confirmarte que tu reserva para <strong>${appt.service}</strong> ha quedado formalizada.</p>
+            
+            <div style="background-color: #f9fafb; border: 1px solid #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0;">
+              <p style="margin: 6px 0;">📌 <strong>Servicio / Actividad:</strong> ${appt.service}</p>
+              ${serviceDescHtml}
               <p style="margin: 6px 0;">📅 <strong>Fecha:</strong> ${formattedDate}</p>
-              <p style="margin: 6px 0;">⏰ <strong>Hora:</strong> ${formattedTime}</p>
-              <p style="margin: 6px 0;">📍 <strong>Modalidad:</strong> ${modalityText}</p>
-              ${
-                isVirtual && appt.calMeetingUrl
-                  ? `<p style="margin: 6px 0;">🔗 <strong>Videollamada:</strong> <a href="${appt.calMeetingUrl}" style="color: #2563eb;">Acceder a la videollamada</a></p>`
-                  : ''
-              }
+              <p style="margin: 6px 0;">⏰ <strong>Horario:</strong> ${formattedTime}</p>
+              ${locationHtml}
+              <p style="margin: 6px 0;">👤 <strong>Responsable / Terapeuta:</strong> ${effectiveManager}</p>
               ${
                 appt.price
-                  ? `<p style="margin: 6px 0;">💶 <strong>Precio:</strong> ${appt.price} €</p>`
+                  ? `<p style="margin: 6px 0;">💶 <strong>Importe:</strong> ${appt.price} €</p>`
                   : ''
               }
             </div>
-            <p>¡Te esperamos con mucho gusto!</p>
+
+            ${reminderSectionHtml}
+
+            <p style="font-size: 13px; color: #6b7280; margin-top: 20px; border-top: 1px solid #f3f4f6; padding-top: 14px;">Si necesitas consultar, cancelar o cambiar cualquier detalle, puedes responder directamente a este correo o escribirnos por WhatsApp al <strong>695 172 625</strong>.</p>
+            <p style="margin-top: 12px; font-weight: bold; color: #374151;">¡Te esperamos!</p>
           </div>
         `;
 
-        chatMessageText = `¡Hola ${contact.name}! Te confirmamos que tu solicitud para *${appt.service}* el *${formattedDate}* a las *${formattedTime}* ha sido *aprobada y confirmada* por el responsable (${managerName}).\n\nModalidad: ${modalityText}${meetingLinkText}\n\n¡Nos vemos pronto!`;
+        const reminderWhatsApp = serviceEntity?.reminderNotes
+          ? `\n\n💡 *Recordatorio y preparación:* ${serviceEntity.reminderNotes}`
+          : '';
+        const locationWhatsApp = isVirtual
+          ? `Online por Videollamada${appt.calMeetingUrl ? `\n🔗 *Enlace directo:* ${appt.calMeetingUrl}` : ''}`
+          : 'Presencial en Club Social Parque Granada (C/ Holanda 1, Fuenlabrada)';
+
+        chatMessageText = `¡Hola ${contact.name || ''}! Te confirmamos que tu cita para *${appt.service}* ha quedado formalizada.\n\n📅 *Fecha:* ${formattedDate}\n⏰ *Hora:* ${formattedTime}\n📍 *Modalidad:* ${locationWhatsApp}\n👤 *Responsable:* ${effectiveManager}${reminderWhatsApp}\n\n¡Muchas gracias y nos vemos pronto!`;
 
         if (contact.email) {
           await this.emailService

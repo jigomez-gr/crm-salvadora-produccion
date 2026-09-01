@@ -29,6 +29,7 @@ interface ServiceFormData {
   allowedModalities: string[];
   requiresReason: boolean;
   calEventTypeId: string;
+  reminderNotes: string;
   isActive: boolean;
 }
 
@@ -60,6 +61,7 @@ export default function ServicesPage() {
     allowedModalities: ["in_person"],
     requiresReason: false,
     calEventTypeId: "",
+    reminderNotes: "",
     isActive: true,
   });
 
@@ -119,6 +121,7 @@ export default function ServicesPage() {
       allowedModalities: ["in_person"],
       requiresReason: false,
       calEventTypeId: "",
+      reminderNotes: "",
       isActive: true,
     });
     setError("");
@@ -144,6 +147,7 @@ export default function ServicesPage() {
       allowedModalities: svc.allowedModalities?.length ? svc.allowedModalities : ["in_person"],
       requiresReason: Boolean(svc.requiresReason),
       calEventTypeId: svc.calEventTypeId ? String(svc.calEventTypeId) : "",
+      reminderNotes: svc.reminderNotes ?? "",
       isActive: svc.isActive ?? true,
     });
     setError("");
@@ -185,6 +189,7 @@ export default function ServicesPage() {
       allowedModalities: form.allowedModalities,
       requiresReason: form.requiresReason,
       calEventTypeId: form.calEventTypeId.trim() ? Number(form.calEventTypeId) : undefined,
+      reminderNotes: form.reminderNotes.trim() || undefined,
       isActive: form.isActive,
     };
 
@@ -445,6 +450,13 @@ export default function ServicesPage() {
                       Requiere aprobación previa
                     </div>
                   )}
+
+                  {s.reminderNotes && (
+                    <div className="mt-1.5 flex items-start gap-1.5 rounded bg-amber-50/80 p-1.5 text-[11px] text-amber-900 border border-amber-200/80">
+                      <span className="font-semibold shrink-0">💡 Recordatorio:</span>
+                      <span className="line-clamp-2">{s.reminderNotes}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -577,8 +589,24 @@ export default function ServicesPage() {
               rows={2}
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              placeholder="Indica de qué trata el servicio, qué material traer o si requiere quórum mínimo…"
+              placeholder="Indica de qué trata el servicio, detalles de la actividad o requisitos…"
             />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-amber-900 flex items-center gap-1">
+              <span>💡 Recordatorio y recomendaciones para el alumno (Email y WhatsApp)</span>
+            </label>
+            <textarea
+              className="block w-full rounded-lg border border-amber-300 bg-amber-50/40 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none placeholder:text-amber-900/40"
+              rows={2}
+              value={form.reminderNotes}
+              onChange={(e) => setForm((f) => ({ ...f, reminderNotes: e.target.value }))}
+              placeholder="ej. Llevar ropa cómoda deportiva, toalla o esterilla propia y acudir 5-10 minutos antes del inicio."
+            />
+            <p className="mt-1 text-[11px] text-neutral-500">
+              Este recordatorio se incluirá automáticamente de forma destacada en el correo electrónico y mensaje de WhatsApp al confirmarse la cita.
+            </p>
           </div>
 
           {form.serviceType === "recurring" ? (

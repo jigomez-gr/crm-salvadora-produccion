@@ -115,6 +115,10 @@ export class Service {
   @Column({ type: 'int', nullable: true })
   calEventTypeId: number | null;
 
+  // Reminder / preparation notes for the customer (e.g. "Llevar ropa cómoda / esterilla")
+  @Column({ type: 'text', nullable: true })
+  reminderNotes: string | null;
+
   @Column({ default: true })
   isActive: boolean;
 

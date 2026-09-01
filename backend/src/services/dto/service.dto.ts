@@ -85,6 +85,10 @@ export class CreateServiceDto {
   @IsOptional()
   calEventTypeId?: number;
 
+  @IsString()
+  @IsOptional()
+  reminderNotes?: string;
+
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
@@ -174,6 +178,10 @@ export class UpdateServiceDto {
   @IsNumber()
   @IsOptional()
   calEventTypeId?: number;
+
+  @IsString()
+  @IsOptional()
+  reminderNotes?: string;
 
   @IsBoolean()
   @IsOptional()

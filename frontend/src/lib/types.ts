@@ -40,6 +40,7 @@ export interface Service {
   allowedModalities?: string[];
   requiresReason?: boolean;
   calEventTypeId?: number | null;
+  reminderNotes?: string | null;
   isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
