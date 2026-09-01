@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const backendUrl =
   process.env.INTERNAL_API_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
-  (process.env.NODE_ENV === "production" ? "http://api:3001" : "http://127.0.0.1:3001");
+  (process.env.NODE_ENV === "production" ? "http://ccmfallaviajeasevilla-salvadora-toiagj:3000" : "http://127.0.0.1:3001");
 
 const nextConfig: NextConfig = {
   output: "standalone",
