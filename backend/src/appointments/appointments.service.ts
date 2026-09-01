@@ -220,6 +220,31 @@ export class AppointmentsService {
       }
     }
 
+    // Check if the contact already has an existing pending_approval appointment for this service/calendar
+    // (e.g. they are rescheduling or agreeing to an alternative time)
+    let existingPending: Appointment | null = null;
+    if (dto.contactId) {
+      existingPending = await this.appointmentsRepo.findOne({
+        where: [
+          {
+            contactId: dto.contactId,
+            status: AppointmentStatus.PENDING_APPROVAL,
+            serviceId: serviceId || undefined,
+          },
+          {
+            contactId: dto.contactId,
+            status: AppointmentStatus.PENDING_APPROVAL,
+            calendarId,
+          },
+          {
+            contactId: dto.contactId,
+            status: AppointmentStatus.PENDING_APPROVAL,
+          },
+        ],
+        order: { createdAt: 'DESC' },
+      });
+    }
+
     // Serialize the "is the slot free? then book it" sequence so two concurrent
     // requests can't both claim the same slot.
     const saved = await this.appointmentsRepo.manager.transaction(
@@ -228,7 +253,22 @@ export class AppointmentsService {
           BOOKING_LOCK_KEY,
         ]);
         const repo = manager.getRepository(Appointment);
-        await this.checkOverlap(repo, startsAt, endsAt, undefined, calendarId, serviceId, serviceName);
+        const excludeId = existingPending?.id;
+        await this.checkOverlap(repo, startsAt, endsAt, excludeId, calendarId, serviceId, serviceName);
+
+        if (existingPending) {
+          existingPending.startsAt = startsAt;
+          existingPending.endsAt = endsAt;
+          existingPending.service = serviceName;
+          existingPending.serviceId = serviceId;
+          existingPending.calendarId = calendarId;
+          existingPending.price = price;
+          existingPending.modality = modality;
+          existingPending.reason = reason || existingPending.reason;
+          existingPending.status = AppointmentStatus.PENDING_APPROVAL;
+          return repo.save(existingPending);
+        }
+
         const appt = repo.create({
           ...dto,
           service: serviceName,
