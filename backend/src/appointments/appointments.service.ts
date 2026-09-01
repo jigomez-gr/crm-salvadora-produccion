@@ -1069,8 +1069,11 @@ export class AppointmentsService {
 
     const qb = repo
       .createQueryBuilder('a')
-      .where('a.status != :cancelled', {
-        cancelled: AppointmentStatus.CANCELLED,
+      .where('a.status NOT IN (:...nonBlocking)', {
+        nonBlocking: [
+          AppointmentStatus.CANCELLED,
+          AppointmentStatus.PENDING_APPROVAL,
+        ],
       })
       .andWhere('a.startsAt < :endsAt', { endsAt })
       .andWhere('a.endsAt > :startsAt', { startsAt });
@@ -1207,7 +1210,12 @@ export class AppointmentsService {
         start: new Date(dayStart.getTime()),
         end: dayEnd,
       })
-      .andWhere('a.status != :cancelled', { cancelled: AppointmentStatus.CANCELLED });
+      .andWhere('a.status NOT IN (:...nonBlocking)', {
+        nonBlocking: [
+          AppointmentStatus.CANCELLED,
+          AppointmentStatus.PENDING_APPROVAL,
+        ],
+      });
 
     if (isYogaOrGroup || maxCapacity > 1) {
       if (targetService?.id) {
