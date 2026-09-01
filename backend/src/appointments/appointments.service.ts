@@ -18,6 +18,7 @@ import { CalcomService } from '../calcom/calcom.service';
 import { TZDate } from '@date-fns/tz';
 import { businessDayWindow } from './business-day';
 import { computeFreeSlots, TimeSlot } from './availability';
+import { parseFlexibleStartsAt } from '../common/time';
 import { WorkingHourSlot } from '../common/entities/agent-config.entity';
 import {
   CreateAppointmentDto,
@@ -128,8 +129,8 @@ export class AppointmentsService {
   }
 
   async create(dto: CreateAppointmentDto): Promise<Appointment> {
-    const startsAt = new Date(dto.startsAt);
-    let endsAt = dto.endsAt ? new Date(dto.endsAt) : startsAt;
+    const startsAt = new Date(parseFlexibleStartsAt(dto.startsAt));
+    let endsAt = dto.endsAt ? new Date(parseFlexibleStartsAt(dto.endsAt)) : startsAt;
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     let serviceEntity: Service | null = null;
     if (dto.serviceId && UUID_REGEX.test(dto.serviceId)) {
@@ -305,8 +306,8 @@ export class AppointmentsService {
   async update(id: string, dto: UpdateAppointmentDto): Promise<Appointment> {
     const appt = await this.findOne(id);
 
-    const newStart = dto.startsAt ? new Date(dto.startsAt) : appt.startsAt;
-    const newEnd = dto.endsAt ? new Date(dto.endsAt) : appt.endsAt;
+    const newStart = dto.startsAt ? new Date(parseFlexibleStartsAt(dto.startsAt)) : appt.startsAt;
+    const newEnd = dto.endsAt ? new Date(parseFlexibleStartsAt(dto.endsAt)) : appt.endsAt;
     const timeChanged = Boolean(dto.startsAt || dto.endsAt);
 
     if (timeChanged) {

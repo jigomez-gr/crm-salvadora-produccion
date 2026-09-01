@@ -4,6 +4,10 @@ import { Memory } from '@mastra/memory';
 import { z } from 'zod';
 import { TZDate } from '@date-fns/tz';
 import { normalizePhoneLoose } from '../common/phone';
+import {
+  parseFlexibleStartsAt,
+  normalizeColloquialSpanishTimes,
+} from '../common/time';
 
 // A single reusable agent template serves every configured agent. The concrete
 // business persona, model and credentials are resolved per request from the
@@ -404,8 +408,9 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         inputData.durationMinutes || svc?.durationMinutes || 30;
       const calendarId = svc?.calendarId || 'default';
 
+      const dateStr = parseFlexibleStartsAt(inputData.date, timezone, new Date());
       const slots = await deps.getAvailableSlots(
-        inputData.date,
+        dateStr,
         durationMinutes,
         workingHours,
         timezone,
@@ -585,30 +590,15 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
             ? new Date(svc.eventStartDate).toISOString()
             : inputData.startsAt;
 
-        // Ensure date is correctly parsed in business timezone if no offset was provided
-        let effectiveStartsAt = rawStartsAt;
-        const trimmed = rawStartsAt?.trim() || '';
-        if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(trimmed)) {
-          // Time-only passed (e.g. "10:30") -> extract date from existing appointment or today
-          const [h, min, s] = trimmed.split(':').map(Number);
-          let targetDate = new Date();
-          if (contactId && deps.listContactAppointments) {
-            const existing = await deps.listContactAppointments(contactId).catch(() => []);
-            const pending = existing.find((a: any) => a.status === 'pending_approval' || a.startsAt);
-            if (pending?.startsAt) {
-              targetDate = new Date(pending.startsAt);
-            }
-          }
-          const zoned = new TZDate(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), h, min, s || 0, timezone);
-          effectiveStartsAt = new Date(zoned.getTime()).toISOString();
-        } else if (trimmed && !trimmed.endsWith('Z') && !/[+-]\d{2}(:\d{2})?$/.test(trimmed)) {
-          const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/);
-          if (match) {
-            const [, y, m, d, h, min, s] = match;
-            const zoned = new TZDate(Number(y), Number(m) - 1, Number(d), Number(h), Number(min), Number(s || 0), timezone);
-            effectiveStartsAt = new Date(zoned.getTime()).toISOString();
+        let targetDate = new Date();
+        if (contactId && deps.listContactAppointments) {
+          const existing = await deps.listContactAppointments(contactId).catch(() => []);
+          const pending = existing.find((a: any) => a.status === 'pending_approval' || a.startsAt);
+          if (pending?.startsAt) {
+            targetDate = new Date(pending.startsAt);
           }
         }
+        const effectiveStartsAt = parseFlexibleStartsAt(rawStartsAt, timezone, targetDate);
 
         const effectiveModality =
           inputData.modality ||
@@ -888,6 +878,17 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
 - NUNCA inventes horarios, días u horas disponibles. ANTES de sugerir cualquier horario, debes llamar OBLIGATORIAMENTE a la herramienta 'checkAvailability' para la fecha y servicio solicitados.
 - Si el día pedido está cerrado (como fines de semana) o 'checkAvailability' no devuelve huecos, indícaselo con total claridad al cliente (p. ej. "Los sábados y domingos estamos cerrados") y ofrece consultar el siguiente día laborable en que haya disponibilidad.
 - Ofrece únicamente los horarios reales que te devuelva 'checkAvailability', en la zona horaria ${timezone} y en lenguaje natural (p. ej. "el lunes a las 10:00").
+- INTERPRETACIÓN Y EQUIVALENCIA DE HORAS Y EXPRESIONES HORARIAS (OBLIGATORIO):
+  * Debes interpretar y aceptar SIEMPRE las expresiones horarias coloquiales y en lenguaje natural español como horas exactas:
+    - "16 y 30", "las 16 y 30", "16 y media", "a las 4 y media de la tarde", "a las 16 y 30" equivalen EXACTAMENTE a las 16:30.
+    - "9 y 45", "las 9 y 45", "10 menos cuarto" equivalen EXACTAMENTE a las 09:45.
+    - "11 y 15", "las 11 y 15", "11 y cuarto" equivalen EXACTAMENTE a las 11:15.
+    - "17 y 00", "a las 17", "a las 5 de la tarde" equivalen EXACTAMENTE a las 17:00.
+    - "18 y 30", "las 18 y 30", "6 y media de la tarde" equivalen EXACTAMENTE a las 18:30.
+    - "20 y 00", "a las 20", "8 de la tarde" equivalen EXACTAMENTE a las 20:00.
+    - "20 y 15", "a las 20 y 15", "8 y cuarto de la tarde" equivalen EXACTAMENTE a las 20:15.
+  * Cuando el cliente responda con una hora como "16 y 30" (o "a las 16 y 30", "16 y media", "17 y 15", "9 y 45"), acéptala y entiéndela inmediatamente como la hora correspondiente (16:30, 17:15, 09:45). NUNCA digas que no entiendes la hora, no rechaces la petición ni digas que la hora no existe si coincide con un horario disponible.
+  * Al invocar las herramientas ('checkAvailability', 'bookAppointment'), pasa siempre la fecha y hora en formato estándar (ej. "16:30" o formato ISO).
 - ACTIVIDADES Y CLASES GRUPALES (AFORO MÚLTIPLE):
   Las clases regulares de Yoga, Baños de Gong, Meditaciones y Talleres son actividades grupales que admiten múltiples asistentes simultáneos (aforo de hasta 20 a 30 personas por sesión según el servicio).
   * Que ya exista una persona apuntada o una cita previa a esa misma hora NO significa que el horario esté ocupado: se pueden reservar plazas hasta completar el aforo total.

@@ -17,6 +17,7 @@ import { detectConsentKeyword } from '../whatsapp/consent-keywords';
 import { AUDIT_EVENT, AuditAction } from '../audit/audit.types';
 import { KnowledgeService } from '../knowledge/knowledge.service';
 import { KNOWLEDGE_BUDGET_CHARS } from '../knowledge/knowledge-core';
+import { normalizeColloquialSpanishTimes } from '../common/time';
 
 // Hard cap on tool-call/generation steps per turn — bounds the agent loop so a
 // misbehaving model (or a prompt-injection loop) can't rack up unbounded
@@ -110,8 +111,9 @@ export class AgentRunnerService {
   async run(params: RunAgentParams): Promise<RunAgentResult> {
     const { agentKey, message, threadId, contactId, phone, contactName, channel, externalId, media } =
       params;
-    // What the LLM reads (a description for media; the stored text otherwise).
-    const agentPrompt = params.agentPrompt ?? message;
+    // What the LLM reads (a description for media; the normalized text otherwise).
+    const agentPrompt =
+      params.agentPrompt ?? normalizeColloquialSpanishTimes(message);
     const mediaFields = media
       ? {
           mediaType: media.mediaType,
