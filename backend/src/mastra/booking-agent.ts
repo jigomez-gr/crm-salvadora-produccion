@@ -579,7 +579,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       try {
         const timezone = config?.timezone || 'Europe/Madrid';
         const status =
-          svc.requiresApproval !== false ? 'pending_approval' : 'scheduled';
+          svc.requiresApproval === true ? 'pending_approval' : 'scheduled';
         const rawStartsAt =
           svc.serviceType === 'event' && svc.eventStartDate
             ? new Date(svc.eventStartDate).toISOString()
