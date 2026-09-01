@@ -23,6 +23,30 @@ export class ServicesService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     try {
+      // 0. Ensure schema columns exist in services table (safe auto-migration)
+      try {
+        await this.serviceRepo.query(`
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "reminderNotes" text;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "managerId" uuid;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "requiresApproval" boolean DEFAULT false;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "maxCapacity" integer DEFAULT 1;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "locationType" character varying DEFAULT 'BOTH';
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "address" text;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "onlineMeetingUrl" text;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "calcomEventTypeId" integer;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "calcomSlug" character varying;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "vapiAssistantId" character varying;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "vapiPhoneNumberId" character varying;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "isVapiEnabled" boolean DEFAULT false;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "isActive" boolean DEFAULT true;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "displayOrder" integer DEFAULT 0;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "stripePriceId" character varying;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "stripeProductId" character varying;
+        `);
+      } catch (colErr) {
+        console.warn('Auto-migration warning in services table:', colErr);
+      }
+
       // 1. Ensure Jose Ignacio Gomez Raya exists as SERVICE_MANAGER
       let manager = await this.userRepo.findOne({
         where: [{ email: 'jigomez@hotmail.com' }, { name: ILike('%Jose Ignacio Gomez%') }],
