@@ -607,6 +607,8 @@ export class AppointmentsService {
   /** Accept an appointment (responsible manager approval) */
   async accept(id: string, acceptedBy: string): Promise<Appointment> {
     const appt = await this.findOne(id);
+    const wasAlreadyAccepted = appt.status === AppointmentStatus.SCHEDULED && !!appt.acceptedAt;
+
     appt.status = AppointmentStatus.SCHEDULED;
     appt.acceptedAt = new Date();
     appt.acceptedBy = acceptedBy;
@@ -661,12 +663,14 @@ export class AppointmentsService {
     const saved = await this.appointmentsRepo.save(appt);
     this.eventEmitter.emit('appointment.created', saved);
 
-    // Notify student via Email and/or WhatsApp and update conversation thread
-    await this.notifyStudentDecision(
-      saved,
-      'accepted',
-      serviceEntity?.manager?.name || acceptedBy || 'Jose Ignacio Gomez Raya',
-    );
+    // Notify student via Email and/or WhatsApp only if this is the first time it is accepted
+    if (!wasAlreadyAccepted) {
+      await this.notifyStudentDecision(
+        saved,
+        'accepted',
+        serviceEntity?.manager?.name || acceptedBy || 'Jose Ignacio Gomez Raya',
+      );
+    }
 
     return saved;
   }
