@@ -57,6 +57,9 @@ export { NestMastraModule };
         // Pure data operations. Per-agent config (services, hours, timezone) is
         // read from requestContext inside the tools, not here.
         const deps = {
+          findContact: async (phone?: string, email?: string) => {
+            return contactsService.findByPhoneOrEmail(phone, email);
+          },
           findContactByPhone: async (phone: string) => {
             return contactsService.findByPhone(phone);
           },

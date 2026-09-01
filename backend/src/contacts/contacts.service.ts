@@ -323,6 +323,29 @@ export class ContactsService {
     return this.contactsRepo.findOne({ where: { phone } });
   }
 
+  async findByEmail(email: string): Promise<Contact | null> {
+    if (!email) return null;
+    return this.contactsRepo
+      .createQueryBuilder('c')
+      .where('LOWER(c.email) = LOWER(:email)', { email: email.trim() })
+      .orderBy('c.createdAt', 'DESC')
+      .getOne();
+  }
+
+  async findByPhoneOrEmail(phone?: string, email?: string): Promise<Contact | null> {
+    if (phone) {
+      const normalized = normalizePhoneLoose(phone);
+      if (normalized) {
+        const byPhone = await this.findByPhone(normalized);
+        if (byPhone) return byPhone;
+      }
+    }
+    if (email) {
+      return this.findByEmail(email);
+    }
+    return null;
+  }
+
   async upsertByPhone(
     phone: string,
     name?: string,
