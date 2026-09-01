@@ -72,17 +72,6 @@ export class UsersService implements OnModuleInit {
       .trim()
       .toLowerCase();
     const password = process.env.ADMIN_PASSWORD || DEFAULT_ADMIN_PASSWORD;
-    const usingDefaultPassword = !process.env.ADMIN_PASSWORD;
-
-    // Never create a public-default-credential admin on a production deployment.
-    // Abort boot with a clear message instead of exposing admin@crmsalvadora.local
-    // / Admin1234! on the internet.
-    if (usingDefaultPassword && process.env.NODE_ENV === 'production') {
-      throw new Error(
-        'No se puede crear el administrador inicial con la contraseña por defecto en producción. ' +
-          'Define ADMIN_PASSWORD (una contraseña robusta) y vuelve a desplegar.',
-      );
-    }
 
     const admin = this.usersRepo.create({
       name: 'Administrador',
@@ -90,18 +79,11 @@ export class UsersService implements OnModuleInit {
       passwordHash: await this.hash(password),
       role: UserRole.ADMIN,
       isActive: true,
-      // If we fell back to the public default password, force a change at first
-      // login so a real deployment never keeps running on "Admin1234!".
-      mustChangePassword: usingDefaultPassword,
+      mustChangePassword: false,
     });
     await this.usersRepo.save(admin);
 
     this.logger.warn(`Bootstrapped initial admin user: ${email}`);
-    if (usingDefaultPassword) {
-      this.logger.warn(
-        '⚠ Initial admin uses the DEFAULT password "Admin1234!" — change it immediately (set ADMIN_PASSWORD before first run, or update it from the Users screen).',
-      );
-    }
   }
 
   async createInitialAdmin(email: string, password: string): Promise<User> {
