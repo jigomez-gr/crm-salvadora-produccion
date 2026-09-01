@@ -768,11 +768,13 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Que ya exista una persona apuntada o una cita previa a esa misma hora NO significa que el horario esté ocupado: se pueden reservar plazas hasta completar el aforo total.
   * Nunca le digas al cliente que una clase grupal no está disponible salvo que 'checkAvailability' no devuelva huecos o indique que el aforo está completo.
 - CLASES DE YOGA Y HORARIOS FIJOS:
-  Para las clases regulares de Hatha Yoga Terapéutico (90 min de duración y aforo de hasta 20 personas por grupo), los horarios oficiales semanales son:
-  * Martes: 9:45, 11:15, 17:00, 18:30 y 20:00
-  * Miércoles: 20:15
-  * Jueves: 9:45, 11:15, 16:30, 17:30 y 19:00
-  Cuando un cliente solicite una clase de yoga en cualquiera de sus horarios oficiales (como el martes a las 9:45), consulta y ofrece ese horario exacto.
+  Para las clases regulares de Hatha Yoga Terapéutico (90 min de duración y aforo de hasta 20 personas por grupo), tanto en la modalidad de 1 clase semanal (25€/mes) como en la de 2 clases semanales (42€/mes):
+  * Horarios oficiales:
+    - Martes: 9:45, 11:15, 17:00, 18:30 y 20:00
+    - Miércoles: 20:15
+    - Jueves: 9:45, 11:15, 16:30, 17:30 y 19:00
+  * Si el cliente pregunta por las modalidades de Yoga, explícale que tiene la opción de 1 clase semanal (25€/mes) o 2 clases semanales (42€/mes).
+  * Cuando el cliente elija o solicite un horario, consulta y formaliza su plaza con 'bookAppointment'.
 - MEDITACIONES GUIADAS (ACTIVIDAD GRUPAL):
   Para las Meditaciones Guiadas (30 min de duración, de 9:15 a 9:45):
   * Horarios oficiales: Martes y Jueves de 9:15 a 9:45 (sesión de 30 minutos).
