@@ -1,10 +1,12 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
 const CANDIDATE_URLS = [
   process.env.INTERNAL_API_URL,
   process.env.NEXT_PUBLIC_API_URL,
+  "http://192.168.1.17:3001",
+  "http://host.docker.internal:3001",
   "http://salvadora:3001",
   "http://ccmfallaviajeasevilla-salvadora-toiagj:3001",
   "http://api:3001",
