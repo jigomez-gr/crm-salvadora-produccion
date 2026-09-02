@@ -1,4 +1,4 @@
-﻿import { VapiWebhookService } from './vapi-webhook.service';
+import { VapiWebhookService } from './vapi-webhook.service';
 
 describe('VapiWebhookService', () => {
   let service: VapiWebhookService;
@@ -231,6 +231,51 @@ describe('VapiWebhookService', () => {
 
       expect(response.results![0].result).toContain('Carlos Santana');
       expect(response.results![0].result).toContain('Salúdale cordialmente');
+    });
+
+    it('handles Constelaciones Familiares fixed-date workshop availability correctly', async () => {
+      const payload: any = {
+        message: {
+          type: 'tool-calls',
+          call: { id: 'vapi-call-constel' },
+          toolCallList: [
+            {
+              id: 'tc-constel-1',
+              name: 'consultar_huecos',
+              arguments: {
+                servicio: 'Constelaciones Familiares',
+              },
+            },
+          ],
+        },
+      };
+
+      const response = await service.handleWebhook(payload);
+      expect(response.results![0].result).toContain('domingo 27 de septiembre');
+      expect(response.results![0].result).toContain('[2026-09-27T08:00:00.000Z]');
+    });
+
+    it('rejects random date for Constelaciones Familiares and informs of the real workshop date', async () => {
+      const payload: any = {
+        message: {
+          type: 'tool-calls',
+          call: { id: 'vapi-call-constel-tarde' },
+          toolCallList: [
+            {
+              id: 'tc-constel-2',
+              name: 'consultar_huecos',
+              arguments: {
+                servicio: 'Constelaciones Familiares',
+                fechaPreferida: 'esta tarde',
+              },
+            },
+          ],
+        },
+      };
+
+      const response = await service.handleWebhook(payload);
+      expect(response.results![0].result).toContain('No hay sesiones de «Constelaciones Familiares» para esa fecha');
+      expect(response.results![0].result).toContain('domingo 27 de septiembre');
     });
   });
 });

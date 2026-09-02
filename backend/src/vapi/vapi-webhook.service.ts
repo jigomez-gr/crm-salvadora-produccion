@@ -275,9 +275,75 @@ export class VapiWebhookService {
       }
     }
 
+    const rawFecha = (params?.fechaPreferida || params?.fecha || params?.date || '').toString().toLowerCase().trim();
+
+    // Check if target service is an event/workshop with fixed dates (Constelaciones, Gong, Puja, Retiro, Encuentro)
+    const isEvent =
+      targetService?.serviceType === 'event' ||
+      /constelaci|gong|puja|retiro|ayuno|encuentro/i.test(requestedService || targetService?.name || '');
+
+    if (isEvent) {
+      const isConstelaciones = /constelaci/i.test(requestedService || targetService?.name || '');
+      const isGong = /baño.*gong|gong.*sonora/i.test(requestedService || targetService?.name || '');
+      const isPuja = /puja/i.test(requestedService || targetService?.name || '');
+      const isRetiro = /retiro|ayuno/i.test(requestedService || targetService?.name || '');
+      const isEncuentro = /encuentro.*mujer/i.test(requestedService || targetService?.name || '');
+
+      let eventStartDate = targetService?.eventStartDate ? new Date(targetService.eventStartDate) : null;
+      let eventText = targetService?.eventDatesText || '';
+
+      if (isConstelaciones) {
+        eventStartDate = eventStartDate || new Date('2026-09-27T08:00:00.000Z'); // Sunday Sep 27, 2026 10:00 Europe/Madrid
+        eventText = eventText || 'domingo 27 de septiembre de 2026 de 10:00 a 14:00';
+      } else if (isGong) {
+        eventStartDate = eventStartDate || new Date('2026-09-26T16:00:00.000Z'); // Saturday Sep 26, 2026 18:00 Europe/Madrid
+        eventText = eventText || 'sábado 26 de septiembre de 2026 de 18:00 a 20:00';
+      } else if (isPuja) {
+        eventStartDate = eventStartDate || new Date('2026-11-28T20:00:00.000Z'); // Saturday Nov 28, 2026 21:00 Europe/Madrid
+        eventText = eventText || 'sábado 28 de noviembre de 2026 de 21:00 a 08:00 del domingo';
+      } else if (isRetiro) {
+        eventStartDate = eventStartDate || new Date('2026-10-09T08:00:00.000Z');
+        eventText = eventText || 'puente de octubre, del 9 al 12 de octubre de 2026';
+      } else if (isEncuentro) {
+        eventStartDate = eventStartDate || new Date('2027-05-15T08:00:00.000Z');
+        eventText = eventText || 'sábado 15 de mayo de 2027 de 10:00 a 16:00';
+      }
+
+      if (eventStartDate) {
+        const iso = eventStartDate.toISOString();
+        const serviceDisplayName = targetService?.name || requestedService || 'Constelaciones Familiares';
+
+        // Check if caller specifically asked for another date (e.g. "esta tarde", "hoy", "mañana", "lunes", etc.)
+        const isDifferentDate =
+          rawFecha &&
+          !rawFecha.includes('27') &&
+          !rawFecha.includes('26') &&
+          !rawFecha.includes('28') &&
+          !rawFecha.includes('septiembre') &&
+          !rawFecha.includes('domingo') &&
+          (rawFecha.includes('hoy') ||
+            rawFecha.includes('tarde') ||
+            rawFecha.includes('mañana') ||
+            rawFecha.includes('manana') ||
+            rawFecha.includes('lunes') ||
+            rawFecha.includes('martes') ||
+            rawFecha.includes('miercoles') ||
+            rawFecha.includes('miércoles') ||
+            rawFecha.includes('jueves') ||
+            rawFecha.includes('viernes') ||
+            rawFecha.includes('sabado') ||
+            rawFecha.includes('sábado'));
+
+        if (isDifferentDate) {
+          return `No hay sesiones de «${serviceDisplayName}» para esa fecha. Es un taller vivencial que se celebra el ${eventText} [${iso}]. Explícaselo al cliente y pregúntale si desea reservar plaza para esa fecha${isConstelaciones ? ' (indicando si quiere Constelar por 60€ o Participar por 20€)' : ''}.`;
+        }
+
+        return `La próxima sesión de «${serviceDisplayName}» tiene lugar el ${eventText} [${iso}]. Hay disponibilidad. Ofrece la fecha al cliente para formalizar su plaza${isConstelaciones ? ' y pregúntale si prefiere Constelar (60€) o Participar como representante (20€)' : ''}.`;
+      }
+    }
+
     const now = new Date();
     let startDate = now;
-    const rawFecha = (params?.fechaPreferida || params?.fecha || params?.date || '').toString().toLowerCase().trim();
 
     if (rawFecha) {
       if (rawFecha.includes('hoy') || rawFecha.includes('esta tarde') || rawFecha.includes('esta mañana')) {
