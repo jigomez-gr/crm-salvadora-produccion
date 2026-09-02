@@ -90,6 +90,7 @@ export class VapiService {
       tone: acc.tone,
       maxDurationSeconds: acc.maxDurationSeconds,
       isActive: acc.isActive,
+      smsWebhookUrl: acc.smsWebhookUrl,
       updatedAt: acc.updatedAt,
     };
   }
@@ -108,6 +109,9 @@ export class VapiService {
     if (dto.serverCredentialId !== undefined) acc.serverCredentialId = dto.serverCredentialId || null;
     if (dto.customWebhookUrl !== undefined) {
       acc.customWebhookUrl = dto.customWebhookUrl?.trim() ? dto.customWebhookUrl.trim() : null;
+    }
+    if (dto.smsWebhookUrl !== undefined) {
+      acc.smsWebhookUrl = dto.smsWebhookUrl?.trim() ? dto.smsWebhookUrl.trim() : null;
     }
     if (dto.handoffNumber !== undefined) acc.handoffNumber = dto.handoffNumber || null;
     if (dto.handoffMessage !== undefined) acc.handoffMessage = dto.handoffMessage || null;

@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ShieldAlert, Upload, Trash2, Bot, Mail, Send, CreditCard, Copy, Check, Video } from "lucide-react";
+import { ShieldAlert, Upload, Trash2, Bot, Mail, Send, CreditCard, Copy, Check, Video, PhoneCall, RefreshCw } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { readableTextColor } from "@/lib/color";
-import { AppSettings, EmailConfig, PaymentConfig, CalcomConfig } from "@/lib/types";
+import { AppSettings, EmailConfig, PaymentConfig, CalcomConfig, VapiAccountConfig } from "@/lib/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranding } from "@/contexts/BrandingContext";
 import { useToast } from "@/contexts/ToastContext";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { SecretInput } from "@/components/ui/SecretInput";
+import { cn } from "@/lib/utils";
 
 // ─── Email (SMTP) configuration ─────────────────────────────────────────────────
 
@@ -640,6 +641,191 @@ function CalcomCard() {
   );
 }
 
+function VapiCard() {
+  const toast = useToast();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [tick, setTick] = useState(0);
+
+  const [hasApiKey, setHasApiKey] = useState(false);
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [assistantId, setAssistantId] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [smsWebhookUrl, setSmsWebhookUrl] = useState("");
+
+  const webhookUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/api/vapi/webhook`
+    : "/api/vapi/webhook";
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<VapiAccountConfig>("/api/vapi/config")
+      .then((data) => {
+        if (cancelled) return;
+        setHasApiKey(data.hasApiKey);
+        setAssistantId(data.assistantId || "");
+        setPhoneNumber(data.phoneNumber || "");
+        setSmsWebhookUrl(data.smsWebhookUrl || "");
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const payload: Record<string, any> = {
+        assistantId: assistantId.trim() || undefined,
+        phoneNumber: phoneNumber.trim() || undefined,
+        smsWebhookUrl: smsWebhookUrl.trim() || null,
+      };
+      if (apiKey !== null && apiKey.trim() !== "") {
+        payload.apiKey = apiKey.trim();
+      }
+      const updated = await apiFetch<VapiAccountConfig>("/api/vapi/config", {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+      setHasApiKey(updated.hasApiKey);
+      setApiKey(null);
+      setTick((t) => t + 1);
+      toast.success("Configuración de VAPI y SMS guardada");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Error al guardar configuración de VAPI");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSyncTools() {
+    setSyncing(true);
+    try {
+      const res = await apiFetch<{ synced: number; tools: any[] }>("/api/vapi/sync-tools", {
+        method: "POST",
+      });
+      toast.success(`Se han sincronizado ${res.synced || res.tools?.length || 0} herramientas con VAPI`);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Error al sincronizar herramientas con VAPI");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  function copyWebhook() {
+    navigator.clipboard.writeText(webhookUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast.success("URL del webhook copiada");
+  }
+
+  const labelCls = "mb-1 block text-xs font-medium text-neutral-700";
+
+  return (
+    <div className="mt-6 max-w-xl rounded-xl border border-neutral-200 bg-white p-6">
+      <div className="flex items-center gap-2">
+        <PhoneCall className="h-4 w-4 text-indigo-600" />
+        <h2 className="text-sm font-semibold text-neutral-800">
+          Voz Telefónica (VAPI & Zadarma) y SMS (n8n)
+        </h2>
+      </div>
+      <p className="mt-1 text-xs text-neutral-500">
+        Conecta tu recepcionista de voz con IA telefónica (VAPI + números Zadarma) y configura el webhook de n8n para enviar SMS de confirmación.
+      </p>
+
+      <div className="mt-4 space-y-4">
+        <SecretInput
+          key={`vapi-key-${tick}`}
+          label="Clave de API de VAPI"
+          placeholder="vapi_... o tu Private API Key"
+          hasValue={hasApiKey}
+          value={apiKey}
+          onChange={setApiKey}
+          hint="Obtén tu API Key privada en dashboard.vapi.ai → Org → API Keys."
+        />
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className={labelCls}>ID del Asistente VAPI</label>
+            <Input
+              placeholder="p. ej. ff7c4d18-aa90-..."
+              value={assistantId}
+              onChange={(e) => setAssistantId(e.target.value)}
+            />
+            <p className="mt-1 text-[11px] text-neutral-500">ID de «Recepcionista Escuela Yoga» en VAPI.</p>
+          </div>
+
+          <div>
+            <label className={labelCls}>Número de Teléfono (Zadarma)</label>
+            <Input
+              placeholder="+34919933764"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+            />
+            <p className="mt-1 text-[11px] text-neutral-500">Número DID español contratado en Zadarma.</p>
+          </div>
+        </div>
+
+        <div>
+          <label className={labelCls}>URL del Webhook del CRM (para VAPI Server URL)</label>
+          <div className="flex gap-2">
+            <Input
+              readOnly
+              value={webhookUrl}
+              onFocus={(e) => e.currentTarget.select()}
+              className="font-mono text-xs"
+            />
+            <Button type="button" variant="secondary" onClick={copyWebhook}>
+              {copied ? (
+                <>
+                  <Check className="h-3.5 w-3.5 text-emerald-600" /> Copiado
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3.5 w-3.5" /> Copiar
+                </>
+              )}
+            </Button>
+          </div>
+          <p className="mt-1 text-[11px] text-neutral-500">
+            Pega esta URL en el <strong>Server URL</strong> de tu asistente y tools en dashboard.vapi.ai.
+          </p>
+        </div>
+
+        <div>
+          <label className={labelCls}>Webhook de Salida para SMS (n8n / C#)</label>
+          <Input
+            placeholder="https://n8n.tudominio.com/webhook/citas-sms"
+            value={smsWebhookUrl}
+            onChange={(e) => setSmsWebhookUrl(e.target.value)}
+          />
+          <p className="mt-1 text-[11px] text-neutral-500">
+            Recibe eventos automáticos (citas aceptadas, rechazadas o creadas) con el texto del SMS listo para enviar.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-neutral-100">
+          <Button onClick={handleSave} disabled={saving}>
+            <Upload className="h-4 w-4" />
+            {saving ? "Guardando…" : "Guardar Voz y SMS"}
+          </Button>
+
+          <Button variant="secondary" onClick={handleSyncTools} disabled={syncing || !hasApiKey}>
+            <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
+            {syncing ? "Sincronizando…" : "Sincronizar Tools con VAPI"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { user } = useAuth();
   const branding = useBranding();
@@ -834,6 +1020,9 @@ export default function SettingsPage() {
 
       {/* Cal.com (Virtual Meetings & Video) */}
       <CalcomCard />
+
+      {/* Voz Telefónica (VAPI & Zadarma) y SMS */}
+      <VapiCard />
 
       {/* Danger zone */}
       <div className="mt-6 max-w-xl rounded-xl border border-red-200 bg-red-50/40 p-6">

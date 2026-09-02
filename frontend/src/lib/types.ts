@@ -552,6 +552,7 @@ export interface VapiAccountConfig {
   tone: string;
   maxDurationSeconds: number;
   isActive: boolean;
+  smsWebhookUrl?: string | null;
   updatedAt: string;
 }
 

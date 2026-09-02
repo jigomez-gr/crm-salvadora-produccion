@@ -107,4 +107,5 @@ export interface VapiAccountConfigDto {
   tone?: string;
   maxDurationSeconds?: number;
   isActive?: boolean;
+  smsWebhookUrl?: string | null;
 }

@@ -38,6 +38,9 @@ export class VapiAccount {
   @Column({ nullable: true })
   handoffMessage: string | null;
 
+  @Column({ type: 'text', nullable: true })
+  smsWebhookUrl: string | null;
+
   // Voice Settings
   @Column({ default: '11labs' })
   voiceProvider: string;

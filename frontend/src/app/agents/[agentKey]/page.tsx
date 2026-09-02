@@ -16,6 +16,7 @@ import {
   ChevronDown,
   Search,
   Star,
+  PhoneCall,
 } from "lucide-react";
 import Link from "next/link";
 import { apiFetch, apiUrl, ApiError } from "@/lib/api";
@@ -972,6 +973,27 @@ function ConfigTab({
             o <code>es_ES</code>).
           </p>
         </div>
+      </div>
+
+      {/* Voice Phone Agent (VAPI & Zadarma) */}
+      <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <PhoneCall className="h-4 w-4 text-indigo-600" />
+            <h2 className="text-sm font-semibold text-neutral-700">
+              Canal de Voz Telefónico (VAPI & Zadarma)
+            </h2>
+          </div>
+          <Link
+            href="/settings"
+            className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800"
+          >
+            Configurar en Ajustes →
+          </Link>
+        </div>
+        <p className="text-xs text-neutral-500">
+          Atiende llamadas telefónicas reales y reserva clases de Yoga automáticamente mediante IA de voz (VAPI) conectada a tus números de Zadarma (+34 919 93 37 64 / +34 919 93 34 03) y con confirmaciones por SMS (n8n).
+        </p>
       </div>
 
       {/* Services */}

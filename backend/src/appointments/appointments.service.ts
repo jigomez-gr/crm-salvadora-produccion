@@ -14,6 +14,7 @@ import {
   AppointmentStatus,
 } from '../common/entities/appointment.entity';
 import { Service } from '../common/entities/service.entity';
+import { VapiAccount } from '../common/entities/vapi-account.entity';
 import { CalcomService } from '../calcom/calcom.service';
 import { TZDate } from '@date-fns/tz';
 import { businessDayWindow } from './business-day';
@@ -1107,8 +1108,103 @@ export class AppointmentsService {
       } catch (convErr) {
         this.logger.debug(`Could not append decision message to conversation: ${convErr}`);
       }
+
+      // Dispatch SMS Webhook for n8n / C# notification system
+      let smsText = '';
+      if (decision === 'accepted') {
+        smsText = `Hola ${contact.name || ''}, tu cita para ${appt.service} el ${formattedDate} a las ${formattedStartTime} ha sido confirmada en Centro de Yoga Salvadora Conesa. ¡Te esperamos!`;
+      } else if (decision === 'reschedule_requested') {
+        smsText = `Hola ${contact.name || ''}, para tu cita de ${appt.service} el ${formattedDate}, solicitamos cambiar de fecha u horario. Motivo: ${rejectionReason || 'No disponible'}`;
+      } else if (decision === 'cancelled') {
+        smsText = `Hola ${contact.name || ''}, confirmamos la cancelación de tu cita para ${appt.service} prevista para el ${formattedDate}.`;
+      } else {
+        smsText = `Hola ${contact.name || ''}, lamentamos informarte de que tu solicitud para ${appt.service} el ${formattedDate} no ha podido ser confirmada.`;
+      }
+
+      await this.dispatchSmsWebhook({
+        event: `appointment.${decision}`,
+        decision,
+        appointmentId: appt.id,
+        service: appt.service,
+        startsAt: appt.startsAt,
+        endsAt: appt.endsAt,
+        formattedDate,
+        formattedTime,
+        contact: {
+          id: contact.id,
+          name: contact.name,
+          phone: contact.phone,
+          email: contact.email,
+        },
+        smsText,
+        manager: effectiveManager,
+        rejectionReason,
+      }).catch(() => null);
     } catch (err) {
       this.logger.error(`Error notifying student about appointment ${appt.id}: ${err}`);
+    }
+  }
+
+  /**
+   * Dispatches outgoing webhook to n8n (or C# service) for SMS notifications.
+   */
+  private async dispatchSmsWebhook(payload: {
+    event: string;
+    decision: 'accepted' | 'rejected' | 'reschedule_requested' | 'cancelled';
+    appointmentId: string;
+    service: string;
+    startsAt: Date | string;
+    endsAt?: Date | string | null;
+    formattedDate: string;
+    formattedTime: string;
+    contact: {
+      id: string;
+      name: string;
+      phone: string | null;
+      email: string | null;
+    };
+    smsText: string;
+    manager: string;
+    rejectionReason?: string;
+  }): Promise<void> {
+    let webhookUrl = process.env.N8N_SMS_WEBHOOK_URL || process.env.SMS_WEBHOOK_URL;
+    
+    if (!webhookUrl) {
+      try {
+        const vapiAcc = await this.appointmentsRepo.manager
+          .getRepository(VapiAccount)
+          .findOne({ where: {} });
+        if (vapiAcc?.smsWebhookUrl) {
+          webhookUrl = vapiAcc.smsWebhookUrl;
+        }
+      } catch {
+        // ignore if not found
+      }
+    }
+
+    if (!webhookUrl || webhookUrl.trim() === '') {
+      return;
+    }
+    if (!payload.contact.phone) {
+      return;
+    }
+    try {
+      this.logger.log(`Dispatching SMS webhook to n8n (${webhookUrl}) for contact ${payload.contact.phone}`);
+      const res = await fetch(webhookUrl.trim(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'CRM-Salvadora-SMS/1.0',
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        this.logger.warn(`n8n SMS Webhook returned status ${res.status}: ${await res.text().catch(() => '')}`);
+      } else {
+        this.logger.log(`n8n SMS Webhook delivered successfully (${res.status})`);
+      }
+    } catch (err: any) {
+      this.logger.error(`Failed to dispatch SMS webhook to n8n: ${err?.message || err}`);
     }
   }
 
