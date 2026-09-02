@@ -113,25 +113,30 @@ export class VapiWebhookService {
     return {};
   }
 
-  private async ensureCallRow(vapiCallId: string, direction: 'inbound' | 'outbound', fromNumber: string | null): Promise<Call> {
-    let call = await this.callsRepo.findOne({ where: { vapiCallId } });
-    if (!call) {
-      let contactId: string | null = null;
-      if (fromNumber) {
-        const contact = await this.contactsRepo.findOne({ where: { phone: fromNumber } });
-        if (contact) contactId = contact.id;
+  private async ensureCallRow(vapiCallId: string, direction: 'inbound' | 'outbound', fromNumber: string | null): Promise<Call | null> {
+    try {
+      let call = await this.callsRepo.findOne({ where: { vapiCallId } });
+      if (!call) {
+        let contactId: string | null = null;
+        if (fromNumber) {
+          const contact = await this.contactsRepo.findOne({ where: { phone: fromNumber } });
+          if (contact) contactId = contact.id;
+        }
+        call = this.callsRepo.create({
+          vapiCallId,
+          direction: direction === 'outbound' ? CallDirection.OUTBOUND : CallDirection.INBOUND,
+          fromNumber,
+          status: CallStatus.IN_PROGRESS,
+          contactId,
+          startedAt: new Date(),
+        });
+        return await this.callsRepo.save(call);
       }
-      call = this.callsRepo.create({
-        vapiCallId,
-        direction: direction === 'outbound' ? CallDirection.OUTBOUND : CallDirection.INBOUND,
-        fromNumber,
-        status: CallStatus.IN_PROGRESS,
-        contactId,
-        startedAt: new Date(),
-      });
-      await this.callsRepo.save(call);
+      return call;
+    } catch (err: any) {
+      this.logger.warn(`Could not ensure Call row for ${vapiCallId}: ${err?.message || err}`);
+      return null;
     }
-    return call;
   }
 
   private async executeToolCall(tc: VapiToolCallItem, ctx: ToolExecutionContext): Promise<string> {
@@ -241,53 +246,64 @@ export class VapiWebhookService {
     let startDate = now;
 
     if (params.fechaPreferida) {
-      const parsed = parseISO(params.fechaPreferida);
-      if (isValid(parsed) && parsed >= now) {
-        startDate = parsed;
+      try {
+        const parsed = parseISO(params.fechaPreferida);
+        if (isValid(parsed)) {
+          startDate = parsed;
+        }
+      } catch {
+        // fallback to now
       }
     }
 
-    const diasVista = Math.min(Math.max(params.diasVista || 5, 1), 14);
-    const slots = await this.appointmentsService.getAvailableSlots(
-      startDate,
-      durationMinutes,
-      workingHours,
-      ctx.timezone,
-      now,
-      targetService?.calendarId || 'default',
-      targetService?.id,
-    );
+    const candidateSlots: Array<{ startsAt: Date; endsAt: Date }> = [];
+    const diasABuscar = Math.min(Math.max(params.diasVista || 5, 1), 7);
 
-    if (params.horaPreferida) {
-      // Check if specific requested hour matches any free slot
-      const prefHour = params.horaPreferida.trim();
-      const matched = slots.find((s) => {
-        const slotDate = s.startsAt instanceof Date ? s.startsAt : parseISO(s.startsAt as any);
-        return format(slotDate, 'HH:mm') === prefHour;
-      });
-      if (matched) {
-        const slotDate = matched.startsAt instanceof Date ? matched.startsAt : parseISO(matched.startsAt as any);
-        const iso = slotDate.toISOString();
-        const spoken = format(slotDate, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
-        return `Sí, el ${spoken} está disponible [${iso}]. Ofréceselo al cliente para confirmar.`;
+    for (let dayOffset = 0; dayOffset < diasABuscar && candidateSlots.length < 3; dayOffset++) {
+      const targetDate = addDays(startDate, dayOffset);
+      const daySlots = await this.appointmentsService.getAvailableSlots(
+        targetDate,
+        durationMinutes,
+        workingHours,
+        ctx.timezone,
+        now,
+        targetService?.calendarId || 'default',
+        targetService?.id,
+        targetService?.name || params.servicio,
+      );
+
+      if (params.horaPreferida) {
+        const prefHour = params.horaPreferida.trim();
+        const matched = daySlots.find((s) => {
+          const slotDate = s.startsAt instanceof Date ? s.startsAt : parseISO(s.startsAt as any);
+          return format(slotDate, 'HH:mm') === prefHour;
+        });
+        if (matched) {
+          const slotDate = matched.startsAt instanceof Date ? matched.startsAt : parseISO(matched.startsAt as any);
+          const iso = slotDate.toISOString();
+          const spoken = format(slotDate, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
+          return `Sí, el ${spoken} está disponible [${iso}]. Ofréceselo al cliente para confirmar.`;
+        }
+      }
+
+      let filteredDaySlots = daySlots;
+      if (params.franja === 'manana') {
+        filteredDaySlots = daySlots.filter((s) => {
+          const slotDate = s.startsAt instanceof Date ? s.startsAt : parseISO(s.startsAt as any);
+          return slotDate.getHours() < 14;
+        });
+      } else if (params.franja === 'tarde') {
+        filteredDaySlots = daySlots.filter((s) => {
+          const slotDate = s.startsAt instanceof Date ? s.startsAt : parseISO(s.startsAt as any);
+          return slotDate.getHours() >= 14;
+        });
+      }
+
+      for (const slot of filteredDaySlots) {
+        candidateSlots.push(slot);
+        if (candidateSlots.length >= 3) break;
       }
     }
-
-    // Filter slots based on franja (manana / tarde)
-    let filtered = slots;
-    if (params.franja === 'manana') {
-      filtered = slots.filter((s) => {
-        const slotDate = s.startsAt instanceof Date ? s.startsAt : parseISO(s.startsAt as any);
-        return slotDate.getHours() < 14;
-      });
-    } else if (params.franja === 'tarde') {
-      filtered = slots.filter((s) => {
-        const slotDate = s.startsAt instanceof Date ? s.startsAt : parseISO(s.startsAt as any);
-        return slotDate.getHours() >= 14;
-      });
-    }
-
-    const candidateSlots = (filtered.length > 0 ? filtered : slots).slice(0, 3);
 
     if (candidateSlots.length === 0) {
       return 'No hay huecos disponibles en esas fechas exactas. Pregunta al cliente si prefiere mirar la próxima semana.';

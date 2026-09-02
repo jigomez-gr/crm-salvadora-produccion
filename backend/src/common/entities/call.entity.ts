@@ -1,4 +1,4 @@
-﻿import {
+import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
@@ -33,8 +33,8 @@ export class Call {
   vapiCallId: string;
 
   @Column({
-    type: 'enum',
-    enum: CallDirection,
+    type: 'varchar',
+    length: 32,
     default: CallDirection.INBOUND,
   })
   direction: CallDirection;
@@ -47,8 +47,8 @@ export class Call {
   toNumber: string | null;
 
   @Column({
-    type: 'enum',
-    enum: CallStatus,
+    type: 'varchar',
+    length: 32,
     default: CallStatus.IN_PROGRESS,
   })
   status: CallStatus;
