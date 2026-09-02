@@ -654,6 +654,7 @@ function VapiCard() {
   const [assistantId, setAssistantId] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [smsWebhookUrl, setSmsWebhookUrl] = useState("");
+  const [publishing, setPublishing] = useState(false);
 
   const webhookUrl = typeof window !== "undefined"
     ? `${window.location.origin}/api/vapi/webhook`
@@ -701,6 +702,21 @@ function VapiCard() {
       toast.error(err instanceof ApiError ? err.message : "Error al guardar configuración de VAPI");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handlePublish() {
+    setPublishing(true);
+    try {
+      const res = await apiFetch<{ assistantId: string; status: string }>("/api/vapi/publish", {
+        method: "POST",
+      });
+      if (res.assistantId) setAssistantId(res.assistantId);
+      toast.success("¡Asistente y herramientas publicados en VAPI con éxito!");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Error al publicar asistente en VAPI");
+    } finally {
+      setPublishing(false);
     }
   }
 
@@ -811,14 +827,21 @@ function VapiCard() {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-neutral-100">
-          <Button onClick={handleSave} disabled={saving}>
-            <Upload className="h-4 w-4" />
-            {saving ? "Guardando…" : "Guardar Voz y SMS"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={handleSave} disabled={saving}>
+              <Upload className="h-4 w-4" />
+              {saving ? "Guardando…" : "Guardar"}
+            </Button>
+
+            <Button variant="secondary" onClick={handlePublish} disabled={publishing || !hasApiKey}>
+              <Bot className={cn("h-3.5 w-3.5", publishing && "animate-spin")} />
+              {publishing ? "Publicando…" : "Publicar Asistente en VAPI"}
+            </Button>
+          </div>
 
           <Button variant="secondary" onClick={handleSyncTools} disabled={syncing || !hasApiKey}>
             <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
-            {syncing ? "Sincronizando…" : "Sincronizar Tools con VAPI"}
+            {syncing ? "Sincronizando…" : "Sincronizar Tools"}
           </Button>
         </div>
       </div>
