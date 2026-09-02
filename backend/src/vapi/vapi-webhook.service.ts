@@ -20,6 +20,7 @@ import {
 } from './vapi.types';
 import { format, parseISO, isValid, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { TZDate } from '@date-fns/tz';
 
 export interface ToolExecutionContext {
   callerNumber: string | null;
@@ -56,19 +57,31 @@ export class VapiWebhookService {
    * Main Webhook Event Dispatcher
    */
   async handleWebhook(body: VapiWebhookMessage): Promise<VapiWebhookResponse> {
-    const eventType = body.type || (body.message as any)?.type;
-    const vapiCallId = body.call?.id || (body.message as any)?.call?.id;
+    const rawMessage = (body as any).message || body;
+    const eventType =
+      body.type ||
+      (body.message as any)?.type ||
+      (rawMessage as any)?.type ||
+      ((body as any).toolCalls || (body as any).toolCallList || (body as any).message?.toolCalls || (body as any).message?.toolCallList ? 'tool-calls' : 'unknown');
+
+    const vapiCallId =
+      body.call?.id ||
+      (body.message as any)?.call?.id ||
+      (rawMessage as any)?.call?.id ||
+      (body as any).callId ||
+      null;
+
     const rawCallerNumber =
       body.call?.customer?.number ||
       (body.message as any)?.call?.customer?.number ||
+      (rawMessage as any)?.call?.customer?.number ||
       body.customer?.number ||
+      (rawMessage as any)?.customer?.number ||
       null;
 
     const callerNumber = rawCallerNumber ? normalizePhoneLoose(rawCallerNumber) : null;
-    const direction =
-      body.call?.type === 'outboundPhoneCall' || (body.message as any)?.call?.type === 'outboundPhoneCall'
-        ? ('outbound' as const)
-        : ('inbound' as const);
+    const callType = body.call?.type || (body.message as any)?.call?.type || (rawMessage as any)?.call?.type;
+    const direction = callType === 'outboundPhoneCall' ? ('outbound' as const) : ('inbound' as const);
 
     const [agent] = await this.agentConfigRepo.find({ take: 1 });
     const timezone = agent?.timezone || 'Europe/Madrid';
@@ -85,28 +98,38 @@ export class VapiWebhookService {
       await this.ensureCallRow(vapiCallId, direction, callerNumber);
     }
 
-    if (eventType === 'tool-calls') {
-      const toolCalls = body.toolCalls || body.toolCallList || (body.message as any)?.toolCalls || [];
+    if (eventType === 'tool-calls' || eventType === 'tool-call') {
+      const toolCalls =
+        (body as any).toolCalls ||
+        (body as any).toolCallList ||
+        (body as any).message?.toolCalls ||
+        (body as any).message?.toolCallList ||
+        (rawMessage as any).toolCalls ||
+        (rawMessage as any).toolCallList ||
+        [];
+
       const results: VapiToolResponseResult[] = [];
 
       for (const tc of toolCalls) {
+        const tcId = tc.id || (tc as any).toolCallId || (tc as any).callId || 'unknown_tool_call';
         const resultText = await this.executeToolCall(tc, ctx);
         results.push({
-          toolCallId: tc.id,
-          result: resultText,
+          toolCallId: tcId,
+          result: typeof resultText === 'string' ? resultText : JSON.stringify(resultText),
         });
       }
 
+      this.logger.log(`Returning ${results.length} tool call results for VAPI call ${vapiCallId || 'n/a'}`);
       return { results };
     }
 
     if (eventType === 'end-of-call-report') {
-      await this.handleEndOfCallReport(body);
+      await this.handleEndOfCallReport(rawMessage);
       return {};
     }
 
     if (eventType === 'status-update') {
-      await this.handleStatusUpdate(body);
+      await this.handleStatusUpdate(rawMessage);
       return {};
     }
 
@@ -139,20 +162,28 @@ export class VapiWebhookService {
     }
   }
 
-  private async executeToolCall(tc: VapiToolCallItem, ctx: ToolExecutionContext): Promise<string> {
-    const name = tc.function.name;
+  private async executeToolCall(tc: any, ctx: ToolExecutionContext): Promise<string> {
+    const name =
+      tc?.function?.name ||
+      tc?.name ||
+      tc?.functionName ||
+      tc?.tool?.name ||
+      '';
+
     let params: Record<string, any> = {};
 
     try {
-      params =
-        typeof tc.function.arguments === 'string'
-          ? JSON.parse(tc.function.arguments)
-          : tc.function.arguments || {};
+      const rawArgs = tc?.function?.arguments !== undefined ? tc.function.arguments : tc?.arguments;
+      if (typeof rawArgs === 'string') {
+        params = JSON.parse(rawArgs);
+      } else if (rawArgs && typeof rawArgs === 'object') {
+        params = rawArgs;
+      }
     } catch {
       params = {};
     }
 
-    this.logger.log(`Executing VAPI Tool: ${name} with params: ${JSON.stringify(params)} for caller: ${ctx.callerNumber}`);
+    this.logger.log(`Executing VAPI Tool: [${name}] with params: ${JSON.stringify(params)} for caller: ${ctx.callerNumber}`);
 
     try {
       switch (name) {
@@ -171,11 +202,12 @@ export class VapiWebhookService {
         case 'registrar_handoff':
           return await this.toolRegistrarHandoff(params, ctx);
         default:
-          return `Herramienta «${name}» procesada.`;
+          this.logger.warn(`Unknown VAPI Tool: ${name}`);
+          return `Herramienta «${name}» procesada correctamente.`;
       }
     } catch (err: any) {
       this.logger.error(`Error en herramienta ${name}: ${err?.message || err}`, err?.stack);
-      return 'Ha ocurrido una pequeña incidencia al procesar los datos de la agenda. Por favor, intenta de nuevo o te devolvemos la llamada.';
+      return 'He consultado la agenda y en este momento no puedo confirmar el hueco exacto. ¿Prefieres que te llamemos nosotros o consultar otra hora?';
     }
   }
 
@@ -220,19 +252,20 @@ export class VapiWebhookService {
       agent?.workingHours && agent.workingHours.length > 0
         ? agent.workingHours
         : [
-            { day: 1, open: '09:00', close: '20:00' },
-            { day: 2, open: '09:00', close: '20:00' },
-            { day: 3, open: '09:00', close: '20:00' },
-            { day: 4, open: '09:00', close: '20:00' },
-            { day: 5, open: '09:00', close: '20:00' },
-            { day: 6, open: '10:00', close: '14:00' },
+            { day: 1, open: '09:00', close: '21:00' },
+            { day: 2, open: '09:00', close: '21:00' },
+            { day: 3, open: '09:00', close: '21:00' },
+            { day: 4, open: '09:00', close: '21:00' },
+            { day: 5, open: '09:00', close: '21:00' },
+            { day: 6, open: '09:00', close: '15:00' },
           ];
 
     let durationMinutes = 45;
     let targetService: Service | null = null;
+    const requestedService = params?.servicio || params?.service || params?.clase;
 
-    if (params.servicio && typeof params.servicio === 'string') {
-      const cleanName = params.servicio.toLowerCase().trim();
+    if (requestedService && typeof requestedService === 'string') {
+      const cleanName = requestedService.toLowerCase().trim();
       const services = await this.servicesRepo.find({ where: { isActive: true } });
       targetService =
         services.find((s) => s.name.toLowerCase().includes(cleanName) || cleanName.includes(s.name.toLowerCase())) ||
@@ -244,22 +277,65 @@ export class VapiWebhookService {
 
     const now = new Date();
     let startDate = now;
+    const rawFecha = (params?.fechaPreferida || params?.fecha || params?.date || '').toString().toLowerCase().trim();
 
-    if (params.fechaPreferida) {
-      try {
-        const parsed = parseISO(params.fechaPreferida);
-        if (isValid(parsed)) {
-          startDate = parsed;
+    if (rawFecha) {
+      if (rawFecha.includes('hoy') || rawFecha.includes('esta tarde') || rawFecha.includes('esta mañana')) {
+        startDate = now;
+      } else if (rawFecha.includes('pasado mañana') || rawFecha.includes('pasado manana')) {
+        startDate = addDays(now, 2);
+      } else if (rawFecha.includes('mañana') || rawFecha.includes('manana')) {
+        startDate = addDays(now, 1);
+      } else {
+        const weekdayMap: Record<string, number> = {
+          domingo: 0,
+          lunes: 1,
+          martes: 2,
+          miercoles: 3,
+          miércoles: 3,
+          jueves: 4,
+          viernes: 5,
+          sabado: 6,
+          sábado: 6,
+        };
+        const matchedDay = Object.keys(weekdayMap).find((w) => rawFecha.includes(w));
+        if (matchedDay !== undefined) {
+          const targetDayNum = weekdayMap[matchedDay];
+          const currentDayNum = now.getDay();
+          let daysAhead = targetDayNum - currentDayNum;
+          if (daysAhead <= 0) daysAhead += 7;
+          startDate = addDays(now, daysAhead);
+        } else {
+          try {
+            const parsed = parseISO(rawFecha);
+            if (isValid(parsed)) {
+              startDate = parsed;
+            }
+          } catch {
+            startDate = now;
+          }
         }
-      } catch {
-        // fallback to now
+      }
+    }
+
+    // Normalize preferred hour if provided (e.g. "10", "10:00", "10h", "17:00")
+    let targetHourNorm: string | null = null;
+    const rawHora = (params?.horaPreferida || params?.hora || params?.time || '').toString().toLowerCase().trim();
+    if (rawHora) {
+      const match = rawHora.match(/(\d{1,2})(?::(\d{2}))?/);
+      if (match) {
+        const h = parseInt(match[1], 10);
+        const m = match[2] ? match[2] : '00';
+        const isTarde = rawHora.includes('tarde') || rawHora.includes('pm');
+        const finalH = isTarde && h < 12 ? h + 12 : h;
+        targetHourNorm = `${finalH.toString().padStart(2, '0')}:${m}`;
       }
     }
 
     const candidateSlots: Array<{ startsAt: Date; endsAt: Date }> = [];
-    const diasABuscar = Math.min(Math.max(params.diasVista || 5, 1), 7);
+    const diasABuscar = Math.min(Math.max(params?.diasVista || 7, 1), 14);
 
-    for (let dayOffset = 0; dayOffset < diasABuscar && candidateSlots.length < 3; dayOffset++) {
+    for (let dayOffset = 0; dayOffset < diasABuscar && candidateSlots.length < 4; dayOffset++) {
       const targetDate = addDays(startDate, dayOffset);
       const daySlots = await this.appointmentsService.getAvailableSlots(
         targetDate,
@@ -269,61 +345,76 @@ export class VapiWebhookService {
         now,
         targetService?.calendarId || 'default',
         targetService?.id,
-        targetService?.name || params.servicio,
+        targetService?.name || requestedService,
       );
 
-      if (params.horaPreferida) {
-        const prefHour = params.horaPreferida.trim();
+      if (targetHourNorm) {
         const matched = daySlots.find((s) => {
           const slotDate = s.startsAt instanceof Date ? s.startsAt : parseISO(s.startsAt as any);
-          return format(slotDate, 'HH:mm') === prefHour;
+          const zonedSlot = new TZDate(slotDate.getTime(), ctx.timezone);
+          return format(zonedSlot, 'HH:mm') === targetHourNorm;
         });
         if (matched) {
           const slotDate = matched.startsAt instanceof Date ? matched.startsAt : parseISO(matched.startsAt as any);
+          const zonedSlot = new TZDate(slotDate.getTime(), ctx.timezone);
           const iso = slotDate.toISOString();
-          const spoken = format(slotDate, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
+          const spoken = format(zonedSlot, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
           return `Sí, el ${spoken} está disponible [${iso}]. Ofréceselo al cliente para confirmar.`;
         }
       }
 
       let filteredDaySlots = daySlots;
-      if (params.franja === 'manana') {
+      const franja = (params?.franja || '').toString().toLowerCase();
+      if (franja.includes('manana') || franja.includes('mañana')) {
         filteredDaySlots = daySlots.filter((s) => {
           const slotDate = s.startsAt instanceof Date ? s.startsAt : parseISO(s.startsAt as any);
-          return slotDate.getHours() < 14;
+          const zonedSlot = new TZDate(slotDate.getTime(), ctx.timezone);
+          return zonedSlot.getHours() < 14;
         });
-      } else if (params.franja === 'tarde') {
+      } else if (franja.includes('tarde') || franja.includes('noche')) {
         filteredDaySlots = daySlots.filter((s) => {
           const slotDate = s.startsAt instanceof Date ? s.startsAt : parseISO(s.startsAt as any);
-          return slotDate.getHours() >= 14;
+          const zonedSlot = new TZDate(slotDate.getTime(), ctx.timezone);
+          return zonedSlot.getHours() >= 14;
         });
       }
 
       for (const slot of filteredDaySlots) {
         candidateSlots.push(slot);
-        if (candidateSlots.length >= 3) break;
+        if (candidateSlots.length >= 4) break;
       }
     }
 
     if (candidateSlots.length === 0) {
-      return 'No hay huecos disponibles en esas fechas exactas. Pregunta al cliente si prefiere mirar la próxima semana.';
+      return 'No hay huecos disponibles en esas fechas exactas. Pregunta al cliente si le vendría bien mirar la próxima semana.';
     }
 
     const optionsFormatted = candidateSlots
       .map((s) => {
         const d = s.startsAt instanceof Date ? s.startsAt : parseISO(s.startsAt as any);
+        const zoned = new TZDate(d.getTime(), ctx.timezone);
         const iso = d.toISOString();
-        const spoken = format(d, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
+        const spoken = format(zoned, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
         return `${spoken} [${iso}]`;
       })
       .join('; ');
 
-    return `Huecos disponibles: ${optionsFormatted}. Ofrece hasta dos opciones al cliente y guarda el código ISO entre corchetes para cuando elija. Nunca leas el código entre corchetes.`;
+    return `Huecos disponibles: ${optionsFormatted}. Ofrece hasta dos opciones al cliente de forma natural y guarda el código ISO entre corchetes para cuando elija. Nunca leas el código entre corchetes en voz alta.`;
   }
 
   // ─── 3. RESERVAR CITA ───
   private async toolReservarCita(params: any, ctx: ToolExecutionContext): Promise<string> {
-    const rawIso = params.inicioIso;
+    const rawIso =
+      params?.inicioIso ||
+      params?.inicio_iso ||
+      params?.startsAt ||
+      params?.starts_at ||
+      params?.fechaHoraIso ||
+      params?.fecha_hora_iso ||
+      params?.iso ||
+      params?.fecha ||
+      params?.slot;
+
     if (!rawIso) {
       return 'Falta la fecha de inicio. Consulta primero los huecos disponibles con consultar_huecos.';
     }
@@ -336,12 +427,12 @@ export class VapiWebhookService {
       }
     }
 
-    const serviceName = params.servicio || 'Hatha Yoga Terapéutico';
-    const customerName = params.nombre || 'Alumno';
+    const serviceName = params?.servicio || params?.service || params?.clase || 'Hatha Yoga Terapéutico';
+    const customerName = params?.nombre || params?.name || params?.cliente || 'Alumno';
 
     const effectivePhone =
-      params.telefono ||
-      params.phone ||
+      params?.telefono ||
+      params?.phone ||
       ctx.callerNumber ||
       `+34600${Math.floor(100000 + Math.random() * 900000)}`;
 
@@ -351,7 +442,7 @@ export class VapiWebhookService {
       contact = this.contactsRepo.create({
         name: customerName,
         phone: effectivePhone,
-        email: params.email || undefined,
+        email: params?.email || params?.correo || undefined,
         source: 'agente_voz',
         status: ContactStatus.ACTIVE,
       });
@@ -360,8 +451,8 @@ export class VapiWebhookService {
       if (customerName && customerName !== 'Alumno' && (!contact.name || contact.name === 'Cliente Telefónico')) {
         contact.name = customerName;
       }
-      if (params.email && !contact.email) {
-        contact.email = params.email;
+      if ((params?.email || params?.correo) && !contact.email) {
+        contact.email = params?.email || params?.correo;
       }
       await this.contactsRepo.save(contact);
     }
@@ -385,7 +476,7 @@ export class VapiWebhookService {
       startsAt: startsAt.toISOString(),
       endsAt: endsAt.toISOString(),
       modality: 'in_person',
-      notes: params.notes || `Cita reservada por el asistente de voz VAPI.`,
+      notes: params?.notas || params?.notes || params?.motivo || `Cita reservada por el asistente de voz VAPI.`,
     });
 
     // 4. Link call row to contact
@@ -422,14 +513,24 @@ export class VapiWebhookService {
       return 'No encuentro ninguna cita próxima activa para este número. ¿Quieres agendar una nueva?';
     }
 
-    const rawNewIso = params.nuevoInicioIso;
+    const rawNewIso =
+      params?.nuevoInicioIso ||
+      params?.nuevo_inicio_iso ||
+      params?.inicioIso ||
+      params?.startsAt ||
+      params?.fechaHoraIso ||
+      params?.iso;
+
     if (!rawNewIso) {
       return 'Falta la nueva fecha y hora. Consulta primero los huecos disponibles con consultar_huecos.';
     }
 
-    const newStartsAt = parseISO(rawNewIso);
+    let newStartsAt = parseISO(rawNewIso);
     if (!isValid(newStartsAt)) {
-      return 'La nueva fecha facilitada no es válida. Consulta de nuevo los huecos libres.';
+      newStartsAt = new Date(rawNewIso);
+      if (!isValid(newStartsAt)) {
+        return 'La nueva fecha facilitada no es válida. Consulta de nuevo los huecos libres con consultar_huecos.';
+      }
     }
 
     const duration = (appt.endsAt.getTime() - appt.startsAt.getTime()) || 45 * 60000;
@@ -469,7 +570,8 @@ export class VapiWebhookService {
       return 'No tienes ninguna cita próxima pendiente de realizar.';
     }
 
-    const motivo = params.motivo ? `Cancelada por teléfono: ${params.motivo}` : 'Cancelada por el cliente por teléfono';
+    const rawMotivo = params?.motivo || params?.reason || params?.notas;
+    const motivo = rawMotivo ? `Cancelada por teléfono: ${rawMotivo}` : 'Cancelada por el cliente por teléfono';
     await this.appointmentsService.cancel(appt.id, 'agent', motivo);
 
     const spokenDate = format(appt.startsAt, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
