@@ -467,25 +467,32 @@ export class VapiWebhookService {
     const durationMinutes = serviceEntity?.durationMinutes || 45;
     const endsAt = new Date(startsAt.getTime() + durationMinutes * 60000);
 
-    // 3. Create appointment
-    const appt = await this.appointmentsService.create({
-      contactId: contact.id,
-      service: serviceEntity?.name || serviceName,
-      serviceId: serviceEntity?.id,
-      calendarId: serviceEntity?.calendarId || 'default',
-      startsAt: startsAt.toISOString(),
-      endsAt: endsAt.toISOString(),
-      modality: 'in_person',
-      notes: params?.notas || params?.notes || params?.motivo || `Cita reservada por el asistente de voz VAPI.`,
-    });
+    // 3. Create appointment with conflict handling
+    try {
+      const appt = await this.appointmentsService.create({
+        contactId: contact.id,
+        service: serviceEntity?.name || serviceName,
+        serviceId: serviceEntity?.id,
+        calendarId: serviceEntity?.calendarId || 'default',
+        startsAt: startsAt.toISOString(),
+        endsAt: endsAt.toISOString(),
+        modality: 'in_person',
+        notes: params?.notas || params?.notes || params?.motivo || `Cita reservada por el asistente de voz VAPI.`,
+      });
 
-    // 4. Link call row to contact
-    if (ctx.vapiCallId) {
-      await this.callsRepo.update({ vapiCallId: ctx.vapiCallId }, { contactId: contact.id });
+      // 4. Link call row to contact
+      if (ctx.vapiCallId) {
+        await this.callsRepo.update({ vapiCallId: ctx.vapiCallId }, { contactId: contact.id });
+      }
+
+      const spokenDate = format(startsAt, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
+      return `¡Cita confirmada con éxito! Queda agendada para ${appt.service} el ${spokenDate} a nombre de ${customerName}. Confírmaselo amablemente al cliente y despídete.`;
+    } catch (err: any) {
+      if (err?.message?.includes('ya tiene una reserva') || err?.status === 409 || err?.name === 'ConflictException') {
+        return `Ya consta una reserva activa a nombre de ${customerName} en ese mismo horario. No es necesario volver a reservarla. Si deseas modificarla o cambiar de horario, dímelo y te la reprogramo.`;
+      }
+      throw err;
     }
-
-    const spokenDate = format(startsAt, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
-    return `¡Cita confirmada con éxito! Queda agendada para ${appt.service} el ${spokenDate} a nombre de ${customerName}. Confírmaselo amablemente al cliente y despídete.`;
   }
 
   // ─── 4. REPROGRAMAR CITA ───

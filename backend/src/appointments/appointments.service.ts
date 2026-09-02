@@ -256,7 +256,7 @@ export class AppointmentsService {
         ]);
         const repo = manager.getRepository(Appointment);
         const excludeId = existingPending?.id;
-        await this.checkOverlap(repo, startsAt, endsAt, excludeId, calendarId, serviceId, serviceName);
+        await this.checkOverlap(repo, startsAt, endsAt, excludeId, calendarId, serviceId, serviceName, dto.contactId);
 
         if (existingPending) {
           existingPending.startsAt = startsAt;
@@ -358,7 +358,7 @@ export class AppointmentsService {
           BOOKING_LOCK_KEY,
         ]);
         const repo = manager.getRepository(Appointment);
-        await this.checkOverlap(repo, newStart, newEnd, appt.id, calendarId, serviceId);
+        await this.checkOverlap(repo, newStart, newEnd, appt.id, calendarId, serviceId, appt.service, appt.contactId);
         return repo.save(appt);
       });
     }
@@ -1273,7 +1273,8 @@ export class AppointmentsService {
 
   /**
    * Reject a booking that exceeds the capacity for an existing non-cancelled appointment slot
-   * on the SAME calendar OR across any service managed by the same responsible manager.
+   * on the SAME calendar OR across any service managed by the same responsible manager,
+   * AND reject duplicate bookings for the SAME contact at the same time.
    */
   private async checkOverlap(
     repo: Repository<Appointment>,
@@ -1283,7 +1284,28 @@ export class AppointmentsService {
     calendarId = 'default',
     serviceId?: string | null,
     serviceName?: string | null,
+    contactId?: string | null,
   ): Promise<void> {
+    // 1. Prevent the SAME contact from booking two simultaneous appointments (e.g. Constelar + Participante, 1 clase + 2 clases, etc.)
+    if (contactId) {
+      const contactConflict = await repo
+        .createQueryBuilder('a')
+        .where('a.contactId = :contactId', { contactId })
+        .andWhere('a.status NOT IN (:...nonBlocking)', {
+          nonBlocking: [AppointmentStatus.CANCELLED],
+        })
+        .andWhere('a.startsAt < :endsAt', { endsAt })
+        .andWhere('a.endsAt > :startsAt', { startsAt })
+        .andWhere(excludeId ? 'a.id != :excludeId' : '1=1', { excludeId })
+        .getOne();
+
+      if (contactConflict) {
+        throw new ConflictException(
+          `Este contacto ya tiene una reserva activa para «${contactConflict.service}» en ese mismo horario. No es posible agendar citas simultáneas para la misma persona.`,
+        );
+      }
+    }
+
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     let managerServiceIds: string[] = [];
     let targetService: Service | null = null;
