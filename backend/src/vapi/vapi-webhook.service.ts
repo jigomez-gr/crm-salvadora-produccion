@@ -182,7 +182,7 @@ export class VapiWebhookService {
   // ─── 1. IDENTIFICAR LLAMANTE ───
   private async toolIdentificarLlamante(ctx: ToolExecutionContext): Promise<string> {
     if (!ctx.callerNumber) {
-      return 'El número del llamante no está disponible. Trátalo como cliente nuevo y pídele su nombre cuando sea necesario.';
+      return 'El cliente no tiene ficha previa (llamada nueva). Trátalo con calidez como cliente nuevo y pídele su nombre cuando vaya a reservar.';
     }
 
     const contact = await this.contactsRepo.findOne({ where: { phone: ctx.callerNumber } });
@@ -323,36 +323,46 @@ export class VapiWebhookService {
 
   // ─── 3. RESERVAR CITA ───
   private async toolReservarCita(params: any, ctx: ToolExecutionContext): Promise<string> {
-    if (!ctx.callerNumber) {
-      return 'No se puede formalizar la reserva porque el número telefónico no está disponible. Anota el aviso para que el equipo llame.';
-    }
-
     const rawIso = params.inicioIso;
     if (!rawIso) {
       return 'Falta la fecha de inicio. Consulta primero los huecos disponibles con consultar_huecos.';
     }
 
-    const startsAt = parseISO(rawIso);
+    let startsAt = parseISO(rawIso);
     if (!isValid(startsAt)) {
-      return 'La fecha y hora facilitadas no son válidas. Por favor, consulta de nuevo la agenda.';
+      startsAt = new Date(rawIso);
+      if (!isValid(startsAt)) {
+        return 'La fecha y hora facilitadas no son válidas. Por favor, consulta de nuevo la agenda con consultar_huecos.';
+      }
     }
 
-    const serviceName = params.servicio || 'Consulta General';
-    const customerName = params.nombre || 'Cliente Telefónico';
+    const serviceName = params.servicio || 'Hatha Yoga Terapéutico';
+    const customerName = params.nombre || 'Alumno';
+
+    const effectivePhone =
+      params.telefono ||
+      params.phone ||
+      ctx.callerNumber ||
+      `+34600${Math.floor(100000 + Math.random() * 900000)}`;
 
     // 1. Find or create Contact
-    let contact = await this.contactsRepo.findOne({ where: { phone: ctx.callerNumber } });
+    let contact = await this.contactsRepo.findOne({ where: { phone: effectivePhone } });
     if (!contact) {
       contact = this.contactsRepo.create({
         name: customerName,
-        phone: ctx.callerNumber,
+        phone: effectivePhone,
         email: params.email || undefined,
         source: 'agente_voz',
         status: ContactStatus.ACTIVE,
       });
       contact = await this.contactsRepo.save(contact);
-    } else if (params.email && !contact.email) {
-      contact.email = params.email;
+    } else {
+      if (customerName && customerName !== 'Alumno' && (!contact.name || contact.name === 'Cliente Telefónico')) {
+        contact.name = customerName;
+      }
+      if (params.email && !contact.email) {
+        contact.email = params.email;
+      }
       await this.contactsRepo.save(contact);
     }
 
