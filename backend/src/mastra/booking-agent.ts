@@ -980,6 +980,10 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
      * Explícale con amabilidad al cliente que su solicitud de cambio de horario ha quedado registrada y **pendiente de aprobación por el instructor responsable (Jose Ignacio Gomez Raya)**, y que en cuanto la confirme recibirá el correo/WhatsApp oficial con el enlace y detalles.
   5. Para actividades regulares o eventos (Yoga, Baño de Gong, Iaidō):
      * Se anula la cita previa y se confirma de inmediato el nuevo horario agendado.
+- PREVENCIÓN DE DUPLICADOS Y RESERVAS SIMULTÁNEAS PARA LA MISMA PERSONA:
+  * Un mismo alumno/contacto NO puede tener dos citas o plazas reservadas simultáneas en el mismo horario.
+  * Por ejemplo: no puede inscribirse a la vez en 1 clase semanal y 2 clases semanales a la misma hora, ni como 'Constelar' y como 'Participante' en el mismo taller de Constelaciones Familiares, ni en dos servicios distintos en el mismo intervalo de tiempo.
+  * Si el cliente intenta reservar en un horario donde ya tiene una reserva activa, o si 'bookAppointment' devuelve un aviso de conflicto/duplicado, infórmale con cercanía: "Ya tienes una reserva activa en ese mismo horario para [Servicio]. Si deseas modificarla o cambiar de horario/modalidad, dímelo y te la reprogramo."
 - REQUISITO OBLIGATORIO PARA TODAS LAS CITAS Y RESERVAS:
   Para formalizar cualquier cita o reserva, es IMPRESCINDIBLE disponer de:
   1. Nombre y apellidos (nombre completo).
