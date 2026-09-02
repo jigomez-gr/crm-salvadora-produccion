@@ -33,6 +33,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-W39xlpS9}@db:5432/${POSTGRES_DB:-crm_salvadora}}
       CORS_ORIGIN: "*"
       PORT: "3001"
+      APP_URL: ${APP_URL:-https://crm-salvadoraconesa.jigretera.com}
       # ─── Authentication (login + roles) ───
       JWT_SECRET: ${JWT_SECRET:-super-secret-crm-key-39xlps9-jwt-token-2026}
       JWT_EXPIRES_IN_SECONDS: ${JWT_EXPIRES_IN_SECONDS:-86400}

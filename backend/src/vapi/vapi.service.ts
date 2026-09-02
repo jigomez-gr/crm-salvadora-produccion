@@ -231,7 +231,19 @@ export class VapiService implements OnModuleInit {
       const custom = account.customWebhookUrl.trim().replace(/\/$/, '');
       return custom.includes('/api/vapi/webhook') ? custom : `${custom}/api/vapi/webhook`;
     }
-    const host = process.env.APP_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+    const corsFirst = (process.env.CORS_ORIGIN || '')
+      .split(',')
+      .map((s) => s.trim())
+      .find((s) => s.startsWith('https://') || (s.startsWith('http://') && !s.includes('localhost')));
+
+    const host =
+      process.env.APP_URL ||
+      process.env.BACKEND_URL ||
+      corsFirst ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      'https://crm-salvadoraconesa.jigretera.com';
+
     const baseUrl = host.replace(/\/$/, '');
     return `${baseUrl}/api/vapi/webhook`;
   }
