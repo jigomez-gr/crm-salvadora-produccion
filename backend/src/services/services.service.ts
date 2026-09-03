@@ -42,6 +42,7 @@ export class ServicesService implements OnModuleInit {
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "displayOrder" integer DEFAULT 0;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "stripePriceId" character varying;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "stripeProductId" character varying;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "weeklySchedule" jsonb;
         `);
       } catch (colErr) {
         console.warn('Auto-migration warning in services table:', colErr);
@@ -361,6 +362,56 @@ export class ServicesService implements OnModuleInit {
         iaidoSvc.managerId = manager.id;
         iaidoSvc.isActive = true;
         await this.serviceRepo.save(iaidoSvc);
+      }
+
+      // 3h. Ensure weeklySchedule on all recurring and event services in DB
+      const allServices = await this.serviceRepo.find();
+      for (const s of allServices) {
+        let updated = false;
+        if (/hatha.*yoga|yoga.*terap/i.test(s.name)) {
+          if (!s.weeklySchedule || Object.keys(s.weeklySchedule).length === 0) {
+            s.weeklySchedule = {
+              2: ['09:45', '11:15', '17:00', '18:30', '20:00'],
+              3: ['20:15'],
+              4: ['09:45', '11:15', '16:30', '17:30', '19:00'],
+            };
+            s.scheduleText = 'Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15) y Jueves (9:45, 11:15, 16:30, 17:30, 19:00)';
+            updated = true;
+          }
+        } else if (/meditaci/i.test(s.name)) {
+          if (!s.weeklySchedule || Object.keys(s.weeklySchedule).length === 0) {
+            s.weeklySchedule = {
+              2: ['09:15'],
+              4: ['09:15'],
+            };
+            s.scheduleText = 'Martes y Jueves de 09:15 a 09:45';
+            updated = true;
+          }
+        } else if (/iaido|iaidō|esgrima/i.test(s.name)) {
+          if (!s.weeklySchedule || Object.keys(s.weeklySchedule).length === 0) {
+            s.weeklySchedule = {
+              1: ['20:00'],
+              4: ['20:30'],
+            };
+            s.scheduleText = 'Lunes de 20:00 a 21:00 y Jueves de 20:30 a 22:00';
+            updated = true;
+          }
+        } else if (/constelaci/i.test(s.name)) {
+          if (!s.eventStartDate) {
+            s.eventStartDate = new Date('2026-09-27T08:00:00.000Z');
+            s.eventEndDate = new Date('2026-09-27T12:00:00.000Z');
+            s.eventDatesText = 'Domingo 27 de Septiembre de 2026 de 10:00 a 14:00';
+            updated = true;
+          }
+        } else if (/gestalt|bienestar/i.test(s.name)) {
+          if (!s.requiresApproval) {
+            s.requiresApproval = true;
+            updated = true;
+          }
+        }
+        if (updated) {
+          await this.serviceRepo.save(s);
+        }
       }
 
       // 4. Update agent config services JSON

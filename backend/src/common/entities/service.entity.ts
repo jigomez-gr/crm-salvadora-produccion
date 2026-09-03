@@ -48,6 +48,10 @@ export class Service {
   @Column({ type: 'text', nullable: true })
   scheduleText: string | null;
 
+  // Structured weekly timetable: day of week (0=Sun, 1=Mon, ..., 6=Sat) -> string[] of HH:mm
+  @Column({ type: 'jsonb', nullable: true })
+  weeklySchedule: Record<number, string[]> | null;
+
   // Flyer / promotional graphic image URL
   @Column({ type: 'text', nullable: true })
   flyerUrl: string | null;

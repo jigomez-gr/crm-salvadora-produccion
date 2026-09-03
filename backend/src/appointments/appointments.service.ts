@@ -186,10 +186,14 @@ export class AppointmentsService {
         3: ['20:15'],
         4: ['09:45', '11:15', '16:30', '17:30', '19:00'],
       };
+      const effectiveTimetable =
+        serviceEntity?.weeklySchedule && Object.keys(serviceEntity.weeklySchedule).length > 0
+          ? serviceEntity.weeklySchedule
+          : HATHA_YOGA_TIMETABLE;
       const zoned = new TZDate(startsAt.getTime(), 'Europe/Madrid');
       const dayOfWeek = zoned.getDay();
       const timeStr = format(zoned, 'HH:mm');
-      const allowed = HATHA_YOGA_TIMETABLE[dayOfWeek] || [];
+      const allowed = effectiveTimetable[dayOfWeek] || [];
       if (!allowed.includes(timeStr)) {
         throw new BadRequestException(
           'Ese horario no corresponde a los turnos oficiales de Hatha Yoga Terapéutico (Martes 9:45, 11:15, 17:00, 18:30, 20:00; Miércoles 20:15; Jueves 9:45, 11:15, 16:30, 17:30, 19:00).',
@@ -211,7 +215,7 @@ export class AppointmentsService {
         const hathaExisting = existingThisWeek.filter((a) => {
           if (!/yoga/i.test(a.service)) return false;
           const z = new TZDate(new Date(a.startsAt).getTime(), 'Europe/Madrid');
-          return HATHA_YOGA_TIMETABLE[z.getDay()]?.includes(format(z, 'HH:mm'));
+          return effectiveTimetable[z.getDay()]?.includes(format(z, 'HH:mm'));
         });
         if (hathaExisting.length >= maxAllowed) {
           throw new BadRequestException(
@@ -1604,29 +1608,20 @@ export class AppointmentsService {
       4: ['20:30'],
     };
 
-    if (isHathaYoga) {
-      const targetDay = zoned.getDay();
-      const allowed = HATHA_YOGA_TIMETABLE[targetDay] || [];
-      return rawSlots.filter((s) => {
-        const slotDate = s.startsAt instanceof Date ? s.startsAt : new Date(s.startsAt);
-        const zonedSlot = new TZDate(slotDate.getTime(), timezone);
-        return allowed.includes(format(zonedSlot, 'HH:mm'));
-      });
-    }
+    const effectiveTimetable =
+      targetService?.weeklySchedule && Object.keys(targetService.weeklySchedule).length > 0
+        ? targetService.weeklySchedule
+        : isHathaYoga
+        ? HATHA_YOGA_TIMETABLE
+        : isMeditacion
+        ? MEDITACION_TIMETABLE
+        : isIaido
+        ? IAIDO_TIMETABLE
+        : null;
 
-    if (isMeditacion) {
+    if (effectiveTimetable) {
       const targetDay = zoned.getDay();
-      const allowed = MEDITACION_TIMETABLE[targetDay] || [];
-      return rawSlots.filter((s) => {
-        const slotDate = s.startsAt instanceof Date ? s.startsAt : new Date(s.startsAt);
-        const zonedSlot = new TZDate(slotDate.getTime(), timezone);
-        return allowed.includes(format(zonedSlot, 'HH:mm'));
-      });
-    }
-
-    if (isIaido) {
-      const targetDay = zoned.getDay();
-      const allowed = IAIDO_TIMETABLE[targetDay] || [];
+      const allowed = effectiveTimetable[targetDay] || [];
       return rawSlots.filter((s) => {
         const slotDate = s.startsAt instanceof Date ? s.startsAt : new Date(s.startsAt);
         const zonedSlot = new TZDate(slotDate.getTime(), timezone);
