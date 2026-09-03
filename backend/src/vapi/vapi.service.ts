@@ -695,13 +695,26 @@ export class VapiService implements OnModuleInit {
       contact = await this.contactsRepo.findOne({ where: { id: contactId } });
     }
 
+    const trimmedPhone = targetPhone.trim();
+    const isSipUri = trimmedPhone.includes('@') || trimmedPhone.startsWith('sip:');
+    const isShortcode = /^\d{3,6}$/.test(trimmedPhone);
+
+    const customerPayload: any = {};
+    if (isSipUri) {
+      customerPayload.sipUri = trimmedPhone.startsWith('sip:') ? trimmedPhone : `sip:${trimmedPhone}`;
+    } else if (isShortcode) {
+      customerPayload.sipUri = `sip:${trimmedPhone}@sip.zadarma.com`;
+    } else {
+      customerPayload.number = trimmedPhone;
+    }
+    if (contact?.name) {
+      customerPayload.name = contact.name;
+    }
+
     const payload = {
       assistantId: acc.assistantId,
       phoneNumberId: resolvedPhoneId,
-      customer: {
-        number: targetPhone,
-        name: contact?.name || undefined,
-      },
+      customer: customerPayload,
       metadata: {
         contactId: contact?.id || null,
         direction: 'outbound',
