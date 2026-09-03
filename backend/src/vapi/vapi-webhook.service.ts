@@ -398,12 +398,46 @@ export class VapiWebhookService {
       }
     }
 
+    const isHathaYoga = /hatha.*yoga|yoga.*terap/i.test(requestedService || targetService?.name || '');
+    const isMeditacion = /meditaci/i.test(requestedService || targetService?.name || '');
+
+    const HATHA_YOGA_TIMETABLE: Record<number, string[]> = {
+      2: ['09:45', '11:15', '17:00', '18:30', '20:00'], // Martes
+      3: ['20:15'],                                     // Miércoles
+      4: ['09:45', '11:15', '16:30', '17:30', '19:00'], // Jueves
+    };
+
+    const MEDITACION_TIMETABLE: Record<number, string[]> = {
+      2: ['09:15'], // Martes 09:15 a 09:45
+      4: ['09:15'], // Jueves 09:15 a 09:45
+    };
+
+    // If caller specifically asked for an unavailable day for Hatha Yoga
+    if (isHathaYoga && rawFecha) {
+      const isLunes = rawFecha.includes('lunes');
+      const isViernes = rawFecha.includes('viernes');
+      const isFinde = rawFecha.includes('sabado') || rawFecha.includes('sábado') || rawFecha.includes('domingo');
+      if (isLunes || isViernes || isFinde) {
+        return 'No hay clases de Hatha Yoga Terapéutico en ese día. Los horarios oficiales son los martes (9:45, 11:15, 17:00, 18:30 y 20:00), miércoles (20:15) y jueves (9:45, 11:15, 16:30, 17:30 y 19:00). ¿Te viene bien alguno de estos días?';
+      }
+    }
+
     const candidateSlots: Array<{ startsAt: Date; endsAt: Date }> = [];
     const diasABuscar = Math.min(Math.max(params?.diasVista || 7, 1), 14);
 
     for (let dayOffset = 0; dayOffset < diasABuscar && candidateSlots.length < 4; dayOffset++) {
       const targetDate = addDays(startDate, dayOffset);
-      const daySlots = await this.appointmentsService.getAvailableSlots(
+      const targetDayOfWeek = targetDate.getDay();
+
+      if (isHathaYoga && (!HATHA_YOGA_TIMETABLE[targetDayOfWeek] || HATHA_YOGA_TIMETABLE[targetDayOfWeek].length === 0)) {
+        continue;
+      }
+
+      if (isMeditacion && (!MEDITACION_TIMETABLE[targetDayOfWeek] || MEDITACION_TIMETABLE[targetDayOfWeek].length === 0)) {
+        continue;
+      }
+
+      let daySlots = await this.appointmentsService.getAvailableSlots(
         targetDate,
         durationMinutes,
         workingHours,
@@ -413,6 +447,23 @@ export class VapiWebhookService {
         targetService?.id,
         targetService?.name || requestedService,
       );
+
+      // Filter by strict class timetables
+      if (isHathaYoga) {
+        const allowed = HATHA_YOGA_TIMETABLE[targetDayOfWeek];
+        daySlots = daySlots.filter((s) => {
+          const slotDate = s.startsAt instanceof Date ? s.startsAt : parseISO(s.startsAt as any);
+          const zonedSlot = new TZDate(slotDate.getTime(), ctx.timezone);
+          return allowed.includes(format(zonedSlot, 'HH:mm'));
+        });
+      } else if (isMeditacion) {
+        const allowed = MEDITACION_TIMETABLE[targetDayOfWeek];
+        daySlots = daySlots.filter((s) => {
+          const slotDate = s.startsAt instanceof Date ? s.startsAt : parseISO(s.startsAt as any);
+          const zonedSlot = new TZDate(slotDate.getTime(), ctx.timezone);
+          return allowed.includes(format(zonedSlot, 'HH:mm'));
+        });
+      }
 
       if (targetHourNorm) {
         const matched = daySlots.find((s) => {
@@ -533,6 +584,32 @@ export class VapiWebhookService {
     const durationMinutes = serviceEntity?.durationMinutes || 45;
     const endsAt = new Date(startsAt.getTime() + durationMinutes * 60000);
 
+    // 2b. Strict validation for Constelaciones Familiares
+    if (/constelaci/i.test(cleanServiceName)) {
+      const zoned = new TZDate(startsAt.getTime(), ctx.timezone);
+      const isSep27 = zoned.getMonth() === 8 && zoned.getDate() === 27 && zoned.getFullYear() === 2026;
+      if (!isSep27) {
+        return `Las Constelaciones Familiares son un taller vivencial exclusivo que se celebra únicamente el domingo 27 de septiembre de 2026 de 10:00 a 14:00. No se pueden agendar para otras fechas. Explícaselo al cliente y pregúntale si desea reservar plaza para ese domingo (indicando si desea Constelar por 60€ o Participar por 20€).`;
+      }
+    }
+
+    // 2c. Strict validation for Hatha Yoga Terapéutico
+    const isHathaYoga = /hatha.*yoga|yoga.*terap/i.test(cleanServiceName);
+    if (isHathaYoga) {
+      const HATHA_YOGA_TIMETABLE: Record<number, string[]> = {
+        2: ['09:45', '11:15', '17:00', '18:30', '20:00'],
+        3: ['20:15'],
+        4: ['09:45', '11:15', '16:30', '17:30', '19:00'],
+      };
+      const zoned = new TZDate(startsAt.getTime(), ctx.timezone);
+      const dayOfWeek = zoned.getDay();
+      const timeStr = format(zoned, 'HH:mm');
+      const allowedTimes = HATHA_YOGA_TIMETABLE[dayOfWeek] || [];
+      if (!allowedTimes.includes(timeStr)) {
+        return `Ese horario no corresponde a las clases oficiales de Hatha Yoga Terapéutico. Los turnos oficiales son: martes (9:45, 11:15, 17:00, 18:30 y 20:00), miércoles (20:15) y jueves (9:45, 11:15, 16:30, 17:30 y 19:00). Indícale amablemente estos turnos al cliente para que elija uno.`;
+      }
+    }
+
     // 3. Create appointment with conflict handling
     try {
       const appt = await this.appointmentsService.create({
@@ -552,6 +629,9 @@ export class VapiWebhookService {
       }
 
       const spokenDate = format(startsAt, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
+      if (serviceEntity?.requiresApproval) {
+        return `¡Solicitud registrada con éxito! Tu cita para ${appt.service} el ${spokenDate} a nombre de ${customerName} ha quedado registrada pendiente de aprobación del terapeuta Jose Ignacio. Te avisaremos en cuanto esté confirmada.`;
+      }
       return `¡Cita confirmada con éxito! Queda agendada para ${appt.service} el ${spokenDate} a nombre de ${customerName}. Confírmaselo amablemente al cliente y despídete.`;
     } catch (err: any) {
       if (err?.message?.includes('ya tiene una reserva') || err?.status === 409 || err?.name === 'ConflictException') {

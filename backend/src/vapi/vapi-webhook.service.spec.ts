@@ -186,7 +186,7 @@ describe('VapiWebhookService', () => {
               id: 'tc-777',
               name: 'reservar_cita',
               arguments: {
-                inicioIso: '2026-09-03T10:00:00.000Z',
+                inicioIso: '2026-09-03T07:45:00.000Z',
                 servicio: 'Hatha Yoga Terapéutico',
                 nombre: 'Carlos Santana',
               },
