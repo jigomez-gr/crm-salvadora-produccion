@@ -140,8 +140,8 @@ describe('VapiWebhookService', () => {
       expect(response.results).toBeDefined();
       expect(response.results?.length).toBe(1);
       expect(response.results![0].toolCallId).toBe('tc-999');
-      expect(response.results![0].result).toContain('Huecos disponibles');
-      expect(response.results![0].result).toContain('[2026-09-03T08:00:00.000Z]');
+      expect(response.results![0].result).toContain('calendario oficial');
+      expect(response.results![0].result).toContain('[2026-09-03T15:00:00.000Z]');
     });
 
     it('handles root-level toolCalls format with preferred hour match', async () => {
@@ -159,7 +159,7 @@ describe('VapiWebhookService', () => {
               arguments: JSON.stringify({
                 servicio: 'Yoga',
                 fechaPreferida: '2026-09-03',
-                horaPreferida: '10:00',
+                horaPreferida: '17:00',
               }),
             },
           },
@@ -171,7 +171,7 @@ describe('VapiWebhookService', () => {
       expect(response.results).toBeDefined();
       expect(response.results?.length).toBe(1);
       expect(response.results![0].toolCallId).toBe('tc-888');
-      expect(response.results![0].result).toContain('está disponible');
+      expect(response.results![0].result).toContain('está disponible en el calendario oficial');
     });
 
     it('handles reservar_cita with flexible alias parameters', async () => {
@@ -275,7 +275,7 @@ describe('VapiWebhookService', () => {
       };
 
       const response = await service.handleWebhook(payload);
-      expect(response.results![0].result).toContain('No hay sesiones de «Constelaciones Familiares» para esa fecha');
+      expect(response.results![0].result).toContain('no hay sesiones de «Constelaciones Familiares» para esa fecha');
       expect(response.results![0].result).toContain('domingo 27 de septiembre');
     });
   });

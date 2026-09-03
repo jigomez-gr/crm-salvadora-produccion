@@ -29,6 +29,161 @@ export interface ToolExecutionContext {
   timezone: string;
 }
 
+export interface OfficialServiceConfig {
+  id: string;
+  name: string;
+  aliases: RegExp;
+  category: 'recurring_schedule' | 'fixed_event' | 'individual_flexible';
+  scheduleSummary: string;
+  timetable?: Record<number, string[]>; // 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 0=Sun -> HH:mm[]
+  eventDate?: Date;
+  eventDateIso?: string;
+  eventSpokenDate?: string;
+  durationMinutes: number;
+  maxCapacity: number;
+  requiresApproval?: boolean;
+  priceInfo: string;
+}
+
+export const OFFICIAL_SERVICES: OfficialServiceConfig[] = [
+  {
+    id: 'hatha-yoga',
+    name: 'Hatha Yoga Terapéutico',
+    aliases: /hatha|yoga.*terap/i,
+    category: 'recurring_schedule',
+    scheduleSummary: 'martes (9:45, 11:15, 17:00, 18:30 y 20:00), miércoles (20:15) y jueves (9:45, 11:15, 16:30, 17:30 y 19:00)',
+    timetable: {
+      2: ['09:45', '11:15', '17:00', '18:30', '20:00'], // Martes
+      3: ['20:15'],                                     // Miércoles
+      4: ['09:45', '11:15', '16:30', '17:30', '19:00'], // Jueves
+    },
+    durationMinutes: 90,
+    maxCapacity: 20,
+    priceInfo: '1 clase semanal (25€/mes) o 2 clases semanales (42€/mes)',
+  },
+  {
+    id: 'meditacion',
+    name: 'Meditaciones Guiadas',
+    aliases: /meditaci/i,
+    category: 'recurring_schedule',
+    scheduleSummary: 'martes y jueves de 09:15 a 09:45',
+    timetable: {
+      2: ['09:15'],
+      4: ['09:15'],
+    },
+    durationMinutes: 30,
+    maxCapacity: 28,
+    priceInfo: '15€/mes (Gratuito para alumnos de Yoga)',
+  },
+  {
+    id: 'iaido',
+    name: 'Iaidō (Esgrima Japonesa Tradicional)',
+    aliases: /iaido|iaidō|esgrima/i,
+    category: 'recurring_schedule',
+    scheduleSummary: 'lunes de 20:00 a 21:00 y jueves de 20:30 a 22:00',
+    timetable: {
+      1: ['20:00'],
+      4: ['20:30'],
+    },
+    durationMinutes: 60,
+    maxCapacity: 15,
+    priceInfo: 'Primera clase de prueba GRATIS',
+  },
+  {
+    id: 'gestalt',
+    name: 'Terapia Gestalt (Sesión Individual)',
+    aliases: /gestalt/i,
+    category: 'individual_flexible',
+    scheduleSummary: 'lunes a viernes de 09:00 a 20:00 según disponibilidad',
+    durationMinutes: 60,
+    maxCapacity: 1,
+    requiresApproval: true,
+    priceInfo: '35€ por sesión de 1 hora. Requiere aprobación de Jose Ignacio Gomez Raya',
+  },
+  {
+    id: 'bienestar-experience',
+    name: 'Bienestar Experience (Sesión Individual)',
+    aliases: /bienestar.*exp/i,
+    category: 'individual_flexible',
+    scheduleSummary: 'lunes a viernes de 09:00 a 20:00 según disponibilidad',
+    durationMinutes: 60,
+    maxCapacity: 1,
+    requiresApproval: true,
+    priceInfo: '25€ por sesión de 1 hora. Requiere aprobación de Jose Ignacio Gomez Raya',
+  },
+  {
+    id: 'constelaciones',
+    name: 'Constelaciones Familiares',
+    aliases: /constelaci/i,
+    category: 'fixed_event',
+    scheduleSummary: 'domingo 27 de septiembre de 2026 de 10:00 a 14:00',
+    eventDate: new Date('2026-09-27T08:00:00.000Z'),
+    eventDateIso: '2026-09-27T08:00:00.000Z',
+    eventSpokenDate: 'domingo 27 de septiembre de 2026 de 10:00 a 14:00',
+    durationMinutes: 240,
+    maxCapacity: 20,
+    priceInfo: 'Constelar asunto propio (60€) o Participar como representante (20€)',
+  },
+  {
+    id: 'bano-gong',
+    name: 'Baño de Gong y Meditación Sonora',
+    aliases: /baño.*gong|gong.*sonora/i,
+    category: 'fixed_event',
+    scheduleSummary: 'sábado 26 de septiembre de 2026 de 18:00 a 20:00',
+    eventDate: new Date('2026-09-26T16:00:00.000Z'),
+    eventDateIso: '2026-09-26T16:00:00.000Z',
+    eventSpokenDate: 'sábado 26 de septiembre de 2026 de 18:00 a 20:00',
+    durationMinutes: 120,
+    maxCapacity: 30,
+    priceInfo: '16€ por persona',
+  },
+  {
+    id: 'puja-gong',
+    name: 'Puja de Gongs (Noche Sagrada de Sonido - 11h)',
+    aliases: /puja/i,
+    category: 'fixed_event',
+    scheduleSummary: 'sábado 28 de noviembre de 2026 de 21:00 a 08:00 del domingo',
+    eventDate: new Date('2026-11-28T20:00:00.000Z'),
+    eventDateIso: '2026-11-28T20:00:00.000Z',
+    eventSpokenDate: 'sábado 28 de noviembre de 2026 de 21:00 a 08:00 del domingo',
+    durationMinutes: 660,
+    maxCapacity: 30,
+    priceInfo: '95€ (90€-100€ según asistentes)',
+  },
+  {
+    id: 'retiro',
+    name: 'Retiro de Ayuno Terapéutico y Senderismo Consciente',
+    aliases: /retiro|ayuno/i,
+    category: 'fixed_event',
+    scheduleSummary: 'puente de octubre, del 9 al 12 de octubre de 2026',
+    eventDate: new Date('2026-10-09T08:00:00.000Z'),
+    eventDateIso: '2026-10-09T08:00:00.000Z',
+    eventSpokenDate: 'puente de octubre, del 9 al 12 de octubre de 2026',
+    durationMinutes: 4320,
+    maxCapacity: 15,
+    priceInfo: '180€',
+  },
+  {
+    id: 'encuentro-mujeres',
+    name: 'Encuentro de Mujeres (Primavera)',
+    aliases: /encuentro.*mujer/i,
+    category: 'fixed_event',
+    scheduleSummary: 'sábado 15 de mayo de 2027 de 10:00 a 16:00',
+    eventDate: new Date('2027-05-15T08:00:00.000Z'),
+    eventDateIso: '2027-05-15T08:00:00.000Z',
+    eventSpokenDate: 'sábado 15 de mayo de 2027 de 10:00 a 16:00',
+    durationMinutes: 360,
+    maxCapacity: 25,
+    priceInfo: '45€',
+  },
+];
+
+export function findOfficialService(query?: string): OfficialServiceConfig | null {
+  if (!query) return null;
+  const q = query.trim();
+  return OFFICIAL_SERVICES.find((s) => s.aliases.test(q) || s.name.toLowerCase().includes(q.toLowerCase())) || null;
+}
+
 @Injectable()
 export class VapiWebhookService {
   private readonly logger = new Logger(VapiWebhookService.name);
@@ -246,8 +401,18 @@ export class VapiWebhookService {
     });
 
     if (nextAppt) {
-      const formattedDate = this.formatSpokenDate(nextAppt.startsAt, ctx.timezone);
-      parts.push(`Tiene una cita de «${nextAppt.service}» programada para el ${formattedDate}.`);
+      const official = findOfficialService(nextAppt.service);
+      let isValidAppt = true;
+      if (official?.category === 'recurring_schedule' && official.timetable) {
+        const zoned = new TZDate(new Date(nextAppt.startsAt).getTime(), ctx.timezone);
+        isValidAppt = official.timetable[zoned.getDay()]?.includes(format(zoned, 'HH:mm')) ?? false;
+      }
+      if (isValidAppt) {
+        const formattedDate = this.formatSpokenDate(nextAppt.startsAt, ctx.timezone);
+        parts.push(`Tiene una cita de «${nextAppt.service}» programada para el ${formattedDate}.`);
+      } else {
+        parts.push('No tiene citas oficiales próximas programadas.');
+      }
     } else {
       parts.push('No tiene citas próximas programadas.');
     }
@@ -270,85 +435,85 @@ export class VapiWebhookService {
             { day: 6, open: '09:00', close: '15:00' },
           ];
 
-    let durationMinutes = 45;
-    let targetService: Service | null = null;
-    const requestedService = params?.servicio || params?.service || params?.clase;
+    const requestedService = (params?.servicio || params?.service || params?.clase || 'Hatha Yoga Terapéutico').toString().trim();
+    const officialSvc = findOfficialService(requestedService);
 
-    if (requestedService && typeof requestedService === 'string') {
-      const cleanName = requestedService.toLowerCase().trim();
-      const services = await this.servicesRepo.find({ where: { isActive: true } });
-      targetService =
-        services.find((s) => s.name.toLowerCase().includes(cleanName) || cleanName.includes(s.name.toLowerCase())) ||
-        null;
-      if (targetService) {
-        durationMinutes = targetService.durationMinutes;
+    const rawFecha = (params?.fechaPreferida || params?.fecha || params?.date || '').toString().toLowerCase().trim();
+    const rawHora = (params?.horaPreferida || params?.hora || params?.time || '').toString().toLowerCase().trim();
+
+    // 1. TALLERES Y EVENTOS CON FECHA FIJA (Constelaciones, Gong, Puja, Retiro, Encuentro)
+    if (officialSvc?.category === 'fixed_event') {
+      const isDifferentDate =
+        rawFecha &&
+        !rawFecha.includes('27') &&
+        !rawFecha.includes('26') &&
+        !rawFecha.includes('28') &&
+        !rawFecha.includes('septiembre') &&
+        !rawFecha.includes('noviembre') &&
+        !rawFecha.includes('octubre') &&
+        !rawFecha.includes('mayo') &&
+        (rawFecha.includes('hoy') ||
+          rawFecha.includes('tarde') ||
+          rawFecha.includes('mañana') ||
+          rawFecha.includes('manana') ||
+          rawFecha.includes('lunes') ||
+          rawFecha.includes('martes') ||
+          rawFecha.includes('miercoles') ||
+          rawFecha.includes('miércoles') ||
+          rawFecha.includes('jueves') ||
+          rawFecha.includes('viernes') ||
+          rawFecha.includes('sabado') ||
+          rawFecha.includes('sábado') ||
+          rawFecha.includes('domingo'));
+
+      if (isDifferentDate) {
+        return `En el calendario oficial no hay sesiones de «${officialSvc.name}» para esa fecha. Es un evento exclusivo con fecha fijada en el calendario: se celebra el ${officialSvc.eventSpokenDate} [${officialSvc.eventDateIso}]. ${officialSvc.priceInfo}. Explícaselo al cliente y ofrécele reservar su plaza para ese día.`;
+      }
+
+      return `El calendario oficial para «${officialSvc.name}» es el ${officialSvc.eventSpokenDate} [${officialSvc.eventDateIso}]. Hay disponibilidad de plazas. ${officialSvc.priceInfo}. Ofrece la fecha oficial al cliente para formalizar su plaza.`;
+    }
+
+    // 2. SESIONES INDIVIDUALES (Gestalt, Bienestar)
+    if (officialSvc?.category === 'individual_flexible') {
+      return `El calendario oficial para «${officialSvc.name}» es de lunes a viernes entre las 09:00 y las 20:00 según disponibilidad. ${officialSvc.priceInfo}. Al solicitarla queda registrada pendiente de aprobación del terapeuta Jose Ignacio Gomez Raya. Pregúntale qué día y hora le vendría bien para tramitar la solicitud de cita.`;
+    }
+
+    // 3. CLASES RECURRENTES CON HORARIOS OFICIALES ESTRICTOS (Hatha Yoga, Meditaciones, Iaido)
+    const timetable = officialSvc?.timetable || {
+      2: ['09:45', '11:15', '17:00', '18:30', '20:00'],
+      3: ['20:15'],
+      4: ['09:45', '11:15', '16:30', '17:30', '19:00'],
+    };
+    const svcName = officialSvc?.name || requestedService;
+    const scheduleSummary = officialSvc?.scheduleSummary || 'martes (9:45, 11:15, 17:00, 18:30 y 20:00), miércoles (20:15) y jueves (9:45, 11:15, 16:30, 17:30 y 19:00)';
+    const durationMinutes = officialSvc?.durationMinutes || 90;
+
+    const weekdayMap: Record<string, number> = {
+      domingo: 0, lunes: 1, martes: 2, miercoles: 3, miércoles: 3, jueves: 4, viernes: 5, sabado: 6, sábado: 6
+    };
+
+    // Si el cliente pide un día que no existe en el calendario oficial de esa clase
+    for (const [wName, wDay] of Object.entries(weekdayMap)) {
+      if (rawFecha.includes(wName) && (!timetable[wDay] || timetable[wDay].length === 0)) {
+        return `En el calendario oficial no hay clases de «${svcName}» los ${wName}s. Los únicos horarios oficiales del calendario son: ${scheduleSummary}. Indícale amablemente este calendario al cliente y pregúntale cuál de estos turnos prefiere.`;
       }
     }
 
-    const rawFecha = (params?.fechaPreferida || params?.fecha || params?.date || '').toString().toLowerCase().trim();
+    // Si el cliente pide una hora concreta
+    let targetHourNorm: string | null = null;
+    if (rawHora) {
+      const match = rawHora.match(/(\d{1,2})(?::(\d{2}))?/);
+      if (match) {
+        const h = parseInt(match[1], 10);
+        const m = match[2] ? match[2] : '00';
+        const isTarde = rawHora.includes('tarde') || rawHora.includes('pm');
+        const finalH = isTarde && h < 12 ? h + 12 : h;
+        targetHourNorm = `${finalH.toString().padStart(2, '0')}:${m}`;
 
-    // Check if target service is an event/workshop with fixed dates (Constelaciones, Gong, Puja, Retiro, Encuentro)
-    const isEvent =
-      targetService?.serviceType === 'event' ||
-      /constelaci|gong|puja|retiro|ayuno|encuentro/i.test(requestedService || targetService?.name || '');
-
-    if (isEvent) {
-      const isConstelaciones = /constelaci/i.test(requestedService || targetService?.name || '');
-      const isGong = /baño.*gong|gong.*sonora/i.test(requestedService || targetService?.name || '');
-      const isPuja = /puja/i.test(requestedService || targetService?.name || '');
-      const isRetiro = /retiro|ayuno/i.test(requestedService || targetService?.name || '');
-      const isEncuentro = /encuentro.*mujer/i.test(requestedService || targetService?.name || '');
-
-      let eventStartDate = targetService?.eventStartDate ? new Date(targetService.eventStartDate) : null;
-      let eventText = targetService?.eventDatesText || '';
-
-      if (isConstelaciones) {
-        eventStartDate = eventStartDate || new Date('2026-09-27T08:00:00.000Z'); // Sunday Sep 27, 2026 10:00 Europe/Madrid
-        eventText = eventText || 'domingo 27 de septiembre de 2026 de 10:00 a 14:00';
-      } else if (isGong) {
-        eventStartDate = eventStartDate || new Date('2026-09-26T16:00:00.000Z'); // Saturday Sep 26, 2026 18:00 Europe/Madrid
-        eventText = eventText || 'sábado 26 de septiembre de 2026 de 18:00 a 20:00';
-      } else if (isPuja) {
-        eventStartDate = eventStartDate || new Date('2026-11-28T20:00:00.000Z'); // Saturday Nov 28, 2026 21:00 Europe/Madrid
-        eventText = eventText || 'sábado 28 de noviembre de 2026 de 21:00 a 08:00 del domingo';
-      } else if (isRetiro) {
-        eventStartDate = eventStartDate || new Date('2026-10-09T08:00:00.000Z');
-        eventText = eventText || 'puente de octubre, del 9 al 12 de octubre de 2026';
-      } else if (isEncuentro) {
-        eventStartDate = eventStartDate || new Date('2027-05-15T08:00:00.000Z');
-        eventText = eventText || 'sábado 15 de mayo de 2027 de 10:00 a 16:00';
-      }
-
-      if (eventStartDate) {
-        const iso = eventStartDate.toISOString();
-        const serviceDisplayName = targetService?.name || requestedService || 'Constelaciones Familiares';
-
-        // Check if caller specifically asked for another date (e.g. "esta tarde", "hoy", "mañana", "lunes", etc.)
-        const isDifferentDate =
-          rawFecha &&
-          !rawFecha.includes('27') &&
-          !rawFecha.includes('26') &&
-          !rawFecha.includes('28') &&
-          !rawFecha.includes('septiembre') &&
-          !rawFecha.includes('domingo') &&
-          (rawFecha.includes('hoy') ||
-            rawFecha.includes('tarde') ||
-            rawFecha.includes('mañana') ||
-            rawFecha.includes('manana') ||
-            rawFecha.includes('lunes') ||
-            rawFecha.includes('martes') ||
-            rawFecha.includes('miercoles') ||
-            rawFecha.includes('miércoles') ||
-            rawFecha.includes('jueves') ||
-            rawFecha.includes('viernes') ||
-            rawFecha.includes('sabado') ||
-            rawFecha.includes('sábado'));
-
-        if (isDifferentDate) {
-          return `No hay sesiones de «${serviceDisplayName}» para esa fecha. Es un taller vivencial que se celebra el ${eventText} [${iso}]. Explícaselo al cliente y pregúntale si desea reservar plaza para esa fecha${isConstelaciones ? ' (indicando si quiere Constelar por 60€ o Participar por 20€)' : ''}.`;
+        const allOfficialHours = Object.values(timetable).flat();
+        if (!allOfficialHours.includes(targetHourNorm)) {
+          return `Ese horario de las ${rawHora} no existe en el calendario oficial de «${svcName}». Los turnos oficiales del calendario son: ${scheduleSummary}. Por favor, indica estos turnos oficiales al cliente para que elija uno.`;
         }
-
-        return `La próxima sesión de «${serviceDisplayName}» tiene lugar el ${eventText} [${iso}]. Hay disponibilidad. Ofrece la fecha al cliente para formalizar su plaza${isConstelaciones ? ' y pregúntale si prefiere Constelar (60€) o Participar como representante (20€)' : ''}.`;
       }
     }
 
@@ -363,17 +528,6 @@ export class VapiWebhookService {
       } else if (rawFecha.includes('mañana') || rawFecha.includes('manana')) {
         startDate = addDays(now, 1);
       } else {
-        const weekdayMap: Record<string, number> = {
-          domingo: 0,
-          lunes: 1,
-          martes: 2,
-          miercoles: 3,
-          miércoles: 3,
-          jueves: 4,
-          viernes: 5,
-          sabado: 6,
-          sábado: 6,
-        };
         const matchedDay = Object.keys(weekdayMap).find((w) => rawFecha.includes(w));
         if (matchedDay !== undefined) {
           const targetDayNum = weekdayMap[matchedDay];
@@ -384,51 +538,11 @@ export class VapiWebhookService {
         } else {
           try {
             const parsed = parseISO(rawFecha);
-            if (isValid(parsed)) {
-              startDate = parsed;
-            }
+            if (isValid(parsed)) startDate = parsed;
           } catch {
             startDate = now;
           }
         }
-      }
-    }
-
-    // Normalize preferred hour if provided (e.g. "10", "10:00", "10h", "17:00")
-    let targetHourNorm: string | null = null;
-    const rawHora = (params?.horaPreferida || params?.hora || params?.time || '').toString().toLowerCase().trim();
-    if (rawHora) {
-      const match = rawHora.match(/(\d{1,2})(?::(\d{2}))?/);
-      if (match) {
-        const h = parseInt(match[1], 10);
-        const m = match[2] ? match[2] : '00';
-        const isTarde = rawHora.includes('tarde') || rawHora.includes('pm');
-        const finalH = isTarde && h < 12 ? h + 12 : h;
-        targetHourNorm = `${finalH.toString().padStart(2, '0')}:${m}`;
-      }
-    }
-
-    const isHathaYoga = /hatha.*yoga|yoga.*terap/i.test(requestedService || targetService?.name || '');
-    const isMeditacion = /meditaci/i.test(requestedService || targetService?.name || '');
-
-    const HATHA_YOGA_TIMETABLE: Record<number, string[]> = {
-      2: ['09:45', '11:15', '17:00', '18:30', '20:00'], // Martes
-      3: ['20:15'],                                     // Miércoles
-      4: ['09:45', '11:15', '16:30', '17:30', '19:00'], // Jueves
-    };
-
-    const MEDITACION_TIMETABLE: Record<number, string[]> = {
-      2: ['09:15'], // Martes 09:15 a 09:45
-      4: ['09:15'], // Jueves 09:15 a 09:45
-    };
-
-    // If caller specifically asked for an unavailable day for Hatha Yoga
-    if (isHathaYoga && rawFecha) {
-      const isLunes = rawFecha.includes('lunes');
-      const isViernes = rawFecha.includes('viernes');
-      const isFinde = rawFecha.includes('sabado') || rawFecha.includes('sábado') || rawFecha.includes('domingo');
-      if (isLunes || isViernes || isFinde) {
-        return 'No hay clases de Hatha Yoga Terapéutico en ese día. Los horarios oficiales son los martes (9:45, 11:15, 17:00, 18:30 y 20:00), miércoles (20:15) y jueves (9:45, 11:15, 16:30, 17:30 y 19:00). ¿Te viene bien alguno de estos días?';
       }
     }
 
@@ -439,11 +553,7 @@ export class VapiWebhookService {
       const targetDate = addDays(startDate, dayOffset);
       const targetDayOfWeek = targetDate.getDay();
 
-      if (isHathaYoga && (!HATHA_YOGA_TIMETABLE[targetDayOfWeek] || HATHA_YOGA_TIMETABLE[targetDayOfWeek].length === 0)) {
-        continue;
-      }
-
-      if (isMeditacion && (!MEDITACION_TIMETABLE[targetDayOfWeek] || MEDITACION_TIMETABLE[targetDayOfWeek].length === 0)) {
+      if (!timetable[targetDayOfWeek] || timetable[targetDayOfWeek].length === 0) {
         continue;
       }
 
@@ -453,27 +563,17 @@ export class VapiWebhookService {
         workingHours,
         ctx.timezone,
         now,
-        targetService?.calendarId || 'default',
-        targetService?.id,
-        targetService?.name || requestedService,
+        'default',
+        undefined,
+        svcName,
       );
 
-      // Filter by strict class timetables
-      if (isHathaYoga) {
-        const allowed = HATHA_YOGA_TIMETABLE[targetDayOfWeek];
-        daySlots = daySlots.filter((s) => {
-          const slotDate = s.startsAt instanceof Date ? s.startsAt : parseISO(s.startsAt as any);
-          const zonedSlot = new TZDate(slotDate.getTime(), ctx.timezone);
-          return allowed.includes(format(zonedSlot, 'HH:mm'));
-        });
-      } else if (isMeditacion) {
-        const allowed = MEDITACION_TIMETABLE[targetDayOfWeek];
-        daySlots = daySlots.filter((s) => {
-          const slotDate = s.startsAt instanceof Date ? s.startsAt : parseISO(s.startsAt as any);
-          const zonedSlot = new TZDate(slotDate.getTime(), ctx.timezone);
-          return allowed.includes(format(zonedSlot, 'HH:mm'));
-        });
-      }
+      const allowed = timetable[targetDayOfWeek];
+      daySlots = daySlots.filter((s) => {
+        const slotDate = s.startsAt instanceof Date ? s.startsAt : parseISO(s.startsAt as any);
+        const zonedSlot = new TZDate(slotDate.getTime(), ctx.timezone);
+        return allowed.includes(format(zonedSlot, 'HH:mm'));
+      });
 
       if (targetHourNorm) {
         const matched = daySlots.find((s) => {
@@ -486,34 +586,18 @@ export class VapiWebhookService {
           const zonedSlot = new TZDate(slotDate.getTime(), ctx.timezone);
           const iso = slotDate.toISOString();
           const spoken = format(zonedSlot, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
-          return `Sí, el ${spoken} está disponible [${iso}]. Ofréceselo al cliente para confirmar.`;
+          return `Sí, el ${spoken} está disponible en el calendario oficial [${iso}]. Ofréceselo al cliente para confirmar.`;
         }
       }
 
-      let filteredDaySlots = daySlots;
-      const franja = (params?.franja || '').toString().toLowerCase();
-      if (franja.includes('manana') || franja.includes('mañana')) {
-        filteredDaySlots = daySlots.filter((s) => {
-          const slotDate = s.startsAt instanceof Date ? s.startsAt : parseISO(s.startsAt as any);
-          const zonedSlot = new TZDate(slotDate.getTime(), ctx.timezone);
-          return zonedSlot.getHours() < 14;
-        });
-      } else if (franja.includes('tarde') || franja.includes('noche')) {
-        filteredDaySlots = daySlots.filter((s) => {
-          const slotDate = s.startsAt instanceof Date ? s.startsAt : parseISO(s.startsAt as any);
-          const zonedSlot = new TZDate(slotDate.getTime(), ctx.timezone);
-          return zonedSlot.getHours() >= 14;
-        });
-      }
-
-      for (const slot of filteredDaySlots) {
+      for (const slot of daySlots) {
         candidateSlots.push(slot);
         if (candidateSlots.length >= 4) break;
       }
     }
 
     if (candidateSlots.length === 0) {
-      return 'No hay huecos disponibles en esas fechas exactas. Pregunta al cliente si le vendría bien mirar la próxima semana.';
+      return `El calendario oficial de «${svcName}» es: ${scheduleSummary}. Para esas fechas no quedan plazas libres. Pregunta al cliente si le vendría bien mirar la próxima semana.`;
     }
 
     const optionsFormatted = candidateSlots
@@ -526,7 +610,7 @@ export class VapiWebhookService {
       })
       .join('; ');
 
-    return `Huecos disponibles: ${optionsFormatted}. Ofrece hasta dos opciones al cliente de forma natural y guarda el código ISO entre corchetes para cuando elija. Nunca leas el código entre corchetes en voz alta.`;
+    return `El calendario oficial de «${svcName}» es: ${scheduleSummary}. Próximos turnos con plazas libres: ${optionsFormatted}. Explica amablemente el calendario oficial, ofrece hasta dos opciones y usa el código ISO entre corchetes para reservar cuando elija. Nunca leas el código entre corchetes en voz alta.`;
   }
 
   // ─── 3. RESERVAR CITA ───
@@ -594,66 +678,73 @@ export class VapiWebhookService {
     const durationMinutes = serviceEntity?.durationMinutes || 45;
     const endsAt = new Date(startsAt.getTime() + durationMinutes * 60000);
 
-    // 2b. Strict validation for Constelaciones Familiares
-    if (/constelaci/i.test(cleanServiceName)) {
-      const zoned = new TZDate(startsAt.getTime(), ctx.timezone);
-      const isSep27 = zoned.getMonth() === 8 && zoned.getDate() === 27 && zoned.getFullYear() === 2026;
-      if (!isSep27) {
-        return `Las Constelaciones Familiares son un taller vivencial exclusivo que se celebra únicamente el domingo 27 de septiembre de 2026 de 10:00 a 14:00. No se pueden agendar para otras fechas. Explícaselo al cliente y pregúntale si desea reservar plaza para ese domingo (indicando si desea Constelar por 60€ o Participar por 20€).`;
+    // 2b. Strict validation against official service calendars
+    const officialSvc = findOfficialService(cleanServiceName || serviceEntity?.name);
+    if (officialSvc) {
+      if (officialSvc.category === 'fixed_event' && officialSvc.eventDate) {
+        const zoned = new TZDate(startsAt.getTime(), ctx.timezone);
+        const targetEventDate = new TZDate(officialSvc.eventDate.getTime(), ctx.timezone);
+        const isSameDay =
+          zoned.getFullYear() === targetEventDate.getFullYear() &&
+          zoned.getMonth() === targetEventDate.getMonth() &&
+          zoned.getDate() === targetEventDate.getDate();
+        if (!isSameDay) {
+          return `No se puede reservar: «${officialSvc.name}» se celebra exclusivamente el ${officialSvc.eventSpokenDate}. No existen otras fechas en el calendario oficial. Explícaselo al cliente y pregúntale si desea plaza para ese día.`;
+        }
+      }
+
+      if (officialSvc.category === 'recurring_schedule' && officialSvc.timetable) {
+        const zoned = new TZDate(startsAt.getTime(), ctx.timezone);
+        const dayOfWeek = zoned.getDay();
+        const timeStr = format(zoned, 'HH:mm');
+        const allowedTimes = officialSvc.timetable[dayOfWeek] || [];
+        if (!allowedTimes.includes(timeStr)) {
+          return `Ese horario no corresponde al calendario oficial de «${officialSvc.name}». Los turnos oficiales del calendario son: ${officialSvc.scheduleSummary}. Indícale amablemente estos turnos oficiales al cliente para que elija uno.`;
+        }
       }
     }
 
-    // 2c. Strict validation for Hatha Yoga Terapéutico
-    const isHathaYoga = /hatha.*yoga|yoga.*terap/i.test(cleanServiceName);
-    if (isHathaYoga) {
+    // 2c. Weekly quota check for Hatha Yoga (1 clase semanal vs 2 clases semanales)
+    const isHathaYoga = officialSvc?.id === 'hatha-yoga' || /hatha.*yoga|yoga.*terap/i.test(cleanServiceName);
+    if (isHathaYoga && contact?.id) {
+      const isTwoClasses = /2\s*clases|dos\s*clases/i.test(cleanServiceName || params?.modalidad || '');
+      const maxAllowedPerWeek = isTwoClasses ? 2 : 1;
+
+      const weekStart = startOfWeek(startsAt, { weekStartsOn: 1 });
+      const weekEnd = endOfWeek(startsAt, { weekStartsOn: 1 });
+
+      const existingThisWeek = await this.appointmentsRepo.find({
+        where: {
+          contactId: contact.id,
+          status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.PENDING_APPROVAL]),
+          startsAt: Between(weekStart, weekEnd),
+        },
+        order: { startsAt: 'ASC' },
+      });
+
       const HATHA_YOGA_TIMETABLE: Record<number, string[]> = {
         2: ['09:45', '11:15', '17:00', '18:30', '20:00'],
         3: ['20:15'],
         4: ['09:45', '11:15', '16:30', '17:30', '19:00'],
       };
-      const zoned = new TZDate(startsAt.getTime(), ctx.timezone);
-      const dayOfWeek = zoned.getDay();
-      const timeStr = format(zoned, 'HH:mm');
-      const allowedTimes = HATHA_YOGA_TIMETABLE[dayOfWeek] || [];
-      if (!allowedTimes.includes(timeStr)) {
-        return `Ese horario no corresponde a las clases oficiales de Hatha Yoga Terapéutico. Los turnos oficiales son: martes (9:45, 11:15, 17:00, 18:30 y 20:00), miércoles (20:15) y jueves (9:45, 11:15, 16:30, 17:30 y 19:00). Indícale amablemente estos turnos al cliente para que elija uno.`;
-      }
 
-      // 2d. Weekly quota check (1 clase semanal vs 2 clases semanales)
-      if (contact?.id) {
-        const isTwoClasses = /2\s*clases|dos\s*clases/i.test(cleanServiceName || params?.modalidad || '');
-        const maxAllowedPerWeek = isTwoClasses ? 2 : 1;
+      const hathaExisting = existingThisWeek.filter((a) => {
+        if (!/yoga/i.test(a.service)) return false;
+        const zoned = new TZDate(new Date(a.startsAt).getTime(), ctx.timezone);
+        const day = zoned.getDay();
+        const time = format(zoned, 'HH:mm');
+        return HATHA_YOGA_TIMETABLE[day]?.includes(time);
+      });
 
-        const weekStart = startOfWeek(startsAt, { weekStartsOn: 1 });
-        const weekEnd = endOfWeek(startsAt, { weekStartsOn: 1 });
-
-        const existingThisWeek = await this.appointmentsRepo.find({
-          where: {
-            contactId: contact.id,
-            status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.PENDING_APPROVAL]),
-            startsAt: Between(weekStart, weekEnd),
-          },
-          order: { startsAt: 'ASC' },
-        });
-
-        const hathaExisting = existingThisWeek.filter((a) => {
-          if (!/yoga/i.test(a.service)) return false;
-          const zoned = new TZDate(new Date(a.startsAt).getTime(), ctx.timezone);
-          const day = zoned.getDay();
-          const time = format(zoned, 'HH:mm');
-          return HATHA_YOGA_TIMETABLE[day]?.includes(time);
-        });
-
-        if (hathaExisting.length >= maxAllowedPerWeek) {
-          if (maxAllowedPerWeek === 1) {
-            const bookedDate = this.formatSpokenDate(hathaExisting[0].startsAt, ctx.timezone);
-            return `Ya tienes una clase de Hatha Yoga agendada para esa semana (el ${bookedDate}). En la modalidad de 1 clase semanal solo puedes tener una clase por semana. Si deseas cambiar de horario, dímelo y te la reprogramo a este nuevo turno, o si prefieres asistir 2 veces por semana podemos cambiarte a la modalidad de 2 clases semanales (42€/mes).`;
-          } else {
-            const bookedDates = hathaExisting
-              .map((a) => this.formatSpokenDate(a.startsAt, ctx.timezone))
-              .join(' y el ');
-            return `Ya tienes tus 2 clases de Hatha Yoga agendadas para esa semana (el ${bookedDates}). Con la modalidad de 2 clases semanales tienes el cupo semanal completo. ¿Deseas que te cambie alguno de esos dos turnos?`;
-          }
+      if (hathaExisting.length >= maxAllowedPerWeek) {
+        if (maxAllowedPerWeek === 1) {
+          const bookedDate = this.formatSpokenDate(hathaExisting[0].startsAt, ctx.timezone);
+          return `Ya tienes una clase de Hatha Yoga agendada para esa semana (el ${bookedDate}). En la modalidad de 1 clase semanal solo puedes tener una clase por semana. Si deseas cambiar de horario, dímelo y te la reprogramo a este nuevo turno, o si prefieres asistir 2 veces por semana podemos cambiarte a la modalidad de 2 clases semanales (42€/mes).`;
+        } else {
+          const bookedDates = hathaExisting
+            .map((a) => this.formatSpokenDate(a.startsAt, ctx.timezone))
+            .join(' y el ');
+          return `Ya tienes tus 2 clases de Hatha Yoga agendadas para esa semana (el ${bookedDates}). Con la modalidad de 2 clases semanales tienes el cupo semanal completo. ¿Deseas que te cambie alguno de esos dos turnos?`;
         }
       }
     }
@@ -662,7 +753,7 @@ export class VapiWebhookService {
     try {
       const appt = await this.appointmentsService.create({
         contactId: contact.id,
-        service: serviceEntity?.name || serviceName,
+        service: officialSvc?.name || serviceEntity?.name || serviceName,
         serviceId: serviceEntity?.id,
         calendarId: serviceEntity?.calendarId || 'default',
         startsAt: startsAt.toISOString(),
@@ -677,7 +768,8 @@ export class VapiWebhookService {
       }
 
       const spokenDate = this.formatSpokenDate(startsAt, ctx.timezone);
-      if (serviceEntity?.requiresApproval) {
+      const requiresApproval = officialSvc?.requiresApproval || serviceEntity?.requiresApproval;
+      if (requiresApproval) {
         return `¡Solicitud registrada con éxito! Tu cita para ${appt.service} el ${spokenDate} a nombre de ${customerName} ha quedado registrada pendiente de aprobación del terapeuta Jose Ignacio. Te avisaremos en cuanto esté confirmada.`;
       }
       return `¡Cita confirmada con éxito! Queda agendada para ${appt.service} el ${spokenDate} a nombre de ${customerName}. Confírmaselo amablemente al cliente y despídete.`;
