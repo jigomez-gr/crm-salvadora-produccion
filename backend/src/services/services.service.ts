@@ -365,8 +365,8 @@ export class ServicesService implements OnModuleInit {
       }
 
       // 3h. Ensure weeklySchedule on all recurring and event services in DB
-      const allServices = await this.serviceRepo.find();
-      for (const s of allServices) {
+      const dbServices = await this.serviceRepo.find();
+      for (const s of dbServices) {
         let updated = false;
         if (/hatha.*yoga|yoga.*terap/i.test(s.name)) {
           if (!s.weeklySchedule || Object.keys(s.weeklySchedule).length === 0) {

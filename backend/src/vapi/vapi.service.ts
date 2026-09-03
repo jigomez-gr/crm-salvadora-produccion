@@ -12,6 +12,7 @@ import { AppSettings } from '../common/entities/app-settings.entity';
 import { Service } from '../common/entities/service.entity';
 import { AgentConfig } from '../common/entities/agent-config.entity';
 import { Contact } from '../common/entities/contact.entity';
+import { Appointment } from '../common/entities/appointment.entity';
 import { Call, CallDirection, CallStatus } from '../common/entities/call.entity';
 import { VapiAccountConfigDto } from './vapi.types';
 import { VAPI_CATALOG } from './vapi-catalog';
@@ -35,6 +36,8 @@ export class VapiService implements OnModuleInit {
     private readonly agentConfigRepo: Repository<AgentConfig>,
     @InjectRepository(Contact)
     private readonly contactsRepo: Repository<Contact>,
+    @InjectRepository(Appointment)
+    private readonly appointmentsRepo: Repository<Appointment>,
     @InjectRepository(Call)
     private readonly callsRepo: Repository<Call>,
   ) {}
