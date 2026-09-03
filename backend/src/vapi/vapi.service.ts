@@ -297,7 +297,7 @@ export class VapiService implements OnModuleInit {
     const acc = await this.getAccount();
     const apiKey = this.getEffectiveApiKey(acc);
     const webhookUrl = this.getWebhookUrl(acc);
-    const toolDefs = buildVapiToolDefinitions(webhookUrl, acc.serverCredentialId || undefined);
+    const toolDefs = buildVapiToolDefinitions(webhookUrl);
 
     // List existing tools in VAPI
     const res = await fetch(`${VAPI_BASE_URL}/tool`, {
@@ -314,13 +314,16 @@ export class VapiService implements OnModuleInit {
 
     const existingTools: any[] = await res.json();
     const existingByName = new Map<string, any>();
-    for (const t of existingTools) {
-      if (t.function?.name) {
-        existingByName.set(t.function.name, t);
+    if (Array.isArray(existingTools)) {
+      for (const t of existingTools) {
+        if (t.function?.name) {
+          existingByName.set(t.function.name, t);
+        }
       }
     }
 
     const results: Array<{ name: string; id: string; action: string }> = [];
+    const errors: string[] = [];
 
     for (const def of toolDefs) {
       const name = def.function.name;
@@ -339,28 +342,59 @@ export class VapiService implements OnModuleInit {
         if (!createRes.ok) {
           const err = await createRes.text();
           this.logger.error(`Error creando herramienta ${name}: ${err}`);
+          errors.push(`${name}: ${err}`);
           continue;
         }
         const created = await createRes.json();
         results.push({ name, id: created.id, action: 'creada' });
       } else {
-        // Update tool
+        // Update tool (omit immutable 'type' field in PATCH)
+        const updatePayload = {
+          function: def.function,
+          server: def.server,
+          messages: def.messages,
+        };
         const updateRes = await fetch(`${VAPI_BASE_URL}/tool/${existing.id}`, {
           method: 'PATCH',
           headers: {
             Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(def),
+          body: JSON.stringify(updatePayload),
         });
         if (!updateRes.ok) {
-          const err = await updateRes.text();
-          this.logger.error(`Error actualizando herramienta ${name}: ${err}`);
-          continue;
+          // If PATCH failed, delete old tool and recreate
+          await fetch(`${VAPI_BASE_URL}/tool/${existing.id}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${apiKey}` },
+          }).catch(() => null);
+
+          const recreateRes = await fetch(`${VAPI_BASE_URL}/tool`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(def),
+          });
+
+          if (!recreateRes.ok) {
+            const err = await recreateRes.text();
+            this.logger.error(`Error recreando herramienta ${name}: ${err}`);
+            errors.push(`${name}: ${err}`);
+            continue;
+          }
+          const created = await recreateRes.json();
+          results.push({ name, id: created.id, action: 'recreada' });
+        } else {
+          const updated = await updateRes.json();
+          results.push({ name, id: updated.id, action: 'actualizada' });
         }
-        const updated = await updateRes.json();
-        results.push({ name, id: updated.id, action: 'actualizada' });
       }
+    }
+
+    if (results.length === 0 && errors.length > 0) {
+      throw new BadRequestException(`No se pudieron sincronizar las herramientas en VAPI: ${errors.join(', ')}`);
     }
 
     return { synced: results.length, tools: results };
@@ -437,7 +471,7 @@ export class VapiService implements OnModuleInit {
       model: modelPayload,
       voice: voicePayload,
       serverUrl: webhookUrl,
-      ...(acc.serverCredentialId ? { serverUrlSecret: acc.serverCredentialId } : {}),
+      ...(acc.webhookToken ? { serverUrlSecret: acc.webhookToken } : {}),
       serverMessages: [
         'end-of-call-report',
         'status-update',
