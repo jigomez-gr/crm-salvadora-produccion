@@ -10,7 +10,9 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CallsService, CallsQueryDto } from './calls.service';
 import { VapiService } from '../vapi/vapi.service';
@@ -46,6 +48,11 @@ export class CallsController {
       return this.vapiService.syncCallFromVapi(call.id).catch(() => call);
     }
     return call;
+  }
+
+  @Get(':id/recording')
+  async getRecording(@Param('id') id: string, @Res() res: Response) {
+    return this.vapiService.streamCallRecording(id, res);
   }
 
   @Post(':id/sync')

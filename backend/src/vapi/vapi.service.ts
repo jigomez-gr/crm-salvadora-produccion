@@ -850,4 +850,72 @@ export class VapiService implements OnModuleInit {
     }
     return { synced: count };
   }
+
+  /**
+   * Stream call recording audio directly to the browser to prevent 401 and CORS errors
+   */
+  async streamCallRecording(callIdOrDbId: string, res: any): Promise<void> {
+    const acc = await this.getAccount();
+    const apiKey = this.getEffectiveApiKey(acc);
+
+    const call = await this.callsRepo.findOne({
+      where: [{ id: callIdOrDbId }, { vapiCallId: callIdOrDbId }],
+    });
+
+    if (!call) {
+      throw new NotFoundException('Llamada no encontrada.');
+    }
+
+    let targetUrl = call.recordingUrl;
+
+    // If recordingUrl is not saved yet, use VAPI mono-recording endpoint
+    if (!targetUrl && call.vapiCallId) {
+      targetUrl = `${VAPI_BASE_URL}/call/${call.vapiCallId}/mono-recording`;
+    }
+
+    if (!targetUrl) {
+      throw new NotFoundException('No hay grabación de audio disponible para esta llamada.');
+    }
+
+    try {
+      let audioRes = await fetch(targetUrl, {
+        headers: targetUrl.includes('api.vapi.ai')
+          ? { Authorization: `Bearer ${apiKey}` }
+          : {},
+        redirect: 'follow',
+      });
+
+      // Fallback to mono-recording or stereo-recording if needed
+      if (!audioRes.ok && call.vapiCallId) {
+        const altUrl = `${VAPI_BASE_URL}/call/${call.vapiCallId}/mono-recording`;
+        if (targetUrl !== altUrl) {
+          audioRes = await fetch(altUrl, {
+            headers: { Authorization: `Bearer ${apiKey}` },
+            redirect: 'follow',
+          });
+        }
+      }
+
+      if (!audioRes.ok) {
+        throw new NotFoundException(`La grabación no está disponible en VAPI (${audioRes.status}).`);
+      }
+
+      const contentType = audioRes.headers.get('content-type') || 'audio/mpeg';
+      const contentLength = audioRes.headers.get('content-length');
+
+      res.setHeader('Content-Type', contentType);
+      if (contentLength) {
+        res.setHeader('Content-Length', contentLength);
+      }
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('Cache-Control', 'private, max-age=3600');
+
+      const arrayBuffer = await audioRes.arrayBuffer();
+      res.end(Buffer.from(arrayBuffer));
+    } catch (err: any) {
+      if (err instanceof NotFoundException) throw err;
+      this.logger.error(`Error transmitiendo audio de llamada ${call.vapiCallId}: ${err?.message || err}`);
+      throw new NotFoundException('Error al recuperar el archivo de audio de la llamada.');
+    }
+  }
 }

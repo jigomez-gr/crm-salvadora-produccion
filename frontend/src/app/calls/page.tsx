@@ -184,9 +184,9 @@ export default function CallsPage() {
     "appointment.created": () => loadCalls(),
   });
 
-  // Audio Playback
+  // Audio Playback via authenticated backend proxy
   function handlePlayAudio(call: Call) {
-    if (!call.recordingUrl) return;
+    if (!call.recordingUrl && !call.vapiCallId) return;
 
     if (playingAudioId === call.id) {
       audioRef.current?.pause();
@@ -195,11 +195,24 @@ export default function CallsPage() {
       if (audioRef.current) {
         audioRef.current.pause();
       }
-      const audio = new Audio(call.recordingUrl);
+      const audio = new Audio(`/api/calls/${call.id}/recording`);
       audioRef.current = audio;
-      audio.play();
-      setPlayingAudioId(call.id);
+      audio
+        .play()
+        .then(() => {
+          setPlayingAudioId(call.id);
+        })
+        .catch((err) => {
+          console.error("Error reproduciendo audio:", err);
+          toast.error("No se pudo reproducir el audio: " + (err?.message || ""));
+          setPlayingAudioId(null);
+        });
+
       audio.onended = () => setPlayingAudioId(null);
+      audio.onerror = () => {
+        toast.error("Error al cargar la grabación de la llamada.");
+        setPlayingAudioId(null);
+      };
     }
   }
 
@@ -1085,13 +1098,29 @@ export default function CallsPage() {
             </div>
 
             {/* Audio Player */}
-            {selectedCall.recordingUrl && (
+            {(selectedCall.recordingUrl || selectedCall.vapiCallId) && (
               <div className="rounded-lg border border-neutral-200 p-3 bg-white space-y-2">
-                <span className="text-xs font-semibold text-neutral-700 flex items-center gap-1.5">
-                  <Volume2 className="h-4 w-4 text-indigo-600" />
-                  Grabación de Audio
-                </span>
-                <audio controls className="w-full h-9" src={selectedCall.recordingUrl}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-neutral-700 flex items-center gap-1.5">
+                    <Volume2 className="h-4 w-4 text-indigo-600" />
+                    Grabación de Audio
+                  </span>
+                  <a
+                    href={`/api/calls/${selectedCall.id}/recording`}
+                    download={`grabacion-${selectedCall.fromNumber || "llamada"}.mp3`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1"
+                  >
+                    Descargar MP3
+                  </a>
+                </div>
+                <audio
+                  controls
+                  className="w-full h-9"
+                  src={`/api/calls/${selectedCall.id}/recording`}
+                  preload="metadata"
+                >
                   Tu navegador no soporta el elemento de audio.
                 </audio>
               </div>
