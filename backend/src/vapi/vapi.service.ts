@@ -518,7 +518,89 @@ export class VapiService implements OnModuleInit {
       }
     }
 
+    // Auto-resolve and link phone number if available
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    let phoneIdToLink = acc.phoneNumberId;
+
+    if (!phoneIdToLink || !UUID_REGEX.test(phoneIdToLink)) {
+      try {
+        const phoneListRes = await fetch(`${VAPI_BASE_URL}/phone-number`, {
+          headers: { Authorization: `Bearer ${apiKey}` },
+        });
+        if (phoneListRes.ok) {
+          const list = await phoneListRes.json();
+          if (Array.isArray(list) && list.length > 0) {
+            const match = acc.phoneNumber
+              ? list.find(
+                  (p: any) =>
+                    p.number === acc.phoneNumber ||
+                    p.number?.replace(/\D/g, '') === acc.phoneNumber?.replace(/\D/g, ''),
+                )
+              : list[0];
+            const target = match || list[0];
+            if (target?.id && UUID_REGEX.test(target.id)) {
+              phoneIdToLink = target.id;
+              acc.phoneNumberId = target.id;
+              if (target.number) acc.phoneNumber = target.number;
+              await this.vapiAccountRepo.save(acc).catch(() => null);
+              this.logger.log(`Auto-resolved phone number UUID: ${target.id} (${target.number})`);
+            }
+          }
+        }
+      } catch (e) {
+        this.logger.warn(`Could not auto-resolve phone number on publish: ${e}`);
+      }
+    }
+
+    if (phoneIdToLink && UUID_REGEX.test(phoneIdToLink) && assistantId) {
+      try {
+        await fetch(`${VAPI_BASE_URL}/phone-number/${phoneIdToLink}`, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            assistantId: assistantId,
+            serverUrl: webhookUrl,
+          }),
+        });
+        this.logger.log(`Linked assistant ${assistantId} to phone number ${phoneIdToLink}`);
+      } catch (e) {
+        this.logger.warn(`Could not update phone number with assistantId: ${e}`);
+      }
+    }
+
     return { assistantId: assistantId!, status: 'publicado_y_sincronizado' };
+  }
+
+  /**
+   * List phone numbers from VAPI account
+   */
+  async listPhoneNumbersFromVapi(): Promise<Array<{ id: string; number: string; name?: string }>> {
+    const acc = await this.getAccount();
+    const apiKey = this.getEffectiveApiKey(acc);
+    if (!apiKey) return [];
+
+    try {
+      const res = await fetch(`${VAPI_BASE_URL}/phone-number`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      if (!res.ok) {
+        this.logger.warn(`Error fetching phone numbers from VAPI (${res.status})`);
+        return [];
+      }
+      const list = await res.json();
+      if (!Array.isArray(list)) return [];
+      return list.map((p: any) => ({
+        id: p.id,
+        number: p.number,
+        name: p.name || p.number,
+      }));
+    } catch (err) {
+      this.logger.error(`Failed to list phone numbers from VAPI: ${err}`);
+      return [];
+    }
   }
 
   /**
@@ -531,8 +613,47 @@ export class VapiService implements OnModuleInit {
     if (!acc.assistantId) {
       throw new BadRequestException('El asistente aún no está publicado en VAPI. Pulsa «Publicar Asistente» primero.');
     }
-    if (!acc.phoneNumberId) {
-      throw new BadRequestException('Falta configurar el Phone Number ID de VAPI en los ajustes.');
+
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    let resolvedPhoneId = acc.phoneNumberId;
+
+    if (!resolvedPhoneId || !UUID_REGEX.test(resolvedPhoneId)) {
+      // Auto-resolve phone number ID from VAPI
+      try {
+        const phoneRes = await fetch(`${VAPI_BASE_URL}/phone-number`, {
+          headers: { Authorization: `Bearer ${apiKey}` },
+        });
+
+        if (phoneRes.ok) {
+          const phoneList = await phoneRes.json();
+          if (Array.isArray(phoneList) && phoneList.length > 0) {
+            const match = acc.phoneNumber
+              ? phoneList.find(
+                  (p: any) =>
+                    p.number === acc.phoneNumber ||
+                    p.number?.replace(/\D/g, '') === acc.phoneNumber?.replace(/\D/g, ''),
+                )
+              : phoneList[0];
+
+            const target = match || phoneList[0];
+            if (target?.id && UUID_REGEX.test(target.id)) {
+              resolvedPhoneId = target.id;
+              acc.phoneNumberId = target.id;
+              if (target.number) acc.phoneNumber = target.number;
+              await this.vapiAccountRepo.save(acc).catch(() => null);
+              this.logger.log(`Auto-resolved VAPI phoneNumberId to: ${resolvedPhoneId} (${target.number})`);
+            }
+          }
+        }
+      } catch (e) {
+        this.logger.warn(`Error resolving phone numbers from VAPI: ${e}`);
+      }
+    }
+
+    if (!resolvedPhoneId || !UUID_REGEX.test(resolvedPhoneId)) {
+      throw new BadRequestException(
+        'No se pudo encontrar un Phone Number ID válido en tu cuenta de VAPI. Comprueba que tienes un número importado en tu panel de VAPI (Phone Numbers).',
+      );
     }
 
     let contact: Contact | null = null;
@@ -542,7 +663,7 @@ export class VapiService implements OnModuleInit {
 
     const payload = {
       assistantId: acc.assistantId,
-      phoneNumberId: acc.phoneNumberId,
+      phoneNumberId: resolvedPhoneId,
       customer: {
         number: targetPhone,
         name: contact?.name || undefined,

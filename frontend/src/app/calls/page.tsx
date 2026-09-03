@@ -95,6 +95,7 @@ export default function CallsPage() {
   const [tone, setTone] = useState("professional");
   const [systemPromptOverride, setSystemPromptOverride] = useState("");
   const [isOverrideActive, setIsOverrideActive] = useState(false);
+  const [availablePhones, setAvailablePhones] = useState<Array<{ id: string; number: string; name?: string }>>([]);
 
   // Load Calls & Stats
   async function loadCalls() {
@@ -146,6 +147,25 @@ export default function CallsPage() {
       setSystemPromptOverride(cfg.systemPromptOverride || "");
       setIsOverrideActive(Boolean(cfg.systemPromptOverride));
       setPromptPreview(preview.prompt);
+
+      // Load registered phone numbers from VAPI
+      apiFetch<Array<{ id: string; number: string; name?: string }>>("/api/vapi/phone-numbers")
+        .then((phones) => {
+          if (Array.isArray(phones) && phones.length > 0) {
+            setAvailablePhones(phones);
+            if (!cfg.phoneNumberId) {
+              const matched = cfg.phoneNumber
+                ? phones.find((p) => p.number === cfg.phoneNumber)
+                : phones[0];
+              const target = matched || phones[0];
+              if (target) {
+                setPhoneNumberId(target.id);
+                if (!cfg.phoneNumber) setPhoneNumber(target.number);
+              }
+            }
+          }
+        })
+        .catch(() => null);
     } catch (err: any) {
       toast.error("Error al cargar configuración de VAPI: " + (err?.message || ""));
     } finally {
@@ -820,14 +840,41 @@ export default function CallsPage() {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-neutral-700">
-                      VAPI Phone Number ID
-                    </label>
-                    <Input
-                      value={phoneNumberId}
-                      onChange={(e) => setPhoneNumberId(e.target.value)}
-                      placeholder="ej. 8a9b7c6d-..."
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-medium text-neutral-700">
+                        VAPI Phone Number ID
+                      </label>
+                      {availablePhones.length > 0 && (
+                        <span className="text-[10px] text-emerald-600 font-semibold">
+                          {availablePhones.length} en VAPI
+                        </span>
+                      )}
+                    </div>
+                    {availablePhones.length > 0 ? (
+                      <select
+                        value={phoneNumberId}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setPhoneNumberId(val);
+                          const matched = availablePhones.find((p) => p.id === val);
+                          if (matched) setPhoneNumber(matched.number);
+                        }}
+                        className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs text-neutral-800 font-mono"
+                      >
+                        <option value="">-- Seleccionar número de VAPI --</option>
+                        {availablePhones.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.number} ({p.name || p.id.slice(0, 8)})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <Input
+                        value={phoneNumberId}
+                        onChange={(e) => setPhoneNumberId(e.target.value)}
+                        placeholder="ej. UUID (se autodetecta automáticamente)"
+                      />
+                    )}
                   </div>
 
                   <div>
@@ -837,7 +884,7 @@ export default function CallsPage() {
                     <Input
                       value={phoneNumber}
                       onChange={(e) => setPhoneNumber(e.target.value)}
-                      placeholder="ej. +34910000000"
+                      placeholder="ej. +34919933764"
                     />
                   </div>
 

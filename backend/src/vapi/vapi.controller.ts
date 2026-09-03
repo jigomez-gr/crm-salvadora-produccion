@@ -1,4 +1,4 @@
-﻿import {
+import {
   Controller,
   Get,
   Patch,
@@ -30,6 +30,11 @@ export class VapiController {
   @Get('catalog')
   getCatalog() {
     return this.vapiService.getCatalog();
+  }
+
+  @Get('phone-numbers')
+  async getPhoneNumbers() {
+    return this.vapiService.listPhoneNumbersFromVapi();
   }
 
   @Get('preview-prompt')
