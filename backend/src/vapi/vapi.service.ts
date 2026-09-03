@@ -640,7 +640,11 @@ export class VapiService implements OnModuleInit {
   /**
    * Launch an Outbound Call to a contact or test phone number
    */
-  async startOutboundCall(targetPhone: string, contactId?: string): Promise<{ ok: boolean; callId?: string; error?: string }> {
+  async startOutboundCall(
+    targetPhone: string,
+    contactId?: string,
+    customFirstMessage?: string,
+  ): Promise<{ ok: boolean; callId?: string; error?: string }> {
     const acc = await this.getAccount();
     const apiKey = this.getEffectiveApiKey(acc);
 
@@ -711,7 +715,7 @@ export class VapiService implements OnModuleInit {
       customerPayload.name = contact.name;
     }
 
-    const payload = {
+    const payload: any = {
       assistantId: acc.assistantId,
       phoneNumberId: resolvedPhoneId,
       customer: customerPayload,
@@ -720,6 +724,12 @@ export class VapiService implements OnModuleInit {
         direction: 'outbound',
       },
     };
+
+    if (customFirstMessage) {
+      payload.assistantOverrides = {
+        firstMessage: customFirstMessage,
+      };
+    }
 
     const res = await fetch(`${VAPI_BASE_URL}/call`, {
       method: 'POST',
@@ -752,6 +762,33 @@ export class VapiService implements OnModuleInit {
     await this.callsRepo.save(call);
 
     return { ok: true, callId: vapiCallId };
+  }
+
+  /**
+   * Launch an Outbound call informing the customer that their appointment is waiting for teacher approval
+   */
+  async notifyApprovalPendingCall(
+    appointmentId: string,
+    phoneOverride?: string,
+  ): Promise<{ ok: boolean; callId?: string; error?: string }> {
+    const appt = await this.appointmentsRepo.findOne({ where: { id: appointmentId } });
+    if (!appt) {
+      throw new NotFoundException(`No se encontró la cita con ID ${appointmentId}`);
+    }
+
+    const contact = appt.contactId
+      ? await this.contactsRepo.findOne({ where: { id: appt.contactId } })
+      : null;
+
+    const phone = phoneOverride || contact?.phone;
+    if (!phone) {
+      throw new BadRequestException('El contacto no tiene un teléfono válido para recibir la llamada.');
+    }
+
+    const customerName = contact?.name || 'Alumno';
+    const message = `Hola ${customerName}, te llamamos del Centro de Yoga Salvadora Conesa para informarte de que tu solicitud de cita para ${appt.service} ha sido recibida y se encuentra actualmente a la espera de la decisión y confirmación del profesor Jose Ignacio Gomez Raya. Te avisaremos en cuanto esté confirmada. ¡Muchas gracias!`;
+
+    return this.startOutboundCall(phone, contact?.id, message);
   }
 
   /**

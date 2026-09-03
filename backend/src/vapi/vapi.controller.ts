@@ -75,7 +75,13 @@ export class VapiController {
 
   @Post('test-call')
   @HttpCode(HttpStatus.OK)
-  async testCall(@Body() body: { phone: string; contactId?: string }) {
-    return this.vapiService.startOutboundCall(body.phone, body.contactId);
+  async testCall(@Body() body: { phone: string; contactId?: string; message?: string }) {
+    return this.vapiService.startOutboundCall(body.phone, body.contactId, body.message);
+  }
+
+  @Post('notify-approval-pending')
+  @HttpCode(HttpStatus.OK)
+  async notifyApprovalPending(@Body() body: { appointmentId: string; phone?: string }) {
+    return this.vapiService.notifyApprovalPendingCall(body.appointmentId, body.phone);
   }
 }

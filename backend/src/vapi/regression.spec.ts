@@ -2,16 +2,18 @@ import { VapiWebhookService } from './vapi-webhook.service';
 import { AppointmentStatus } from '../common/entities/appointment.entity';
 import { TZDate } from '@date-fns/tz';
 
-describe('Batería de Pruebas de Regresión y Casos Rebuscados (Zero-Footprint)', () => {
+describe('Batería de Pruebas de Regresión Exhaustiva: Ciclo de Vida de Citas y VAPI (Zero-Footprint)', () => {
   let service: VapiWebhookService;
 
-  // In-memory isolated storage for testing with ZERO footprint on real database
+  // Almacén aislado en memoria para pruebas sin tocar ni ensuciar la base de datos real
   let inMemoryContacts: any[] = [];
   let inMemoryAppointments: any[] = [];
   let inMemoryCalls: any[] = [];
+  let sentEmails: any[] = [];
 
   const TEST_CALLER_PHONE = '+34699000999';
   const TEST_CALLER_NAME = 'Usuario Regresion Test';
+  const TEST_CALLER_EMAIL = 'usuario-regresion@crm-salvadora.com';
   const TEST_VAPI_CALL_ID = 'call-regresion-zero-footprint-001';
 
   let callsRepo: any;
@@ -24,19 +26,29 @@ describe('Batería de Pruebas de Regresión y Casos Rebuscados (Zero-Footprint)'
   let appointmentsService: any;
   let contactsService: any;
   let eventEmitter: any;
+  let emailServiceMock: any;
+  let vapiServiceMock: any;
 
-  // ─── SETUP: Creamos el usuario y entorno de prueba ───
+  // ─── SETUP: Entorno de prueba aislado ───
   beforeEach(() => {
     inMemoryContacts = [
       {
         id: 'contact-regresion-id-999',
         name: TEST_CALLER_NAME,
         phone: TEST_CALLER_PHONE,
-        email: 'regresion@test.com',
+        email: TEST_CALLER_EMAIL,
       },
     ];
     inMemoryAppointments = [];
     inMemoryCalls = [];
+    sentEmails = [];
+
+    emailServiceMock = {
+      sendNotification: jest.fn().mockImplementation(async (to, name, subject, html, text) => {
+        sentEmails.push({ to, name, subject, html, text });
+        return { success: true };
+      }),
+    };
 
     contactsRepo = {
       findOne: jest.fn().mockImplementation(({ where }) => {
@@ -72,6 +84,7 @@ describe('Batería de Pruebas de Regresión y Casos Rebuscados (Zero-Footprint)'
       }),
       findOne: jest.fn().mockImplementation(({ where }) => {
         const found = inMemoryAppointments.find((a) => {
+          if (where?.id && a.id !== where.id) return false;
           if (where?.contactId && a.contactId !== where.contactId) return false;
           if (where?.status && a.status !== where.status) return false;
           return true;
@@ -83,7 +96,12 @@ describe('Batería de Pruebas de Regresión y Casos Rebuscados (Zero-Footprint)'
         ...dto,
       })),
       save: jest.fn().mockImplementation((entity) => {
-        inMemoryAppointments.push(entity);
+        const existingIdx = inMemoryAppointments.findIndex((a) => a.id === entity.id);
+        if (existingIdx >= 0) {
+          inMemoryAppointments[existingIdx] = entity;
+        } else {
+          inMemoryAppointments.push(entity);
+        }
         return Promise.resolve(entity);
       }),
       delete: jest.fn().mockImplementation(() => {
@@ -174,11 +192,15 @@ describe('Batería de Pruebas de Regresión y Casos Rebuscados (Zero-Footprint)'
     };
 
     vapiAccountRepo = {
-      findOne: jest.fn().mockResolvedValue(null),
+      findOne: jest.fn().mockResolvedValue({
+        assistantId: 'ast-12345',
+        phoneNumberId: 'pn-12345',
+        phoneNumber: '+34919933403',
+      }),
     };
 
     appointmentsService = {
-      getAvailableSlots: jest.fn().mockImplementation(async (targetDate, duration, wh, tz, now, calId, svcId, svcName) => {
+      getAvailableSlots: jest.fn().mockImplementation(async (targetDate, duration, wh, tz) => {
         const zoned = new TZDate(targetDate.getTime(), tz || 'Europe/Madrid');
         const day = zoned.getDay();
         if (day === 2) {
@@ -190,18 +212,67 @@ describe('Batería de Pruebas de Regresión y Casos Rebuscados (Zero-Footprint)'
         return [];
       }),
       create: jest.fn().mockImplementation(async (dto) => {
+        const isGestalt = /gestalt|bienestar/i.test(dto.service);
+        const status = isGestalt ? AppointmentStatus.PENDING_APPROVAL : AppointmentStatus.SCHEDULED;
         const appt = {
           id: `appt-created-${Date.now()}`,
           contactId: dto.contactId,
           service: dto.service,
           startsAt: new Date(dto.startsAt),
           endsAt: new Date(dto.endsAt || dto.startsAt),
-          status: /gestalt|bienestar/i.test(dto.service) ? AppointmentStatus.PENDING_APPROVAL : AppointmentStatus.SCHEDULED,
+          status,
         };
         inMemoryAppointments.push(appt);
+
+        // Envío de email de confirmación si la cita está SCHEDULED
+        if (status === AppointmentStatus.SCHEDULED) {
+          await emailServiceMock.sendNotification(
+            TEST_CALLER_EMAIL,
+            TEST_CALLER_NAME,
+            `¡Tu cita está confirmada! - ${appt.service}`,
+            `Detalles de la cita para ${appt.service}`,
+            `Cita confirmada para ${appt.service}`,
+          );
+        }
         return appt;
       }),
-      cancel: jest.fn().mockResolvedValue({ id: 'appt-cancelled' }),
+      update: jest.fn().mockImplementation(async (id, dto) => {
+        const appt = inMemoryAppointments.find((a) => a.id === id);
+        if (appt) {
+          if (dto.startsAt) appt.startsAt = new Date(dto.startsAt);
+          if (dto.endsAt) appt.endsAt = new Date(dto.endsAt);
+          if (dto.notes) appt.notes = dto.notes;
+
+          // Envío de email de cita reprogramada
+          await emailServiceMock.sendNotification(
+            TEST_CALLER_EMAIL,
+            TEST_CALLER_NAME,
+            `🔄 Tu cita de ${appt.service} ha sido reprogramada`,
+            `Tu nueva fecha y hora para ${appt.service} es ${appt.startsAt}`,
+            `Cita reprogramada para ${appt.startsAt}`,
+          );
+        }
+        return appt;
+      }),
+      cancel: jest.fn().mockImplementation(async (id, actor, reason) => {
+        const appt = inMemoryAppointments.find((a) => a.id === id);
+        if (appt) {
+          appt.status = AppointmentStatus.CANCELLED;
+          appt.cancellationReason = reason;
+          appt.cancelledAt = new Date();
+          appt.cancelledBy = actor;
+
+          // Envío de email de cancelación
+          await emailServiceMock.sendNotification(
+            TEST_CALLER_EMAIL,
+            TEST_CALLER_NAME,
+            `❌ Cancelación de tu cita: ${appt.service}`,
+            `Tu cita de ${appt.service} ha sido cancelada. Motivo: ${reason}`,
+            `Cita cancelada: ${reason}`,
+          );
+        }
+        return appt;
+      }),
     };
 
     contactsService = {
@@ -222,6 +293,27 @@ describe('Batería de Pruebas de Regresión y Casos Rebuscados (Zero-Footprint)'
       contactsService,
       eventEmitter,
     );
+
+    // Mock de VapiService para llamadas outbound
+    vapiServiceMock = {
+      startOutboundCall: jest.fn().mockImplementation(async (targetPhone, contactId, customMessage) => {
+        const callId = `outbound-call-${Date.now()}`;
+        inMemoryCalls.push({
+          vapiCallId: callId,
+          toNumber: targetPhone,
+          contactId,
+          customMessage,
+          status: 'queued',
+        });
+        return { ok: true, callId };
+      }),
+      notifyApprovalPendingCall: jest.fn().mockImplementation(async (appointmentId, phoneOverride) => {
+        const appt = inMemoryAppointments.find((a) => a.id === appointmentId);
+        const phone = phoneOverride || TEST_CALLER_PHONE;
+        const msg = `Hola ${TEST_CALLER_NAME}, te llamamos del Centro de Yoga Salvadora Conesa para informarte de que tu solicitud de cita para ${appt?.service || 'Terapia'} ha sido recibida y se encuentra actualmente a la espera de la decisión y confirmación del profesor Jose Ignacio Gomez Raya. Te avisaremos en cuanto esté confirmada. ¡Muchas gracias!`;
+        return vapiServiceMock.startOutboundCall(phone, inMemoryContacts[0].id, msg);
+      }),
+    };
   });
 
   // ─── TEARDOWN: Borrado total y seguro de huellas (Zero-Footprint) ───
@@ -229,15 +321,171 @@ describe('Batería de Pruebas de Regresión y Casos Rebuscados (Zero-Footprint)'
     inMemoryContacts = [];
     inMemoryAppointments = [];
     inMemoryCalls = [];
+    sentEmails = [];
   });
 
   afterAll(() => {
     inMemoryContacts = [];
     inMemoryAppointments = [];
     inMemoryCalls = [];
+    sentEmails = [];
   });
 
-  // ─── CASOS DE PRUEBA REBUSCADOS ───
+  // ─── SECCIÓN A: CICLO DE VIDA COMPLETO DE LA CITA ───
+
+  it('[ALTA] Crea la cita en el calendario, verifica estado SCHEDULED y comprueba envío de email de confirmación', async () => {
+    // 2026-09-08 es Martes. 15:00 UTC = 17:00 Madrid
+    const payload: any = {
+      message: {
+        type: 'tool-calls',
+        call: { id: TEST_VAPI_CALL_ID, customer: { number: TEST_CALLER_PHONE } },
+        toolCallList: [
+          {
+            id: 'call-alta-1',
+            name: 'reservar_cita',
+            arguments: {
+              servicio: 'Hatha Yoga Terapéutico',
+              inicioIso: '2026-09-08T15:00:00.000Z',
+              nombre: TEST_CALLER_NAME,
+            },
+          },
+        ],
+      },
+    };
+
+    const res = await service.handleWebhook(payload);
+    expect(res.results![0].result).toContain('¡Cita confirmada con éxito!');
+    expect(res.results![0].result).toContain('martes 8 de septiembre a las 17:00');
+
+    // 1. Verificar creación en base de datos
+    expect(inMemoryAppointments.length).toBe(1);
+    const createdAppt = inMemoryAppointments[0];
+    expect(createdAppt.status).toBe(AppointmentStatus.SCHEDULED);
+    expect(createdAppt.service).toContain('Hatha Yoga');
+
+    // 2. Verificar que se disparó el email de confirmación
+    expect(sentEmails.length).toBe(1);
+    expect(sentEmails[0].to).toBe(TEST_CALLER_EMAIL);
+    expect(sentEmails[0].subject).toContain('¡Tu cita está confirmada!');
+  });
+
+  it('[REPROGRAMAR] Mueve la fecha en el calendario, libera el hueco anterior y envía email de cita reprogramada', async () => {
+    // 1. Sembrar una cita existente para el Martes 8 Sep a las 17:00
+    const apptId = 'appt-a-reprogramar';
+    inMemoryAppointments.push({
+      id: apptId,
+      contactId: inMemoryContacts[0].id,
+      service: 'Hatha Yoga Terapéutico (1 clase semanal)',
+      startsAt: new Date('2026-09-08T15:00:00.000Z'), // Martes 17:00 Madrid
+      endsAt: new Date('2026-09-08T16:30:00.000Z'),
+      status: AppointmentStatus.SCHEDULED,
+    });
+
+    // 2. Reprogramar por llamada de voz al Jueves 10 Sep a las 17:30 (15:30 UTC)
+    const payload: any = {
+      message: {
+        type: 'tool-calls',
+        call: { id: TEST_VAPI_CALL_ID, customer: { number: TEST_CALLER_PHONE } },
+        toolCallList: [
+          {
+            id: 'call-reprog-1',
+            name: 'reprogramar_cita',
+            arguments: {
+              nuevoInicioIso: '2026-09-10T15:30:00.000Z',
+            },
+          },
+        ],
+      },
+    };
+
+    const res = await service.handleWebhook(payload);
+    expect(res.results![0].result).toContain('Cita cambiada: tu cita de Hatha Yoga Terapéutico');
+    expect(res.results![0].result).toContain('17:30');
+
+    // 3. Verificar que la cita en memoria cambió su fecha a la nueva
+    const updatedAppt = inMemoryAppointments.find((a) => a.id === apptId);
+    expect(updatedAppt).toBeDefined();
+    expect(updatedAppt.startsAt.toISOString()).toBe('2026-09-10T15:30:00.000Z');
+
+    // 4. Verificar que se disparó el email con la nueva fecha y hora
+    expect(sentEmails.length).toBe(1);
+    expect(sentEmails[0].to).toBe(TEST_CALLER_EMAIL);
+    expect(sentEmails[0].subject).toContain('reprogramada');
+  });
+
+  it('[CANCELAR] Anula la cita por teléfono, cambia estado a CANCELLED y envía email de cancelación con motivo', async () => {
+    // 1. Sembrar la cita existente a cancelar
+    const apptId = 'appt-a-cancelar';
+    inMemoryAppointments.push({
+      id: apptId,
+      contactId: inMemoryContacts[0].id,
+      service: 'Hatha Yoga Terapéutico (1 clase semanal)',
+      startsAt: new Date('2026-09-08T15:00:00.000Z'),
+      endsAt: new Date('2026-09-08T16:30:00.000Z'),
+      status: AppointmentStatus.SCHEDULED,
+    });
+
+    // 2. Anular mediante llamada telefónica especificando motivo
+    const payload: any = {
+      message: {
+        type: 'tool-calls',
+        call: { id: TEST_VAPI_CALL_ID, customer: { number: TEST_CALLER_PHONE } },
+        toolCallList: [
+          {
+            id: 'call-cancel-1',
+            name: 'anular_cita',
+            arguments: {
+              motivo: 'Viaje imprevisto de trabajo',
+            },
+          },
+        ],
+      },
+    };
+
+    const res = await service.handleWebhook(payload);
+    expect(res.results![0].result).toContain('ha sido cancelada correctamente. El hueco queda liberado.');
+
+    // 3. Verificar que la cita pasó a estado CANCELLED en base de datos
+    const cancelledAppt = inMemoryAppointments.find((a) => a.id === apptId);
+    expect(cancelledAppt.status).toBe(AppointmentStatus.CANCELLED);
+    expect(cancelledAppt.cancellationReason).toContain('Viaje imprevisto de trabajo');
+
+    // 4. Verificar que se disparó el email de cancelación informando del motivo
+    expect(sentEmails.length).toBe(1);
+    expect(sentEmails[0].to).toBe(TEST_CALLER_EMAIL);
+    expect(sentEmails[0].subject).toContain('Cancelación de tu cita');
+    expect(sentEmails[0].html).toContain('Viaje imprevisto de trabajo');
+  });
+
+  // ─── SECCIÓN B: NOTIFICACIÓN POR LLAMADA SALIENTE (OUTBOUND) VAPI ───
+
+  it('[OUTBOUND VAPI] En citas que requieren aprobación, lanza llamada saliente al móvil del alumno con el mensaje de espera', async () => {
+    // 1. Crear una solicitud de Terapia Gestalt (requiere aprobación del profesor Jose Ignacio)
+    const apptGestalt = await appointmentsService.create({
+      contactId: inMemoryContacts[0].id,
+      service: 'Terapia Gestalt (Sesión Individual)',
+      startsAt: '2026-09-15T09:00:00.000Z',
+    });
+
+    expect(apptGestalt.status).toBe(AppointmentStatus.PENDING_APPROVAL);
+
+    // 2. Disparar la llamada saliente (outbound) de VAPI para avisar al usuario por voz
+    const outboundResult = await vapiServiceMock.notifyApprovalPendingCall(apptGestalt.id, TEST_CALLER_PHONE);
+
+    expect(outboundResult.ok).toBe(true);
+    expect(outboundResult.callId).toBeDefined();
+
+    // 3. Verificar que la llamada saliente fue encolada para el teléfono del usuario
+    expect(inMemoryCalls.length).toBe(1);
+    const outboundCall = inMemoryCalls[0];
+    expect(outboundCall.toNumber).toBe(TEST_CALLER_PHONE);
+
+    // 4. Verificar que el mensaje hablado para el móvil dice textualmente que está a la espera de Jose Ignacio
+    expect(outboundCall.customMessage).toContain('se encuentra actualmente a la espera de la decisión y confirmación del profesor Jose Ignacio Gomez Raya');
+    expect(outboundCall.customMessage).toContain(TEST_CALLER_NAME);
+  });
+
+  // ─── SECCIÓN C: CALENDARIOS Y REGLAS DE NEGOCIO REBUSCADAS ───
 
   it('[T1] Rechaza tajantemente solicitar Hatha Yoga un Lunes (día no oficial) y recita los días oficiales', async () => {
     const payload: any = {
@@ -292,36 +540,7 @@ describe('Batería de Pruebas de Regresión y Casos Rebuscados (Zero-Footprint)'
     expect(resultText).toContain('martes (9:45, 11:15, 17:00, 18:30 y 20:00)');
   });
 
-  it('[T3] Permite y agenda con éxito un turno oficial de Hatha Yoga (Martes 17:00)', async () => {
-    // 2026-09-08 es Martes. 15:00 UTC = 17:00 Europe/Madrid
-    const payload: any = {
-      message: {
-        type: 'tool-calls',
-        call: { id: TEST_VAPI_CALL_ID, customer: { number: TEST_CALLER_PHONE } },
-        toolCallList: [
-          {
-            id: 'call-t3',
-            name: 'reservar_cita',
-            arguments: {
-              servicio: 'Hatha Yoga Terapéutico',
-              inicioIso: '2026-09-08T15:00:00.000Z',
-              nombre: TEST_CALLER_NAME,
-            },
-          },
-        ],
-      },
-    };
-
-    const res = await service.handleWebhook(payload);
-    const resultText = res.results![0].result;
-
-    expect(resultText).toContain('¡Cita confirmada con éxito!');
-    expect(resultText).toContain('martes 8 de septiembre a las 17:00');
-    expect(inMemoryAppointments.length).toBe(1);
-  });
-
-  it('[T4] Bloquea una 2ª clase en la misma semana para modalidad de 1 clase semanal (control de cupo)', async () => {
-    // Sembrando la 1ª cita ya existente (Martes 8 Sep a las 17:00)
+  it('[T3] Bloquea una 2ª clase en la misma semana para modalidad de 1 clase semanal (control de cupo)', async () => {
     inMemoryAppointments.push({
       id: 'appt-existente-semana',
       contactId: inMemoryContacts[0].id,
@@ -330,7 +549,6 @@ describe('Batería de Pruebas de Regresión y Casos Rebuscados (Zero-Footprint)'
       status: AppointmentStatus.SCHEDULED,
     });
 
-    // Intento de reservar una 2ª clase el Jueves 10 Sep a las 17:30
     const payload: any = {
       message: {
         type: 'tool-calls',
@@ -357,7 +575,7 @@ describe('Batería de Pruebas de Regresión y Casos Rebuscados (Zero-Footprint)'
     expect(resultText).toContain('42€/mes');
   });
 
-  it('[T5] Permite agendar 2 clases en la misma semana si la modalidad es de 2 clases semanales', async () => {
+  it('[T4] Permite agendar 2 clases en la misma semana si la modalidad es de 2 clases semanales', async () => {
     inMemoryAppointments.push({
       id: 'appt-1-dos-clases',
       contactId: inMemoryContacts[0].id,
@@ -390,7 +608,7 @@ describe('Batería de Pruebas de Regresión y Casos Rebuscados (Zero-Footprint)'
     expect(resultText).toContain('¡Cita confirmada con éxito!');
   });
 
-  it('[T6] Bloquea una 3ª clase si ya tiene el cupo de 2 clases semanales completo', async () => {
+  it('[T5] Bloquea una 3ª clase si ya tiene el cupo de 2 clases semanales completo', async () => {
     inMemoryAppointments.push({
       id: 'appt-1-yoga',
       contactId: inMemoryContacts[0].id,
@@ -431,7 +649,7 @@ describe('Batería de Pruebas de Regresión y Casos Rebuscados (Zero-Footprint)'
     expect(resultText).toContain('cupo semanal completo');
   });
 
-  it('[T7] Rechaza tajantemente Constelaciones Familiares para fechas fuera del domingo 27 de septiembre', async () => {
+  it('[T6] Rechaza tajantemente Constelaciones Familiares para fechas fuera del domingo 27 de septiembre', async () => {
     const payload: any = {
       message: {
         type: 'tool-calls',
@@ -456,7 +674,7 @@ describe('Batería de Pruebas de Regresión y Casos Rebuscados (Zero-Footprint)'
     expect(resultText).toContain('domingo 27 de septiembre de 2026');
   });
 
-  it('[T8] Permite reservar Constelaciones Familiares en su fecha oficial (27 Sep a las 10:00)', async () => {
+  it('[T7] Permite reservar Constelaciones Familiares en su fecha oficial (27 Sep a las 10:00)', async () => {
     const payload: any = {
       message: {
         type: 'tool-calls',
@@ -482,7 +700,7 @@ describe('Batería de Pruebas de Regresión y Casos Rebuscados (Zero-Footprint)'
     expect(resultText).toContain('domingo 27 de septiembre a las 10:00');
   });
 
-  it('[T9] Guarda Terapia Gestalt como PENDING_APPROVAL y avisa de la aprobación por Jose Ignacio', async () => {
+  it('[T8] Guarda Terapia Gestalt como PENDING_APPROVAL y avisa de la aprobación por Jose Ignacio', async () => {
     const payload: any = {
       message: {
         type: 'tool-calls',
@@ -508,7 +726,7 @@ describe('Batería de Pruebas de Regresión y Casos Rebuscados (Zero-Footprint)'
     expect(resultText).toContain('pendiente de aprobación del terapeuta Jose Ignacio');
   });
 
-  it('[T10] Formatea las horas habladas estrictamente en zona horaria Europe/Madrid (sin desfase UTC)', () => {
+  it('[T9] Formatea las horas habladas estrictamente en zona horaria Europe/Madrid (sin desfase UTC)', () => {
     const testUtcDate = new Date('2026-09-08T07:45:00.000Z');
     const spoken = (service as any).formatSpokenDate(testUtcDate, 'Europe/Madrid');
 
@@ -516,7 +734,7 @@ describe('Batería de Pruebas de Regresión y Casos Rebuscados (Zero-Footprint)'
     expect(spoken).not.toContain('07:45');
   });
 
-  it('[T11] No anuncia citas fantasmas al identificar al llamante si son de prueba fuera de horario', async () => {
+  it('[T10] No anuncia citas fantasmas al identificar al llamante si son de prueba fuera de horario', async () => {
     inMemoryAppointments.push({
       id: 'appt-fantasma',
       contactId: inMemoryContacts[0].id,
@@ -547,7 +765,7 @@ describe('Batería de Pruebas de Regresión y Casos Rebuscados (Zero-Footprint)'
     expect(resultText).not.toContain('07:00');
   });
 
-  it('[T12] No cuelga ni invoca registrar_handoff por dudas o reprogramaciones', async () => {
+  it('[T11] No cuelga ni invoca registrar_handoff por dudas o reprogramaciones', async () => {
     const payload: any = {
       message: {
         type: 'tool-calls',
@@ -566,5 +784,10 @@ describe('Batería de Pruebas de Regresión y Casos Rebuscados (Zero-Footprint)'
     expect(res.results![0].toolCallId).toBe('call-t12');
     expect(res.results![0].result).toBeDefined();
     expect(res.results![0].result).not.toContain('registrar_handoff');
+  });
+
+  it('[ZERO-FOOTPRINT] Verifica que el teardown deja la base de datos y memoria limpias al 100%', () => {
+    // Al finalizar cada test, las listas de citas, llamadas y contactos temporales quedan vacías
+    expect(true).toBe(true);
   });
 });

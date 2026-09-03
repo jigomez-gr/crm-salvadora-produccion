@@ -415,7 +415,7 @@ export class AppointmentsService {
     const serviceId = appt.serviceId;
 
     if (timeChanged && appt.status !== AppointmentStatus.CANCELLED) {
-      return this.appointmentsRepo.manager.transaction(async (manager) => {
+      const saved = await this.appointmentsRepo.manager.transaction(async (manager) => {
         await manager.query('SELECT pg_advisory_xact_lock($1)', [
           BOOKING_LOCK_KEY,
         ]);
@@ -423,6 +423,11 @@ export class AppointmentsService {
         await this.checkOverlap(repo, newStart, newEnd, appt.id, calendarId, serviceId, appt.service, appt.contactId);
         return repo.save(appt);
       });
+      const withContact = await this.findOne(saved.id);
+      this.eventEmitter.emit('appointment.created', withContact);
+      // Enviar confirmación por email con el nuevo horario reprogramado
+      this.notifyStudentDecision(withContact, 'accepted', 'Centro de Yoga Salvadora Conesa').catch(() => null);
+      return withContact;
     }
 
     const updated = await this.appointmentsRepo.save(appt);
