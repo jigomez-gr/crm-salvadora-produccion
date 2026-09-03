@@ -102,6 +102,7 @@ export default function CallsPage() {
   const [sipUsername, setSipUsername] = useState("368228");
   const [sipPassword, setSipPassword] = useState("");
   const [connectingSip, setConnectingSip] = useState(false);
+  const [validatingIp, setValidatingIp] = useState(false);
 
   // Load Calls & Stats
   async function loadCalls() {
@@ -292,6 +293,21 @@ export default function CallsPage() {
       toast.error("Error al vincular con VAPI: " + (err?.message || ""));
     } finally {
       setConnectingSip(false);
+    }
+  }
+
+  // Send Echo Test call to Zadarma to validate and confirm IP
+  async function handleValidateZadarmaIp() {
+    try {
+      setValidatingIp(true);
+      const res = await apiFetch<{ ok: boolean; message: string }>("/api/vapi/validate-zadarma-ip", {
+        method: "POST",
+      });
+      toast.success(res.message || "Llamada de eco enviada a Zadarma.");
+    } catch (err: any) {
+      toast.error("Error al validar IP en Zadarma: " + (err?.message || ""));
+    } finally {
+      setValidatingIp(false);
     }
   }
 
@@ -996,7 +1012,19 @@ export default function CallsPage() {
                   </div>
                 </div>
 
-                <div className="flex justify-end pt-2">
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleValidateZadarmaIp}
+                    disabled={validatingIp}
+                    className="text-xs flex items-center gap-1.5 border-emerald-300 text-emerald-800 hover:bg-emerald-100"
+                    title="Envía una llamada de comprobación a Zadarma para que valide la IP y pase a Confirmado"
+                  >
+                    <PhoneOutgoing className={cn("h-3.5 w-3.5", validatingIp && "animate-spin")} />
+                    {validatingIp ? "Validando IP con Zadarma..." : "Validar IP en Zadarma (Llamada Eco 4444 / 8888)"}
+                  </Button>
+
                   <Button
                     type="button"
                     onClick={handleConnectSipTrunk}

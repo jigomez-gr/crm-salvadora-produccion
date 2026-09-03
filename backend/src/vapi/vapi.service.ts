@@ -1061,4 +1061,76 @@ export class VapiService implements OnModuleInit {
       message: 'Línea SIP de Zadarma vinculada correctamente con VAPI para llamadas salientes.',
     };
   }
+
+  /**
+   * Send an echo test SIP call to Zadarma (sip:4444@sip.zadarma.com)
+   * to automatically confirm the IP in Zadarma.
+   */
+  async sendEchoTestCallToZadarma(): Promise<{ ok: boolean; message: string; callId?: string }> {
+    const acc = await this.getAccount();
+    const apiKey = this.getEffectiveApiKey(acc);
+
+    if (!acc.assistantId) {
+      throw new BadRequestException('El asistente aún no está publicado en VAPI. Pulsa «Publicar Asistente» primero.');
+    }
+
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    let phoneId = acc.phoneNumberId;
+
+    if (!phoneId || !UUID_REGEX.test(phoneId)) {
+      const list = await this.listPhoneNumbersFromVapi();
+      if (list.length > 0) {
+        phoneId = list[0].id;
+        acc.phoneNumberId = phoneId;
+        await this.vapiAccountRepo.save(acc).catch(() => null);
+      }
+    }
+
+    const targets = ['sip:4444@sip.zadarma.com', 'sip:8888@sip.zadarma.com'];
+    let lastCallId: string | undefined;
+    const errors: string[] = [];
+
+    for (const target of targets) {
+      try {
+        const payload = {
+          assistantId: acc.assistantId,
+          phoneNumberId: phoneId,
+          customer: {
+            sipUri: target,
+          },
+        };
+
+        const res = await fetch(`${VAPI_BASE_URL}/call`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          lastCallId = data.id;
+          this.logger.log(`Echo test call sent to ${target}: ${data.id}`);
+        } else {
+          const err = await res.text();
+          this.logger.warn(`Echo test to ${target} returned (${res.status}): ${err}`);
+          errors.push(`${target}: ${err}`);
+        }
+      } catch (e: any) {
+        this.logger.warn(`Error sending echo test call to ${target}: ${e?.message || e}`);
+      }
+    }
+
+    if (!lastCallId && errors.length > 0) {
+      throw new BadRequestException(`Error enviando llamada de eco a Zadarma: ${errors.join(', ')}`);
+    }
+
+    return {
+      ok: true,
+      callId: lastCallId,
+      message: 'Llamada de eco enviada a Zadarma desde VAPI (4444 y 8888). En 15 segundos recarga tu panel de Zadarma.',
+    };
+  }
 }

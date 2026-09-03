@@ -67,6 +67,12 @@ export class VapiController {
     return this.vapiService.connectSipTrunkToPhoneNumber(body);
   }
 
+  @Post('validate-zadarma-ip')
+  @HttpCode(HttpStatus.OK)
+  async validateZadarmaIp() {
+    return this.vapiService.sendEchoTestCallToZadarma();
+  }
+
   @Post('test-call')
   @HttpCode(HttpStatus.OK)
   async testCall(@Body() body: { phone: string; contactId?: string }) {
