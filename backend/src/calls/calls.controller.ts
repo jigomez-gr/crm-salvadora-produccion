@@ -1,4 +1,4 @@
-﻿import {
+import {
   Controller,
   Get,
   Post,
@@ -33,9 +33,25 @@ export class CallsController {
     return this.callsService.getStats();
   }
 
+  @Post('sync')
+  @HttpCode(HttpStatus.OK)
+  async syncRecent() {
+    return this.vapiService.syncRecentCalls();
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string) {
-    return this.callsService.findOne(id);
+    const call = await this.callsService.findOne(id);
+    if (call.vapiCallId && (!call.transcript || call.status === 'in-progress')) {
+      return this.vapiService.syncCallFromVapi(call.id).catch(() => call);
+    }
+    return call;
+  }
+
+  @Post(':id/sync')
+  @HttpCode(HttpStatus.OK)
+  async syncOne(@Param('id') id: string) {
+    return this.vapiService.syncCallFromVapi(id);
   }
 
   @Patch(':id')

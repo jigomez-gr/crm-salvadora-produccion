@@ -438,12 +438,25 @@ export class VapiService implements OnModuleInit {
       voice: voicePayload,
       serverUrl: webhookUrl,
       ...(acc.serverCredentialId ? { serverUrlSecret: acc.serverCredentialId } : {}),
+      serverMessages: [
+        'end-of-call-report',
+        'status-update',
+        'tool-calls',
+        'transcript',
+        'hang',
+      ],
       maxDurationSeconds: acc.maxDurationSeconds || 900,
       recordingEnabled: true,
       silenceTimeoutSeconds: 30,
       responseDelaySeconds: 0.4,
       llmRequestDelaySeconds: 0.1,
       endCallMessage: 'Gracias por llamar. ¡Que tengas un excelente día!',
+      artifactPlan: {
+        recordingEnabled: true,
+        transcriptPlan: {
+          enabled: true,
+        },
+      },
     };
 
     let assistantId = acc.assistantId;
@@ -571,5 +584,149 @@ export class VapiService implements OnModuleInit {
     await this.callsRepo.save(call);
 
     return { ok: true, callId: vapiCallId };
+  }
+
+  /**
+   * Sync a call details (transcript, recording, summary, duration, cost) directly from VAPI API
+   */
+  async syncCallFromVapi(callIdOrDbId: string): Promise<Call> {
+    const acc = await this.getAccount();
+    const apiKey = this.getEffectiveApiKey(acc);
+    if (!apiKey) {
+      throw new BadRequestException('API Key de VAPI no configurada.');
+    }
+
+    const call = await this.callsRepo.findOne({
+      where: [{ id: callIdOrDbId }, { vapiCallId: callIdOrDbId }],
+      relations: ['contact'],
+    });
+
+    if (!call) {
+      throw new NotFoundException(`Llamada con identificador ${callIdOrDbId} no encontrada.`);
+    }
+
+    if (!call.vapiCallId) {
+      return call;
+    }
+
+    try {
+      const res = await fetch(`${VAPI_BASE_URL}/call/${call.vapiCallId}`, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        this.logger.warn(`No se pudo sincronizar la llamada desde VAPI (${res.status}): ${err}`);
+        return call;
+      }
+
+      const vapiData = await res.json();
+
+      const recordingUrl =
+        vapiData.artifact?.recordingUrl ||
+        vapiData.recordingUrl ||
+        (typeof vapiData.artifact?.recording === 'string'
+          ? vapiData.artifact?.recording
+          : (vapiData.artifact?.recording as any)?.url) ||
+        call.recordingUrl;
+
+      const summary =
+        vapiData.analysis?.summary ||
+        vapiData.summary ||
+        vapiData.artifact?.summary ||
+        call.summary;
+
+      let transcript =
+        vapiData.artifact?.transcript ||
+        vapiData.transcript ||
+        call.transcript;
+
+      const messages =
+        vapiData.artifact?.messages ||
+        vapiData.messages ||
+        call.messages;
+
+      if (!transcript && Array.isArray(messages) && messages.length > 0) {
+        transcript = messages
+          .filter((m: any) => m.message || m.content)
+          .map((m: any) => {
+            const role =
+              m.role === 'assistant' || m.role === 'bot'
+                ? 'Asistente'
+                : m.role === 'user' || m.role === 'customer'
+                ? 'Cliente'
+                : 'Herramienta';
+            return `${role}: ${m.message || m.content}`;
+          })
+          .join('\n');
+      }
+
+      const rawCost = typeof vapiData.cost === 'number' ? vapiData.cost : null;
+      const costCents = rawCost !== null ? Math.round(rawCost * 100) : call.costCents;
+      const endedReason = vapiData.endedReason || call.endedReason;
+
+      const startedAt = vapiData.startedAt ? new Date(vapiData.startedAt) : call.startedAt;
+      const endedAt = vapiData.endedAt ? new Date(vapiData.endedAt) : call.endedAt;
+
+      let durationSeconds = call.durationSeconds;
+      if (typeof vapiData.durationSeconds === 'number') {
+        durationSeconds = vapiData.durationSeconds;
+      } else if (typeof vapiData.duration === 'number') {
+        durationSeconds = Math.round(vapiData.duration);
+      } else if (startedAt && endedAt) {
+        durationSeconds = Math.max(0, Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000));
+      }
+
+      let status = call.status;
+      if (vapiData.status === 'ended') status = CallStatus.ENDED;
+      else if (vapiData.status === 'failed') status = CallStatus.FAILED;
+      else if (vapiData.status === 'in-progress') status = CallStatus.IN_PROGRESS;
+
+      call.recordingUrl = recordingUrl;
+      call.summary = summary;
+      call.transcript = transcript;
+      call.messages = messages;
+      call.costCents = costCents;
+      call.endedReason = endedReason;
+      if (startedAt) call.startedAt = startedAt;
+      if (endedAt) call.endedAt = endedAt;
+      if (durationSeconds !== null) call.durationSeconds = durationSeconds;
+      call.status = status;
+
+      return await this.callsRepo.save(call);
+    } catch (err: any) {
+      this.logger.error(`Error sincronizando llamada ${call.vapiCallId}: ${err?.message || err}`);
+      return call;
+    }
+  }
+
+  /**
+   * Synchronize all recent calls that lack transcripts or are in-progress
+   */
+  async syncRecentCalls(): Promise<{ synced: number }> {
+    const acc = await this.getAccount();
+    const apiKey = this.getEffectiveApiKey(acc);
+    if (!apiKey) return { synced: 0 };
+
+    const unsynced = await this.callsRepo
+      .createQueryBuilder('c')
+      .where('c.vapiCallId IS NOT NULL')
+      .andWhere('(c.transcript IS NULL OR c.status = :inProg)', { inProg: CallStatus.IN_PROGRESS })
+      .orderBy('c.createdAt', 'DESC')
+      .take(20)
+      .getMany();
+
+    let count = 0;
+    for (const c of unsynced) {
+      try {
+        await this.syncCallFromVapi(c.id);
+        count++;
+      } catch (err) {
+        this.logger.warn(`Error sincronizando llamada ${c.id}: ${err}`);
+      }
+    }
+    return { synced: count };
   }
 }

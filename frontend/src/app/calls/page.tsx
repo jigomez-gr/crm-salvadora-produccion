@@ -60,6 +60,8 @@ export default function CallsPage() {
   // Selected Call for details / transcript modal
   const [selectedCall, setSelectedCall] = useState<Call | null>(null);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+  const [syncingCallId, setSyncingCallId] = useState<string | null>(null);
+  const [syncingAll, setSyncingAll] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Outbound Call modal
@@ -180,6 +182,54 @@ export default function CallsPage() {
       audio.onended = () => setPlayingAudioId(null);
     }
   }
+
+  // Sync specific call from VAPI
+  async function handleSyncCall(callId: string) {
+    try {
+      setSyncingCallId(callId);
+      const updated = await apiFetch<Call>(`/api/calls/${callId}/sync`, {
+        method: "POST",
+      });
+      setCalls((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      if (selectedCall?.id === updated.id) {
+        setSelectedCall(updated);
+      }
+      toast.success("Llamada sincronizada correctamente con VAPI.");
+    } catch (err: any) {
+      toast.error("Error al sincronizar llamada con VAPI: " + (err?.message || ""));
+    } finally {
+      setSyncingCallId(null);
+    }
+  }
+
+  // Sync recent calls in bulk from VAPI
+  async function handleSyncAllCalls() {
+    try {
+      setSyncingAll(true);
+      const res = await apiFetch<{ synced: number }>("/api/calls/sync", {
+        method: "POST",
+      });
+      await loadCalls();
+      toast.success(`Se han actualizado ${res.synced} llamada(s) desde VAPI.`);
+    } catch (err: any) {
+      toast.error("Error al sincronizar llamadas: " + (err?.message || ""));
+    } finally {
+      setSyncingAll(false);
+    }
+  }
+
+  // Auto-sync call from VAPI when opened if transcript is missing
+  useEffect(() => {
+    if (
+      selectedCall?.id &&
+      !selectedCall.transcript &&
+      (!selectedCall.messages || selectedCall.messages.length === 0) &&
+      selectedCall.vapiCallId &&
+      !syncingCallId
+    ) {
+      handleSyncCall(selectedCall.id);
+    }
+  }, [selectedCall?.id]);
 
   // Save Config
   async function handleSaveConfig(e: React.FormEvent) {
@@ -333,6 +383,16 @@ export default function CallsPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            onClick={handleSyncAllCalls}
+            disabled={syncingAll}
+            className="flex items-center gap-2"
+            title="Descargar transcripciones, grabaciones y estados actualizados desde VAPI"
+          >
+            <RefreshCw className={cn("h-4 w-4", syncingAll && "animate-spin")} />
+            Sincronizar con VAPI
+          </Button>
           <Button
             variant="secondary"
             onClick={() => loadCalls()}
@@ -1003,9 +1063,21 @@ export default function CallsPage() {
 
             {/* Full Transcript */}
             <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">
-                Transcripción Completa
-              </h4>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500">
+                  Transcripción Completa
+                </h4>
+                <Button
+                  variant="secondary"
+                  onClick={() => handleSyncCall(selectedCall.id)}
+                  disabled={syncingCallId === selectedCall.id}
+                  className="text-[11px] h-7 px-2.5 flex items-center gap-1.5"
+                  title="Descargar transcripción, audio y estado actualizado directamente desde VAPI"
+                >
+                  <RefreshCw className={cn("h-3 w-3", syncingCallId === selectedCall.id && "animate-spin")} />
+                  {syncingCallId === selectedCall.id ? "Sincronizando..." : "Actualizar desde VAPI"}
+                </Button>
+              </div>
 
               {selectedCall.messages && selectedCall.messages.length > 0 ? (
                 <div className="space-y-2.5 rounded-lg border border-neutral-200 bg-neutral-50 p-3 max-h-72 overflow-y-auto">
@@ -1037,7 +1109,18 @@ export default function CallsPage() {
                   {selectedCall.transcript}
                 </pre>
               ) : (
-                <p className="text-xs text-neutral-400 italic">No hay transcripción disponible para esta llamada.</p>
+                <div className="rounded-lg border border-dashed border-neutral-300 p-4 text-center bg-neutral-50/50">
+                  <p className="text-xs text-neutral-500 mb-3">No hay transcripción almacenada en la base de datos para esta llamada.</p>
+                  <Button
+                    variant="secondary"
+                    onClick={() => handleSyncCall(selectedCall.id)}
+                    disabled={syncingCallId === selectedCall.id}
+                    className="text-xs mx-auto"
+                  >
+                    <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", syncingCallId === selectedCall.id && "animate-spin")} />
+                    {syncingCallId === selectedCall.id ? "Consultando VAPI..." : "Obtener Transcripción de VAPI"}
+                  </Button>
+                </div>
               )}
             </div>
 

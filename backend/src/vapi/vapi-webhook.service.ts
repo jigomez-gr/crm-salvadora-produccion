@@ -694,31 +694,87 @@ export class VapiWebhookService {
 
   // ─── EVENT: END OF CALL REPORT ───
   private async handleEndOfCallReport(body: VapiWebhookMessage): Promise<void> {
-    const vapiCallId = body.call?.id || (body.message as any)?.call?.id;
+    const raw = (body as any).message || body;
+    const vapiCallId = raw.call?.id || raw.callId || (body as any).call?.id;
     if (!vapiCallId) return;
 
     const recordingUrl =
-      body.artifact?.recordingUrl ||
-      (typeof body.artifact?.recording === 'string' ? body.artifact?.recording : (body.artifact?.recording as any)?.url) ||
+      raw.artifact?.recordingUrl ||
+      raw.recordingUrl ||
+      raw.call?.recordingUrl ||
+      (typeof raw.artifact?.recording === 'string'
+        ? raw.artifact?.recording
+        : (raw.artifact?.recording as any)?.url) ||
       null;
 
-    const summary = body.analysis?.summary || null;
-    const transcript = body.artifact?.transcript || null;
-    const messages = body.artifact?.messages || null;
-    const costCents = typeof body.cost === 'number' ? Math.round(body.cost * 100) : null;
-    const endedReason = body.endedReason || (body.message as any)?.endedReason || null;
+    const summary =
+      raw.analysis?.summary ||
+      raw.summary ||
+      raw.artifact?.summary ||
+      raw.call?.analysis?.summary ||
+      null;
 
-    const startedAt = body.startedAt ? new Date(body.startedAt) : undefined;
-    const endedAt = body.endedAt ? new Date(body.endedAt) : new Date();
+    let transcript =
+      raw.artifact?.transcript ||
+      raw.transcript ||
+      raw.call?.transcript ||
+      null;
+
+    const messages =
+      raw.artifact?.messages ||
+      raw.messages ||
+      raw.call?.messages ||
+      null;
+
+    if (!transcript && Array.isArray(messages) && messages.length > 0) {
+      transcript = messages
+        .filter((m: any) => m.message || m.content)
+        .map((m: any) => {
+          const role =
+            m.role === 'assistant' || m.role === 'bot'
+              ? 'Asistente'
+              : m.role === 'user' || m.role === 'customer'
+              ? 'Cliente'
+              : 'Herramienta';
+          return `${role}: ${m.message || m.content}`;
+        })
+        .join('\n');
+    }
+
+    const rawCost =
+      typeof raw.cost === 'number'
+        ? raw.cost
+        : typeof raw.call?.cost === 'number'
+        ? raw.call?.cost
+        : null;
+    const costCents = rawCost !== null ? Math.round(rawCost * 100) : null;
+    const endedReason = raw.endedReason || raw.call?.endedReason || null;
+
+    const startedAt = raw.startedAt
+      ? new Date(raw.startedAt)
+      : raw.call?.startedAt
+      ? new Date(raw.call.startedAt)
+      : undefined;
+    const endedAt = raw.endedAt
+      ? new Date(raw.endedAt)
+      : raw.call?.endedAt
+      ? new Date(raw.call.endedAt)
+      : new Date();
 
     let durationSeconds: number | null = null;
-    if (startedAt && endedAt) {
+    if (typeof raw.durationSeconds === 'number') {
+      durationSeconds = raw.durationSeconds;
+    } else if (typeof raw.call?.duration === 'number') {
+      durationSeconds = Math.round(raw.call.duration);
+    } else if (startedAt && endedAt) {
       durationSeconds = Math.max(0, Math.round((endedAt.getTime() - startedAt.getTime()) / 1000));
     }
 
     let call = await this.callsRepo.findOne({ where: { vapiCallId } });
     if (!call) {
-      const rawCustomer = body.call?.customer?.number || (body.message as any)?.call?.customer?.number;
+      const rawCustomer =
+        raw.call?.customer?.number ||
+        (body.message as any)?.call?.customer?.number;
       const fromNumber = rawCustomer ? normalizePhoneLoose(rawCustomer) : null;
       let contactId: string | null = null;
       if (fromNumber) {
@@ -728,7 +784,7 @@ export class VapiWebhookService {
 
       call = this.callsRepo.create({
         vapiCallId,
-        direction: body.call?.type === 'outboundPhoneCall' ? CallDirection.OUTBOUND : CallDirection.INBOUND,
+        direction: raw.call?.type === 'outboundPhoneCall' ? CallDirection.OUTBOUND : CallDirection.INBOUND,
         fromNumber,
         contactId,
         status: CallStatus.ENDED,
