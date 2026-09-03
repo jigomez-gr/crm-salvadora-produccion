@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThan, LessThanOrEqual } from 'typeorm';
+import { Repository, MoreThan, LessThanOrEqual, In, Between } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Contact, ContactStatus } from '../common/entities/contact.entity';
 import { Appointment, AppointmentStatus } from '../common/entities/appointment.entity';
@@ -18,7 +18,7 @@ import {
   VapiToolResponseResult,
   VapiWebhookResponse,
 } from './vapi.types';
-import { format, parseISO, isValid, addDays } from 'date-fns';
+import { format, parseISO, isValid, addDays, startOfWeek, endOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { TZDate } from '@date-fns/tz';
 
@@ -607,6 +607,38 @@ export class VapiWebhookService {
       const allowedTimes = HATHA_YOGA_TIMETABLE[dayOfWeek] || [];
       if (!allowedTimes.includes(timeStr)) {
         return `Ese horario no corresponde a las clases oficiales de Hatha Yoga Terapéutico. Los turnos oficiales son: martes (9:45, 11:15, 17:00, 18:30 y 20:00), miércoles (20:15) y jueves (9:45, 11:15, 16:30, 17:30 y 19:00). Indícale amablemente estos turnos al cliente para que elija uno.`;
+      }
+
+      // 2d. Weekly quota check (1 clase semanal vs 2 clases semanales)
+      if (contact?.id) {
+        const isTwoClasses = /2\s*clases|dos\s*clases/i.test(cleanServiceName || params?.modalidad || '');
+        const maxAllowedPerWeek = isTwoClasses ? 2 : 1;
+
+        const weekStart = startOfWeek(startsAt, { weekStartsOn: 1 });
+        const weekEnd = endOfWeek(startsAt, { weekStartsOn: 1 });
+
+        const existingThisWeek = await this.appointmentsRepo.find({
+          where: {
+            contactId: contact.id,
+            status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.PENDING_APPROVAL]),
+            startsAt: Between(weekStart, weekEnd),
+          },
+          order: { startsAt: 'ASC' },
+        });
+
+        const hathaExisting = existingThisWeek.filter((a) => /yoga/i.test(a.service));
+
+        if (hathaExisting.length >= maxAllowedPerWeek) {
+          if (maxAllowedPerWeek === 1) {
+            const bookedDate = format(hathaExisting[0].startsAt, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
+            return `Ya tienes una clase de Hatha Yoga agendada para esa semana (el ${bookedDate}). En la modalidad de 1 clase semanal solo puedes tener una clase por semana. Si deseas cambiar de horario, dímelo y te la reprogramo a este nuevo turno, o si prefieres asistir 2 veces por semana podemos cambiarte a la modalidad de 2 clases semanales (42€/mes).`;
+          } else {
+            const bookedDates = hathaExisting
+              .map((a) => format(a.startsAt, "EEEE d 'a las' HH:mm", { locale: es }))
+              .join(' y el ');
+            return `Ya tienes tus 2 clases de Hatha Yoga agendadas para esa semana (el ${bookedDates}). Con la modalidad de 2 clases semanales tienes el cupo semanal completo. ¿Deseas que te cambie alguno de esos dos turnos?`;
+          }
+        }
       }
     }
 

@@ -28,6 +28,7 @@ describe('VapiWebhookService', () => {
     };
 
     appointmentsRepo = {
+      find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn().mockResolvedValue(null),
       save: jest.fn().mockImplementation((entity) => Promise.resolve(entity)),
     };

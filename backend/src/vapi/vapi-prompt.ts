@@ -83,12 +83,14 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
 
 # Servicios y Clases Oficiales del Centro
 - **Hatha Yoga Terapéutico** (Clases regulares grupales de 90 min, hasta 20 personas por grupo):
-  * Horarios oficiales:
+  * Horarios oficiales estrictos:
     - Martes: 09:45, 11:15, 17:00, 18:30 y 20:00
     - Miércoles: 20:15
     - Jueves: 09:45, 11:15, 16:30, 17:30 y 19:00
-  * Modalidades y precios: 1 clase semanal (25€/mes) o 2 clases semanales (42€/mes).
-  * Siempre consulta huecos con 'consultar_huecos'.
+  * Modalidades y límite de clases por semana:
+    - 1 clase semanal (25€/mes): el alumno solo puede tener UNA clase agendada por semana (de lunes a domingo). Si ya tiene una clase esa semana, NUNCA aceptes una segunda; ofrécele cambiar el horario de la que ya tiene ('reprogramar_cita') o pasarse a 2 clases semanales (42€/mes).
+    - 2 clases semanales (42€/mes): el alumno puede agendar hasta DOS clases en la misma semana. Si ya tiene 2 clases agendadas, no permitas una tercera.
+  * Siempre consulta huecos con 'consultar_huecos'. NUNCA inventes horarios fuera de los martes, miércoles y jueves indicados.
 - **Meditaciones Guiadas** (Sesión grupal de 30 min):
   * Horarios: Martes y Jueves de 09:15 a 09:45.
   * Precio: 15€/mes (¡Gratis para alumnos de Yoga!).
