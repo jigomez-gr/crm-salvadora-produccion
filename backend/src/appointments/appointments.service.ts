@@ -357,10 +357,16 @@ export class AppointmentsService {
     const withContact = await this.findOne(saved.id);
     this.eventEmitter.emit('appointment.created', withContact);
 
-    // If appointment is confirmed (SCHEDULED) directly (e.g. Yoga, Meditacion, Gong, etc.), send full confirmation Email & WhatsApp
+    // Notify student via Email and WhatsApp
+    const managerName = serviceEntity?.manager?.name || 'Centro de Yoga Salvadora Conesa';
     if (saved.status === AppointmentStatus.SCHEDULED) {
-      const managerName = serviceEntity?.manager?.name || 'Centro de Yoga Salvadora Conesa';
-      this.notifyStudentDecision(withContact, 'accepted', managerName).catch(() => null);
+      this.notifyStudentDecision(withContact, 'accepted', managerName).catch((err) => {
+        this.logger.error(`Error notifying student on accepted appointment: ${err}`);
+      });
+    } else if (saved.status === AppointmentStatus.PENDING_APPROVAL) {
+      this.notifyStudentDecision(withContact, 'pending_approval', managerName).catch((err) => {
+        this.logger.error(`Error notifying student on pending_approval appointment: ${err}`);
+      });
     }
 
     return withContact;
@@ -798,7 +804,7 @@ export class AppointmentsService {
 
   private async notifyStudentDecision(
     appt: Appointment,
-    decision: 'accepted' | 'rejected' | 'reschedule_requested' | 'cancelled',
+    decision: 'accepted' | 'rejected' | 'reschedule_requested' | 'cancelled' | 'pending_approval',
     managerName: string,
     rejectionReason?: string,
     proposedTimes?: string,
@@ -807,7 +813,10 @@ export class AppointmentsService {
       const contact =
         appt.contact ||
         (await this.contactsRepo.findOne({ where: { id: appt.contactId } }));
-      if (!contact) return;
+      if (!contact) {
+        this.logger.warn(`[Email] No contact found for appointment ${appt.id}. Skipping notifications.`);
+        return;
+      }
 
       // Load serviceEntity for full details, description, reminderNotes and manager info
       let serviceEntity: Service | null = null;
@@ -871,7 +880,56 @@ export class AppointmentsService {
 
       let chatMessageText = '';
 
-      if (decision === 'accepted') {
+      if (decision === 'pending_approval') {
+        const subject = `📋 Solicitud de cita recibida: ${appt.service} - ${formattedDate}`;
+        const emailHtml = `
+          <div style="font-family: Arial, sans-serif; color: #1f2937; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 10px; padding: 24px; background-color: #ffffff;">
+            <div style="text-align: center; margin-bottom: 20px; border-bottom: 1px solid #f3f4f6; padding-bottom: 16px;">
+              <h2 style="color: #2563eb; margin: 0; font-size: 22px;">Solicitud de Cita Recibida</h2>
+              <p style="margin: 6px 0 0 0; color: #6b7280; font-size: 14px;">Centro de Yoga Salvadora Conesa & Club Social Parque Granada</p>
+            </div>
+            
+            <p style="font-size: 15px;">Hola <strong>${contact.name || 'Alumno'}</strong>,</p>
+            <p style="font-size: 14px; color: #374151;">Hemos recibido correctamente tu solicitud de cita para <strong>${appt.service}</strong>.</p>
+            
+            <div style="background-color: #eff6ff; border: 1px solid #dbeafe; padding: 16px; border-radius: 8px; margin: 16px 0;">
+              <p style="margin: 6px 0; color: #1e40af;">📌 <strong>Servicio / Actividad:</strong> ${appt.service}</p>
+              <p style="margin: 6px 0; color: #1e40af;">📅 <strong>Fecha solicitada:</strong> ${formattedDate}</p>
+              <p style="margin: 6px 0; color: #1e40af;">⏰ <strong>Horario:</strong> ${formattedTime}</p>
+              <p style="margin: 6px 0; color: #1e40af;">👤 <strong>Terapeuta / Profesor:</strong> ${effectiveManager}</p>
+              <p style="margin: 6px 0; color: #1e40af;">⏳ <strong>Estado:</strong> Pendiente de confirmación del profesor</p>
+            </div>
+
+            <p style="font-size: 14px; color: #374151;">Esta sesión requiere coordinación previa de agenda con el profesor (<strong>${effectiveManager}</strong>). En cuanto el profesor revise y confirme tu solicitud, recibirás un nuevo correo con la confirmación definitiva.</p>
+
+            <p style="font-size: 13px; color: #6b7280; margin-top: 20px; border-top: 1px solid #f3f4f6; padding-top: 14px;">Para cualquier consulta, puedes responder a este correo o escribirnos por WhatsApp al <strong>695 172 625</strong>.</p>
+            <p style="margin-top: 12px; font-weight: bold; color: #374151;">¡Muchas gracias!</p>
+          </div>
+        `;
+
+        chatMessageText = `¡Hola ${contact.name || ''}! Hemos recibido tu solicitud para *${appt.service}* el *${formattedDate}* a las *${formattedTime}*. Se encuentra pendiente de confirmación por el profesor (${effectiveManager}). En cuanto se confirme recibirás los detalles.`;
+
+        if (contact.email) {
+          this.logger.log(`[Email] Sending pending_approval email to ${contact.email} for appt ${appt.id}...`);
+          const res = await this.emailService
+            .sendNotification(
+              contact.email,
+              contact.name,
+              subject,
+              emailHtml,
+              chatMessageText,
+              undefined,
+              contact.id,
+            )
+            .catch((err) => {
+              this.logger.error(`[Email] Error sending pending_approval email to ${contact.email}: ${err}`);
+              return { ok: false, error: String(err) };
+            });
+          this.logger.log(`[Email] Result for ${contact.email}: ${JSON.stringify(res)}`);
+        } else {
+          this.logger.warn(`[Email] Contact ${contact.id} (${contact.name}) has NO email. Cannot send pending_approval notification.`);
+        }
+      } else if (decision === 'accepted') {
         const subject = `✅ Confirmación de tu cita: ${appt.service} - ${formattedDate}`;
 
         const reminderSectionHtml = serviceEntity?.reminderNotes
@@ -946,7 +1004,8 @@ export class AppointmentsService {
         chatMessageText = `¡Hola ${contact.name || ''}! Te confirmamos que tu cita para *${appt.service}* ha quedado formalizada.\n\n📅 *Fecha:* ${formattedDate}\n⏰ *Hora:* ${formattedTime}\n📍 *Modalidad:* ${locationWhatsApp}\n👤 *Responsable:* ${effectiveManager}${reminderWhatsApp}\n\n¡Muchas gracias y nos vemos pronto!`;
 
         if (contact.email) {
-          await this.emailService
+          this.logger.log(`[Email] Sending accepted confirmation email to ${contact.email} for appt ${appt.id}...`);
+          const res = await this.emailService
             .sendNotification(
               contact.email,
               contact.name,
@@ -956,7 +1015,13 @@ export class AppointmentsService {
               undefined,
               contact.id,
             )
-            .catch(() => null);
+            .catch((err) => {
+              this.logger.error(`[Email] Error sending accepted email to ${contact.email}: ${err}`);
+              return { ok: false, error: String(err) };
+            });
+          this.logger.log(`[Email] Result for ${contact.email}: ${JSON.stringify(res)}`);
+        } else {
+          this.logger.warn(`[Email] Contact ${contact.id} (${contact.name}) has NO email. Cannot send accepted confirmation email.`);
         }
 
         if (contact.phone) {
@@ -1178,7 +1243,9 @@ export class AppointmentsService {
 
       // Dispatch SMS Webhook for n8n / C# notification system
       let smsText = '';
-      if (decision === 'accepted') {
+      if (decision === 'pending_approval') {
+        smsText = `Hola ${contact.name || ''}, tu solicitud para ${appt.service} el ${formattedDate} ha sido recibida y está pendiente de confirmación del profesor. Centro de Yoga Salvadora Conesa.`;
+      } else if (decision === 'accepted') {
         smsText = `Hola ${contact.name || ''}, tu cita para ${appt.service} el ${formattedDate} a las ${formattedStartTime} ha sido confirmada en Centro de Yoga Salvadora Conesa. ¡Te esperamos!`;
       } else if (decision === 'reschedule_requested') {
         smsText = `Hola ${contact.name || ''}, para tu cita de ${appt.service} el ${formattedDate}, solicitamos cambiar de fecha u horario. Motivo: ${rejectionReason || 'No disponible'}`;
@@ -1217,7 +1284,7 @@ export class AppointmentsService {
    */
   private async dispatchSmsWebhook(payload: {
     event: string;
-    decision: 'accepted' | 'rejected' | 'reschedule_requested' | 'cancelled';
+    decision: 'accepted' | 'rejected' | 'reschedule_requested' | 'cancelled' | 'pending_approval';
     appointmentId: string;
     service: string;
     startsAt: Date | string;
