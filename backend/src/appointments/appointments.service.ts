@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, ILike } from 'typeorm';
+import { Repository, Between, ILike, In } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Contact } from '../common/entities/contact.entity';
 import {
@@ -17,6 +17,7 @@ import { Service } from '../common/entities/service.entity';
 import { VapiAccount } from '../common/entities/vapi-account.entity';
 import { CalcomService } from '../calcom/calcom.service';
 import { TZDate } from '@date-fns/tz';
+import { format, startOfWeek, endOfWeek } from 'date-fns';
 import { businessDayWindow } from './business-day';
 import { computeFreeSlots, TimeSlot } from './availability';
 import { parseFlexibleStartsAt } from '../common/time';
@@ -164,6 +165,63 @@ export class AppointmentsService {
     }
 
     this.assertValidWindow(startsAt, endsAt, { mustBeFuture: true });
+
+    const cleanServiceName = (dto.service || serviceEntity?.name || '').toLowerCase().trim();
+
+    // 1. Strict validation: Constelaciones Familiares
+    if (/constelaci/i.test(cleanServiceName)) {
+      const zoned = new TZDate(startsAt.getTime(), 'Europe/Madrid');
+      const isSep27 = zoned.getMonth() === 8 && zoned.getDate() === 27 && zoned.getFullYear() === 2026;
+      if (!isSep27) {
+        throw new BadRequestException(
+          'Las Constelaciones Familiares son un taller vivencial exclusivo que se celebra únicamente el domingo 27 de septiembre de 2026 de 10:00 a 14:00.',
+        );
+      }
+    }
+
+    // 2. Strict validation: Hatha Yoga Terapéutico
+    if (/hatha.*yoga|yoga.*terap/i.test(cleanServiceName)) {
+      const HATHA_YOGA_TIMETABLE: Record<number, string[]> = {
+        2: ['09:45', '11:15', '17:00', '18:30', '20:00'],
+        3: ['20:15'],
+        4: ['09:45', '11:15', '16:30', '17:30', '19:00'],
+      };
+      const zoned = new TZDate(startsAt.getTime(), 'Europe/Madrid');
+      const dayOfWeek = zoned.getDay();
+      const timeStr = format(zoned, 'HH:mm');
+      const allowed = HATHA_YOGA_TIMETABLE[dayOfWeek] || [];
+      if (!allowed.includes(timeStr)) {
+        throw new BadRequestException(
+          'Ese horario no corresponde a los turnos oficiales de Hatha Yoga Terapéutico (Martes 9:45, 11:15, 17:00, 18:30, 20:00; Miércoles 20:15; Jueves 9:45, 11:15, 16:30, 17:30, 19:00).',
+        );
+      }
+
+      if (dto.contactId) {
+        const isTwoClasses = /2\s*clases|dos\s*clases/i.test(cleanServiceName);
+        const maxAllowed = isTwoClasses ? 2 : 1;
+        const weekStart = startOfWeek(startsAt, { weekStartsOn: 1 });
+        const weekEnd = endOfWeek(startsAt, { weekStartsOn: 1 });
+        const existingThisWeek = await this.appointmentsRepo.find({
+          where: {
+            contactId: dto.contactId,
+            status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.PENDING_APPROVAL]),
+            startsAt: Between(weekStart, weekEnd),
+          },
+        });
+        const hathaExisting = existingThisWeek.filter((a) => {
+          if (!/yoga/i.test(a.service)) return false;
+          const z = new TZDate(new Date(a.startsAt).getTime(), 'Europe/Madrid');
+          return HATHA_YOGA_TIMETABLE[z.getDay()]?.includes(format(z, 'HH:mm'));
+        });
+        if (hathaExisting.length >= maxAllowed) {
+          throw new BadRequestException(
+            maxAllowed === 1
+              ? 'Ya tienes una clase de Hatha Yoga agendada para esa semana en la modalidad de 1 clase semanal.'
+              : 'Ya tienes 2 clases de Hatha Yoga agendadas para esa semana en la modalidad de 2 clases semanales.',
+          );
+        }
+      }
+    }
 
     const calendarId = dto.calendarId || serviceEntity?.calendarId || 'default';
     const serviceName = dto.service || serviceEntity?.name || 'General';
@@ -1519,11 +1577,64 @@ export class AppointmentsService {
 
     const existing = await qb.getMany();
 
-    return computeFreeSlots(date, durationMinutes, workingHours, existing, {
+    const rawSlots = computeFreeSlots(date, durationMinutes, workingHours, existing, {
       timezone,
       now,
       maxCapacity,
     });
+
+    // Enforce official service timetables strictly across all channels (VAPI, WhatsApp, Landing)
+    const isHathaYoga = /hatha.*yoga|yoga.*terap/i.test(serviceName || targetService?.name || '');
+    const isMeditacion = /meditaci/i.test(serviceName || targetService?.name || '');
+    const isIaido = /iaido|iaidō|esgrima/i.test(serviceName || targetService?.name || '');
+
+    const HATHA_YOGA_TIMETABLE: Record<number, string[]> = {
+      2: ['09:45', '11:15', '17:00', '18:30', '20:00'], // Martes
+      3: ['20:15'],                                     // Miércoles
+      4: ['09:45', '11:15', '16:30', '17:30', '19:00'], // Jueves
+    };
+
+    const MEDITACION_TIMETABLE: Record<number, string[]> = {
+      2: ['09:15'],
+      4: ['09:15'],
+    };
+
+    const IAIDO_TIMETABLE: Record<number, string[]> = {
+      1: ['20:00'],
+      4: ['20:30'],
+    };
+
+    if (isHathaYoga) {
+      const targetDay = zoned.getDay();
+      const allowed = HATHA_YOGA_TIMETABLE[targetDay] || [];
+      return rawSlots.filter((s) => {
+        const slotDate = s.startsAt instanceof Date ? s.startsAt : new Date(s.startsAt);
+        const zonedSlot = new TZDate(slotDate.getTime(), timezone);
+        return allowed.includes(format(zonedSlot, 'HH:mm'));
+      });
+    }
+
+    if (isMeditacion) {
+      const targetDay = zoned.getDay();
+      const allowed = MEDITACION_TIMETABLE[targetDay] || [];
+      return rawSlots.filter((s) => {
+        const slotDate = s.startsAt instanceof Date ? s.startsAt : new Date(s.startsAt);
+        const zonedSlot = new TZDate(slotDate.getTime(), timezone);
+        return allowed.includes(format(zonedSlot, 'HH:mm'));
+      });
+    }
+
+    if (isIaido) {
+      const targetDay = zoned.getDay();
+      const allowed = IAIDO_TIMETABLE[targetDay] || [];
+      return rawSlots.filter((s) => {
+        const slotDate = s.startsAt instanceof Date ? s.startsAt : new Date(s.startsAt);
+        const zonedSlot = new TZDate(slotDate.getTime(), timezone);
+        return allowed.includes(format(zonedSlot, 'HH:mm'));
+      });
+    }
+
+    return rawSlots;
   }
 
   /** Cancellation requested by the AI agent (on the customer's behalf). */
