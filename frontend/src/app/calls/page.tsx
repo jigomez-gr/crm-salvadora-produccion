@@ -97,6 +97,12 @@ export default function CallsPage() {
   const [isOverrideActive, setIsOverrideActive] = useState(false);
   const [availablePhones, setAvailablePhones] = useState<Array<{ id: string; number: string; name?: string }>>([]);
 
+  // Zadarma SIP Trunk connection state
+  const [sipGateway, setSipGateway] = useState("sip.zadarma.com");
+  const [sipUsername, setSipUsername] = useState("368228");
+  const [sipPassword, setSipPassword] = useState("");
+  const [connectingSip, setConnectingSip] = useState(false);
+
   // Load Calls & Stats
   async function loadCalls() {
     try {
@@ -263,6 +269,31 @@ export default function CallsPage() {
       handleSyncCall(selectedCall.id);
     }
   }, [selectedCall?.id]);
+
+  // Connect Zadarma SIP Trunk to VAPI for outbound calls (+34)
+  async function handleConnectSipTrunk() {
+    if (!sipUsername || !sipPassword) {
+      toast.error("Por favor introduce el usuario y la contraseña SIP de Zadarma.");
+      return;
+    }
+    try {
+      setConnectingSip(true);
+      const res = await apiFetch<{ ok: boolean; message: string }>("/api/vapi/connect-sip-trunk", {
+        method: "POST",
+        body: JSON.stringify({
+          authUsername: sipUsername,
+          authPassword: sipPassword,
+          gateway: sipGateway,
+        }),
+      });
+      toast.success(res.message || "Línea Zadarma vinculada con éxito en VAPI.");
+      await loadConfig();
+    } catch (err: any) {
+      toast.error("Error al vincular con VAPI: " + (err?.message || ""));
+    } finally {
+      setConnectingSip(false);
+    }
+  }
 
   // Save Config
   async function handleSaveConfig(e: React.FormEvent) {
@@ -911,6 +942,70 @@ export default function CallsPage() {
                       placeholder="ej. +34600112233 (al que se transferirá al cliente si pide una persona)"
                     />
                   </div>
+                </div>
+              </div>
+
+              {/* Zadarma SIP Trunk Outbound Caller ID (+34) */}
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-5 shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-emerald-950 flex items-center gap-2">
+                    <PhoneOutgoing className="h-4 w-4 text-emerald-600" />
+                    Línea Saliente de Zadarma (Caller ID +34)
+                  </h3>
+                  <span className="text-[11px] font-medium text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                    Emite con tu número español
+                  </span>
+                </div>
+                <p className="text-xs text-emerald-900/80 leading-relaxed">
+                  Para que las llamadas salientes no muestren el número internacional (+44) y salgan a través de tu cuenta de Zadarma con tu número <strong>+34 919 93 34 03</strong>, introduce aquí la contraseña de tu SIP de Zadarma.
+                </p>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-neutral-700">
+                      Servidor SIP
+                    </label>
+                    <Input
+                      value={sipGateway}
+                      onChange={(e) => setSipGateway(e.target.value)}
+                      placeholder="sip.zadarma.com"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-neutral-700">
+                      Usuario / Login SIP (Zadarma)
+                    </label>
+                    <Input
+                      value={sipUsername}
+                      onChange={(e) => setSipUsername(e.target.value)}
+                      placeholder="ej. 368228"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-neutral-700">
+                      Contraseña SIP
+                    </label>
+                    <Input
+                      type="password"
+                      value={sipPassword}
+                      onChange={(e) => setSipPassword(e.target.value)}
+                      placeholder="Contraseña de la línea SIP"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <Button
+                    type="button"
+                    onClick={handleConnectSipTrunk}
+                    disabled={connectingSip || !sipUsername || !sipPassword}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs flex items-center gap-1.5 shadow-sm"
+                  >
+                    <RefreshCw className={cn("h-3.5 w-3.5", connectingSip && "animate-spin")} />
+                    {connectingSip ? "Vinculando con VAPI..." : "Vincular Línea Zadarma con VAPI"}
+                  </Button>
                 </div>
               </div>
 

@@ -54,6 +54,19 @@ export class VapiController {
     return this.vapiService.publishAssistant();
   }
 
+  @Post('connect-sip-trunk')
+  @HttpCode(HttpStatus.OK)
+  async connectSipTrunk(
+    @Body()
+    body: {
+      authUsername: string;
+      authPassword: string;
+      gateway?: string;
+    },
+  ) {
+    return this.vapiService.connectSipTrunkToPhoneNumber(body);
+  }
+
   @Post('test-call')
   @HttpCode(HttpStatus.OK)
   async testCall(@Body() body: { phone: string; contactId?: string }) {

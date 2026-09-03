@@ -918,4 +918,100 @@ export class VapiService implements OnModuleInit {
       throw new NotFoundException('Error al recuperar el archivo de audio de la llamada.');
     }
   }
+
+  /**
+   * Automatically create a BYO SIP Trunk credential in VAPI and link it to the configured phone number
+   */
+  async connectSipTrunkToPhoneNumber(dto: {
+    authUsername: string;
+    authPassword: string;
+    gateway?: string;
+  }): Promise<{ ok: boolean; credentialId: string; message: string }> {
+    const acc = await this.getAccount();
+    const apiKey = this.getEffectiveApiKey(acc);
+
+    if (!dto.authUsername?.trim() || !dto.authPassword?.trim()) {
+      throw new BadRequestException('Debes indicar el usuario y la contraseña SIP de Zadarma.');
+    }
+
+    const gateway = dto.gateway?.trim() || 'sip.zadarma.com';
+
+    // 1. Create credential in VAPI
+    const credPayload = {
+      provider: 'byo-sip-trunk',
+      name: `Zadarma-${dto.authUsername.trim()}`,
+      gateways: [
+        {
+          ip: gateway,
+          inboundEnabled: false,
+        },
+      ],
+      outboundLeadingPlusEnabled: true,
+      outboundAuthenticationPlan: {
+        authUsername: dto.authUsername.trim(),
+        authPassword: dto.authPassword.trim(),
+      },
+    };
+
+    const credRes = await fetch(`${VAPI_BASE_URL}/credential`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(credPayload),
+    });
+
+    if (!credRes.ok) {
+      const err = await credRes.text();
+      this.logger.error(`Error creando credencial SIP en VAPI: ${err}`);
+      throw new BadRequestException(`Error en VAPI al registrar la credencial SIP (${credRes.status}): ${err}`);
+    }
+
+    const credData = await credRes.json();
+    const credentialId = credData.id;
+
+    // 2. Resolve target phone number if not set or not UUID
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    let phoneId = acc.phoneNumberId;
+
+    if (!phoneId || !UUID_REGEX.test(phoneId)) {
+      const phoneList = await this.listPhoneNumbersFromVapi();
+      if (phoneList.length > 0) {
+        phoneId = phoneList[0].id;
+        acc.phoneNumberId = phoneId;
+        acc.phoneNumber = phoneList[0].number;
+      }
+    }
+
+    // 3. Link credential to phone number in VAPI
+    if (phoneId && UUID_REGEX.test(phoneId)) {
+      const patchRes = await fetch(`${VAPI_BASE_URL}/phone-number/${phoneId}`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          credentialId: credentialId,
+        }),
+      });
+
+      if (!patchRes.ok) {
+        const err = await patchRes.text();
+        this.logger.warn(`Could not link credential to phone number in VAPI: ${err}`);
+      } else {
+        this.logger.log(`Linked credential ${credentialId} to phone number ${phoneId}`);
+      }
+    }
+
+    acc.serverCredentialId = credentialId;
+    await this.vapiAccountRepo.save(acc);
+
+    return {
+      ok: true,
+      credentialId,
+      message: 'Línea SIP de Zadarma vinculada correctamente con VAPI para llamadas salientes.',
+    };
+  }
 }
