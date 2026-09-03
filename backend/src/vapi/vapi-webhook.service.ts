@@ -211,6 +211,16 @@ export class VapiWebhookService {
     }
   }
 
+  private formatSpokenDate(
+    d: Date | string,
+    timezone: string,
+    pattern = "EEEE d 'de' MMMM 'a las' HH:mm",
+  ): string {
+    const rawDate = d instanceof Date ? d : parseISO(d as string);
+    const zoned = new TZDate(rawDate.getTime(), timezone);
+    return format(zoned, pattern, { locale: es });
+  }
+
   // ─── 1. IDENTIFICAR LLAMANTE ───
   private async toolIdentificarLlamante(ctx: ToolExecutionContext): Promise<string> {
     if (!ctx.callerNumber) {
@@ -236,7 +246,7 @@ export class VapiWebhookService {
     });
 
     if (nextAppt) {
-      const formattedDate = format(nextAppt.startsAt, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
+      const formattedDate = this.formatSpokenDate(nextAppt.startsAt, ctx.timezone);
       parts.push(`Tiene una cita de «${nextAppt.service}» programada para el ${formattedDate}.`);
     } else {
       parts.push('No tiene citas próximas programadas.');
@@ -626,15 +636,21 @@ export class VapiWebhookService {
           order: { startsAt: 'ASC' },
         });
 
-        const hathaExisting = existingThisWeek.filter((a) => /yoga/i.test(a.service));
+        const hathaExisting = existingThisWeek.filter((a) => {
+          if (!/yoga/i.test(a.service)) return false;
+          const zoned = new TZDate(new Date(a.startsAt).getTime(), ctx.timezone);
+          const day = zoned.getDay();
+          const time = format(zoned, 'HH:mm');
+          return HATHA_YOGA_TIMETABLE[day]?.includes(time);
+        });
 
         if (hathaExisting.length >= maxAllowedPerWeek) {
           if (maxAllowedPerWeek === 1) {
-            const bookedDate = format(hathaExisting[0].startsAt, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
+            const bookedDate = this.formatSpokenDate(hathaExisting[0].startsAt, ctx.timezone);
             return `Ya tienes una clase de Hatha Yoga agendada para esa semana (el ${bookedDate}). En la modalidad de 1 clase semanal solo puedes tener una clase por semana. Si deseas cambiar de horario, dímelo y te la reprogramo a este nuevo turno, o si prefieres asistir 2 veces por semana podemos cambiarte a la modalidad de 2 clases semanales (42€/mes).`;
           } else {
             const bookedDates = hathaExisting
-              .map((a) => format(a.startsAt, "EEEE d 'a las' HH:mm", { locale: es }))
+              .map((a) => this.formatSpokenDate(a.startsAt, ctx.timezone))
               .join(' y el ');
             return `Ya tienes tus 2 clases de Hatha Yoga agendadas para esa semana (el ${bookedDates}). Con la modalidad de 2 clases semanales tienes el cupo semanal completo. ¿Deseas que te cambie alguno de esos dos turnos?`;
           }
@@ -660,7 +676,7 @@ export class VapiWebhookService {
         await this.callsRepo.update({ vapiCallId: ctx.vapiCallId }, { contactId: contact.id });
       }
 
-      const spokenDate = format(startsAt, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
+      const spokenDate = this.formatSpokenDate(startsAt, ctx.timezone);
       if (serviceEntity?.requiresApproval) {
         return `¡Solicitud registrada con éxito! Tu cita para ${appt.service} el ${spokenDate} a nombre de ${customerName} ha quedado registrada pendiente de aprobación del terapeuta Jose Ignacio. Te avisaremos en cuanto esté confirmada.`;
       }
@@ -727,7 +743,7 @@ export class VapiWebhookService {
       notes: appt.notes ? `${appt.notes}\nReprogramada por voz.` : 'Reprogramada por voz.',
     });
 
-    const spokenNew = format(newStartsAt, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
+    const spokenNew = this.formatSpokenDate(newStartsAt, ctx.timezone);
     return `Cita cambiada: tu cita de ${appt.service} ha sido movida al ${spokenNew}. Confírmaselo al cliente.`;
   }
 
@@ -759,7 +775,7 @@ export class VapiWebhookService {
     const motivo = rawMotivo ? `Cancelada por teléfono: ${rawMotivo}` : 'Cancelada por el cliente por teléfono';
     await this.appointmentsService.cancel(appt.id, 'agent', motivo);
 
-    const spokenDate = format(appt.startsAt, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
+    const spokenDate = this.formatSpokenDate(appt.startsAt, ctx.timezone);
     return `Tu cita de ${appt.service} del ${spokenDate} ha sido cancelada correctamente. El hueco queda liberado.`;
   }
 
