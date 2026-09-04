@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ShieldAlert, Upload, Trash2, Bot, Mail, Send, CreditCard, Copy, Check, Video, PhoneCall, RefreshCw } from "lucide-react";
+import { ShieldAlert, Upload, Trash2, Bot, Mail, Send, CreditCard, Copy, Check, Video, PhoneCall, RefreshCw, FileText } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { readableTextColor } from "@/lib/color";
 import { AppSettings, EmailConfig, PaymentConfig, CalcomConfig, VapiAccountConfig } from "@/lib/types";
@@ -665,10 +665,21 @@ function VapiCard() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [smsWebhookUrl, setSmsWebhookUrl] = useState("");
   const [publishing, setPublishing] = useState(false);
+  const [copiedCall, setCopiedCall] = useState(false);
 
   const webhookUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/api/vapi/webhook`
-    : "/api/vapi/webhook";
+    ? `${window.location.origin}/api/widget/vapi/webhook`
+    : "/api/widget/vapi/webhook";
+
+  const landingCallUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/api/widget/vapi/call`
+    : "/api/widget/vapi/call";
+
+  function copyLandingCallUrl() {
+    navigator.clipboard.writeText(landingCallUrl);
+    setCopiedCall(true);
+    setTimeout(() => setCopiedCall(false), 2000);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -822,6 +833,42 @@ function VapiCard() {
           <p className="mt-1 text-[11px] text-neutral-500">
             Pega esta URL en el <strong>Server URL</strong> de tu asistente y tools en dashboard.vapi.ai.
           </p>
+        </div>
+
+        <div>
+          <label className={labelCls}>Endpoint de Llamadas para Landing Web (VAPI Outbound)</label>
+          <div className="flex gap-2">
+            <Input
+              readOnly
+              value={landingCallUrl}
+              onFocus={(e) => e.currentTarget.select()}
+              className="font-mono text-xs"
+            />
+            <Button type="button" variant="secondary" onClick={copyLandingCallUrl}>
+              {copiedCall ? (
+                <>
+                  <Check className="h-3.5 w-3.5 text-emerald-600" /> Copiado
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3.5 w-3.5" /> Copiar
+                </>
+              )}
+            </Button>
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-neutral-500">
+            <span>
+              Peticiones directas desde el botón <strong>"Pedir por Teléfono (VAPI)"</strong> de la web.
+            </span>
+            <a
+              href="/Guia_Implementacion_VAPI_Landing_Salvadora.pdf"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 font-semibold text-[#800020] hover:underline"
+            >
+              <FileText className="h-3.5 w-3.5" /> Descargar Guía Técnica (PDF)
+            </a>
+          </div>
         </div>
 
         <div>

@@ -8,6 +8,8 @@ import {
   NotFoundException,
   BadRequestException,
   Header,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { AgentsConfigService } from '../agents/agents-config.service';
@@ -19,8 +21,12 @@ import { ServicesService } from '../services/services.service';
 import { AnalizaIaService } from '../appointments/analiza-ia.service';
 import { EmailService } from '../email/email.service';
 import { UsersService } from '../users/users.service';
-import { MessageChannel } from '../common/entities/message.entity';
+import { MessageChannel, MessageDirection } from '../common/entities/message.entity';
 import { WidgetChatDto } from './dto/widget-chat.dto';
+import { WidgetVapiCallDto } from './dto/widget-vapi-call.dto';
+import { VapiService } from '../vapi/vapi.service';
+import { VapiWebhookService } from '../vapi/vapi-webhook.service';
+import { VapiWebhookMessage, VapiWebhookResponse } from '../vapi/vapi.types';
 import {
   AnalizaIaPublicRequestDto,
   AnalizaIaEnviarPeticionDto,
@@ -81,6 +87,8 @@ export class WidgetController {
     private readonly analizaIaService: AnalizaIaService,
     private readonly emailService: EmailService,
     private readonly usersService: UsersService,
+    private readonly vapiService: VapiService,
+    private readonly vapiWebhookService: VapiWebhookService,
   ) {}
 
   @Get('config/:agentKey')
@@ -244,6 +252,61 @@ export class WidgetController {
       },
       whatsappUrl,
     };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // LLAMADAS SALIENTES VAPI (VOICE AI) — LANDING & WIDGET
+  // ─────────────────────────────────────────────────────────────
+
+  @Post('vapi/call')
+  async handleVapiOutboundCall(
+    @Body() dto: WidgetVapiCallDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.vapiService.triggerLandingOutboundCall(dto);
+    if (!result.success) {
+      res.status(result.statusCode || 400);
+      return {
+        success: false,
+        error: result.error || 'Error al procesar la llamada saliente.',
+      };
+    }
+
+    // Link contact to thread if sessionId is present
+    if (dto.sessionId && result.contactId) {
+      const threadId = `${dto.agentKey || 'booking'}:widget-${dto.sessionId}`;
+      await this.messagesService.linkContact(threadId, result.contactId).catch(() => null);
+      await this.messagesService
+        .saveMessage({
+          threadId,
+          contactId: result.contactId,
+          direction: MessageDirection.OUTBOUND,
+          channel: MessageChannel.WIDGET,
+          body: `📞 Llamada de voz asistida (VAPI) iniciada hacia ${result.phoneNumber}.${
+            dto.inquiry ? ` Consulta: "${dto.inquiry}".` : ''
+          } (ID llamada: ${result.callId})`,
+        })
+        .catch(() => null);
+    }
+
+    return {
+      success: true,
+      message: result.message || 'Llamada iniciada con éxito.',
+      callId: result.callId,
+      phoneNumber: result.phoneNumber,
+    };
+  }
+
+  @Post('vapi/webhook')
+  @HttpCode(HttpStatus.OK)
+  async handleVapiWebhook(
+    @Body() body: VapiWebhookMessage,
+  ): Promise<VapiWebhookResponse> {
+    try {
+      return await this.vapiWebhookService.handleWebhook(body);
+    } catch {
+      return { results: [] };
+    }
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -496,6 +559,14 @@ export class WidgetController {
         <p>Retiro de fin de semana para depuración física y bienestar integral.</p>
       </div>
       <button class="btn" data-crm-service="Ayuno Terapéutico & Retiro Detox">Reservar</button>
+    </div>
+
+    <div class="card" style="border: 1.5px solid #818cf8; background: #f5f3ff;">
+      <div>
+        <h3 style="color: #4338ca;">Pedir por Teléfono (VAPI Voice AI)</h3>
+        <p>Lanzar llamada saliente inmediata desde la web para hablar con el asistente de voz.</p>
+      </div>
+      <button class="btn" style="background: #4f46e5;" data-crm-vapi-call="true" data-crm-service="Clase de Yoga (Hatha / Vinyasa)">Pedir por Teléfono (VAPI)</button>
     </div>
   </div>
 
@@ -778,6 +849,123 @@ export class WidgetController {
       opacity: 0.4;
       cursor: not-allowed;
     }
+    .crm-widget-action-bar {
+      display: flex;
+      gap: 6px;
+      padding: 6px 12px;
+      background: #F3F4F6;
+      border-top: 1px solid #E5E7EB;
+    }
+    .crm-action-vapi-btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      background: #4F46E5;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .crm-action-vapi-btn:hover {
+      background: #4338CA;
+    }
+    .crm-modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(2px);
+      z-index: 1000000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .crm-modal-box {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      width: 100%;
+      max-width: 320px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+    .crm-modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .crm-modal-title {
+      font-weight: 700;
+      font-size: 13.5px;
+      color: #111827;
+    }
+    .crm-modal-x {
+      background: none;
+      border: none;
+      font-size: 18px;
+      line-height: 1;
+      color: #9CA3AF;
+      cursor: pointer;
+    }
+    .crm-modal-desc {
+      font-size: 11px;
+      color: #6B7280;
+      margin-bottom: 10px;
+      line-height: 1.35;
+    }
+    .crm-modal-input {
+      width: 100%;
+      border: 1px solid #D1D5DB;
+      border-radius: 8px;
+      padding: 7px 10px;
+      font-size: 12px;
+      margin-bottom: 8px;
+      outline: none;
+      box-sizing: border-box;
+    }
+    .crm-modal-input:focus {
+      border-color: #4F46E5;
+    }
+    .crm-modal-msg {
+      font-size: 11px;
+      margin-bottom: 8px;
+      line-height: 1.3;
+    }
+    .crm-modal-foot {
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+    .crm-btn-cancel {
+      background: #F3F4F6;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #4B5563;
+      cursor: pointer;
+    }
+    .crm-btn-submit {
+      background: #4F46E5;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      color: white;
+      cursor: pointer;
+    }
+    .crm-btn-submit:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
   \`;
   document.head.appendChild(style);
 
@@ -801,11 +989,40 @@ export class WidgetController {
     </div>
     <div class="crm-widget-chips-container" id="crm-chips"></div>
     <div class="crm-widget-body" id="crm-body"></div>
+    <div class="crm-widget-action-bar">
+      <button type="button" class="crm-action-vapi-btn" id="crm-action-vapi">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        Pedir por Teléfono (VAPI)
+      </button>
+    </div>
     <div class="crm-widget-footer">
       <input type="text" class="crm-widget-input" id="crm-input" placeholder="Escribe tu mensaje o consulta..." />
       <button class="crm-widget-send-btn" id="crm-send-btn" aria-label="Enviar">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
       </button>
+    </div>
+    <div class="crm-modal-backdrop" id="crm-vapi-modal" style="display:none;">
+      <div class="crm-modal-box">
+        <div class="crm-modal-head">
+          <div class="crm-modal-title">Pedir por Teléfono (VAPI)</div>
+          <button type="button" class="crm-modal-x" id="crm-vapi-close">×</button>
+        </div>
+        <div class="crm-modal-desc">Nuestro asistente de voz inteligente te llamará inmediatamente para informarte o tramitar tu cita.</div>
+        <div id="crm-vapi-form-view">
+          <input type="text" class="crm-modal-input" id="crm-vapi-name" placeholder="Tu nombre (opcional)" />
+          <input type="tel" class="crm-modal-input" id="crm-vapi-phone" placeholder="Teléfono (ej. +34600112233)" required />
+          <div class="crm-modal-msg" id="crm-vapi-msg" style="display:none;"></div>
+          <div class="crm-modal-foot">
+            <button type="button" class="crm-btn-cancel" id="crm-vapi-btn-cancel">Cancelar</button>
+            <button type="button" class="crm-btn-submit" id="crm-vapi-btn-submit">Llamar Ahora</button>
+          </div>
+        </div>
+        <div id="crm-vapi-success-view" style="display:none; text-align:center; padding:12px 0;">
+          <div style="font-size:24px; margin-bottom:6px;">📞</div>
+          <div style="font-weight:700; color:#065f46; font-size:13px; margin-bottom:4px;">¡Llamada lanzada con éxito!</div>
+          <div style="font-size:11.5px; color:#047857;" id="crm-vapi-success-text">En breves segundos sonará tu teléfono.</div>
+        </div>
+      </div>
     </div>
   \`;
 
@@ -818,6 +1035,16 @@ export class WidgetController {
   var closeBtn = win.querySelector('#crm-close-btn');
   var chipsEl = win.querySelector('#crm-chips');
   var businessNameEl = win.querySelector('#crm-business-name');
+  var vapiActionBtn = win.querySelector('#crm-action-vapi');
+  var vapiModal = win.querySelector('#crm-vapi-modal');
+  var vapiClose = win.querySelector('#crm-vapi-close');
+  var vapiCancel = win.querySelector('#crm-vapi-btn-cancel');
+  var vapiSubmit = win.querySelector('#crm-vapi-btn-submit');
+  var vapiPhoneInput = win.querySelector('#crm-vapi-phone');
+  var vapiNameInput = win.querySelector('#crm-vapi-name');
+  var vapiMsg = win.querySelector('#crm-vapi-msg');
+  var vapiFormView = win.querySelector('#crm-vapi-form-view');
+  var vapiSuccessView = win.querySelector('#crm-vapi-success-view');
 
   function renderChips(services) {
     chipsEl.innerHTML = '';
@@ -971,6 +1198,85 @@ export class WidgetController {
     sendMessage('Me gustaría reservar o consultar disponibilidad para ' + serviceName, serviceName);
   }
 
+  function openVapiModal(inquiryContext) {
+    if (!isOpen) openWidget();
+    vapiPhoneInput.value = '';
+    vapiNameInput.value = '';
+    vapiMsg.style.display = 'none';
+    vapiFormView.style.display = 'block';
+    vapiSuccessView.style.display = 'none';
+    vapiSubmit.disabled = false;
+    vapiSubmit.textContent = 'Llamar Ahora';
+    vapiModal.style.display = 'flex';
+    vapiModal._inquiry = inquiryContext || '';
+  }
+
+  function closeVapiModal() {
+    vapiModal.style.display = 'none';
+  }
+
+  if (vapiActionBtn) vapiActionBtn.onclick = function() { openVapiModal(); };
+  if (vapiClose) vapiClose.onclick = closeVapiModal;
+  if (vapiCancel) vapiCancel.onclick = closeVapiModal;
+
+  if (vapiSubmit) {
+    vapiSubmit.onclick = function() {
+      var phone = (vapiPhoneInput.value || '').trim();
+      var name = (vapiNameInput.value || '').trim();
+      if (!phone) {
+        vapiMsg.textContent = 'Por favor, introduce tu número de teléfono.';
+        vapiMsg.style.display = 'block';
+        vapiMsg.style.color = '#dc2626';
+        return;
+      }
+      if (/^[6789]\d{8}$/.test(phone)) {
+        phone = '+34' + phone;
+      } else if (!phone.startsWith('+')) {
+        phone = '+' + phone;
+      }
+
+      vapiSubmit.disabled = true;
+      vapiSubmit.textContent = 'Conectando...';
+      vapiMsg.style.display = 'none';
+
+      fetch(apiUrl + '/api/widget/vapi/call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phoneNumber: phone,
+          name: name || undefined,
+          agentKey: agentKey,
+          sessionId: sessionId,
+          inquiry: vapiModal._inquiry || 'Consulta desde widget web'
+        })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data && data.success) {
+          vapiFormView.style.display = 'none';
+          vapiSuccessView.style.display = 'block';
+          appendMessage('📞 Solicitud de llamada por voz (VAPI) iniciada hacia ' + phone + '.', 'inbound');
+          setTimeout(function() {
+            closeVapiModal();
+          }, 3500);
+        } else {
+          vapiSubmit.disabled = false;
+          vapiSubmit.textContent = 'Llamar Ahora';
+          vapiMsg.textContent = (data && data.error) ? data.error : 'Error al conectar la llamada.';
+          vapiMsg.style.display = 'block';
+          vapiMsg.style.color = '#dc2626';
+        }
+      })
+      .catch(function(err) {
+        vapiSubmit.disabled = false;
+        vapiSubmit.textContent = 'Llamar Ahora';
+        vapiMsg.textContent = 'Error de conexión. Puedes llamar directamente al 695 172 625.';
+        vapiMsg.style.display = 'block';
+        vapiMsg.style.color = '#dc2626';
+      });
+    };
+  }
+
   // Event Listeners
   btn.onclick = function () {
     if (isOpen) closeWidget();
@@ -990,8 +1296,16 @@ export class WidgetController {
     }
   };
 
-  // Wire automatic click listener for any button or link with data-crm-service
+  // Wire automatic click listener for any button or link with data-crm-service or data-crm-vapi-call
   document.addEventListener('click', function (e) {
+    var vapiTrigger = e.target.closest('[data-crm-vapi-call]');
+    if (vapiTrigger) {
+      e.preventDefault();
+      var inq = vapiTrigger.getAttribute('data-crm-service') || '';
+      openVapiModal(inq);
+      return;
+    }
+
     var target = e.target.closest('[data-crm-service]');
     if (target) {
       e.preventDefault();
@@ -1005,7 +1319,8 @@ export class WidgetController {
     open: openWidget,
     close: closeWidget,
     selectService: selectService,
-    sendMessage: sendMessage
+    sendMessage: sendMessage,
+    openVapiCall: openVapiModal
   };
 
   // Initialize

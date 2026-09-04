@@ -150,10 +150,14 @@ export class VapiService implements OnModuleInit {
     const acc = await this.getAccount();
     return {
       id: acc.id,
-      hasApiKey: Boolean(acc.apiKey || process.env.VAPI_API_KEY),
+      hasApiKey: Boolean(
+        acc.apiKey ||
+          process.env.VAPI_PRIVATE_API_KEY ||
+          process.env.VAPI_API_KEY,
+      ),
       hasWebhookToken: Boolean(acc.webhookToken || process.env.VAPI_WEBHOOK_TOKEN),
-      assistantId: acc.assistantId,
-      phoneNumberId: acc.phoneNumberId,
+      assistantId: acc.assistantId || process.env.VAPI_ASSISTANT_ID || null,
+      phoneNumberId: acc.phoneNumberId || process.env.VAPI_PHONE_NUMBER_ID || null,
       phoneNumber: acc.phoneNumber,
       serverCredentialId: acc.serverCredentialId,
       customWebhookUrl: acc.customWebhookUrl,
@@ -222,9 +226,14 @@ export class VapiService implements OnModuleInit {
   }
 
   private getEffectiveApiKey(account: VapiAccount): string {
-    const key = account.apiKey || process.env.VAPI_API_KEY;
+    const key =
+      account.apiKey ||
+      process.env.VAPI_PRIVATE_API_KEY ||
+      process.env.VAPI_API_KEY;
     if (!key) {
-      throw new BadRequestException('Falta configurar la API Key de VAPI (VAPI_API_KEY).');
+      throw new BadRequestException(
+        'Falta configurar la API Key de VAPI (VAPI_PRIVATE_API_KEY o VAPI_API_KEY).',
+      );
     }
     return key;
   }
@@ -1171,6 +1180,209 @@ export class VapiService implements OnModuleInit {
       ok: true,
       callId: lastCallId,
       message: 'Llamada de eco enviada a Zadarma desde VAPI (4444 y 8888). En 15 segundos recarga tu panel de Zadarma.',
+    };
+  }
+
+  /**
+   * Launch Outbound Call from Landing Web / Widget (VAPI specification)
+   * Section 4.2 & Section 6 of Especificacion_Integracion_VAPI_CRM_Salvadora.pdf
+   */
+  async triggerLandingOutboundCall(dto: {
+    phoneNumber: string;
+    name?: string;
+    agentKey?: string;
+    sessionId?: string;
+    inquiry?: string;
+  }): Promise<{
+    success: boolean;
+    message?: string;
+    callId?: string;
+    phoneNumber?: string;
+    contactId?: string;
+    error?: string;
+    statusCode?: number;
+  }> {
+    const rawPhone = (dto.phoneNumber || '').trim();
+
+    // 1. Validate E.164 phone format
+    if (!rawPhone || !rawPhone.startsWith('+')) {
+      return {
+        success: false,
+        error: 'El número de teléfono es obligatorio y debe tener formato E.164 (+34...)',
+        statusCode: 400,
+      };
+    }
+
+    const acc = await this.getAccount();
+    const apiKey =
+      process.env.VAPI_PRIVATE_API_KEY ||
+      process.env.VAPI_API_KEY ||
+      acc.apiKey;
+
+    if (!apiKey) {
+      this.logger.error('VAPI API key is not configured');
+      return {
+        success: false,
+        error: 'Credenciales de VAPI no configuradas en el servidor CRM (VAPI_PRIVATE_API_KEY).',
+        statusCode: 500,
+      };
+    }
+
+    const assistantId = process.env.VAPI_ASSISTANT_ID || acc.assistantId;
+    if (!assistantId) {
+      this.logger.error('VAPI Assistant ID is not configured');
+      return {
+        success: false,
+        error: 'Asistente de VAPI no configurado (VAPI_ASSISTANT_ID).',
+        statusCode: 500,
+      };
+    }
+
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    let resolvedPhoneId = process.env.VAPI_PHONE_NUMBER_ID || acc.phoneNumberId;
+
+    if (!resolvedPhoneId || !UUID_REGEX.test(resolvedPhoneId)) {
+      try {
+        const phoneList = await this.listPhoneNumbersFromVapi();
+        if (Array.isArray(phoneList) && phoneList.length > 0) {
+          const match = acc.phoneNumber
+            ? phoneList.find(
+                (p: any) =>
+                  p.number === acc.phoneNumber ||
+                  p.number?.replace(/\D/g, '') === acc.phoneNumber?.replace(/\D/g, ''),
+              )
+            : phoneList[0];
+          const target = match || phoneList[0];
+          if (target?.id && UUID_REGEX.test(target.id)) {
+            resolvedPhoneId = target.id;
+          }
+        }
+      } catch (err: any) {
+        this.logger.warn(`Could not resolve phone number from VAPI: ${err?.message || err}`);
+      }
+    }
+
+    if (!resolvedPhoneId) {
+      return {
+        success: false,
+        error: 'No se pudo encontrar un Phone Number ID válido en VAPI (VAPI_PHONE_NUMBER_ID).',
+        statusCode: 500,
+      };
+    }
+
+    // 2. Prepare payload per PDF section 4.2
+    const vapiPayload = {
+      phoneNumberId: resolvedPhoneId,
+      assistantId,
+      customer: {
+        number: rawPhone,
+        name: dto.name || 'Visitante Web',
+      },
+      assistantOverrides: {
+        variableValues: {
+          nombre_cliente: dto.name || 'amigo/a',
+          consulta_origen: dto.inquiry || 'Información general',
+          sessionId: dto.sessionId,
+        },
+      },
+    };
+
+    let vapiRes: globalThis.Response;
+    try {
+      vapiRes = await fetch(`${VAPI_BASE_URL}/call/phone`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(vapiPayload),
+      });
+
+      // If /call/phone endpoint is not routed, try standard /call
+      if (vapiRes.status === 404) {
+        vapiRes = await fetch(`${VAPI_BASE_URL}/call`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(vapiPayload),
+        });
+      }
+    } catch (fetchErr: any) {
+      this.logger.error(`Error connecting to VAPI API: ${fetchErr?.message || fetchErr}`);
+      return {
+        success: false,
+        error: `Error de conexión con VAPI: ${fetchErr?.message || 'Servidor inaccesible'}`,
+        statusCode: 502,
+      };
+    }
+
+    const vapiData = await vapiRes.json().catch(() => ({}));
+    if (!vapiRes.ok) {
+      const errMsg =
+        vapiData.message ||
+        (typeof vapiData === 'string' ? vapiData : 'Error al contactar con VAPI');
+      this.logger.error(`VAPI call creation failed (${vapiRes.status}): ${JSON.stringify(vapiData)}`);
+      return {
+        success: false,
+        error: errMsg,
+        statusCode: 502,
+      };
+    }
+
+    const callId = vapiData.id;
+
+    // 3. Register lead / contact in CRM
+    let contactId: string | undefined;
+    try {
+      let contact = await this.contactsRepo.findOne({ where: { phone: rawPhone } });
+      const callNote = `[Llamada VAPI Web]: Call ID: ${callId} | Motivo: "${dto.inquiry || 'Consulta general'}" | Sesión: ${dto.sessionId || 'n/a'} | Fecha: ${new Date().toLocaleString('es-ES')}`;
+
+      if (!contact) {
+        contact = this.contactsRepo.create({
+          phone: rawPhone,
+          name: dto.name || 'Visitante Web VAPI',
+          source: 'landing_vapi',
+          tags: ['lead_landing_vapi', 'vapi_call'],
+          notes: callNote,
+        });
+        const savedContact = await this.contactsRepo.save(contact);
+        contactId = savedContact.id;
+      } else {
+        const existingTags = new Set(contact.tags || []);
+        existingTags.add('lead_landing_vapi');
+        existingTags.add('vapi_call');
+        contact.tags = Array.from(existingTags);
+        if (dto.name && (!contact.name || contact.name.startsWith('Visitante Web'))) {
+          contact.name = dto.name;
+        }
+        contact.notes = contact.notes ? `${contact.notes}\n${callNote}` : callNote;
+        const savedContact = await this.contactsRepo.save(contact);
+        contactId = savedContact.id;
+      }
+
+      // 4. Save call in calls table
+      const call = this.callsRepo.create({
+        vapiCallId: callId,
+        direction: CallDirection.OUTBOUND,
+        fromNumber: acc.phoneNumber || 'VAPI',
+        toNumber: rawPhone,
+        status: CallStatus.QUEUED,
+        contactId: contactId || null,
+        startedAt: new Date(),
+      });
+      await this.callsRepo.save(call);
+    } catch (dbErr: any) {
+      this.logger.warn(`Error registering lead/call in CRM: ${dbErr?.message || dbErr}`);
+    }
+
+    return {
+      success: true,
+      message: 'Llamada iniciada con éxito.',
+      callId,
+      phoneNumber: rawPhone,
+      contactId,
     };
   }
 }
