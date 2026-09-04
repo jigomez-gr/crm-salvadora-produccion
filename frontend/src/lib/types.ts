@@ -169,6 +169,10 @@ export interface Appointment {
   stripePaymentIntentId?: string | null;
   paymentUrl?: string | null;
   paidAt?: string | null;
+  paymentMethod?: string | null;
+  paidAmount?: string | null;
+  paymentNotes?: string | null;
+  paymentRecordedBy?: string | null;
   acceptedAt?: string | null;
   acceptedBy?: string | null;
   cancellationReason?: string | null;

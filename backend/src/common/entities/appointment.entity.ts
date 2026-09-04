@@ -181,6 +181,19 @@ export class Appointment {
   @Column({ type: 'timestamptz', nullable: true })
   paidAt: Date | null;
 
+  // Payment method: 'cash' | 'bizum' | 'card_in_person' | 'stripe' | 'transfer' | 'other'
+  @Column({ type: 'varchar', nullable: true })
+  paymentMethod: string | null;
+
+  @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
+  paidAmount: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  paymentNotes: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  paymentRecordedBy: string | null;
+
   // ─── Acceptance audit (set when status becomes 'scheduled' from 'pending_approval') ───
   @Column({ type: 'timestamptz', nullable: true })
   acceptedAt: Date | null;

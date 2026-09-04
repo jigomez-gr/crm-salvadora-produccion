@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Put,
   Delete,
   Param,
   Body,
@@ -24,6 +25,8 @@ import {
   UploadPatientAttachmentDto,
   RunAiAnalysisDto,
   RejectAppointmentDto,
+  UpdateAppointmentPaymentDto,
+  QueryAppointmentPaymentsDto,
 } from './dto/appointment.dto';
 import { AppointmentStatus } from '../common/entities/appointment.entity';
 import { UserRole } from '../common/entities/user.entity';
@@ -67,6 +70,29 @@ export class AppointmentsController {
       status: AppointmentStatus.PENDING_APPROVAL,
       managerId,
     });
+  }
+
+  @Get('payments')
+  getPayments(@Query() query: QueryAppointmentPaymentsDto) {
+    return this.appointmentsService.getAppointmentPayments(query);
+  }
+
+  @Patch(':id/payment')
+  patchPayment(
+    @Param('id') id: string,
+    @Body() dto: UpdateAppointmentPaymentDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.appointmentsService.updatePayment(id, dto, user.name || user.email);
+  }
+
+  @Put(':id/payment')
+  putPayment(
+    @Param('id') id: string,
+    @Body() dto: UpdateAppointmentPaymentDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.appointmentsService.updatePayment(id, dto, user.name || user.email);
   }
 
   @Post('analyze-ai')

@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import {
   ChevronLeft,
   ChevronRight,
@@ -23,6 +24,7 @@ import {
   Sparkles,
   Scissors,
   Bot,
+  CreditCard,
 } from "lucide-react";
 import { ImageCropModal, SPECIALTIES, SpecialtyType } from "@/components/ImageCropModal";
 import {
@@ -602,6 +604,52 @@ function AppointmentModal({
             <option value="cancelled">Cancelada</option>
           </select>
         </div>
+
+        {/* Estado y Cobro de la Cita */}
+        {initial && (
+          <div className="rounded-xl border border-neutral-200 bg-neutral-50/70 p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-[#800020]" />
+                <h4 className="text-xs font-bold text-neutral-800 uppercase tracking-wider">
+                  Estado de Pago de la Cita
+                </h4>
+              </div>
+              <Link
+                href="/payments"
+                className="text-xs text-[#800020] hover:underline font-semibold flex items-center gap-1"
+              >
+                Abrir Gestión de Pagos →
+              </Link>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-xs pt-1">
+              <span
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md font-semibold ${
+                  initial.paymentStatus === "paid"
+                    ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                    : "bg-amber-100 text-amber-800 border border-amber-300"
+                }`}
+              >
+                {initial.paymentStatus === "paid" ? "✅ Pagado" : "⏳ Pendiente de cobro"}
+              </span>
+              {initial.paymentMethod && (
+                <span className="text-neutral-600">
+                  Método: <strong>{initial.paymentMethod}</strong>
+                </span>
+              )}
+              {initial.paidAmount && (
+                <span className="text-neutral-600">
+                  Importe: <strong>{initial.paidAmount} €</strong>
+                </span>
+              )}
+              {initial.paymentRecordedBy && (
+                <span className="text-neutral-500">
+                  Registrado por: {initial.paymentRecordedBy}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Documentos / Archivos Adjuntos del Paciente (BLOB) */}
         {initial && (

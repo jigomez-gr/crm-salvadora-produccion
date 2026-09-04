@@ -9,7 +9,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-import { AppointmentStatus } from '../../common/entities/appointment.entity';
+import { AppointmentStatus, PaymentStatus } from '../../common/entities/appointment.entity';
 
 export class CreateAppointmentDto {
   @IsUUID()
@@ -156,5 +156,60 @@ export class RejectAppointmentDto {
   @IsOptional()
   @IsString()
   proposedTimes?: string;
+}
+
+export class UpdateAppointmentPaymentDto {
+  @IsEnum(PaymentStatus)
+  paymentStatus: PaymentStatus;
+
+  @IsOptional()
+  @IsString()
+  paymentMethod?: string; // cash | bizum | card_in_person | stripe | transfer | other
+
+  @IsOptional()
+  @IsString()
+  paidAmount?: string;
+
+  @IsOptional()
+  @IsString()
+  paidAt?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentNotes?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentRecordedBy?: string;
+}
+
+export class QueryAppointmentPaymentsDto {
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+
+  @IsOptional()
+  @IsString()
+  service?: string;
+
+  @IsOptional()
+  @IsString()
+  contactId?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentStatus?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentMethod?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
 }
 

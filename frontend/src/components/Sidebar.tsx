@@ -19,6 +19,7 @@ import {
   KeyRound,
   Globe,
   PhoneCall,
+  CreditCard,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,7 @@ import { ChangePasswordForm } from "@/components/ChangePasswordForm";
 const baseNavItems = [
   { href: "/", label: "Inicio", icon: LayoutDashboard },
   { href: "/calendar", label: "Citas y Calendario", icon: CalendarDays },
+  { href: "/payments", label: "Pagos", icon: CreditCard },
   { href: "/contacts", label: "Contactos", icon: Users },
   { href: "/pipeline", label: "Embudo", icon: KanbanSquare },
   { href: "/services", label: "Servicios", icon: Sparkles },

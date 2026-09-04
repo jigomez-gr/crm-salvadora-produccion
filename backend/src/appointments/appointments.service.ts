@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, ILike, In } from 'typeorm';
@@ -12,6 +13,7 @@ import { Contact } from '../common/entities/contact.entity';
 import {
   Appointment,
   AppointmentStatus,
+  PaymentStatus,
 } from '../common/entities/appointment.entity';
 import { Service } from '../common/entities/service.entity';
 import { VapiAccount } from '../common/entities/vapi-account.entity';
@@ -27,6 +29,8 @@ import {
   UpdateAppointmentDto,
   RunAiAnalysisDto,
   RejectAppointmentDto,
+  UpdateAppointmentPaymentDto,
+  QueryAppointmentPaymentsDto,
 } from './dto/appointment.dto';
 import { generateDoctorReportPdfBuffer } from './pdf-report.generator';
 import { AnalizaIaService, AiAnalysisResponse } from './analiza-ia.service';
@@ -46,7 +50,7 @@ import {
 const BOOKING_LOCK_KEY = 528_491;
 
 @Injectable()
-export class AppointmentsService {
+export class AppointmentsService implements OnModuleInit {
   private readonly logger = new Logger(AppointmentsService.name);
   constructor(
     @InjectRepository(Appointment)
@@ -65,6 +69,21 @@ export class AppointmentsService {
     private readonly agentsConfigService: AgentsConfigService,
     private readonly messagesService: MessagesService,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    try {
+      await this.appointmentsRepo.query(`
+        ALTER TABLE "appointments" ADD COLUMN IF NOT EXISTS "paymentMethod" character varying;
+        ALTER TABLE "appointments" ADD COLUMN IF NOT EXISTS "paidAmount" numeric(10,2);
+        ALTER TABLE "appointments" ADD COLUMN IF NOT EXISTS "paymentNotes" text;
+        ALTER TABLE "appointments" ADD COLUMN IF NOT EXISTS "paymentRecordedBy" character varying;
+        ALTER TABLE "appointments" ADD COLUMN IF NOT EXISTS "paidAt" timestamptz;
+      `);
+      this.logger.log('Payment schema columns verified on appointments table.');
+    } catch (err) {
+      this.logger.warn(`Could not run payment schema migration on appointments table: ${err}`);
+    }
+  }
 
   async findAll(
     from?: string,
@@ -1714,5 +1733,145 @@ export class AppointmentsService {
       where: { contactId },
       order: { startsAt: 'DESC' },
     });
+  }
+
+  /**
+   * Retrieves appointments filtered for payment tracking, including full summary totals.
+   */
+  async getAppointmentPayments(query: QueryAppointmentPaymentsDto): Promise<{
+    items: Appointment[];
+    summary: {
+      totalCount: number;
+      paidCount: number;
+      pendingCount: number;
+      totalPaidAmount: number;
+      totalPendingAmount: number;
+    };
+  }> {
+    const qb = this.appointmentsRepo
+      .createQueryBuilder('appointment')
+      .leftJoinAndSelect('appointment.contact', 'contact')
+      .orderBy('appointment.startsAt', 'DESC');
+
+    if (query.startDate) {
+      const start = new Date(query.startDate);
+      if (!isNaN(start.getTime())) {
+        qb.andWhere('appointment.startsAt >= :startDate', { startDate: start.toISOString() });
+      }
+    }
+
+    if (query.endDate) {
+      const end = new Date(query.endDate);
+      if (!isNaN(end.getTime())) {
+        if (query.endDate.length === 10) {
+          end.setHours(23, 59, 59, 999);
+        }
+        qb.andWhere('appointment.startsAt <= :endDate', { endDate: end.toISOString() });
+      }
+    }
+
+    if (query.service && query.service !== 'all') {
+      qb.andWhere('(appointment.service ILIKE :service OR appointment.serviceId = :service)', {
+        service: `%${query.service}%`,
+      });
+    }
+
+    if (query.contactId) {
+      qb.andWhere('appointment.contactId = :contactId', { contactId: query.contactId });
+    }
+
+    if (query.paymentStatus && query.paymentStatus !== 'all') {
+      if (query.paymentStatus === 'pending') {
+        qb.andWhere('appointment.paymentStatus IN (:...pendingStatuses)', {
+          pendingStatuses: [PaymentStatus.PENDING, PaymentStatus.UNPAID],
+        });
+      } else {
+        qb.andWhere('appointment.paymentStatus = :paymentStatus', {
+          paymentStatus: query.paymentStatus,
+        });
+      }
+    }
+
+    if (query.paymentMethod && query.paymentMethod !== 'all') {
+      qb.andWhere('appointment.paymentMethod = :paymentMethod', {
+        paymentMethod: query.paymentMethod,
+      });
+    }
+
+    if (query.search && query.search.trim()) {
+      const term = `%${query.search.trim()}%`;
+      qb.andWhere(
+        '(contact.name ILIKE :search OR contact.phone ILIKE :search OR contact.email ILIKE :search OR appointment.service ILIKE :search)',
+        { search: term },
+      );
+    }
+
+    const items = await qb.getMany();
+
+    let paidCount = 0;
+    let pendingCount = 0;
+    let totalPaidAmount = 0;
+    let totalPendingAmount = 0;
+
+    for (const appt of items) {
+      const priceNum = appt.price ? parseFloat(appt.price) : 0;
+      const paidNum = appt.paidAmount ? parseFloat(appt.paidAmount) : priceNum;
+
+      if (appt.paymentStatus === PaymentStatus.PAID) {
+        paidCount++;
+        totalPaidAmount += isNaN(paidNum) ? 0 : paidNum;
+      } else if (
+        appt.paymentStatus === PaymentStatus.PENDING ||
+        appt.paymentStatus === PaymentStatus.UNPAID ||
+        !appt.paymentStatus
+      ) {
+        pendingCount++;
+        totalPendingAmount += isNaN(priceNum) ? 0 : priceNum;
+      }
+    }
+
+    return {
+      items,
+      summary: {
+        totalCount: items.length,
+        paidCount,
+        pendingCount,
+        totalPaidAmount: Math.round(totalPaidAmount * 100) / 100,
+        totalPendingAmount: Math.round(totalPendingAmount * 100) / 100,
+      },
+    };
+  }
+
+  /**
+   * Updates an appointment's payment status, method, amount, date and notes manually.
+   */
+  async updatePayment(
+    id: string,
+    dto: UpdateAppointmentPaymentDto,
+    recordedBy?: string,
+  ): Promise<Appointment> {
+    const appt = await this.findOne(id);
+    appt.paymentStatus = dto.paymentStatus;
+    if (dto.paymentMethod !== undefined) {
+      appt.paymentMethod = dto.paymentMethod || null;
+    }
+    if (dto.paidAmount !== undefined) {
+      appt.paidAmount = dto.paidAmount || null;
+    }
+    if (dto.paidAt !== undefined) {
+      appt.paidAt = dto.paidAt ? new Date(dto.paidAt) : null;
+    } else if (dto.paymentStatus === PaymentStatus.PAID && !appt.paidAt) {
+      appt.paidAt = new Date();
+    }
+    if (dto.paymentNotes !== undefined) {
+      appt.paymentNotes = dto.paymentNotes || null;
+    }
+    appt.paymentRecordedBy =
+      dto.paymentRecordedBy || recordedBy || appt.paymentRecordedBy || 'Salvadora Conesa';
+
+    const saved = await this.appointmentsRepo.save(appt);
+    const withContact = await this.findOne(saved.id);
+    this.eventEmitter.emit('appointment.updated', withContact);
+    return withContact;
   }
 }
