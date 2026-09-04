@@ -178,8 +178,24 @@ export class EmailService {
       await this.buildTransport(acc).sendMail({
         from: this.fromHeader(acc),
         to: recipient,
-        subject: 'Correo de prueba — CRM',
-        text: 'Esto es un correo de prueba. Si lo recibes, tu cuenta de correo está bien configurada. ✅',
+        subject: '✅ Correo de prueba exitoso — Centro de Yoga Salvadora Conesa',
+        text: 'Esto es un correo de prueba desde tu CRM. Si lo recibes, la configuración SMTP funciona perfectamente. ✅',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 10px; padding: 24px; background: #ffffff;">
+            <div style="text-align: center; border-bottom: 1px solid #f3f4f6; padding-bottom: 16px; margin-bottom: 20px;">
+              <h2 style="color: #16a34a; margin: 0; font-size: 20px;">✅ Configuración SMTP Correcta</h2>
+              <p style="margin: 4px 0 0 0; color: #6b7280; font-size: 13px;">Centro de Yoga Salvadora Conesa & Club Social Parque Granada</p>
+            </div>
+            <p style="font-size: 14px; color: #374151;">¡Hola!</p>
+            <p style="font-size: 14px; color: #374151;">Este es un mensaje de prueba enviado desde tu CRM para verificar la conectividad de correo.</p>
+            <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px; margin: 16px 0; font-size: 13px; color: #166534;">
+              <p style="margin: 3px 0;">✉️ <strong>Destinatario de prueba:</strong> ${recipient}</p>
+              <p style="margin: 3px 0;">📤 <strong>Remitente configurado:</strong> ${acc.fromAddress}</p>
+              <p style="margin: 3px 0;">🌐 <strong>Servidor SMTP:</strong> ${acc.smtpHost}:${acc.smtpPort}</p>
+            </div>
+            <p style="font-size: 13px; color: #4b5563;">Tu cuenta está lista para enviar confirmaciones de cita, recordatorios y avisos a tus alumnos.</p>
+          </div>
+        `,
       });
       return { ok: true, to: recipient };
     } catch (err) {

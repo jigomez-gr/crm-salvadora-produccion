@@ -147,14 +147,19 @@ function EmailCard() {
   }
 
   async function test() {
+    const target = testTo.trim() || fromAddress;
+    if (!target) {
+      toast.error("Indica una dirección de correo a la que enviar la prueba.");
+      return;
+    }
     setTesting(true);
     try {
       const res = await apiFetch<{ to: string }>("/api/email/test", {
         method: "POST",
-        body: JSON.stringify(testTo ? { to: testTo } : {}),
+        body: JSON.stringify({ to: target }),
       });
       toast.success(
-        `Correo de prueba enviado a ${res.to}. Revisa la bandeja de entrada (y la carpeta de spam).`,
+        `✅ Correo de prueba enviado con éxito a ${res.to}. Revisa tu bandeja de entrada y carpeta de spam.`,
       );
     } catch (err) {
       toast.error(
@@ -277,30 +282,35 @@ function EmailCard() {
           hint="Para Gmail/Outlook con 2FA, usa una contraseña de aplicación (no la normal). No se muestra nunca por seguridad."
         />
 
-        <div className="flex flex-wrap items-center gap-2 pt-1">
+        <div className="pt-2">
           <Button onClick={save} disabled={saving}>
             <Upload className="h-4 w-4" />
             {saving ? "Guardando…" : "Guardar cuenta"}
           </Button>
-          <div className="flex items-center gap-2">
+        </div>
+
+        {/* Sección destacada para probar el envío de correo */}
+        <div className="mt-3 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
+          <label className="mb-1.5 block text-xs font-semibold text-neutral-800">
+            Enviar correo de prueba a esta dirección:
+          </label>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <Input
               type="email"
-              className="w-52"
+              className="flex-1 bg-white text-sm"
               value={testTo}
               onChange={(e) => setTestTo(e.target.value)}
-              placeholder="probar a (opcional)"
+              placeholder="Escribe tu correo (ej: jigomez@hotmail.com o tu email personal)"
             />
-            <Button variant="secondary" onClick={test} disabled={testing}>
+            <Button variant="secondary" onClick={test} disabled={testing} className="whitespace-nowrap">
               <Send className="h-4 w-4" />
-              {testing ? "Enviando…" : "Enviar prueba"}
+              {testing ? "Enviando prueba…" : "Enviar correo de prueba"}
             </Button>
           </div>
+          <p className="mt-2 text-xs text-neutral-500">
+            Guarda la cuenta antes de enviar la prueba. Puedes escribir cualquier dirección de correo donde quieras recibir el mensaje para verificar que te llega a la bandeja de entrada o spam.
+          </p>
         </div>
-        <p className="text-xs text-neutral-400">
-          Guarda la cuenta antes de enviar la prueba. Si el correo llega a spam,
-          pide a tu proveedor de dominio que configure los registros{" "}
-          <strong>SPF</strong> y <strong>DKIM</strong> para mejorar la entrega.
-        </p>
       </div>
     </div>
   );
