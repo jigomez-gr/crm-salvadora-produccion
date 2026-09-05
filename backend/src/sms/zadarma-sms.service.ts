@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as crypto from 'crypto';
@@ -26,7 +26,7 @@ export interface SendSmsResult {
 }
 
 @Injectable()
-export class ZadarmaSmsService {
+export class ZadarmaSmsService implements OnModuleInit {
   private readonly logger = new Logger(ZadarmaSmsService.name);
 
   // Fallback defaults from environment
@@ -40,6 +40,51 @@ export class ZadarmaSmsService {
     @InjectRepository(VapiAccount)
     private readonly vapiAccountRepo: Repository<VapiAccount>,
   ) {}
+
+  async onModuleInit() {
+    await this.ensureSchema();
+  }
+
+  private async ensureSchema(): Promise<void> {
+    try {
+      await this.smsLogRepo.query(`
+        CREATE TABLE IF NOT EXISTS "zadarma_sms_respuesta" (
+          "id" SERIAL PRIMARY KEY,
+          "fecha" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          "fecharegistro" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          "httpstatuscode" integer,
+          "status" character varying(50) NOT NULL,
+          "messages" integer DEFAULT 1,
+          "cost" numeric(10, 4) DEFAULT 0,
+          "costtotal" numeric(10, 4) DEFAULT 0,
+          "currency" character varying(10) DEFAULT 'EUR',
+          "callerid" character varying(50) DEFAULT 'Teamsale',
+          "phone" character varying(64) NOT NULL,
+          "numerodestino" character varying(64),
+          "costmin" numeric(10, 4) DEFAULT 0,
+          "costmax" numeric(10, 4) DEFAULT 0,
+          "message" text NOT NULL,
+          "mensaje" text,
+          "parts" integer DEFAULT 1,
+          "raw_response" text,
+          "rawjsonrespuesta" text,
+          "contact_id" uuid,
+          "call_id" uuid,
+          "appointment_id" uuid,
+          CONSTRAINT "FK_zadarmasms_contact" FOREIGN KEY ("contact_id") REFERENCES "contacts"("id") ON DELETE SET NULL,
+          CONSTRAINT "FK_zadarmasms_call" FOREIGN KEY ("call_id") REFERENCES "calls"("id") ON DELETE SET NULL,
+          CONSTRAINT "FK_zadarmasms_appointment" FOREIGN KEY ("appointment_id") REFERENCES "appointments"("id") ON DELETE SET NULL
+        );
+        CREATE INDEX IF NOT EXISTS "IDX_zadarmasms_phone" ON "zadarma_sms_respuesta" ("phone");
+        CREATE INDEX IF NOT EXISTS "IDX_zadarmasms_fecha" ON "zadarma_sms_respuesta" ("fecha" DESC);
+        CREATE INDEX IF NOT EXISTS "IDX_zadarmasms_contact" ON "zadarma_sms_respuesta" ("contact_id");
+        CREATE INDEX IF NOT EXISTS "IDX_zadarmasms_call" ON "zadarma_sms_respuesta" ("call_id");
+        CREATE INDEX IF NOT EXISTS "IDX_zadarmasms_appointment" ON "zadarma_sms_respuesta" ("appointment_id");
+      `);
+    } catch (err: any) {
+      this.logger.warn(`Could not ensure zadarma_sms_respuesta schema: ${err?.message || err}`);
+    }
+  }
 
   /**
    * Retrieves active Zadarma configuration from DB or env defaults.

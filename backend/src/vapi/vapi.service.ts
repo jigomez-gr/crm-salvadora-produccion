@@ -61,6 +61,12 @@ export class VapiService implements OnModuleInit {
           "handoffNumber" character varying,
           "handoffMessage" character varying,
           "smsWebhookUrl" text,
+          "zadarmaApiKey" character varying(100),
+          "zadarmaApiSecret" character varying(100),
+          "zadarmaSenderId" character varying(50) DEFAULT 'Teamsale',
+          "zadarmaSmsEnabled" boolean NOT NULL DEFAULT true,
+          "smsAutoConfirmation" boolean NOT NULL DEFAULT true,
+          "smsConfirmationTemplate" text,
           "voiceProvider" character varying NOT NULL DEFAULT '11labs',
           "voiceId" character varying NOT NULL DEFAULT 'UOIqAnmS11Reiei1Ytkc',
           "voiceModel" character varying NOT NULL DEFAULT 'eleven_turbo_v2_5',
@@ -82,6 +88,47 @@ export class VapiService implements OnModuleInit {
 
       await this.vapiAccountRepo.query(`
         ALTER TABLE "vapi_accounts" ADD COLUMN IF NOT EXISTS "smsWebhookUrl" text;
+        ALTER TABLE "vapi_accounts" ADD COLUMN IF NOT EXISTS "zadarmaApiKey" character varying(100);
+        ALTER TABLE "vapi_accounts" ADD COLUMN IF NOT EXISTS "zadarmaApiSecret" character varying(100);
+        ALTER TABLE "vapi_accounts" ADD COLUMN IF NOT EXISTS "zadarmaSenderId" character varying(50) DEFAULT 'Teamsale';
+        ALTER TABLE "vapi_accounts" ADD COLUMN IF NOT EXISTS "zadarmaSmsEnabled" boolean NOT NULL DEFAULT true;
+        ALTER TABLE "vapi_accounts" ADD COLUMN IF NOT EXISTS "smsAutoConfirmation" boolean NOT NULL DEFAULT true;
+        ALTER TABLE "vapi_accounts" ADD COLUMN IF NOT EXISTS "smsConfirmationTemplate" text;
+      `);
+
+      await this.vapiAccountRepo.query(`
+        CREATE TABLE IF NOT EXISTS "zadarma_sms_respuesta" (
+          "id" SERIAL PRIMARY KEY,
+          "fecha" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          "fecharegistro" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          "httpstatuscode" integer,
+          "status" character varying(50) NOT NULL,
+          "messages" integer DEFAULT 1,
+          "cost" numeric(10, 4) DEFAULT 0,
+          "costtotal" numeric(10, 4) DEFAULT 0,
+          "currency" character varying(10) DEFAULT 'EUR',
+          "callerid" character varying(50) DEFAULT 'Teamsale',
+          "phone" character varying(64) NOT NULL,
+          "numerodestino" character varying(64),
+          "costmin" numeric(10, 4) DEFAULT 0,
+          "costmax" numeric(10, 4) DEFAULT 0,
+          "message" text NOT NULL,
+          "mensaje" text,
+          "parts" integer DEFAULT 1,
+          "raw_response" text,
+          "rawjsonrespuesta" text,
+          "contact_id" uuid,
+          "call_id" uuid,
+          "appointment_id" uuid,
+          CONSTRAINT "FK_zadarmasms_contact" FOREIGN KEY ("contact_id") REFERENCES "contacts"("id") ON DELETE SET NULL,
+          CONSTRAINT "FK_zadarmasms_call" FOREIGN KEY ("call_id") REFERENCES "calls"("id") ON DELETE SET NULL,
+          CONSTRAINT "FK_zadarmasms_appointment" FOREIGN KEY ("appointment_id") REFERENCES "appointments"("id") ON DELETE SET NULL
+        );
+        CREATE INDEX IF NOT EXISTS "IDX_zadarmasms_phone" ON "zadarma_sms_respuesta" ("phone");
+        CREATE INDEX IF NOT EXISTS "IDX_zadarmasms_fecha" ON "zadarma_sms_respuesta" ("fecha" DESC);
+        CREATE INDEX IF NOT EXISTS "IDX_zadarmasms_contact" ON "zadarma_sms_respuesta" ("contact_id");
+        CREATE INDEX IF NOT EXISTS "IDX_zadarmasms_call" ON "zadarma_sms_respuesta" ("call_id");
+        CREATE INDEX IF NOT EXISTS "IDX_zadarmasms_appointment" ON "zadarma_sms_respuesta" ("appointment_id");
       `);
 
       await this.callsRepo.query(`
