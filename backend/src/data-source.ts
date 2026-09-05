@@ -16,6 +16,12 @@ import { KnowledgeDocument } from './common/entities/knowledge-document.entity';
 import { KnowledgeChunk } from './common/entities/knowledge-chunk.entity';
 import { EmailAccount } from './common/entities/email-account.entity';
 import { EmailMessage } from './common/entities/email-message.entity';
+import { Service } from './common/entities/service.entity';
+import { Call } from './common/entities/call.entity';
+import { VapiAccount } from './common/entities/vapi-account.entity';
+import { PaymentAccount } from './common/entities/payment-account.entity';
+import { CalcomAccount } from './common/entities/calcom-account.entity';
+import { ZadarmaSmsLog } from './sms/zadarma-sms-log.entity';
 
 /**
  * Standalone TypeORM DataSource used ONLY by the migration CLI
@@ -33,6 +39,7 @@ export const AppDataSource = new DataSource({
   entities: [
     Contact,
     Appointment,
+    Service,
     AgentConfig,
     Message,
     Conversation,
@@ -44,6 +51,11 @@ export const AppDataSource = new DataSource({
     KnowledgeChunk,
     EmailAccount,
     EmailMessage,
+    PaymentAccount,
+    CalcomAccount,
+    Call,
+    VapiAccount,
+    ZadarmaSmsLog,
   ],
   // When run through ts-node (CLI) __dirname is src/, matching *.ts; at runtime
   // it is dist/, matching the compiled *.js.

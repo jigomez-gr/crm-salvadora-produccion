@@ -68,6 +68,12 @@ export default function ContactDetailPage({
   const [subject, setSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [sending, setSending] = useState(false);
+
+  const [smsList, setSmsList] = useState<any[]>([]);
+  const [smsOpen, setSmsOpen] = useState(false);
+  const [smsMessage, setSmsMessage] = useState("");
+  const [smsSending, setSmsSending] = useState(false);
+
   const [selectedDocAppt, setSelectedDocAppt] = useState<Appointment | null>(null);
   const [aiCropAppt, setAiCropAppt] = useState<Appointment | null>(null);
   const [aiSpecialty, setAiSpecialty] = useState<SpecialtyType>("dental");
@@ -83,7 +89,37 @@ export default function ContactDetailPage({
     apiFetch<EmailMessage[]>(`/api/email/contact/${id}`)
       .then(setEmails)
       .catch(() => {});
+    apiFetch<any[]>(`/api/sms/contact/${id}`)
+      .then(setSmsList)
+      .catch(() => {});
   }, [id]);
+
+  async function sendSms() {
+    if (!smsMessage.trim() || !contact?.phone) return;
+    setSmsSending(true);
+    try {
+      const res = await apiFetch<any>("/api/sms/send", {
+        method: "POST",
+        body: JSON.stringify({
+          number: contact.phone,
+          message: smsMessage.trim(),
+          contactId: id,
+        }),
+      });
+      if (res.success) {
+        toast.success("SMS enviado vía Zadarma.");
+        setSmsMessage("");
+        setSmsOpen(false);
+        apiFetch<any[]>(`/api/sms/contact/${id}`).then(setSmsList).catch(() => {});
+      } else {
+        toast.error(res.error || "No se pudo enviar el SMS.");
+      }
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Error enviando SMS.");
+    } finally {
+      setSmsSending(false);
+    }
+  }
 
   async function sendEmail() {
     if (!subject.trim() || !emailBody.trim()) return;
@@ -243,6 +279,20 @@ export default function ContactDetailPage({
             >
               <Send className="h-3.5 w-3.5" />
               Enviar correo
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={!contact.phone}
+              title={
+                !contact.phone
+                  ? "Este contacto no tiene teléfono registrado"
+                  : "Enviar un SMS vía Zadarma a este contacto"
+              }
+              onClick={() => setSmsOpen(true)}
+            >
+              <Phone className="h-3.5 w-3.5 text-[#800020]" />
+              Enviar SMS
             </Button>
             <Button
               variant="secondary"
@@ -421,6 +471,63 @@ export default function ContactDetailPage({
         )}
       </div>
 
+      {/* SMS enviados (Zadarma) */}
+      <div className="mt-6">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Phone className="h-4 w-4 text-[#800020]" />
+            <h2 className="text-sm font-semibold text-neutral-700">
+              SMS enviados — Zadarma ({smsList.length})
+            </h2>
+          </div>
+          {contact.phone && !contact.anonymizedAt && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setSmsOpen(true)}
+            >
+              <Phone className="h-3.5 w-3.5 text-[#800020]" />
+              Nuevo SMS
+            </Button>
+          )}
+        </div>
+        {smsList.length === 0 ? (
+          <div className="rounded-xl border border-neutral-200 bg-white p-6 text-center text-sm text-neutral-400">
+            Sin mensajes SMS enviados
+          </div>
+        ) : (
+          <div className="divide-y divide-neutral-100 overflow-hidden rounded-xl border border-neutral-200 bg-white">
+            {smsList.map((s) => (
+              <div key={s.id} className="px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs font-medium text-neutral-500">
+                    A: {s.phone || s.numerodestino} {s.callerid ? `· Remitente: ${s.callerid}` : ""}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {Number(s.cost) > 0 && (
+                      <span className="text-xs text-neutral-400">
+                        {s.cost} {s.currency || "EUR"}
+                      </span>
+                    )}
+                    <Badge variant={s.status === "success" ? "success" : "danger"}>
+                      {s.status === "success" ? "Enviado" : s.status || "Error"}
+                    </Badge>
+                  </div>
+                </div>
+                <p className="mt-0.5 text-xs text-neutral-500">
+                  {format(parseISO(s.fecha || s.fecharegistro), "d 'de' MMM, HH:mm", {
+                    locale: es,
+                  })}
+                </p>
+                <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-neutral-700">
+                  {s.message || s.mensaje}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Compose email */}
       <Modal
         open={emailOpen}
@@ -465,6 +572,48 @@ export default function ContactDetailPage({
           >
             <Send className="h-3.5 w-3.5" />
             {sending ? "Enviando…" : "Enviar"}
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Compose SMS */}
+      <Modal
+        open={smsOpen}
+        onClose={() => setSmsOpen(false)}
+        title="Enviar SMS (Zadarma)"
+      >
+        <div className="space-y-3">
+          <div className="text-sm text-neutral-600">
+            Destino:{" "}
+            <span className="font-medium text-neutral-900">{contact.phone}</span>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              Mensaje SMS
+            </label>
+            <Textarea
+              rows={4}
+              value={smsMessage}
+              maxLength={480}
+              onChange={(e) => setSmsMessage(e.target.value)}
+              placeholder="Escribe el mensaje SMS a enviar…"
+            />
+            <div className="mt-1 flex justify-between text-[11px] text-neutral-400">
+              <span>Máx. 160 caracteres por fragmento estándar</span>
+              <span>{smsMessage.length}/480</span>
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setSmsOpen(false)}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={sendSms}
+            disabled={smsSending || !smsMessage.trim() || !contact.phone}
+          >
+            <Send className="h-3.5 w-3.5" />
+            {smsSending ? "Enviando…" : "Enviar SMS"}
           </Button>
         </div>
       </Modal>

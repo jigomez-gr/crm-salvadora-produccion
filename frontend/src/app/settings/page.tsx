@@ -664,6 +664,14 @@ function VapiCard() {
   const [assistantId, setAssistantId] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [smsWebhookUrl, setSmsWebhookUrl] = useState("");
+  const [hasZadarmaApiKey, setHasZadarmaApiKey] = useState(false);
+  const [zadarmaApiKey, setZadarmaApiKey] = useState<string | null>(null);
+  const [hasZadarmaApiSecret, setHasZadarmaApiSecret] = useState(false);
+  const [zadarmaApiSecret, setZadarmaApiSecret] = useState<string | null>(null);
+  const [zadarmaSenderId, setZadarmaSenderId] = useState("Teamsale");
+  const [zadarmaSmsEnabled, setZadarmaSmsEnabled] = useState(true);
+  const [smsAutoConfirmation, setSmsAutoConfirmation] = useState(true);
+  const [smsConfirmationTemplate, setSmsConfirmationTemplate] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [copiedCall, setCopiedCall] = useState(false);
 
@@ -690,6 +698,12 @@ function VapiCard() {
         setAssistantId(data.assistantId || "");
         setPhoneNumber(data.phoneNumber || "");
         setSmsWebhookUrl(data.smsWebhookUrl || "");
+        setHasZadarmaApiKey(Boolean(data.hasZadarmaApiKey));
+        setHasZadarmaApiSecret(Boolean(data.hasZadarmaApiSecret));
+        setZadarmaSenderId(data.zadarmaSenderId || "Teamsale");
+        setZadarmaSmsEnabled(data.zadarmaSmsEnabled ?? true);
+        setSmsAutoConfirmation(data.smsAutoConfirmation ?? true);
+        setSmsConfirmationTemplate(data.smsConfirmationTemplate || "");
       })
       .catch(() => {})
       .finally(() => {
@@ -707,9 +721,19 @@ function VapiCard() {
         assistantId: assistantId.trim() || undefined,
         phoneNumber: phoneNumber.trim() || undefined,
         smsWebhookUrl: smsWebhookUrl.trim() || null,
+        zadarmaSenderId: zadarmaSenderId.trim() || "Teamsale",
+        zadarmaSmsEnabled,
+        smsAutoConfirmation,
+        smsConfirmationTemplate: smsConfirmationTemplate.trim() || null,
       };
       if (apiKey !== null && apiKey.trim() !== "") {
         payload.apiKey = apiKey.trim();
+      }
+      if (zadarmaApiKey !== null) {
+        payload.zadarmaApiKey = zadarmaApiKey.trim() || null;
+      }
+      if (zadarmaApiSecret !== null) {
+        payload.zadarmaApiSecret = zadarmaApiSecret.trim() || null;
       }
       const updated = await apiFetch<VapiAccountConfig>("/api/vapi/config", {
         method: "PATCH",
@@ -717,8 +741,12 @@ function VapiCard() {
       });
       setHasApiKey(updated.hasApiKey);
       setApiKey(null);
+      setHasZadarmaApiKey(Boolean(updated.hasZadarmaApiKey));
+      setZadarmaApiKey(null);
+      setHasZadarmaApiSecret(Boolean(updated.hasZadarmaApiSecret));
+      setZadarmaApiSecret(null);
       setTick((t) => t + 1);
-      toast.success("Configuración de VAPI y SMS guardada");
+      toast.success("Configuración de VAPI y Zadarma SMS guardada");
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Error al guardar configuración de VAPI");
     } finally {
@@ -881,6 +909,82 @@ function VapiCard() {
           <p className="mt-1 text-[11px] text-neutral-500">
             Recibe eventos automáticos (citas aceptadas, rechazadas o creadas) con el texto del SMS listo para enviar.
           </p>
+        </div>
+
+        {/* Zadarma SMS Direct Delivery */}
+        <div className="rounded-xl border border-neutral-200 bg-neutral-50/50 p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-medium text-neutral-900 flex items-center gap-2">
+                <span>📱 Envío Directo de SMS por Zadarma</span>
+                {hasZadarmaApiKey && hasZadarmaApiSecret && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Conectado
+                  </span>
+                )}
+              </h4>
+              <p className="text-xs text-neutral-500 mt-0.5">
+                Envía SMS automáticos inmediatamente al confirmar reservas telefónicas por VAPI o desde la agenda del CRM.
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={zadarmaSmsEnabled}
+                onChange={(e) => setZadarmaSmsEnabled(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-9 h-5 bg-neutral-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#800020]"></div>
+            </label>
+          </div>
+
+          {zadarmaSmsEnabled && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              <div>
+                <label className={labelCls}>Zadarma API Key</label>
+                <Input
+                  type="password"
+                  placeholder={hasZadarmaApiKey ? "•••••••••••• (configurada)" : "ej: 45dc42d6f22439899024"}
+                  value={zadarmaApiKey ?? ""}
+                  onChange={(e) => setZadarmaApiKey(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className={labelCls}>Zadarma API Secret</label>
+                <Input
+                  type="password"
+                  placeholder={hasZadarmaApiSecret ? "•••••••••••• (configurado)" : "ej: 34061190a934a453aa99"}
+                  value={zadarmaApiSecret ?? ""}
+                  onChange={(e) => setZadarmaApiSecret(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className={labelCls}>Remitente (Sender ID)</label>
+                <Input
+                  placeholder="Teamsale o nombre de remitente"
+                  value={zadarmaSenderId}
+                  onChange={(e) => setZadarmaSenderId(e.target.value)}
+                />
+                <p className="mt-1 text-[11px] text-neutral-500">
+                  Identificador de remitente registrado en Zadarma (por defecto Teamsale).
+                </p>
+              </div>
+
+              <div>
+                <label className={labelCls}>Plantilla Personalizada (opcional)</label>
+                <Input
+                  placeholder="Usa {servicio} y {fecha} para variables"
+                  value={smsConfirmationTemplate}
+                  onChange={(e) => setSmsConfirmationTemplate(e.target.value)}
+                />
+                <p className="mt-1 text-[11px] text-neutral-500">
+                  Si se deja vacío, usará el mensaje con captura secundaria de email.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-neutral-100">

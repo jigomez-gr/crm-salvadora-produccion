@@ -18,3 +18,5 @@ backups/
 *.sql
 !docs/*.sql
 *.dump
+bin/
+obj/

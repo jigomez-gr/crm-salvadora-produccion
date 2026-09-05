@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Botón de Reserva Telefónica (VAPI + Zadarma SMS) - CRM Salvadora</title>
+  <style>
+    :root {
+      --primary-crm: #800020;
+      --primary-crm-hover: #660019;
+    }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 40px 20px;
+      background-color: #f8fafc;
+      color: #0f172a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 640px;
+      width: 100%;
+      background: #ffffff;
+      padding: 32px;
+      border-radius: 20px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+      border: 1px solid #e2e8f0;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #fdf2f4;
+      color: var(--primary-crm);
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      border: 1px solid #fecdd3;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin: 0 0 10px 0;
+      color: #0f172a;
+    }
+    p {
+      color: #475569;
+      font-size: 14px;
+      line-height: 1.6;
+      margin: 0 0 20px 0;
+    }
+    .flow-steps {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+    .flow-steps ol {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 13px;
+      color: #334155;
+    }
+    .flow-steps li {
+      margin-bottom: 8px;
+    }
+    .flow-steps li:last-child {
+      margin-bottom: 0;
+    }
+
+    /* BOTÓN PRINCIPAL */
+    .btn-vapi-call {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background-color: var(--primary-crm);
+      color: #ffffff;
+      padding: 14px 28px;
+      font-size: 15px;
+      font-weight: 600;
+      border-radius: 12px;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(128, 0, 32, 0.25);
+      transition: all 0.2s ease;
+      width: 100%;
+    }
+    .btn-vapi-call:hover {
+      background-color: var(--primary-crm-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(128, 0, 32, 0.35);
+    }
+    .btn-vapi-call:active {
+      transform: translateY(0);
+    }
+
+    /* MODAL DE CAPTURA */
+    .vapi-modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(4px);
+      z-index: 99999;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .vapi-modal-content {
+      background: #ffffff;
+      border-radius: 20px;
+      max-width: 440px;
+      width: 100%;
+      padding: 28px;
+      position: relative;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      border: 1px solid #f1f5f9;
+      animation: modalFadeIn 0.2s ease-out;
+    }
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .vapi-modal-close {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      background: transparent;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: #94a3b8;
+      line-height: 1;
+      padding: 4px;
+    }
+    .vapi-modal-close:hover {
+      color: #334155;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #334155;
+      margin-bottom: 6px;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      font-size: 14px;
+      box-sizing: border-box;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-group input:focus {
+      border-color: var(--primary-crm);
+      box-shadow: 0 0 0 3px rgba(128, 0, 32, 0.1);
+    }
+    .btn-submit-call {
+      width: 100%;
+      background: var(--primary-crm);
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-submit-call:hover {
+      background: var(--primary-crm-hover);
+    }
+    .btn-submit-call:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .alert-box {
+      display: none;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      margin-bottom: 14px;
+    }
+    .alert-error {
+      background: #fef2f2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+    }
+    .success-view {
+      display: none;
+      text-align: center;
+      padding: 16px 0;
+    }
+    .success-icon {
+      width: 48px;
+      height: 48px;
+      background: #ecfdf5;
+      color: #059669;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="badge">📞 Asistente de Voz VAPI + Zadarma SMS</div>
+    <h1>Reserva Telefónica Inmediata</h1>
+    <p>Prueba el botón directo de llamada para que tus visitantes soliciten una reserva telefónica atendida por IA y reciban automáticamente un <strong>SMS de confirmación por Zadarma</strong>.</p>
+
+    <div class="flow-steps">
+      <strong>Flujo automático de 3 pasos:</strong>
+      <ol>
+        <li>El usuario pulsa el botón e introduce su número móvil.</li>
+        <li>El sistema le llama al instante; la IA de voz de VAPI gestiona la cita.</li>
+        <li>Al confirmarse, el CRM envía automáticamente un SMS vía Zadarma con los datos de acceso y recordatorio.</li>
+      </ol>
+    </div>
+
+    <!-- BOTÓN QUE SE PUEDE COPIAR A CUALQUIER LANDING -->
+    <button class="btn-vapi-call" onclick="openVapiModal()">
+      <span>📞 Pedir Cita por Teléfono (Llamada IA)</span>
+    </button>
+  </div>
+
+  <!-- MODAL DE RESERVA TELEFÓNICA -->
+  <div id="vapiModal" class="vapi-modal-overlay">
+    <div class="vapi-modal-content">
+      <button class="vapi-modal-close" onclick="closeVapiModal()">&times;</button>
+      
+      <div id="vapiForm">
+        <div style="font-size: 12px; font-weight: 700; color: var(--primary-crm); text-transform: uppercase; margin-bottom: 4px;">Llamada Gratuita</div>
+        <h3 style="margin: 0 0 6px 0; font-size: 18px; font-weight: 700;">Te llamamos en 5 segundos</h3>
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 16px;">Nuestra asistente telefónica te atenderá por voz y te enviará un SMS con tu plaza confirmada.</p>
+
+        <div id="vapiAlert" class="alert-box alert-error"></div>
+
+        <div class="form-group">
+          <label for="callerName">Tu Nombre (opcional)</label>
+          <input type="text" id="callerName" placeholder="Ej. Ana Belén">
+        </div>
+
+        <div class="form-group">
+          <label for="callerPhone">Número de Teléfono <span style="color: #e11d48;">*</span></label>
+          <input type="tel" id="callerPhone" placeholder="Ej. 611 22 33 44" required>
+        </div>
+
+        <button id="vapiSubmitBtn" class="btn-submit-call" onclick="submitVapiCall()">
+          Llamarme Ahora
+        </button>
+      </div>
+
+      <div id="vapiSuccess" class="success-view">
+        <div class="success-icon">✓</div>
+        <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700; color: #0f172a;">¡Llamada en camino!</h3>
+        <p style="font-size: 13px; color: #475569; margin-bottom: 14px;">Descuelga tu teléfono. Nuestra IA te confirmará el horario y recibirás un SMS de Zadarma con el resumen.</p>
+        <button class="btn-submit-call" style="background: #0f172a;" onclick="closeVapiModal()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Configura la URL del CRM en producción
+    const CRM_URL = "https://crm-salvadoraconesa.jigretera.com";
+
+    function openVapiModal() {
+      document.getElementById('vapiModal').style.display = 'flex';
+      document.getElementById('vapiForm').style.display = 'block';
+      document.getElementById('vapiSuccess').style.display = 'none';
+      document.getElementById('vapiAlert').style.display = 'none';
+    }
+
+    function closeVapiModal() {
+      document.getElementById('vapiModal').style.display = 'none';
+    }
+
+    function submitVapiCall() {
+      const phoneInput = document.getElementById('callerPhone').value.trim();
+      const nameInput = document.getElementById('callerName').value.trim();
+      const alertBox = document.getElementById('vapiAlert');
+      const submitBtn = document.getElementById('vapiSubmitBtn');
+
+      if (!phoneInput) {
+        alertBox.textContent = 'Por favor, introduce tu número de teléfono móvil.';
+        alertBox.style.display = 'block';
+        return;
+      }
+
+      let phone = phoneInput.replace(/\\s+/g, '');
+      if (/^[6789]\\d{8}$/.test(phone)) {
+        phone = '+34' + phone;
+      } else if (!phone.startsWith('+')) {
+        phone = '+' + phone;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Conectando...';
+      alertBox.style.display = 'none';
+
+      fetch(`${CRM_URL}/api/widget/vapi/call`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phoneNumber: phone,
+          name: nameInput || undefined,
+          agentKey: 'booking',
+          inquiry: 'Reserva telefónica desde landing'
+        })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          document.getElementById('vapiForm').style.display = 'none';
+          document.getElementById('vapiSuccess').style.display = 'block';
+        } else {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Llamarme Ahora';
+          alertBox.textContent = data.error || 'No se pudo conectar la llamada. Inténtalo de nuevo.';
+          alertBox.style.display = 'block';
+        }
+      })
+      .catch(err => {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Llamarme Ahora';
+        alertBox.textContent = 'Error de conexión con el CRM. Comprueba la red.';
+        alertBox.style.display = 'block';
+      });
+    }
+  </script>
+</body>
+</html>

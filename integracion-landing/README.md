@@ -48,27 +48,44 @@ NEXT_PUBLIC_BUSINESS_NAME=Centro de Yoga y Bienestar Salvadora
 * `ChatBubbleWidget.tsx`: Componente React autocontenido con la burbuja flotante, chat en streaming con OpenRouter, historial y formulario de derivación a WhatsApp.
 * `SimuladorDiagnosticoModal.tsx`: Modal con IA para análisis visual de imágenes y recomendaciones automáticas.
 * `FooterLegal.tsx`: Pie de página legal responsive con enlaces a privacidad, términos y contacto.
+* `VapiVoiceBookingButton.tsx`: Botón y modal interactivo para solicitar llamada telefónica instantánea con la IA de VAPI y recibir SMS automático de Zadarma tras la reserva.
 
-### 3. Cómo usar la Burbuja de Chat en tu Layout (`layout.tsx` o `App.tsx`):
+### 3. Cómo usar la Burbuja de Chat y el Botón de Llamada Telefónica en tu Landing:
 ```tsx
 import { ChatBubbleWidget } from "@/components/ChatBubbleWidget";
+import { VapiVoiceBookingButton } from "@/components/VapiVoiceBookingButton";
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function MiLandingPage() {
   return (
-    <html lang="es">
-      <body>
-        {children}
-        {/* Burbuja flotante en toda la web */}
-        <ChatBubbleWidget agentKey="booking" />
-      </body>
-    </html>
+    <main className="p-8">
+      <h1>Reserva tu clase o cita en Centro Salvadora</h1>
+      
+      {/* Botón directo de llamada IA con Zadarma SMS */}
+      <div className="my-6">
+        <VapiVoiceBookingButton 
+          buttonText="📞 Reservar por Teléfono (Llamada IA + SMS)"
+          serviceHint="Reserva de Yoga o Terapia"
+        />
+      </div>
+
+      {/* Burbuja flotante de chat en la esquina inferior */}
+      <ChatBubbleWidget agentKey="booking" />
+    </main>
   );
 }
 ```
 
 ---
 
-## 📄 OPCIÓN 3: Integrar la Página Completa de Landing
+## 📞 OPCIÓN 3: Botón HTML Autocontenido para WordPress / Webflow / Shopify
+Si tu landing está hecha en WordPress, Elementor, Webflow, Shopify o HTML estático:
+1. Abre el archivo `embed-html/vapi-sms-widget.html`.
+2. Copia el botón y el modal en tu página.
+3. El visitante pulsa el botón, introduce su móvil y la IA le llama de inmediato, confirmando la plaza y disparando el SMS de Zadarma en tiempo real.
+
+---
+
+## 📄 OPCIÓN 4: Integrar la Página Completa de Landing
 
 En la carpeta `pages/` dispones del código fuente completo de la landing:
 * `pages/demo-landing-app-router.tsx` $\rightarrow$ Para copiarlo en `app/servicios/page.tsx` o `app/page.tsx` (Next.js App Router).
@@ -79,5 +96,8 @@ En la carpeta `pages/` dispones del código fuente completo de la landing:
 ## 🛠️ Endpoints de la API del Widget disponibles:
 1. `GET /api/widget/config/:agentKey` $\rightarrow$ Obtiene el nombre del negocio, color de marca y lista de servicios disponibles.
 2. `POST /api/widget/chat/:agentKey` $\rightarrow$ Envía un mensaje al agente de IA y devuelve la respuesta en tiempo real.
-3. `POST /api/widget/handoff-whatsapp/:agentKey` $\rightarrow$ Registra el contacto en el CRM y deriva la conversación a WhatsApp.
-4. `POST /api/widget/analizaia/analizar` $\rightarrow$ Analiza una imagen o descripción y genera un prediagnóstico médico o de bienestar.
+3. `POST /api/widget/vapi/call` $\rightarrow$ Inicia una llamada saliente de voz (VAPI) hacia el móvil del cliente y envía el SMS de Zadarma al confirmar.
+4. `POST /api/widget/handoff-whatsapp/:agentKey` $\rightarrow$ Registra el contacto en el CRM y deriva la conversación a WhatsApp.
+5. `POST /api/widget/analizaia/analizar` $\rightarrow$ Analiza una imagen o descripción y genera un prediagnóstico médico o de bienestar.
+6. `POST /api/sms/send` $\rightarrow$ Envío y registro de SMS vía API de Zadarma con firma HMAC-SHA1.
+7. `GET /api/sms/logs` $\rightarrow$ Consulta histórica de auditoría y costes de SMS enviados.

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan, LessThanOrEqual, In, Between } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -11,6 +11,7 @@ import { AppSettings } from '../common/entities/app-settings.entity';
 import { VapiAccount } from '../common/entities/vapi-account.entity';
 import { AppointmentsService } from '../appointments/appointments.service';
 import { ContactsService } from '../contacts/contacts.service';
+import { ZadarmaSmsService } from '../sms/zadarma-sms.service';
 import { normalizePhoneLoose } from '../common/phone';
 import {
   VapiWebhookMessage,
@@ -206,6 +207,8 @@ export class VapiWebhookService {
     private readonly appointmentsService: AppointmentsService,
     private readonly contactsService: ContactsService,
     private readonly eventEmitter: EventEmitter2,
+    @Optional()
+    private readonly zadarmaSms?: ZadarmaSmsService,
   ) {}
 
   /**
@@ -769,10 +772,48 @@ export class VapiWebhookService {
 
       const spokenDate = this.formatSpokenDate(startsAt, ctx.timezone);
       const requiresApproval = officialSvc?.requiresApproval || serviceEntity?.requiresApproval;
-      if (requiresApproval) {
-        return `¡Solicitud registrada con éxito! Tu cita para ${appt.service} el ${spokenDate} a nombre de ${customerName} ha quedado registrada pendiente de aprobación del terapeuta Jose Ignacio. Te avisaremos en cuanto esté confirmada.`;
+
+      // 5. Trigger Zadarma SMS confirmation asynchronously
+      const customerPhone = contact.phone || effectivePhone;
+      if (customerPhone && this.zadarmaSms) {
+        const defaultMsg = requiresApproval
+          ? `Centro Salvadora: Solicitud recibida para ${appt.service} el ${spokenDate}. Si deseas recibir el acceso por correo, respóndenos a este SMS con tu email.`
+          : `Centro Salvadora: Confirmamos tu cita de ${appt.service} para el ${spokenDate}. Si deseas recibir los detalles por correo, respóndenos a este SMS con tu email. ¡Te esperamos!`;
+
+        this.vapiAccountRepo.findOne({ where: {} }).then((vapiAcc) => {
+          if (vapiAcc?.zadarmaSmsEnabled === false) return;
+          const template = vapiAcc?.smsConfirmationTemplate;
+          const smsText = template
+            ? template.replace('{servicio}', appt.service).replace('{fecha}', spokenDate)
+            : defaultMsg;
+
+          const callLookup = ctx.vapiCallId
+            ? this.callsRepo.findOne({ where: { vapiCallId: ctx.vapiCallId } })
+            : Promise.resolve(null);
+
+          callLookup.then((callRow) => {
+            this.zadarmaSms?.sendSms({
+              number: customerPhone,
+              message: smsText,
+              sender: vapiAcc?.zadarmaSenderId || undefined,
+              contactId: contact.id,
+              callId: callRow?.id,
+              appointmentId: appt.id,
+            }).catch((smsErr) => {
+              this.logger.error(`Error sending Zadarma SMS post-reservation: ${smsErr?.message || smsErr}`);
+            });
+          }).catch((err) => {
+            this.logger.debug(`Could not resolve call for SMS log: ${err?.message || err}`);
+          });
+        }).catch((err) => {
+          this.logger.debug(`Could not read Zadarma SMS settings: ${err?.message || err}`);
+        });
       }
-      return `¡Cita confirmada con éxito! Queda agendada para ${appt.service} el ${spokenDate} a nombre de ${customerName}. Confírmaselo amablemente al cliente y despídete.`;
+
+      if (requiresApproval) {
+        return `¡Solicitud registrada con éxito! Tu cita para ${appt.service} el ${spokenDate} a nombre de ${customerName} ha quedado registrada pendiente de aprobación del terapeuta Jose Ignacio. Confírmaselo y pregúntale: "Si quieres que te envíe un resumen con los datos de acceso, ¿me dices tu correo electrónico?". Si prefiere no darlo o duda al deletrear, dile "No te preocupes, te lo dejo todo registrado con tu número de teléfono" y despídete.`;
+      }
+      return `¡Cita confirmada con éxito! Queda agendada para ${appt.service} el ${spokenDate} a nombre de ${customerName}. Confírmaselo amablemente al cliente y dile exactamente: "Tu plaza ya está reservada. Si quieres que te envíe un resumen con la ubicación y datos de acceso, ¿me dices tu correo electrónico?". Si el cliente no desea darlo o duda al deletrear, dile con amabilidad "No te preocupes, te lo dejo todo registrado con tu número de teléfono" y despídete con calidez.`;
     } catch (err: any) {
       if (err?.message?.includes('ya tiene una reserva') || err?.status === 409 || err?.name === 'ConflictException') {
         return `Ya consta una reserva activa a nombre de ${customerName} en ese mismo horario. No es necesario volver a reservarla. Si deseas modificarla o cambiar de horario, dímelo y te la reprogramo.`;

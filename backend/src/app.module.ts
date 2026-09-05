@@ -23,6 +23,8 @@ import { CalcomAccount } from './common/entities/calcom-account.entity';
 import { Service } from './common/entities/service.entity';
 import { Call } from './common/entities/call.entity';
 import { VapiAccount } from './common/entities/vapi-account.entity';
+import { ZadarmaSmsLog } from './sms/zadarma-sms-log.entity';
+import { ZadarmaSmsModule } from './sms/zadarma-sms.module';
 import { ContactsModule } from './contacts/contacts.module';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { ServicesModule } from './services/services.module';
@@ -75,6 +77,7 @@ import { AgentsModule } from './agents/agents.module';
         CalcomAccount,
         Call,
         VapiAccount,
+        ZadarmaSmsLog,
       ],
       synchronize: false,
       migrationsRun: false,
@@ -99,6 +102,7 @@ import { AgentsModule } from './agents/agents.module';
     EmailModule,
     PaymentsModule,
     CalcomModule,
+    ZadarmaSmsModule,
     VapiModule,
     CallsModule,
     SeedModule,

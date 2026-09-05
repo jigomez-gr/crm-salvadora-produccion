@@ -10,6 +10,7 @@ import { AppSettings } from '../common/entities/app-settings.entity';
 import { AppointmentsModule } from '../appointments/appointments.module';
 import { ContactsModule } from '../contacts/contacts.module';
 import { AuthModule } from '../auth/auth.module';
+import { ZadarmaSmsModule } from '../sms/zadarma-sms.module';
 import { VapiService } from './vapi.service';
 import { VapiWebhookService } from './vapi-webhook.service';
 import { VapiController } from './vapi.controller';
@@ -29,6 +30,7 @@ import { VapiWebhookController } from './vapi-webhook.controller';
     forwardRef(() => AppointmentsModule),
     forwardRef(() => ContactsModule),
     AuthModule,
+    ZadarmaSmsModule,
   ],
   providers: [VapiService, VapiWebhookService],
   controllers: [VapiWebhookController, VapiController],

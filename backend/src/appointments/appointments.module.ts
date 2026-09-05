@@ -14,6 +14,7 @@ import { EmailModule } from '../email/email.module';
 import { YCloudModule } from '../whatsapp/ycloud.module';
 import { AgentsConfigModule } from '../agents/agents-config.module';
 import { ConversationsModule } from '../conversations/conversations.module';
+import { ZadarmaSmsModule } from '../sms/zadarma-sms.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ConversationsModule } from '../conversations/conversations.module';
     YCloudModule,
     AgentsConfigModule,
     ConversationsModule,
+    ZadarmaSmsModule,
   ],
   providers: [AppointmentsService, AnalizaIaService],
   controllers: [AppointmentsController],

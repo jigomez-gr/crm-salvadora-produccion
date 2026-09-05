@@ -41,6 +41,25 @@ export class VapiAccount {
   @Column({ type: 'text', nullable: true })
   smsWebhookUrl: string | null;
 
+  // Zadarma SMS Settings
+  @Column({ nullable: true })
+  zadarmaApiKey: string | null;
+
+  @Column({ nullable: true })
+  zadarmaApiSecret: string | null;
+
+  @Column({ nullable: true, default: 'Teamsale' })
+  zadarmaSenderId: string | null;
+
+  @Column({ default: true })
+  zadarmaSmsEnabled: boolean;
+
+  @Column({ default: true })
+  smsAutoConfirmation: boolean;
+
+  @Column({ type: 'text', nullable: true })
+  smsConfirmationTemplate: string | null;
+
   // Voice Settings
   @Column({ default: '11labs' })
   voiceProvider: string;

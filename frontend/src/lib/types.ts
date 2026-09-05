@@ -557,6 +557,13 @@ export interface VapiAccountConfig {
   maxDurationSeconds: number;
   isActive: boolean;
   smsWebhookUrl?: string | null;
+  hasZadarmaApiKey?: boolean;
+  maskedZadarmaApiKey?: string | null;
+  hasZadarmaApiSecret?: boolean;
+  zadarmaSenderId?: string | null;
+  zadarmaSmsEnabled?: boolean;
+  smsAutoConfirmation?: boolean;
+  smsConfirmationTemplate?: string | null;
   updatedAt: string;
 }
 

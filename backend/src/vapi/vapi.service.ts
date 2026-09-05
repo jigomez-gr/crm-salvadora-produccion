@@ -177,6 +177,17 @@ export class VapiService implements OnModuleInit {
       maxDurationSeconds: acc.maxDurationSeconds,
       isActive: acc.isActive,
       smsWebhookUrl: acc.smsWebhookUrl,
+      hasZadarmaApiKey: Boolean(acc.zadarmaApiKey || process.env.ZADARMA_API_KEY),
+      maskedZadarmaApiKey: acc.zadarmaApiKey
+        ? `***${acc.zadarmaApiKey.slice(-4)}`
+        : process.env.ZADARMA_API_KEY
+          ? `***${process.env.ZADARMA_API_KEY.slice(-4)}`
+          : null,
+      hasZadarmaApiSecret: Boolean(acc.zadarmaApiSecret || process.env.ZADARMA_API_SECRET),
+      zadarmaSenderId: acc.zadarmaSenderId || process.env.ZADARMA_SENDER_ID || 'Teamsale',
+      zadarmaSmsEnabled: acc.zadarmaSmsEnabled ?? true,
+      smsAutoConfirmation: acc.smsAutoConfirmation ?? true,
+      smsConfirmationTemplate: acc.smsConfirmationTemplate,
       updatedAt: acc.updatedAt,
     };
   }
@@ -198,6 +209,26 @@ export class VapiService implements OnModuleInit {
     }
     if (dto.smsWebhookUrl !== undefined) {
       acc.smsWebhookUrl = dto.smsWebhookUrl?.trim() ? dto.smsWebhookUrl.trim() : null;
+    }
+    if (dto.zadarmaApiKey !== undefined) {
+      acc.zadarmaApiKey = dto.zadarmaApiKey ? dto.zadarmaApiKey.trim() : null;
+    }
+    if (dto.zadarmaApiSecret !== undefined) {
+      acc.zadarmaApiSecret = dto.zadarmaApiSecret ? dto.zadarmaApiSecret.trim() : null;
+    }
+    if (dto.zadarmaSenderId !== undefined) {
+      acc.zadarmaSenderId = dto.zadarmaSenderId ? dto.zadarmaSenderId.trim() : null;
+    }
+    if (dto.zadarmaSmsEnabled !== undefined) {
+      acc.zadarmaSmsEnabled = dto.zadarmaSmsEnabled;
+    }
+    if (dto.smsAutoConfirmation !== undefined) {
+      acc.smsAutoConfirmation = dto.smsAutoConfirmation;
+    }
+    if (dto.smsConfirmationTemplate !== undefined) {
+      acc.smsConfirmationTemplate = dto.smsConfirmationTemplate
+        ? dto.smsConfirmationTemplate.trim()
+        : null;
     }
     if (dto.handoffNumber !== undefined) acc.handoffNumber = dto.handoffNumber || null;
     if (dto.handoffMessage !== undefined) acc.handoffMessage = dto.handoffMessage || null;

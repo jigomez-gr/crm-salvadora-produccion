@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, ILike, In } from 'typeorm';
@@ -18,6 +19,7 @@ import {
 import { Service } from '../common/entities/service.entity';
 import { VapiAccount } from '../common/entities/vapi-account.entity';
 import { CalcomService } from '../calcom/calcom.service';
+import { ZadarmaSmsService } from '../sms/zadarma-sms.service';
 import { TZDate } from '@date-fns/tz';
 import { format, startOfWeek, endOfWeek } from 'date-fns';
 import { businessDayWindow } from './business-day';
@@ -68,6 +70,8 @@ export class AppointmentsService implements OnModuleInit {
     private readonly ycloudClient: YCloudClient,
     private readonly agentsConfigService: AgentsConfigService,
     private readonly messagesService: MessagesService,
+    @Optional()
+    private readonly zadarmaSms?: ZadarmaSmsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -1272,6 +1276,26 @@ export class AppointmentsService implements OnModuleInit {
         smsText = `Hola ${contact.name || ''}, confirmamos la cancelación de tu cita para ${appt.service} prevista para el ${formattedDate}.`;
       } else {
         smsText = `Hola ${contact.name || ''}, lamentamos informarte de que tu solicitud para ${appt.service} el ${formattedDate} no ha podido ser confirmada.`;
+      }
+
+      // Direct Zadarma SMS dispatch if enabled and contact has phone
+      if (contact.phone && this.zadarmaSms) {
+        try {
+          const vapiAcc = await this.appointmentsRepo.manager
+            .getRepository(VapiAccount)
+            .findOne({ where: {} });
+          if (vapiAcc?.zadarmaSmsEnabled !== false) {
+            await this.zadarmaSms.sendSms({
+              number: contact.phone,
+              message: smsText,
+              sender: vapiAcc?.zadarmaSenderId || undefined,
+              contactId: contact.id,
+              appointmentId: appt.id,
+            });
+          }
+        } catch (smsErr) {
+          this.logger.warn(`Could not dispatch Zadarma SMS for appointment ${appt.id}: ${smsErr}`);
+        }
       }
 
       await this.dispatchSmsWebhook({
