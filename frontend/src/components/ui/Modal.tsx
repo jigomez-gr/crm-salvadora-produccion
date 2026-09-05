@@ -86,7 +86,7 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
         aria-labelledby={titleId}
         tabIndex={-1}
         className={cn(
-          "relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow-xl focus:outline-none",
+          "relative z-10 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-xl focus:outline-none",
           className
         )}
       >

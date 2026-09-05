@@ -13,6 +13,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  MessageSquare,
 } from "lucide-react";
 import { apiFetch, apiUrl, ApiError } from "@/lib/api";
 import { Contact, ContactPage, ContactStatus, ImportResult } from "@/lib/types";
@@ -112,6 +113,20 @@ function ContactModal({
       title={initial ? "Editar contacto" : "Nuevo contacto"}
     >
       <form onSubmit={handleSubmit} className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
+        {initial?.id && (
+          <div className="rounded-lg bg-indigo-50 border border-indigo-100 p-2.5 flex items-center justify-between gap-2">
+            <div className="text-xs text-indigo-950">
+              <span className="font-semibold block">Ficha y SMS de {initial.name}</span>
+              <span className="text-neutral-500 text-[11px]">Accede a citas, historial y envío de SMS con Zadarma.</span>
+            </div>
+            <Link
+              href={`/contacts/${initial.id}`}
+              className="px-2.5 py-1 rounded bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700 shrink-0 shadow-xs"
+            >
+              Abrir Ficha / SMS →
+            </Link>
+          </div>
+        )}
         <div>
           <label className="mb-1 block text-xs font-medium text-neutral-700">
             Nombre <span className="text-red-500">*</span>
@@ -641,6 +656,14 @@ function ContactsPageInner() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
+                      <Link
+                        href={`/contacts/${c.id}`}
+                        className="inline-flex items-center justify-center h-8 px-2 rounded-md text-xs font-medium text-indigo-600 hover:bg-indigo-50 gap-1"
+                        title="Ver ficha completa y enviar SMS con Zadarma"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Ficha & SMS</span>
+                      </Link>
                       <Button
                         size="sm"
                         variant="ghost"

@@ -262,6 +262,7 @@ function AppointmentModal({
       open={open}
       onClose={onClose}
       title={initial ? "Detalles / Editar Cita" : "Nueva Cita"}
+      className="max-w-2xl max-h-[92vh] overflow-y-auto"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Banner de Cita Pendiente de Aprobación */}
