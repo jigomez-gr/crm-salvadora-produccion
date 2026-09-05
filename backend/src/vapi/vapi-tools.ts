@@ -1,4 +1,4 @@
-﻿import { createHash } from 'crypto';
+import { createHash } from 'crypto';
 
 export interface VapiToolDefinition {
   type: 'function';
@@ -144,6 +144,23 @@ export function buildVapiToolDefinitions(webhookUrl: string, credentialId?: stri
             motivo: { type: 'string', description: 'Motivo de la derivación o solicitud de atención humana' },
           },
           required: ['motivo'],
+        },
+      },
+      server,
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'guardar_datos_contacto',
+        description:
+          'Guarda o actualiza el correo electrónico del cliente en su ficha del CRM. Úsala tan pronto como el cliente te facilite su email tras confirmar la reserva o durante la llamada. Parámetros: email (obligatorio), nombre (opcional).',
+        parameters: {
+          type: 'object',
+          properties: {
+            email: { type: 'string', description: 'Correo electrónico facilitado por el cliente' },
+            nombre: { type: 'string', description: 'Nombre del cliente si lo facilita o actualiza' },
+          },
+          required: ['email'],
         },
       },
       server,

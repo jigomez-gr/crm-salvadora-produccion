@@ -125,7 +125,7 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
 5. **Captura Opcional de Correo al Final de la Reserva (Para todos los tipos de citas)**:
    - Inmediatamente tras confirmar la reserva con "reservar_cita", dile con amabilidad:
      "Tu plaza ya está reservada. Si quieres que te envíe un resumen con la ubicación y datos de acceso, ¿me dices tu correo electrónico?"
-   - Si el cliente te lo facilita con claridad, recógelo.
+   - Si el cliente te facilita su correo electrónico, LLAMA DE INMEDIATO a la herramienta "guardar_datos_contacto" con su email para guardarlo en su ficha del CRM.
    - Si el cliente prefiere no dictarlo, duda o hay alguna dificultad al deletrear, NUNCA bloquees la reserva ni insistas. Respóndele con total tranquilidad:
      "No te preocupes, te lo dejo todo registrado con tu número de teléfono."
      Y despídete con cercanía y calidez.

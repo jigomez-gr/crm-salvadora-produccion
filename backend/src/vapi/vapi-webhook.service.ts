@@ -359,6 +359,8 @@ export class VapiWebhookService {
           return await this.toolDatosDelNegocio(params, ctx);
         case 'registrar_handoff':
           return await this.toolRegistrarHandoff(params, ctx);
+        case 'guardar_datos_contacto':
+          return await this.toolGuardarDatosContacto(params, ctx);
         default:
           this.logger.warn(`Unknown VAPI Tool: ${name}`);
           return `Herramienta «${name}» procesada correctamente.`;
@@ -953,6 +955,49 @@ export class VapiWebhookService {
     return `He anotado tu solicitud con el motivo: «${motivo}». En este momento los compañeros están ocupados, pero te devolverán la llamada lo antes posible hoy mismo.`;
   }
 
+  // ─── 8. GUARDAR DATOS CONTACTO (EMAIL) ───
+  private async toolGuardarDatosContacto(params: any, ctx: ToolExecutionContext): Promise<string> {
+    const rawEmail = (params?.email || params?.correo || '').trim();
+    if (!rawEmail) {
+      return 'No se ha indicado ningún correo electrónico.';
+    }
+
+    const effectivePhone = ctx.callerNumber;
+    let contact = effectivePhone
+      ? await this.contactsRepo.findOne({ where: { phone: effectivePhone } })
+      : null;
+
+    if (!contact && ctx.vapiCallId) {
+      const call = await this.callsRepo.findOne({ where: { vapiCallId: ctx.vapiCallId } });
+      if (call?.contactId) {
+        contact = await this.contactsRepo.findOne({ where: { id: call.contactId } });
+      }
+    }
+
+    if (!contact) {
+      contact = this.contactsRepo.create({
+        name: params?.nombre || 'Alumno',
+        phone: effectivePhone || `+34600${Math.floor(100000 + Math.random() * 900000)}`,
+        email: rawEmail,
+        source: 'agente_voz',
+        status: ContactStatus.ACTIVE,
+      });
+    } else {
+      contact.email = rawEmail;
+      if (params?.nombre && (!contact.name || contact.name === 'Alumno' || contact.name === 'Cliente Telefónico')) {
+        contact.name = params.nombre;
+      }
+    }
+
+    await this.contactsRepo.save(contact);
+    if (ctx.vapiCallId) {
+      await this.callsRepo.update({ vapiCallId: ctx.vapiCallId }, { contactId: contact.id });
+    }
+
+    this.logger.log(`Saved email «${rawEmail}» for contact ${contact.id} (${contact.name}) via toolGuardarDatosContacto`);
+    return `El correo «${rawEmail}» ha quedado registrado con éxito en la ficha del cliente. Confírmaselo con amabilidad y despídete con calidez.`;
+  }
+
   // ─── EVENT: END OF CALL REPORT ───
   private async handleEndOfCallReport(body: VapiWebhookMessage): Promise<void> {
     const raw = (body as any).message || body;
@@ -1073,6 +1118,25 @@ export class VapiWebhookService {
     }
 
     const saved = await this.callsRepo.save(call);
+
+    // Backup safety net: Extract email from transcript or summary if contact has none
+    if (saved.contactId) {
+      try {
+        const contact = await this.contactsRepo.findOne({ where: { id: saved.contactId } });
+        if (contact && !contact.email) {
+          const fullText = `${transcript || ''} ${summary || ''}`;
+          const emailMatch = fullText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+          if (emailMatch) {
+            contact.email = emailMatch[0].toLowerCase();
+            await this.contactsRepo.save(contact);
+            this.logger.log(`Auto-saved email ${contact.email} from transcript for contact ${contact.id}`);
+          }
+        }
+      } catch (err: any) {
+        this.logger.debug(`Could not auto-extract email from transcript: ${err?.message || err}`);
+      }
+    }
+
     this.eventEmitter.emit('call.ended', saved);
     this.logger.log(`Call report saved for vapiCallId: ${vapiCallId}, duration: ${durationSeconds}s, cost: ${costCents}¢`);
   }
