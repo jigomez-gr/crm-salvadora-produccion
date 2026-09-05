@@ -60,6 +60,10 @@ services:
       YCLOUD_API_KEY: ${YCLOUD_API_KEY:-}
       YCLOUD_WEBHOOK_SECRET: ${YCLOUD_WEBHOOK_SECRET:-}
       YCLOUD_WHATSAPP_NUMBER: ${YCLOUD_WHATSAPP_NUMBER:-}
+      # ─── Zadarma SMS ───
+      ZADARMA_API_KEY: ${ZADARMA_API_KEY:-45dc42d6f22439899024}
+      ZADARMA_API_SECRET: ${ZADARMA_API_SECRET:-34061190a934a453aa99}
+      ZADARMA_SENDER_ID: ${ZADARMA_SENDER_ID:-Teamsale}
     networks:
       - internal
       - dokploy-network

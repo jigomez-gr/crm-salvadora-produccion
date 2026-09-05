@@ -43,6 +43,34 @@ export class ZadarmaSmsService implements OnModuleInit {
 
   async onModuleInit() {
     await this.ensureSchema();
+    await this.ensureValidCredentials();
+  }
+
+  private async ensureValidCredentials(): Promise<void> {
+    try {
+      const vapi = await this.vapiAccountRepo.findOne({ where: {} });
+      if (vapi) {
+        let changed = false;
+        if (!vapi.zadarmaApiKey || vapi.zadarmaApiKey.includes('*') || vapi.zadarmaApiKey.includes('•') || vapi.zadarmaApiKey.trim().length < 10) {
+          vapi.zadarmaApiKey = this.defaultApiKey;
+          changed = true;
+        }
+        if (!vapi.zadarmaApiSecret || vapi.zadarmaApiSecret.includes('*') || vapi.zadarmaApiSecret.includes('•') || vapi.zadarmaApiSecret.trim().length < 10) {
+          vapi.zadarmaApiSecret = this.defaultApiSecret;
+          changed = true;
+        }
+        if (!vapi.zadarmaSenderId) {
+          vapi.zadarmaSenderId = this.defaultSenderId;
+          changed = true;
+        }
+        if (changed) {
+          await this.vapiAccountRepo.save(vapi);
+          this.logger.log('Verified and repaired Zadarma SMS credentials in database.');
+        }
+      }
+    } catch (err: any) {
+      this.logger.debug(`Could not ensure valid Zadarma credentials: ${err?.message || err}`);
+    }
   }
 
   private async ensureSchema(): Promise<void> {
@@ -97,8 +125,12 @@ export class ZadarmaSmsService implements OnModuleInit {
   }> {
     try {
       const vapi = await this.vapiAccountRepo.findOne({ where: {} });
-      const apiKey = vapi?.zadarmaApiKey?.trim() || this.defaultApiKey;
-      const apiSecret = vapi?.zadarmaApiSecret?.trim() || this.defaultApiSecret;
+      const rawKey = vapi?.zadarmaApiKey?.trim();
+      const rawSecret = vapi?.zadarmaApiSecret?.trim();
+      const isValidKey = Boolean(rawKey && rawKey.length >= 10 && !rawKey.includes('*') && !rawKey.includes('•'));
+      const isValidSecret = Boolean(rawSecret && rawSecret.length >= 10 && !rawSecret.includes('*') && !rawSecret.includes('•'));
+      const apiKey = isValidKey ? rawKey! : this.defaultApiKey;
+      const apiSecret = isValidSecret ? rawSecret! : this.defaultApiSecret;
       const senderId = vapi?.zadarmaSenderId?.trim() || this.defaultSenderId;
       const enabled = vapi?.zadarmaSmsEnabled ?? true;
       return { apiKey, apiSecret, senderId, enabled };
@@ -220,6 +252,50 @@ export class ZadarmaSmsService implements OnModuleInit {
       if (!success) {
         errorMessage = rawResponse?.message || `Zadarma HTTP status ${statusCode}`;
         this.logger.warn(`Zadarma SMS error response: ${JSON.stringify(rawResponse)}`);
+
+        // Automatic fallback if error is 'Not authorized'
+        if (rawResponse?.message === 'Not authorized' || rawResponse?.error === 'Not authorized') {
+          this.logger.warn(`Zadarma API returned 'Not authorized'. Attempting immediate fallback with verified default credentials...`);
+          try {
+            const fallbackParams: Record<string, string> = {
+              message: options.message,
+              number: cleanNumber,
+            };
+            const fallbackSender = options.sender?.trim() || this.defaultSenderId;
+            if (fallbackSender && fallbackSender !== 'none') {
+              fallbackParams.sender = fallbackSender;
+            }
+            const fallbackAuth = this.generateAuthHeader(this.defaultApiKey, this.defaultApiSecret, methodPath, fallbackParams);
+            const fallbackRes = await fetch(`https://api.zadarma.com${methodPath}`, {
+              method: 'POST',
+              headers: {
+                Authorization: fallbackAuth.authHeader,
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': 'CRM-Salvadora-ZadarmaSMS/1.0',
+              },
+              body: fallbackAuth.queryString,
+              signal: AbortSignal.timeout(10000),
+            });
+            const fallbackText = await fallbackRes.text();
+            let fallbackJson: any = null;
+            try {
+              fallbackJson = JSON.parse(fallbackText);
+            } catch {
+              fallbackJson = { text: fallbackText };
+            }
+            if (fallbackRes.ok && fallbackJson?.status === 'success') {
+              this.logger.log(`Zadarma SMS successfully dispatched via verified default credentials to +${cleanNumber}! (Cost: ${fallbackJson?.cost || 0} EUR)`);
+              rawResponse = fallbackJson;
+              statusCode = fallbackRes.status;
+              success = true;
+              errorMessage = undefined;
+            } else {
+              this.logger.warn(`Zadarma SMS fallback also failed: ${JSON.stringify(fallbackJson)}`);
+            }
+          } catch (fbErr: any) {
+            this.logger.error(`Error during Zadarma SMS fallback: ${fbErr?.message || fbErr}`);
+          }
+        }
       } else {
         this.logger.log(`Zadarma SMS sent successfully to +${cleanNumber} (Cost: ${rawResponse?.cost || 0} ${rawResponse?.currency || 'EUR'})`);
       }

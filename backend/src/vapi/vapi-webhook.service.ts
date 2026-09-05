@@ -394,6 +394,9 @@ export class VapiWebhookService {
 
     const firstName = contact.name.split(' ')[0] || contact.name;
     const parts = [`El cliente registrado es ${contact.name}. Salúdale cordialmente por su nombre (${firstName}).`];
+    if (contact.email) {
+      parts.push(`Ya dispone de correo electrónico registrado (${contact.email}). Por tanto, NO debes pedirle su email.`);
+    }
 
     // Check next upcoming scheduled appointment
     const nextAppt = await this.appointmentsRepo.findOne({
@@ -954,8 +957,18 @@ export class VapiWebhookService {
         });
       }
 
+      const hasEmail = Boolean(contact.email || params?.email || params?.correo);
+      const emailAddress = contact.email || params?.email || params?.correo;
+
       if (requiresApproval) {
+        if (hasEmail) {
+          return `¡Solicitud registrada con éxito! Tu cita para ${appt.service} el ${spokenDate} a nombre de ${customerName} ha quedado registrada pendiente de aprobación del terapeuta Jose Ignacio Gomez Raya. Confírmaselo amablemente e infórmale de que, como ya tenemos registrado su correo electrónico (${emailAddress}), le enviaremos allí la confirmación en cuanto se apruebe. NO le pidas su email. Despídete con calidez.`;
+        }
         return `¡Solicitud registrada con éxito! Tu cita para ${appt.service} el ${spokenDate} a nombre de ${customerName} ha quedado registrada pendiente de aprobación del terapeuta Jose Ignacio. Confírmaselo y pregúntale: "Si quieres que te envíe un resumen con los datos de acceso, ¿me dices tu correo electrónico?". Si prefiere no darlo o duda al deletrear, dile "No te preocupes, te lo dejo todo registrado con tu número de teléfono" y despídete.`;
+      }
+
+      if (hasEmail) {
+        return `¡Cita confirmada con éxito! Queda agendada para ${appt.service} el ${spokenDate} a nombre de ${customerName}. Confírmaselo amablemente al cliente e indícale que recibirá todos los detalles y datos de acceso en su correo registrado (${emailAddress}). NO le pidas su email. Despídete con calidez.`;
       }
       return `¡Cita confirmada con éxito! Queda agendada para ${appt.service} el ${spokenDate} a nombre de ${customerName}. Confírmaselo amablemente al cliente y dile exactamente: "Tu plaza ya está reservada. Si quieres que te envíe un resumen con la ubicación y datos de acceso, ¿me dices tu correo electrónico?". Si el cliente no desea darlo o duda al deletrear, dile con amabilidad "No te preocupes, te lo dejo todo registrado con tu número de teléfono" y despídete con calidez.`;
     } catch (err: any) {
