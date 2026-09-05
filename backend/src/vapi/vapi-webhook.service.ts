@@ -480,7 +480,148 @@ export class VapiWebhookService {
 
     // 2. SESIONES INDIVIDUALES (Gestalt, Bienestar)
     if (officialSvc?.category === 'individual_flexible') {
-      return `El calendario oficial para «${officialSvc.name}» es de lunes a viernes entre las 09:00 y las 20:00 según disponibilidad. ${officialSvc.priceInfo}. Al solicitarla queda registrada pendiente de aprobación del terapeuta Jose Ignacio Gomez Raya. Pregúntale qué día y hora le vendría bien para tramitar la solicitud de cita.`;
+      const weekdayMap: Record<string, number> = {
+        domingo: 0, lunes: 1, martes: 2, miercoles: 3, miércoles: 3, jueves: 4, viernes: 5, sabado: 6, sábado: 6,
+      };
+
+      const isWeekendRequested =
+        rawFecha.includes('sabado') ||
+        rawFecha.includes('sábado') ||
+        rawFecha.includes('domingo');
+
+      const now = new Date();
+      let startDate = now;
+
+      if (rawFecha) {
+        if (rawFecha.includes('hoy') || rawFecha.includes('esta tarde') || rawFecha.includes('esta mañana')) {
+          startDate = now;
+        } else if (rawFecha.includes('pasado mañana') || rawFecha.includes('pasado manana')) {
+          startDate = addDays(now, 2);
+        } else if (rawFecha.includes('mañana') || rawFecha.includes('manana')) {
+          startDate = addDays(now, 1);
+        } else {
+          const matchedDay = Object.keys(weekdayMap).find((w) => rawFecha.includes(w));
+          if (matchedDay !== undefined) {
+            const targetDayNum = weekdayMap[matchedDay];
+            const currentDayNum = now.getDay();
+            let daysAhead = targetDayNum - currentDayNum;
+            if (daysAhead <= 0) daysAhead += 7;
+            startDate = addDays(now, daysAhead);
+          } else {
+            try {
+              const parsed = parseISO(rawFecha);
+              if (isValid(parsed)) startDate = parsed;
+            } catch {
+              startDate = now;
+            }
+          }
+        }
+      }
+
+      let weekendNotice = '';
+      const startDay = startDate.getDay();
+      if (startDay === 0) {
+        startDate = addDays(startDate, 1);
+        if (isWeekendRequested) {
+          weekendNotice = `Las sesiones de «${officialSvc.name}» se atienden de lunes a viernes de 09:00 a 20:00 (no hay servicio en fines de semana). `;
+        }
+      } else if (startDay === 6) {
+        startDate = addDays(startDate, 2);
+        if (isWeekendRequested) {
+          weekendNotice = `Las sesiones de «${officialSvc.name}» se atienden de lunes a viernes de 09:00 a 20:00 (no hay servicio en fines de semana). `;
+        }
+      }
+
+      let targetHourNorm: string | null = null;
+      if (rawHora) {
+        const match = rawHora.match(/(\d{1,2})(?::(\d{2}))?/);
+        if (match) {
+          let h = parseInt(match[1], 10);
+          const m = match[2] ? match[2] : '00';
+          const isTarde = rawHora.includes('tarde') || rawHora.includes('pm');
+          if (isTarde && h < 12) h += 12;
+          targetHourNorm = `${h.toString().padStart(2, '0')}:${m}`;
+
+          if (h < 9 || h > 19 || (h === 19 && parseInt(m, 10) > 0) || h >= 20) {
+            return `El horario oficial para «${officialSvc.name}» es de lunes a viernes entre las 09:00 y las 20:00. Las ${rawHora} queda fuera del horario de atención. ${officialSvc.priceInfo}. ¿Te vendría bien dentro de la franja de 09:00 a 20:00?`;
+          }
+        }
+      }
+
+      const flexibleWorkingHours: WorkingHourSlot[] = [
+        { day: 1, open: '09:00', close: '20:00' },
+        { day: 2, open: '09:00', close: '20:00' },
+        { day: 3, open: '09:00', close: '20:00' },
+        { day: 4, open: '09:00', close: '20:00' },
+        { day: 5, open: '09:00', close: '20:00' },
+      ];
+
+      const durationMinutes = officialSvc.durationMinutes || 60;
+      const candidateSlots: Array<{ startsAt: Date; endsAt: Date }> = [];
+      const diasABuscar = Math.min(Math.max(params?.diasVista || 7, 1), 14);
+
+      for (let dayOffset = 0; dayOffset < diasABuscar && candidateSlots.length < 4; dayOffset++) {
+        const targetDate = addDays(startDate, dayOffset);
+        const dayOfWeek = targetDate.getDay();
+        if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+
+        let daySlots = await this.appointmentsService.getAvailableSlots(
+          targetDate,
+          durationMinutes,
+          flexibleWorkingHours,
+          ctx.timezone,
+          now,
+          'default',
+          undefined,
+          officialSvc.name,
+        );
+
+        if (targetHourNorm) {
+          const matched = daySlots.find((s) => {
+            const slotDate = s.startsAt instanceof Date ? s.startsAt : parseISO(s.startsAt as any);
+            const zonedSlot = new TZDate(slotDate.getTime(), ctx.timezone);
+            return format(zonedSlot, 'HH:mm') === targetHourNorm;
+          });
+          if (matched) {
+            const slotDate = matched.startsAt instanceof Date ? matched.startsAt : parseISO(matched.startsAt as any);
+            const zonedSlot = new TZDate(slotDate.getTime(), ctx.timezone);
+            const iso = slotDate.toISOString();
+            const spoken = format(zonedSlot, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
+            return `${weekendNotice}Sí, para «${officialSvc.name}» tenemos disponible el ${spoken} [${iso}]. ${officialSvc.priceInfo}. Esta cita queda registrada pendiente de aprobación del terapeuta Jose Ignacio Gomez Raya. ¿Deseas solicitar esta cita?`;
+          }
+        }
+
+        const preferredSlots = daySlots.filter((s) => {
+          const slotDate = s.startsAt instanceof Date ? s.startsAt : parseISO(s.startsAt as any);
+          const zonedSlot = new TZDate(slotDate.getTime(), ctx.timezone);
+          return zonedSlot.getMinutes() === 0;
+        });
+
+        const pool = preferredSlots.length > 0 ? preferredSlots : daySlots;
+        for (const slot of pool) {
+          candidateSlots.push(slot);
+          if (candidateSlots.length >= 4) break;
+        }
+      }
+
+      if (candidateSlots.length === 0) {
+        return `${weekendNotice}El calendario para «${officialSvc.name}» es de lunes a viernes de 09:00 a 20:00. Para esas fechas no quedan huecos libres. ¿Deseas que consultemos para la próxima semana?`;
+      }
+
+      const optionsFormatted = candidateSlots
+        .slice(0, 3)
+        .map((s) => {
+          const d = s.startsAt instanceof Date ? s.startsAt : parseISO(s.startsAt as any);
+          const zoned = new TZDate(d.getTime(), ctx.timezone);
+          const iso = d.toISOString();
+          const spoken = format(zoned, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
+          return `${spoken} [${iso}]`;
+        })
+        .join('; ');
+
+      const hourMissedNotice = targetHourNorm ? `A las ${targetHourNorm} no está disponible. ` : '';
+
+      return `${weekendNotice}${hourMissedNotice}Para «${officialSvc.name}» (lunes a viernes de 09:00 a 20:00, ${officialSvc.priceInfo}), los próximos huecos disponibles son: ${optionsFormatted}. Al solicitarla queda registrada pendiente de aprobación de Jose Ignacio Gomez Raya. Ofrece estas opciones y usa el código ISO entre corchetes para reservar cuando elija. Nunca leas el código entre corchetes en voz alta.`;
     }
 
     // 3. CLASES RECURRENTES CON HORARIOS OFICIALES ESTRICTOS (Hatha Yoga, Meditaciones, Iaido)
@@ -756,6 +897,7 @@ export class VapiWebhookService {
 
     // 3. Create appointment with conflict handling
     try {
+      const requiresApproval = Boolean(officialSvc?.requiresApproval || serviceEntity?.requiresApproval);
       const appt = await this.appointmentsService.create({
         contactId: contact.id,
         service: officialSvc?.name || serviceEntity?.name || serviceName,
@@ -763,6 +905,7 @@ export class VapiWebhookService {
         calendarId: serviceEntity?.calendarId || 'default',
         startsAt: startsAt.toISOString(),
         endsAt: endsAt.toISOString(),
+        status: requiresApproval ? AppointmentStatus.PENDING_APPROVAL : AppointmentStatus.SCHEDULED,
         modality: 'in_person',
         notes: params?.notas || params?.notes || params?.motivo || `Cita reservada por el asistente de voz VAPI.`,
       });
@@ -773,19 +916,18 @@ export class VapiWebhookService {
       }
 
       const spokenDate = this.formatSpokenDate(startsAt, ctx.timezone);
-      const requiresApproval = officialSvc?.requiresApproval || serviceEntity?.requiresApproval;
 
       // 5. Trigger Zadarma SMS confirmation asynchronously
       const customerPhone = contact.phone || effectivePhone;
       if (customerPhone && this.zadarmaSms) {
         const defaultMsg = requiresApproval
-          ? `Centro Salvadora: Solicitud recibida para ${appt.service} el ${spokenDate}. Si deseas recibir el acceso por correo, respóndenos a este SMS con tu email.`
+          ? `Centro Salvadora: Solicitud recibida para ${appt.service} el ${spokenDate}. Pendiente de confirmacion del terapeuta Jose Ignacio Gomez Raya. Te avisaremos en cuanto se confirme.`
           : `Centro Salvadora: Confirmamos tu cita de ${appt.service} para el ${spokenDate}. Si deseas recibir los detalles por correo, respóndenos a este SMS con tu email. ¡Te esperamos!`;
 
         this.vapiAccountRepo.findOne({ where: {} }).then((vapiAcc) => {
           if (vapiAcc?.zadarmaSmsEnabled === false) return;
           const template = vapiAcc?.smsConfirmationTemplate;
-          const smsText = template
+          const smsText = (template && !requiresApproval)
             ? template.replace('{servicio}', appt.service).replace('{fecha}', spokenDate)
             : defaultMsg;
 

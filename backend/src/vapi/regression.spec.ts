@@ -786,6 +786,29 @@ describe('Batería de Pruebas de Regresión Exhaustiva: Ciclo de Vida de Citas y
     expect(res.results![0].result).not.toContain('registrar_handoff');
   });
 
+  it('[T12] Consultar huecos para Terapia Gestalt devuelve opciones con código ISO y requiere aprobación', async () => {
+    const payload: any = {
+      message: {
+        type: 'tool-calls',
+        call: { id: TEST_VAPI_CALL_ID, customer: { number: TEST_CALLER_PHONE } },
+        toolCallList: [
+          {
+            id: 'call-t13',
+            name: 'consultar_huecos',
+            arguments: { servicio: 'Terapia Gestalt' },
+          },
+        ],
+      },
+    };
+
+    const res = await service.handleWebhook(payload);
+    expect(res.results![0].toolCallId).toBe('call-t13');
+    const resultText = res.results![0].result;
+    expect(resultText).toContain('Terapia Gestalt');
+    expect(resultText).toContain('Jose Ignacio Gomez Raya');
+    expect(resultText).toMatch(/\[\d{4}-\d{2}-\d{2}T/); // Contiene el código ISO entre corchetes
+  });
+
   it('[ZERO-FOOTPRINT] Verifica que el teardown deja la base de datos y memoria limpias al 100%', () => {
     // Al finalizar cada test, las listas de citas, llamadas y contactos temporales quedan vacías
     expect(true).toBe(true);
