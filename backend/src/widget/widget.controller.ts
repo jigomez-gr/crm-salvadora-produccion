@@ -105,21 +105,31 @@ export class WidgetController {
       ? dbServices.map((s) => ({
           id: s.id,
           name: s.name,
+          description: s.description,
+          scheduleText: s.scheduleText,
+          weeklySchedule: s.weeklySchedule,
           durationMinutes: s.durationMinutes,
           price: s.price ? `${s.price} €` : undefined,
           serviceType: s.serviceType || 'standard',
           eventDatesText: s.eventDatesText,
+          maxCapacity: s.maxCapacity,
+          paymentType: s.paymentType,
           allowedModalities: s.allowedModalities,
           requiresReason: s.requiresReason,
         }))
-      : (config.services || []).map((s) => ({
+      : (config.services || []).map((s: any) => ({
           id: s.name,
           name: s.name,
+          description: s.description || null,
+          scheduleText: s.scheduleText || null,
+          weeklySchedule: s.weeklySchedule || null,
           durationMinutes: s.durationMinutes,
-          price: undefined,
-          serviceType: 'standard',
-          eventDatesText: null,
-          allowedModalities: ['in_person'],
+          price: s.price ? `${s.price} €` : undefined,
+          serviceType: s.serviceType || 'standard',
+          eventDatesText: s.eventDatesText || null,
+          maxCapacity: s.maxCapacity || null,
+          paymentType: s.paymentType || 'in_person',
+          allowedModalities: s.allowedModalities || ['in_person'],
           requiresReason: false,
         }));
 
@@ -130,8 +140,58 @@ export class WidgetController {
       brandColor: branding?.brandColor || '#800020',
       logoUrl: branding?.logoUrl || null,
       tone: config.tone || 'cálido, profesional y cercano',
+      whatsappNumber: config.whatsappNumber || '34695172625',
       services,
       greeting: `¡Hola! 👋 Te damos la bienvenida a ${config.businessName || 'nuestro centro'}. ¿En qué podemos ayudarte hoy? Puedes preguntarme cualquier duda o seleccionar un servicio para reservar tu plaza.`,
+    };
+  }
+
+  /**
+   * Public Catalog Endpoint for Landings and External Portals
+   * Returns live services, prices, schedules, and booking URLs directly from DB.
+   */
+  @Get('services')
+  async getPublicServices() {
+    const dbServices = await this.servicesService.findAll(true).catch(() => []);
+    const [agentConfig] = await this.agentsConfigService.findAll().catch(() => []);
+    const branding = await this.settingsService.getBranding().catch(() => null);
+    const whatsappPhone = agentConfig?.whatsappNumber || '34695172625';
+    const cleanWaPhone = whatsappPhone.replace(/[^0-9]/g, '');
+
+    return {
+      success: true,
+      businessName: agentConfig?.businessName || branding?.businessName || 'Centro de Yoga y Bienestar Salvadora',
+      businessDescription: agentConfig?.businessDescription || '',
+      brandColor: branding?.brandColor || '#800020',
+      logoUrl: branding?.logoUrl || null,
+      whatsappNumber: whatsappPhone,
+      services: dbServices.map((s) => {
+        const isYoga = /yoga/i.test(s.name);
+        const isIaido = /iaido|iaidō/i.test(s.name);
+        const isMeditacion = /meditaci/i.test(s.name);
+        return {
+          id: s.id,
+          name: s.name,
+          serviceType: s.serviceType,
+          description: s.description,
+          scheduleText: s.scheduleText,
+          weeklySchedule: s.weeklySchedule,
+          eventDatesText: s.eventDatesText,
+          durationMinutes: s.durationMinutes,
+          price: s.price,
+          currency: 'EUR',
+          maxCapacity: s.maxCapacity,
+          paymentType: s.paymentType,
+          externalPaymentUrl: s.externalPaymentUrl,
+          allowedModalities: s.allowedModalities || ['in_person'],
+          requiresApproval: Boolean(s.requiresApproval),
+          firstClassFree: isYoga || isIaido,
+          freeForYogaStudents: isMeditacion,
+          whatsappBookingUrl: `https://wa.me/${cleanWaPhone}?text=${encodeURIComponent(
+            `Hola, me gustaría información y disponibilidad para ${s.name}.`,
+          )}`,
+        };
+      }),
     };
   }
 

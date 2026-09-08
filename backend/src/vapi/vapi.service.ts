@@ -366,6 +366,9 @@ export class VapiService implements OnModuleInit {
         name: s.name,
         durationMinutes: s.durationMinutes,
         price: s.price,
+        scheduleText: s.scheduleText,
+        description: s.description,
+        maxCapacity: s.maxCapacity,
       })),
       phone: agent?.whatsappNumber || null,
     };

@@ -8,7 +8,14 @@ export interface PromptInputData {
   timezone: string;
   tone: string;
   hours: Array<{ day: number; open: string; close: string }>;
-  services: Array<{ name: string; durationMinutes: number; price?: string | number | null }>;
+  services: Array<{
+    name: string;
+    durationMinutes: number;
+    price?: string | number | null;
+    scheduleText?: string | null;
+    description?: string | null;
+    maxCapacity?: number | null;
+  }>;
   facts?: Array<{ question: string; answer: string }>;
 }
 
@@ -38,8 +45,10 @@ export function composeVapiSystemPrompt(input: PromptInputData): string {
     input.services.length > 0
       ? input.services
           .map((s) => {
-            const priceStr = s.price ? `, precio orientativo: ${s.price}€` : '';
-            return `- ${s.name}: duración aprox. ${s.durationMinutes} min${priceStr}.`;
+            const priceStr = s.price ? `, precio: ${s.price}€` : '';
+            const scheduleStr = s.scheduleText ? `, horarios oficiales: ${s.scheduleText}` : '';
+            const descStr = s.description ? `. Detalles y condiciones: ${s.description}` : '';
+            return `- ${s.name}: duración ${s.durationMinutes} min${priceStr}${scheduleStr}${descStr}`;
           })
           .join('\n')
       : '- Consultas y servicios generales (duración estándar 45 min).';
