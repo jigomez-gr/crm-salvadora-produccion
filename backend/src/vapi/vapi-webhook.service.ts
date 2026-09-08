@@ -50,7 +50,7 @@ export const OFFICIAL_SERVICES: OfficialServiceConfig[] = [
   {
     id: 'hatha-yoga',
     name: 'Hatha Yoga Terapéutico',
-    aliases: /hatha|yoga.*terap/i,
+    aliases: /hatha|yoga/i,
     category: 'recurring_schedule',
     scheduleSummary: 'martes (9:45, 11:15, 17:00, 18:30 y 20:00), miércoles (20:15) y jueves (9:45, 11:15, 16:00, 17:30 y 19:00)',
     timetable: {

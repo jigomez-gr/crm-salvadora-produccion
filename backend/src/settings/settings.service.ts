@@ -100,4 +100,90 @@ export class SettingsService {
     });
     return { ok: true };
   }
+
+  /**
+   * Reset the CRM for testing:
+   * 1. Resets all contacts to 'lead' and 'new' pipeline stage, removing student status
+   * 2. Deletes all conversations & messages (including mastra and email messages)
+   * 3. Deletes all appointments & reminders
+   * 4. Deletes all calls & zadarma sms logs
+   * 5. Deletes all audit records
+   * 6. Funnel data is fully reset because it derives from appointments and contacts
+   */
+  async resetTestData(): Promise<{
+    ok: true;
+    contactsReset: number;
+    deleted: {
+      conversations: boolean;
+      appointments: boolean;
+      calls: boolean;
+      auditLogs: boolean;
+    };
+  }> {
+    await this.dataSource.transaction(async (m) => {
+      // 1. Delete appointments & reminders
+      await m.query('DELETE FROM appointment_reminders');
+      await m.query('DELETE FROM appointments');
+
+      // 2. Delete conversations, messages, mastra messages/threads and email messages
+      await m.query('DELETE FROM messages');
+      await m.query('DELETE FROM conversations');
+      await m.query(`
+        DO $$ 
+        BEGIN
+          IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'mastra_messages') THEN
+            DELETE FROM mastra_messages;
+          END IF;
+          IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'mastra_threads') THEN
+            DELETE FROM mastra_threads;
+          END IF;
+          IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'email_messages') THEN
+            DELETE FROM email_messages;
+          END IF;
+        END $$;
+      `);
+
+      // 3. Delete calls & sms logs
+      await m.query(`
+        DO $$ 
+        BEGIN
+          IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'zadarma_sms_respuesta') THEN
+            DELETE FROM zadarma_sms_respuesta;
+          END IF;
+          IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'calls') THEN
+            DELETE FROM calls;
+          END IF;
+        END $$;
+      `);
+
+      // 4. Delete audit records
+      await m.query('DELETE FROM audit_logs');
+
+      // 5. Reset all contacts: lead, new pipeline stage, clear student status
+      await m.query(`
+        UPDATE contacts
+        SET status = 'lead',
+            "pipelineStage" = 'new',
+            "boardPosition" = 0,
+            "isStudent" = false,
+            "studentModality" = NULL,
+            "studentSchedule" = NULL,
+            "studentEnrolledAt" = NULL
+      `);
+    });
+
+    const contactsCount = await this.dataSource.query('SELECT COUNT(*) FROM contacts');
+
+    return {
+      ok: true,
+      contactsReset: parseInt(contactsCount[0]?.count || '0', 10),
+      deleted: {
+        conversations: true,
+        appointments: true,
+        calls: true,
+        auditLogs: true,
+      },
+    };
+  }
 }
+

@@ -16,6 +16,7 @@ import { Roles } from '../auth/roles.decorator';
 import { CurrentUser, AuthUser } from '../auth/current-user.decorator';
 import { UserRole } from '../common/entities/user.entity';
 import { AUDIT_EVENT, AuditAction, AuditRecord } from '../audit/audit.types';
+import { AdminResetGuard } from './admin-reset.guard';
 
 @Controller('settings')
 export class SettingsController {
@@ -108,4 +109,22 @@ export class SettingsController {
     });
     return result;
   }
+
+  /**
+   * Reset CRM test environment:
+   * 1. Resets all contacts to 'lead' & 'new' pipeline stage, removing student status
+   * 2. Deletes all conversations & messages
+   * 3. Deletes all appointments & reminders
+   * 4. Deletes all calls & zadarma sms logs
+   * 5. Deletes all audit records
+   * 6. Funnel data is reset as a result of contacts reset and appointments deletion
+   * Accessible by Admin via session JWT or x-admin-password header.
+   */
+  @Post('reset-test-data')
+  @UseGuards(AdminResetGuard)
+  @Roles(UserRole.ADMIN)
+  async resetTestData(@CurrentUser() actor: AuthUser, @Ip() ip: string) {
+    return this.settings.resetTestData();
+  }
 }
+

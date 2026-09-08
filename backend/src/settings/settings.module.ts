@@ -5,6 +5,7 @@ import { SettingsService } from './settings.service';
 import { SettingsController } from './settings.controller';
 import { AuthModule } from '../auth/auth.module';
 import { AgentsConfigModule } from '../agents/agents-config.module';
+import { AdminResetGuard } from './admin-reset.guard';
 
 /**
  * App settings + white-label branding + onboarding. AuthModule provides the
@@ -18,7 +19,7 @@ import { AgentsConfigModule } from '../agents/agents-config.module';
     AuthModule,
     AgentsConfigModule,
   ],
-  providers: [SettingsService],
+  providers: [SettingsService, AdminResetGuard],
   controllers: [SettingsController],
   exports: [SettingsService],
 })

@@ -1631,14 +1631,34 @@ export class AppointmentsService implements OnModuleInit {
       }
     }
 
+    const effectiveSvcName = serviceName || targetService?.name || '';
+    const isYoga = /yoga/i.test(effectiveSvcName);
+    const isMeditacion = /meditaci/i.test(effectiveSvcName);
+    const isGongOrPuja = /gong|puja/i.test(effectiveSvcName);
     const isYogaOrGroup =
-      /yoga|meditaci|gong|taller|grupal/i.test(
-        serviceName || targetService?.name || '',
-      ) ||
-      (targetService?.maxCapacity && targetService.maxCapacity > 1);
+      isYoga ||
+      isMeditacion ||
+      isGongOrPuja ||
+      /taller|grupal/i.test(effectiveSvcName) ||
+      Boolean(targetService?.maxCapacity && targetService.maxCapacity > 1);
 
     let maxCapacity = 1;
-    if (targetService?.maxCapacity && targetService.maxCapacity > 0) {
+    if (isYoga) {
+      maxCapacity =
+        targetService?.maxCapacity && targetService.maxCapacity > 1
+          ? targetService.maxCapacity
+          : 20;
+    } else if (isMeditacion) {
+      maxCapacity =
+        targetService?.maxCapacity && targetService.maxCapacity > 1
+          ? targetService.maxCapacity
+          : 28;
+    } else if (isGongOrPuja) {
+      maxCapacity =
+        targetService?.maxCapacity && targetService.maxCapacity > 1
+          ? targetService.maxCapacity
+          : 30;
+    } else if (targetService?.maxCapacity && targetService.maxCapacity > 1) {
       maxCapacity = targetService.maxCapacity;
     } else if (isYogaOrGroup) {
       maxCapacity = 20;
@@ -1663,8 +1683,24 @@ export class AppointmentsService implements OnModuleInit {
       .andWhere('a.startsAt < :endsAt', { endsAt })
       .andWhere('a.endsAt > :startsAt', { startsAt });
 
-    if (isYogaOrGroup || maxCapacity > 1) {
-      // For group sessions, check conflicts against the same group service/class
+    if (isYoga) {
+      // Clases de Yoga: NUNCA se ven limitadas porque el profesor tenga otra cita a esa hora
+      // sino por el aforo máximo de alumnos por grupo (20 plazas).
+      // Se contabilizan conjuntamente todas las modalidades de Yoga (1 clase, 2 clases, suelta, prueba, recuperación).
+      qb.andWhere('(a.service ILIKE :yogaPattern OR a.calendarId = :yogaCal)', {
+        yogaPattern: '%yoga%',
+        yogaCal: targetService?.calendarId || 'cal-hatha-yoga',
+      });
+    } else if (isMeditacion) {
+      // Clases de Meditación: NUNCA se ven limitadas porque el profesor tenga otra cita a esa hora
+      // sino por el aforo máximo de alumnos por grupo (28 plazas).
+      // Se contabilizan conjuntamente todas las modalidades de Meditación.
+      qb.andWhere('(a.service ILIKE :medPattern OR a.calendarId = :medCal)', {
+        medPattern: '%meditaci%',
+        medCal: targetService?.calendarId || 'cal-meditacion',
+      });
+    } else if (isYogaOrGroup || maxCapacity > 1) {
+      // Para otros eventos o talleres grupales (Gongs, talleres, etc.)
       if (targetService?.id) {
         qb.andWhere('(a.serviceId = :svcId OR a.service ILIKE :svcName)', {
           svcId: targetService.id,
@@ -1767,14 +1803,34 @@ export class AppointmentsService implements OnModuleInit {
       }
     }
 
+    const effectiveSvcName = serviceName || targetService?.name || '';
+    const isYoga = /yoga/i.test(effectiveSvcName);
+    const isMeditacion = /meditaci/i.test(effectiveSvcName);
+    const isGongOrPuja = /gong|puja/i.test(effectiveSvcName);
     const isYogaOrGroup =
-      /yoga|meditaci|gong|taller|grupal/i.test(
-        serviceName || targetService?.name || '',
-      ) ||
-      (targetService?.maxCapacity && targetService.maxCapacity > 1);
+      isYoga ||
+      isMeditacion ||
+      isGongOrPuja ||
+      /taller|grupal/i.test(effectiveSvcName) ||
+      Boolean(targetService?.maxCapacity && targetService.maxCapacity > 1);
 
     let maxCapacity = 1;
-    if (targetService?.maxCapacity && targetService.maxCapacity > 0) {
+    if (isYoga) {
+      maxCapacity =
+        targetService?.maxCapacity && targetService.maxCapacity > 1
+          ? targetService.maxCapacity
+          : 20;
+    } else if (isMeditacion) {
+      maxCapacity =
+        targetService?.maxCapacity && targetService.maxCapacity > 1
+          ? targetService.maxCapacity
+          : 28;
+    } else if (isGongOrPuja) {
+      maxCapacity =
+        targetService?.maxCapacity && targetService.maxCapacity > 1
+          ? targetService.maxCapacity
+          : 30;
+    } else if (targetService?.maxCapacity && targetService.maxCapacity > 1) {
       maxCapacity = targetService.maxCapacity;
     } else if (isYogaOrGroup) {
       maxCapacity = 20;
@@ -1802,7 +1858,24 @@ export class AppointmentsService implements OnModuleInit {
         ],
       });
 
-    if (isYogaOrGroup || maxCapacity > 1) {
+    if (isYoga) {
+      // Clases de Yoga: NUNCA se ven limitadas porque el profesor tenga otra cita a esa hora
+      // sino por el aforo máximo de alumnos por grupo (20 plazas).
+      // Se contabilizan conjuntamente todas las modalidades de Yoga (1 clase, 2 clases, suelta, prueba, recuperación).
+      qb.andWhere('(a.service ILIKE :yogaPattern OR a.calendarId = :yogaCal)', {
+        yogaPattern: '%yoga%',
+        yogaCal: targetService?.calendarId || 'cal-hatha-yoga',
+      });
+    } else if (isMeditacion) {
+      // Clases de Meditación: NUNCA se ven limitadas porque el profesor tenga otra cita a esa hora
+      // sino por el aforo máximo de alumnos por grupo (28 plazas).
+      // Se contabilizan conjuntamente todas las modalidades de Meditación.
+      qb.andWhere('(a.service ILIKE :medPattern OR a.calendarId = :medCal)', {
+        medPattern: '%meditaci%',
+        medCal: targetService?.calendarId || 'cal-meditacion',
+      });
+    } else if (isYogaOrGroup || maxCapacity > 1) {
+      // Para otros eventos o talleres grupales (Gongs, talleres, etc.)
       if (targetService?.id) {
         qb.andWhere('(a.serviceId = :svcId OR a.service ILIKE :svcName)', {
           svcId: targetService.id,
@@ -1831,8 +1904,7 @@ export class AppointmentsService implements OnModuleInit {
     });
 
     // Enforce official service timetables strictly across all channels (VAPI, WhatsApp, Landing)
-    const isHathaYoga = /hatha.*yoga|yoga.*terap/i.test(serviceName || targetService?.name || '');
-    const isMeditacion = /meditaci/i.test(serviceName || targetService?.name || '');
+    const isHathaYoga = isYoga;
     const isIaido = /iaido|iaidō|esgrima/i.test(serviceName || targetService?.name || '');
 
     const HATHA_YOGA_TIMETABLE: Record<number, string[]> = {

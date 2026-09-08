@@ -894,6 +894,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
 - ACTIVIDADES Y CLASES GRUPALES (AFORO MÚLTIPLE):
   Las clases regulares de Yoga, Baños de Gong, Meditaciones y Talleres son actividades grupales que admiten múltiples asistentes simultáneos (aforo de hasta 20 a 30 personas por sesión según el servicio).
   * Que ya exista una persona apuntada o una cita previa a esa misma hora NO significa que el horario esté ocupado: se pueden reservar plazas hasta completar el aforo total.
+  * Una cita de Yoga o Meditación NUNCA se ve limitada porque el profesor tenga otra cita a esa hora: se rige exclusivamente por el aforo máximo de alumnos por grupo (20 plazas en Yoga, 28 en Meditación).
   * Nunca le digas al cliente que una clase grupal no está disponible salvo que 'checkAvailability' no devuelva huecos o indique que el aforo está completo.
 - CLASES DE YOGA, MODALIDADES Y CONDICIÓN DE ALUMNO:
   Para las clases regulares de Hatha Yoga Terapéutico (90 min de duración y aforo de hasta 20 personas por grupo):

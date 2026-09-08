@@ -369,6 +369,10 @@ export class ServicesService implements OnModuleInit {
       for (const s of dbServices) {
         let updated = false;
         if (/hatha.*yoga|yoga.*terap/i.test(s.name)) {
+          if (!s.maxCapacity || s.maxCapacity < 20) {
+            s.maxCapacity = 20;
+            updated = true;
+          }
           if (!s.weeklySchedule || Object.keys(s.weeklySchedule).length === 0 || s.weeklySchedule[4]?.includes('16:30')) {
             s.weeklySchedule = {
               2: ['09:45', '11:15', '17:00', '18:30', '20:00'],
@@ -378,7 +382,11 @@ export class ServicesService implements OnModuleInit {
             s.scheduleText = 'Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15) y Jueves (9:45, 11:15, 16:00, 17:30, 19:00)';
             updated = true;
           }
-        } else if (/meditaci/i.test(s.name)) {
+        } else if (/meditaci/i.test(s.name) && !/baño.*gong/i.test(s.name)) {
+          if (!s.maxCapacity || s.maxCapacity < 28) {
+            s.maxCapacity = 28;
+            updated = true;
+          }
           if (!s.weeklySchedule || Object.keys(s.weeklySchedule).length === 0) {
             s.weeklySchedule = {
               2: ['09:15'],
@@ -427,6 +435,22 @@ export class ServicesService implements OnModuleInit {
         let hasParticiparConst = false;
 
         agentConfig.services = agentConfig.services.map((s: any) => {
+          if (/yoga/i.test(s.name || '')) {
+            changed = true;
+            return {
+              ...s,
+              maxCapacity: 20,
+              durationMinutes: 90,
+            };
+          }
+          if (/meditaci/i.test(s.name || '') && !/baño.*gong/i.test(s.name || '')) {
+            changed = true;
+            return {
+              ...s,
+              maxCapacity: 28,
+              durationMinutes: 30,
+            };
+          }
           if (/gestalt/i.test(s.name || '')) {
             changed = true;
             return {

@@ -1021,6 +1021,8 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -1105,6 +1107,28 @@ export default function SettingsPage() {
       );
     } finally {
       setClearing(false);
+    }
+  }
+
+  async function handleResetTestData() {
+    setResetting(true);
+    try {
+      const res = await apiFetch<{ ok: boolean; contactsReset: number }>(
+        "/api/settings/reset-test-data",
+        { method: "POST" }
+      );
+      setResetOpen(false);
+      toast.success(
+        `✅ Entorno reiniciado para pruebas (${res.contactsReset} contactos reseteados a leads).`
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError
+          ? err.message
+          : "Error al reiniciar el entorno de pruebas."
+      );
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -1207,6 +1231,70 @@ export default function SettingsPage() {
 
       {/* Voz Telefónica (VAPI & Zadarma) y SMS */}
       <VapiCard />
+
+      {/* Test environment reset card */}
+      <div className="mt-6 max-w-xl rounded-xl border border-amber-300 bg-amber-50/60 p-6 shadow-sm">
+        <div className="flex items-center gap-2">
+          <RefreshCw className="h-4 w-4 text-amber-700" />
+          <h2 className="text-sm font-semibold text-amber-900">
+            Entorno de Pruebas — Reiniciar para Pruebas
+          </h2>
+        </div>
+        <p className="mt-1 text-sm text-neutral-700">
+          Reinicia la base de datos de pruebas (DGX SPARC) para ejecutar nuevos ensayos sin agotar los datos:
+        </p>
+        <ul className="mt-2.5 list-disc list-inside text-xs text-neutral-600 space-y-1">
+          <li><strong>Contactos:</strong> Todos pasan a estado <em>lead</em> y etapa <em>nueva</em>; se desactivan como alumnos de yoga.</li>
+          <li><strong>Conversaciones:</strong> Se eliminan por completo todas las conversaciones y mensajes de chat.</li>
+          <li><strong>Citas:</strong> Se eliminan todas las citas y recordatorios de la agenda.</li>
+          <li><strong>Llamadas:</strong> Se eliminan todas las llamadas telefónicas y registros SMS.</li>
+          <li><strong>Auditorías:</strong> Se limpia el registro de auditoría.</li>
+          <li><strong>Embudo:</strong> Las métricas del embudo vuelven al estado inicial (0 citas, todos leads).</li>
+        </ul>
+        <Button
+          variant="secondary"
+          className="mt-4 border-amber-400 bg-amber-100/80 hover:bg-amber-200 text-amber-900 font-medium"
+          onClick={() => setResetOpen(true)}
+        >
+          <RefreshCw className="h-4 w-4 text-amber-800" />
+          Reiniciar para Pruebas
+        </Button>
+      </div>
+
+      <Modal
+        open={resetOpen}
+        onClose={() => setResetOpen(false)}
+        title="Reiniciar entorno para pruebas"
+      >
+        <div className="space-y-2 text-sm text-neutral-600">
+          <p>
+            ¿Estás seguro de reiniciar el entorno de pruebas?
+          </p>
+          <ul className="list-disc list-inside text-xs text-neutral-600 space-y-1">
+            <li>Los <strong>contactos se conservan</strong>, pero pasan todos a <em>lead</em> (no alumnos).</li>
+            <li>Se borran todas las <strong>conversaciones y mensajes</strong>.</li>
+            <li>Se borran todas las <strong>citas</strong>.</li>
+            <li>Se borran las <strong>llamadas telefónicas y SMS</strong>.</li>
+            <li>Se borran las <strong>auditorías</strong> y se resetea el <strong>embudo</strong>.</li>
+          </ul>
+          <p className="pt-2 text-xs font-semibold text-amber-800">
+            Esta acción restablece el sistema limpio para nuevas pruebas.
+          </p>
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setResetOpen(false)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            onClick={handleResetTestData}
+            disabled={resetting}
+            className="bg-amber-600 hover:bg-amber-700 text-white"
+          >
+            {resetting ? "Reiniciando…" : "Confirmar Reinicio"}
+          </Button>
+        </div>
+      </Modal>
 
       {/* Danger zone */}
       <div className="mt-6 max-w-xl rounded-xl border border-red-200 bg-red-50/40 p-6">
