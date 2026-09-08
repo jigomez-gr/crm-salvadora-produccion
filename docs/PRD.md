@@ -204,6 +204,12 @@ may run several agents). Selling to multiple businesses = one deployment each.
   conversations) to begin from zero before going live; users, agents and settings
   are kept. (Audited.)
 
+### 4.11 Services, dynamic schedules & omnichannel catalog (ADR 0026)
+- **Single source of truth:** Services, official weekly timetables, prices, capacities, and descriptions are stored in PostgreSQL (`services`) and editable from the **Servicios** screen.
+- **Natural language schedule parser:** Admins input schedules in conversational Spanish (e.g. `Martes (9:45...), Miércoles (20:15)...`), which the backend automatically parses into structured JSON (`weeklySchedule`) for availability checks.
+- **Dynamic AI agent & Vapi voice assistant:** The Mastra AI agent and Vapi voice assistant pull live services and schedules directly from the database on every interaction; no hours, prices, or conditions are hardcoded in prompts.
+- **Public landing & widget API (`GET /api/widget/services`):** Exposes active services, schedules, prices, and pre-formatted WhatsApp booking deep-links for external landing pages (`salvadora.jigretera.com`) and the web chat widget.
+
 ## 5. How the agents work (architecture)
 
 - **Agents are configurations** (`agent_configs` rows), not separate runtimes.
@@ -355,18 +361,25 @@ may run several agents). Selling to multiple businesses = one deployment each.
   foreground). The data-dense pages adapt too: the inbox switches to a mobile
   list/detail view, tables scroll horizontally, the calendar toolbar wraps, and
   page padding softens on small screens.
+- **Dynamic services catalog & omnichannel sync (ADR 0026):** the `services` table
+  acts as the single source of truth for schedules, prices, descriptions, and
+  capacities. A natural language schedule parser synchronizes human text to
+  structured JSON. Mastra AI agents, Vapi voice prompts, and the public landing/widget
+  API (`GET /api/widget/services`) read dynamically from PostgreSQL, eliminating
+  hardcoded timetables across all channels with zero recompilations required.
 
 ## 8. Tech stack (see ADRs)
 
 | Layer | Choice | ADR |
 | --- | --- | --- |
 | Backend | NestJS + TypeScript | 0001 |
-| ORM / DB | TypeORM + PostgreSQL | 0001 |
+| ORM / DB | TypeORM + PostgreSQL | 0001, 0008, 0026 |
 | Frontend | Next.js + TypeScript + Tailwind | 0001 |
-| Agents | Mastra (embedded in NestJS) | 0001, 0005 |
+| Agents | Mastra (embedded in NestJS) | 0001, 0005, 0026 |
 | Realtime | SSE (`@Sse()` + `EventSource`) | 0002 |
 | WhatsApp | YCloud REST v2 + signed webhooks (per agent) | 0003, 0005 |
 | AI models | OpenRouter (per-agent key + model) | 0005 |
+| Voice | Vapi (prompt dynamically synchronized) | 0026 |
 | Auth | JWT (httpOnly cookie) + roles (admin/employee), bcrypt | — |
 
 ## 9. Future iterations (parking lot)
