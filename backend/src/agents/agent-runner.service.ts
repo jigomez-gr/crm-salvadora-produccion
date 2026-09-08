@@ -18,6 +18,7 @@ import { AUDIT_EVENT, AuditAction } from '../audit/audit.types';
 import { KnowledgeService } from '../knowledge/knowledge.service';
 import { KNOWLEDGE_BUDGET_CHARS } from '../knowledge/knowledge-core';
 import { normalizeColloquialSpanishTimes } from '../common/time';
+import { ServicesService } from '../services/services.service';
 
 // Hard cap on tool-call/generation steps per turn — bounds the agent loop so a
 // misbehaving model (or a prompt-injection loop) can't rack up unbounded
@@ -83,6 +84,7 @@ export class AgentRunnerService {
     private readonly contactsService: ContactsService,
     private readonly eventEmitter: EventEmitter2,
     private readonly knowledgeService: KnowledgeService,
+    private readonly servicesService: ServicesService,
   ) {}
 
   /** Persist an outbound reply (status by channel) and emit a sanitized SSE. */
@@ -233,6 +235,28 @@ export class AgentRunnerService {
 
     const requestContext = new RequestContext<Record<string, any>>();
     if (agentConfig) {
+      // Pull live services directly from the database table 'services' so that any schedule
+      // or description update in the CRM is immediately and dynamically visible to the agent.
+      const liveServices = await this.servicesService.findAll(true).catch(() => []);
+      if (liveServices && liveServices.length > 0) {
+        agentConfig.services = liveServices.map((s) => ({
+          name: s.name,
+          durationMinutes: s.durationMinutes,
+          price: s.price,
+          serviceType: s.serviceType,
+          eventDatesText: s.eventDatesText,
+          scheduleText: s.scheduleText,
+          description: s.description,
+          weeklySchedule: s.weeklySchedule,
+          maxCapacity: s.maxCapacity,
+          minQuorum: s.minQuorum,
+          paymentType: s.paymentType,
+          externalPaymentUrl: s.externalPaymentUrl,
+          allowedModalities: s.allowedModalities,
+          requiresReason: s.requiresReason,
+        }));
+      }
+
       requestContext.set('agentConfig', agentConfig);
       if (agentConfig.openrouterApiKey && agentConfig.openrouterApiKey !== 'sk-or-placeholder') {
         process.env.OPENROUTER_API_KEY = agentConfig.openrouterApiKey;

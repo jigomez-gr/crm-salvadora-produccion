@@ -251,8 +251,11 @@ export class AppointmentsService implements OnModuleInit {
       const timeStr = format(zoned, 'HH:mm');
       const allowed = effectiveTimetable[dayOfWeek] || [];
       if (!allowed.includes(timeStr)) {
+        const scheduleDisplay =
+          serviceEntity?.scheduleText ||
+          'Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15) y Jueves (9:45, 11:15, 16:00, 17:30, 19:00)';
         throw new BadRequestException(
-          'Ese horario no corresponde a los turnos oficiales de Hatha Yoga Terapéutico (Martes 9:45, 11:15, 17:00, 18:30, 20:00; Miércoles 20:15; Jueves 9:45, 11:15, 16:00, 17:30, 19:00).',
+          `Ese horario no corresponde a los turnos oficiales de ${cleanServiceName} (${scheduleDisplay}).`,
         );
       }
 
@@ -355,8 +358,10 @@ export class AppointmentsService implements OnModuleInit {
       const timeStr = format(zoned, 'HH:mm');
       const allowed = effectiveTimetable[dayOfWeek] || [];
       if (!allowed.includes(timeStr)) {
+        const scheduleDisplay =
+          serviceEntity?.scheduleText || 'Martes y Jueves de 09:15 a 09:45';
         throw new BadRequestException(
-          'Ese horario no corresponde a los turnos oficiales de Meditaciones Guiadas (Martes y Jueves de 09:15 a 09:45).',
+          `Ese horario no corresponde a los turnos oficiales de Meditaciones Guiadas (${scheduleDisplay}).`,
         );
       }
 

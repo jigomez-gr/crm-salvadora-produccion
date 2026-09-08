@@ -1007,9 +1007,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
 - CLASES DE YOGA, MODALIDADES Y CONDICIÓN DE ALUMNO:
   Para las clases regulares de Hatha Yoga Terapéutico (90 min de duración y aforo de hasta 20 personas por grupo):
   * Horarios oficiales:
-    - Martes: 9:45, 11:15, 17:00, 18:30 y 20:00
-    - Miércoles: 20:15
-    - Jueves: 9:45, 11:15, 16:00, 17:30 y 19:00
+    Consulta y ofrece SIEMPRE los turnos y horarios oficiales especificados en la sección de Servicios de arriba (configurados dinámicamente en la base de datos para cada servicio). NUNCA inventes horarios ni utilices horas que no figuren en la sección de Servicios.
   * Las modalidades de funcionamiento son:
     1. **1 clase semanal**: cuota mensual de 25€/mes.
     2. **2 clases semanales**: cuota mensual de 42€/mes.
@@ -1026,8 +1024,8 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     - **Constancia de cambios**: En cada cambio de horario o recuperación se enviará una notificación por correo electrónico o un SMS si la gestión es por voz (o ambos) para dejar constancia formal del cambio.
   * Cuando el cliente elija o solicite un horario, consulta disponibilidad y formaliza su plaza con 'bookAppointment'.
 - MEDITACIONES GUIADAS (ACTIVIDAD GRUPAL):
-  Para las Meditaciones Guiadas (30 min de duración, de 9:15 a 9:45):
-  * Horarios oficiales: Martes y Jueves de 9:15 a 9:45 (sesión de 30 minutos).
+  Para las Meditaciones Guiadas (30 min de duración):
+  * Horarios oficiales: Consulta y ofrece SIEMPRE los horarios oficiales especificados en la sección de Servicios de arriba (configurados en la base de datos del centro).
   * Modalidad: Actividad grupal presencial (aforo de hasta 28 personas).
   * Precios:
     - ¡Alumnos del centro de Yoga: GRATIS! (incluido en su condición de alumno).
@@ -1202,6 +1200,7 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
             serviceType?: string;
             eventDatesText?: string;
             scheduleText?: string;
+            description?: string;
             maxCapacity?: number;
             minQuorum?: number;
             paymentType?: string;
@@ -1211,7 +1210,7 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
           }) => {
             let details = `- ${s.name}`;
             if (s.serviceType === 'event') {
-              details += ` (Evento / Viaje puntual`;
+              details += ` (Evento / Actividad puntual`;
               if (s.eventDatesText) details += `, Fechas: ${s.eventDatesText}`;
               if (s.price) details += `, precio: ${s.price} €`;
               if (s.maxCapacity) details += `, Plazas máximas: ${s.maxCapacity}`;
@@ -1219,8 +1218,11 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
             } else {
               details += ` (${s.durationMinutes} minutos`;
               if (s.price) details += `, precio: ${s.price} €`;
-              if (s.maxCapacity && s.maxCapacity > 1) details += `, aforo: ${s.maxCapacity} personas`;
-              if (s.scheduleText) details += `, horarios: ${s.scheduleText}`;
+              if (s.maxCapacity && s.maxCapacity > 1) details += `, aforo máximo: ${s.maxCapacity} personas por turno`;
+              if (s.scheduleText) details += `, Horarios oficiales: ${s.scheduleText}`;
+            }
+            if (s.description) {
+              details += ` | Descripción y condiciones: ${s.description}`;
             }
             if (s.allowedModalities && s.allowedModalities.length > 0) {
               const modNames = s.allowedModalities

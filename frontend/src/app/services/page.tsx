@@ -17,6 +17,7 @@ interface ServiceFormData {
   description: string;
   serviceType: "recurring" | "event";
   eventDatesText: string;
+  scheduleText: string;
   maxCapacity: string;
   minQuorum: string;
   durationMinutes: number;
@@ -49,6 +50,7 @@ export default function ServicesPage() {
     description: "",
     serviceType: "recurring",
     eventDatesText: "",
+    scheduleText: "",
     maxCapacity: "",
     minQuorum: "",
     durationMinutes: 60,
@@ -109,6 +111,7 @@ export default function ServicesPage() {
       description: "",
       serviceType: "recurring",
       eventDatesText: "",
+      scheduleText: "",
       maxCapacity: "",
       minQuorum: "",
       durationMinutes: 60,
@@ -135,6 +138,7 @@ export default function ServicesPage() {
       description: svc.description ?? "",
       serviceType: svc.serviceType ?? "recurring",
       eventDatesText: svc.eventDatesText ?? "",
+      scheduleText: svc.scheduleText ?? "",
       maxCapacity: svc.maxCapacity ? String(svc.maxCapacity) : "",
       minQuorum: svc.minQuorum ? String(svc.minQuorum) : "",
       durationMinutes: svc.durationMinutes,
@@ -177,6 +181,7 @@ export default function ServicesPage() {
       description: form.description.trim() || undefined,
       serviceType: form.serviceType,
       eventDatesText: form.eventDatesText.trim() || undefined,
+      scheduleText: form.scheduleText.trim() || undefined,
       maxCapacity: form.maxCapacity ? Number(form.maxCapacity) : (editingService ? null : undefined),
       minQuorum: form.minQuorum ? Number(form.minQuorum) : undefined,
       durationMinutes: Number(form.durationMinutes),
@@ -326,6 +331,13 @@ export default function ServicesPage() {
                         Fechas:
                       </span>
                       <span className="font-semibold text-purple-900">{s.eventDatesText}</span>
+                    </div>
+                  )}
+
+                  {s.serviceType === "recurring" && s.scheduleText && (
+                    <div className="rounded-md bg-sky-50 p-2 text-sky-950 border border-sky-100 flex items-start gap-1.5 text-[11px] leading-tight">
+                      <Clock className="h-3.5 w-3.5 text-sky-600 mt-0.5 shrink-0" />
+                      <span><strong>Horarios oficiales:</strong> {s.scheduleText}</span>
                     </div>
                   )}
 
@@ -534,6 +546,24 @@ export default function ServicesPage() {
               placeholder="ej. Retiro de Yoga y Meditación en la Sierra"
             />
           </div>
+
+          {form.serviceType === "recurring" && (
+            <div className="rounded-lg border border-sky-200 bg-sky-50/50 p-3 space-y-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-sky-950">
+                  Horarios y Turnos Oficiales (Semanales)
+                </label>
+                <Input
+                  value={form.scheduleText}
+                  onChange={(e) => setForm((f) => ({ ...f, scheduleText: e.target.value }))}
+                  placeholder="ej. Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15) y Jueves (9:45, 11:15, 16:00, 17:30, 19:00)"
+                />
+                <p className="mt-1 text-[11px] text-sky-800">
+                  El asistente de IA, WhatsApp, la web y el calendario utilizarán exactamente estos horarios para validar y ofrecer turnos disponibles.
+                </p>
+              </div>
+            </div>
+          )}
 
           {form.serviceType === "event" && (
             <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-3 space-y-3">

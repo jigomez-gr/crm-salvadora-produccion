@@ -7,6 +7,7 @@ import { User, UserRole } from '../common/entities/user.entity';
 import { Appointment, AppointmentStatus } from '../common/entities/appointment.entity';
 import { AgentConfig } from '../common/entities/agent-config.entity';
 import { CreateServiceDto, UpdateServiceDto } from './dto/service.dto';
+import { parseWeeklyScheduleFromText } from './schedule-parser';
 
 @Injectable()
 export class ServicesService implements OnModuleInit {
@@ -741,8 +742,17 @@ export class ServicesService implements OnModuleInit {
     }
 
     const generatedCalendarId = `cal-${dto.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+    let weeklySchedule = dto.weeklySchedule;
+    if (!weeklySchedule && dto.scheduleText) {
+      weeklySchedule = parseWeeklyScheduleFromText(dto.scheduleText) || undefined;
+    }
+    if (!weeklySchedule && dto.description) {
+      weeklySchedule = parseWeeklyScheduleFromText(dto.description) || undefined;
+    }
+
     const service = this.serviceRepo.create({
       ...dto,
+      weeklySchedule: weeklySchedule || null,
       serviceType: dto.serviceType || ServiceType.RECURRING,
       eventDatesText: dto.eventDatesText || null,
       eventStartDate: dto.eventStartDate ? new Date(dto.eventStartDate) : null,
@@ -776,6 +786,20 @@ export class ServicesService implements OnModuleInit {
     if (dto.description !== undefined) service.description = dto.description;
     if (dto.serviceType !== undefined) service.serviceType = dto.serviceType;
     if (dto.eventDatesText !== undefined) service.eventDatesText = dto.eventDatesText;
+    if (dto.scheduleText !== undefined) {
+      service.scheduleText = dto.scheduleText;
+      if (dto.weeklySchedule !== undefined) {
+        service.weeklySchedule = dto.weeklySchedule;
+      } else {
+        const parsed = parseWeeklyScheduleFromText(dto.scheduleText);
+        if (parsed) service.weeklySchedule = parsed;
+      }
+    } else if (dto.weeklySchedule !== undefined) {
+      service.weeklySchedule = dto.weeklySchedule;
+    } else if (dto.description !== undefined && (!service.weeklySchedule || Object.keys(service.weeklySchedule).length === 0)) {
+      const parsed = parseWeeklyScheduleFromText(dto.description);
+      if (parsed) service.weeklySchedule = parsed;
+    }
     if (dto.eventStartDate !== undefined)
       service.eventStartDate = dto.eventStartDate ? new Date(dto.eventStartDate) : null;
     if (dto.eventEndDate !== undefined)

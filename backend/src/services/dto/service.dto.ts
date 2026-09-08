@@ -38,6 +38,9 @@ export class CreateServiceDto {
   @IsOptional()
   scheduleText?: string;
 
+  @IsOptional()
+  weeklySchedule?: Record<number, string[]>;
+
   @IsString()
   @IsOptional()
   flyerUrl?: string;
@@ -114,6 +117,9 @@ export class UpdateServiceDto {
   @IsString()
   @IsOptional()
   scheduleText?: string;
+
+  @IsOptional()
+  weeklySchedule?: Record<number, string[]>;
 
   @IsString()
   @IsOptional()
