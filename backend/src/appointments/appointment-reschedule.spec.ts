@@ -97,16 +97,31 @@ describe('AppointmentsService - rescheduleAppointment', () => {
     };
 
     servicesRepo = {
-      findOne: jest.fn(async () => ({
-        id: 'svc-hatha-1',
-        name: 'Hatha Yoga Terapéutico (1 clase semanal)',
-        durationMinutes: 90,
-        maxCapacity: 20,
-        weeklySchedule: {
-          2: ['09:45', '11:15', '17:00', '18:30', '20:00'],
-          4: ['09:45', '11:15', '16:00', '17:30', '19:00'],
-        },
-      })),
+      findOne: jest.fn(async (query: any) => {
+        const nameQuery = query?.where?.[0]?.name || query?.where?.name;
+        if (nameQuery && /meditaci/i.test(nameQuery)) {
+          return {
+            id: 'svc-med-1',
+            name: 'Meditaciones Guiadas',
+            durationMinutes: 30,
+            maxCapacity: 28,
+            weeklySchedule: {
+              2: ['09:15'],
+              4: ['09:15'],
+            },
+          };
+        }
+        return {
+          id: 'svc-hatha-1',
+          name: 'Hatha Yoga Terapéutico (1 clase semanal)',
+          durationMinutes: 90,
+          maxCapacity: 20,
+          weeklySchedule: {
+            2: ['09:45', '11:15', '17:00', '18:30', '20:00'],
+            4: ['09:45', '11:15', '16:00', '17:30', '19:00'],
+          },
+        };
+      }),
       find: jest.fn(async () => []),
     };
 
@@ -118,7 +133,10 @@ describe('AppointmentsService - rescheduleAppointment', () => {
       { cancelBooking: jest.fn().mockResolvedValue({}) } as any, // calcom
       { emit: jest.fn() } as any, // eventEmitter
       null as any, // analizaIa
-      { sendAppointmentDecisionEmail: jest.fn().mockResolvedValue({}) } as any, // emailService
+      {
+        sendAppointmentDecisionEmail: jest.fn().mockResolvedValue({}),
+        sendNotification: jest.fn().mockResolvedValue({}),
+      } as any, // emailService
       null as any, // ycloudClient
       null as any, // agentsConfigService
       null as any, // messagesService
@@ -144,5 +162,41 @@ describe('AppointmentsService - rescheduleAppointment', () => {
     const tuesday = apptsInDb.find((a) => a.id === 'appt-tuesday-1');
     expect(tuesday.status).toBe(AppointmentStatus.CANCELLED);
     expect(tuesday.cancelledBy).toBe('agent');
+  });
+
+  it('cancels Tuesday Meditación Guiada and creates Thursday Meditación retaining conditions', async () => {
+    const tuesdayMed: Partial<Appointment> = {
+      id: 'appt-med-tuesday',
+      contactId: 'contact-test-1',
+      contact: contactMock as Contact,
+      service: 'Meditaciones Guiadas',
+      calendarId: 'cal-meditacion',
+      startsAt: new Date('2026-09-15T07:15:00.000Z'), // Tuesday 09:15 local (UTC+2)
+      endsAt: new Date('2026-09-15T07:45:00.000Z'),
+      status: AppointmentStatus.SCHEDULED,
+      isFirstClass: false,
+      price: '3.00',
+      notes: 'Meditación guiada sesión suelta (3,00 €) o abono mensual (15,00 €/mes).',
+    };
+    apptsInDb.push(tuesdayMed);
+
+    // Thursday 17 Sep at 09:15 local (07:15 UTC)
+    const thursdayIso = '2026-09-17T07:15:00.000Z';
+
+    const newAppt = await service.rescheduleAppointment(
+      'appt-med-tuesday',
+      thursdayIso,
+      'Reprogramada al jueves por el alumno',
+    );
+
+    expect(newAppt).toBeDefined();
+    expect(newAppt.startsAt).toEqual(new Date(thursdayIso));
+    expect(newAppt.service).toBe('Meditaciones Guiadas');
+    expect(newAppt.price).toBe('3.00');
+
+    // Verify Tuesday med appt was cancelled
+    const cancelledMed = apptsInDb.find((a) => a.id === 'appt-med-tuesday');
+    expect(cancelledMed.status).toBe(AppointmentStatus.CANCELLED);
+    expect(cancelledMed.cancelledBy).toBe('agent');
   });
 });
