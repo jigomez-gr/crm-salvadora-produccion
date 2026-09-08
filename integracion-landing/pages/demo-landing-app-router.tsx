@@ -142,15 +142,15 @@ export default function DemoLandingPage() {
       title: "Hatha Yoga Terapéutico (1 clase semanal)",
       category: "Yoga & Salud Postural",
       categoryIcon: "🧘",
-      badge: "1ª Clase GRATIS (te la regalamos)",
+      badge: "🎁 1ª Clase de Regalo (0€) • Sueltas 10€",
       desc: "Práctica consciente de asanas, alineación corporal, respiración terapéutica y relajación profunda.",
       schedules: {
         morning: "Martes y Jueves: 9:45 y 11:15",
         afternoon: "Martes: 17:00, 18:30, 20:00 | Miércoles: 20:15 | Jueves: 16:00, 17:30, 19:00",
-        note: "Clases de 90 min. 1ª clase de prueba NO SE COBRA, SE LA REGALAMOS. Si no continúas como alumno, puedes acudir a clases esporádicas a 10€/sesión. Alumnos con horario fijo semanal y recuperación de clases (3 meses).",
+        note: "Clases de 90 min. ¡Tu 1ª clase de prueba NO SE COBRA, ES UN REGALO (0 €)! Clases sueltas esporádicas a 10€/sesión (sin permanencia). Cuota de alumno con turno fijo semanal y recuperación de clases (hasta 3 meses / 90 días). Confirmación fehaciente por Email y SMS.",
       },
       duration: "90 min",
-      priceTag: "25.00 € / mes",
+      priceTag: "25.00 € / mes (Turno fijo)",
       isFreeTrial: true,
       serviceName: "Hatha Yoga Terapéutico (1 clase semanal)",
       calendarId: "cal-hatha-yoga",
@@ -160,15 +160,15 @@ export default function DemoLandingPage() {
       title: "Hatha Yoga Terapéutico (2 clases semanales)",
       category: "Yoga & Práctica Frecuente",
       categoryIcon: "🧘",
-      badge: "1ª Clase GRATIS (te la regalamos)",
+      badge: "🎁 1ª Clase de Regalo (0€) • Sueltas 10€",
       desc: "Inscripción para 2 sesiones semanales en los horarios oficiales de mañana o tarde.",
       schedules: {
         morning: "Martes y Jueves: 9:45 y 11:15",
         afternoon: "Martes: 17:00, 18:30, 20:00 | Miércoles: 20:15 | Jueves: 16:00, 17:30, 19:00",
-        note: "Comparte calendario y aforo con 1 clase semanal. 1ª clase de prueba de regalo (gratis). Clases esporádicas a 10€/sesión. Alumnos con horario fijo semanal y recuperación de clases (3 meses).",
+        note: "Comparte calendario y aforo con 1 clase semanal. ¡Tu 1ª clase de prueba NO SE COBRA, ES UN REGALO (0 €)! Clases sueltas esporádicas a 10€/sesión (sin permanencia). Cuota de alumno con 2 turnos fijos semanales y recuperación de clases (hasta 3 meses / 90 días). Confirmación fehaciente por Email y SMS.",
       },
       duration: "90 min",
-      priceTag: "42.00 € / mes",
+      priceTag: "42.00 € / mes (2 Turnos fijos)",
       isFreeTrial: true,
       serviceName: "Hatha Yoga Terapéutico (2 clases semanales)",
       calendarId: "cal-hatha-yoga",
@@ -178,13 +178,14 @@ export default function DemoLandingPage() {
       title: "Meditaciones Guiadas",
       category: "Conciencia & Silencio",
       categoryIcon: "✨",
-      desc: "Sesión grupal de meditación, respiración y centramiento para iniciar el día en calma y presencia.",
+      badge: "¡GRATIS Alumnos de Yoga!",
+      desc: "Sesión grupal de meditación, respiración y centramiento para iniciar el día en calma y presencia. Aforo máximo 28 personas para máxima comodidad y concentración.",
       schedules: {
-        morning: "Martes y Jueves de 9:15 a 9:45 (30 min)",
-        note: "Gratuitas para alumnos inscritos en Yoga. No alumnos: 15€/mes o 3€ sesión suelta. Asistencia flexible respetando aforo.",
+        morning: "Martes y Jueves de 09:15 a 09:45 (30 min)",
+        note: "¡GRATIS para alumnos matriculados en Yoga! No alumnos: 15€/mes (acceso ilimitado) o 3€ meditación suelta. Aforo máximo 28 personas.",
       },
       duration: "30 min",
-      priceTag: "15.00 € / mes · 3€ suelta (Gratis alumnos)",
+      priceTag: "GRATIS Alumnos · 15€/mes no alumnos (3€ suelta)",
       isFreeTrial: false,
       serviceName: "Meditaciones Guiadas",
       calendarId: "cal-meditacion",
@@ -752,18 +753,34 @@ export default function DemoLandingPage() {
         </div>
 
         {/* Banner Informativo Reglas de Yoga */}
-        <div className="mb-6 bg-amber-50/90 border border-amber-200 rounded-2xl p-4 text-xs text-stone-800 shadow-2xs">
-          <div className="flex items-start gap-2.5">
-            <span className="text-base">🧘</span>
-            <div className="space-y-1">
-              <p className="font-bold text-amber-950 text-xs sm:text-sm">
-                Modalidades de Alumno, Clase de Prueba y Recuperaciones:
+        <div className="mb-6 bg-amber-50/95 border-2 border-amber-200/90 rounded-2xl p-5 text-xs text-stone-800 shadow-sm space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🧘</span>
+            <h4 className="font-bold text-amber-950 text-sm sm:text-base">
+              Políticas Oficiales, 1ª Clase de Regalo y Flexibilidad de Alumnos:
+            </h4>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1 text-stone-700 leading-relaxed">
+            <div className="space-y-2">
+              <p>
+                • 🎁 <strong>1ª Clase de prueba de REGALO:</strong> ¡Tu primera clase de prueba <strong>NO SE COBRA, ES UN REGALO</strong>! (100% gratuita, 0 €, sin compromiso ni permanencia).
               </p>
-              <p className="text-stone-700 leading-relaxed">
-                • <strong>1ª Cita de prueba:</strong> Es <strong>gratuita si confirmas que te transformas en alumno</strong> (cuota mensual de 25€/mes para 1 clase/semana o 42€/mes para 2 clases/semana). Si decides no continuar como alumno, se abona como sesión suelta (10 €).
+              <p>
+                • 📅 <strong>Cuotas de Alumno (Turno fijo garantizado):</strong> 1 clase/semana por <strong>25,00 €/mes</strong> o 2 clases/semana por <strong>42,00 €/mes</strong>. Alumno con horario fijo reservado para no tener que estar reservando cita cada semana. Total libertad para darse de alta o baja cuando se desee.
               </p>
-              <p className="text-stone-700 leading-relaxed">
-                • <strong>Recuperación de clases (3 meses):</strong> Siendo alumno, si no puedes acudir a tu clase semanal por cualquier motivo, puedes recuperarla a partir de la semana siguiente durante <strong>3 meses (90 días)</strong>.
+              <p>
+                • 🎟️ <strong>Clases sueltas / esporádicas:</strong> <strong>10,00 € por clase</strong> para quien no desee matricularse como alumno mensual, sin permanencia.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <p>
+                • 🔄 <strong>Política de recuperaciones (hasta 3 meses / 90 días):</strong> Si no puedes asistir y avisas con antelación, tienes hasta 3 meses para recuperar tu clase en cualquier otro turno con plaza libre.
+              </p>
+              <p>
+                • ✨ <strong>Meditaciones Guiadas (Martes y Jueves 09:15):</strong> <strong>¡GRATIS!</strong> para todos los alumnos matriculados en Yoga. No alumnos: 15,00 €/mes (acceso ilimitado) o 3,00 € por meditación suelta (aforo máx. 28 personas).
+              </p>
+              <p>
+                • 📩 <strong>Confirmación fehaciente:</strong> Recibirás confirmación inmediata por <strong>Correo Electrónico y por SMS</strong> tras cada reserva, cambio o reprogramación de clase.
               </p>
             </div>
           </div>
