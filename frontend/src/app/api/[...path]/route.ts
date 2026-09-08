@@ -29,7 +29,10 @@ async function forwardRequest(req: NextRequest, { params }: { params: Promise<{ 
 
   let body: ArrayBuffer | undefined = undefined;
   if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
-    body = await req.arrayBuffer();
+    const rawBody = await req.arrayBuffer();
+    if (rawBody.byteLength > 0) {
+      body = rawBody;
+    }
   }
 
   // Try cached working URL first

@@ -54,6 +54,11 @@ export interface BookingAgentDeps {
   ) => Promise<any>;
   listContactAppointments: (contactId: string) => Promise<any[]>;
   cancelAppointment: (appointmentId: string, reason?: string) => Promise<any>;
+  rescheduleAppointment?: (
+    appointmentId: string,
+    newStartsAt: string,
+    reason?: string,
+  ) => Promise<any>;
   linkThreadContact?: (threadId: string, contactId: string) => Promise<void>;
   getThreadContact?: (threadId: string) => Promise<any>;
   createPaymentLink?: (params: {
@@ -853,6 +858,109 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     },
   });
 
+  const rescheduleAppointmentTool = createTool({
+    id: 'rescheduleAppointment',
+    description:
+      'Reschedule an existing appointment to a new date and time. Use this whenever the customer requests to reprogram, change the day, or change the time of an existing appointment. This cancels the previous appointment and registers the new appointment on the desired date and time.',
+    inputSchema: z.object({
+      appointmentId: z
+        .string()
+        .optional()
+        .describe(
+          'ID of the appointment to reschedule. If not provided, the active appointment for the customer is resolved automatically.',
+        ),
+      newStartsAt: z
+        .string()
+        .describe(
+          'The new start time in ISO format (e.g. 2026-09-17T09:45:00.000Z) or date string',
+        ),
+      reason: z
+        .string()
+        .optional()
+        .describe('Optional reason or motive for rescheduling'),
+    }),
+    execute: async (inputData, context) => {
+      const customer = getCustomer(context);
+      let contactId = customer?.contactId;
+      const threadId = (context as any)?.requestContext?.get?.('threadId');
+
+      if (!contactId && threadId && deps.getThreadContact) {
+        const threadContact = await deps.getThreadContact(threadId).catch(() => null);
+        if (threadContact?.id) contactId = threadContact.id;
+      }
+
+      let apptId = inputData.appointmentId;
+      if (!apptId && contactId && deps.listContactAppointments) {
+        const existing = await deps.listContactAppointments(contactId).catch(() => []);
+        const active = existing.find(
+          (a: any) =>
+            a.status === 'scheduled' || a.status === 'pending_approval',
+        );
+        if (active?.id) {
+          apptId = active.id;
+        }
+      }
+
+      if (!apptId) {
+        return {
+          error:
+            'No se ha encontrado ninguna cita activa previa para reprogramar. Por favor consulta primero sus citas con listContactAppointments o pídele su teléfono/correo.',
+        };
+      }
+
+      try {
+        const config = getConfig(context);
+        const timezone = config?.timezone || 'Europe/Madrid';
+        const effectiveStartsAt = parseFlexibleStartsAt(inputData.newStartsAt, timezone);
+
+        let newAppt: any;
+        if (deps.rescheduleAppointment) {
+          newAppt = await deps.rescheduleAppointment(
+            apptId,
+            effectiveStartsAt,
+            inputData.reason,
+          );
+        } else {
+          await deps.cancelAppointment(apptId, inputData.reason || 'Reprogramada');
+          newAppt = await deps.bookAppointment(
+            contactId!,
+            'Hatha Yoga Terapéutico',
+            effectiveStartsAt,
+            90,
+          );
+        }
+
+        const startsAtDate = new Date(newAppt.startsAt);
+        const localDate = startsAtDate.toLocaleDateString('es-ES', {
+          timeZone: timezone,
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+        });
+        const localTime = startsAtDate.toLocaleTimeString('es-ES', {
+          timeZone: timezone,
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+
+        return {
+          success: true,
+          appointment: newAppt,
+          message: `Tu cita de ${newAppt.service} ha sido reprogramada con éxito para el ${localDate} a las ${localTime}. La cita anterior ha quedado cancelada y se ha registrado la nueva en el sistema.`,
+        };
+      } catch (err: any) {
+        const errorMsg =
+          err?.message ||
+          err?.response?.message ||
+          (typeof err === 'string' ? err : 'Error al reprogramar la cita en el sistema.');
+        return {
+          error: errorMsg,
+        };
+      }
+    },
+  });
+
   return new Agent({
     id: TEMPLATE_AGENT_ID,
     name: 'Assistant',
@@ -989,15 +1097,15 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   4. Solicita amablemente el MOTIVO de la cancelación (por ejemplo: "¿Podrías indicarme brevemente el motivo de la cancelación?").
   5. En cuanto el cliente confirme qué cita anula y aporte el motivo (o lo exprese), ejecuta 'cancelAppointment' pasando el 'appointmentId' y el 'reason'.
   6. Confírmale al cliente que su cita ha quedado cancelada con éxito y que el sistema le envía la confirmación oficial por correo electrónico y/o WhatsApp.
-- REPROGRAMACIÓN O CAMBIO DE FECHA DE CITAS:
-  1. Si el alumno desea cambiar de día u hora su cita:
-  2. Llama a 'listContactAppointments' para revisar su cita actual y su estado.
-  3. Pregunta qué nuevo día y franja horaria prefiere y consulta la disponibilidad real con 'checkAvailability'.
-  4. Para servicios que requieren aprobación previa del instructor/terapeuta (como Bienestar Experience o Terapia Gestalt):
-     * Al reprogramar, la cita entra de nuevo en el **circuito de aprobación** (estado pendiente de aprobación) en la nueva fecha solicitada.
-     * Explícale con amabilidad al cliente que su solicitud de cambio de horario ha quedado registrada y **pendiente de aprobación por el instructor responsable (Jose Ignacio Gomez Raya)**, y que en cuanto la confirme recibirá el correo/WhatsApp oficial con el enlace y detalles.
-  5. Para actividades regulares o eventos (Yoga, Baño de Gong, Iaidō):
-     * Se anula la cita previa y se confirma de inmediato el nuevo horario agendado.
+- REPROGRAMACIÓN O CAMBIO DE FECHA/HORA DE CITAS (OBLIGATORIO):
+  1. Si el alumno o cliente solicita cambiar de día, cambiar de hora o reprogramar una cita (por ejemplo: "quiero reprogramarla para el jueves a la misma hora", "cámbiamela al jueves", "mover mi cita"):
+  2. Consulta SIEMPRE primero los huecos disponibles con 'checkAvailability' para confirmar que el nuevo horario es válido y tiene aforo disponible.
+  3. Llama DIRECTAMENTE a la herramienta 'rescheduleAppointment' pasando 'newStartsAt' (con la nueva fecha/hora solicitada) y el motivo si lo hay.
+  4. 'rescheduleAppointment' se encarga AUTOMÁTICAMENTE de cancelar la cita previa y dar de alta de inmediato la nueva cita en el sistema en una sola operación atómica.
+  5. NUNCA intentes llamar a 'cancelAppointment' y 'bookAppointment' por separado cuando se trate de un cambio o reprogramación: usa SIEMPRE 'rescheduleAppointment'.
+  6. Si el cliente ya te ha pedido cambiar o reprogramar la cita para un día u hora concreto, NO le vuelvas a preguntar "¿Quieres que cancele la del martes para poner la del jueves?"; EJECÚTALO DIRECTAMENTE con 'rescheduleAppointment' y confírmale que ha quedado reprogramada con éxito.
+  7. Si la cita es para una clase de prueba gratuita (regalo del centro) o modalidad de alumno, 'rescheduleAppointment' mantiene automáticamente la gratuidad y las condiciones originales.
+  8. Para servicios que requieren aprobación previa del instructor/terapeuta (como Bienestar Experience o Terapia Gestalt), al reprogramar la cita entra de nuevo en estado de revisión y avísale al cliente con amabilidad.
 - PREVENCIÓN DE DUPLICADOS Y RESERVAS SIMULTÁNEAS PARA LA MISMA PERSONA:
   * Un mismo alumno/contacto NO puede tener dos citas o plazas reservadas simultáneas en el mismo horario.
   * Por ejemplo: no puede inscribirse a la vez en 1 clase semanal y 2 clases semanales a la misma hora, ni como 'Constelar' y como 'Participante' en el mismo taller de Constelaciones Familiares, ni en dos servicios distintos en el mismo intervalo de tiempo.
@@ -1192,6 +1300,7 @@ ${flow}`;
       bookAppointment: bookAppointmentTool,
       listContactAppointments: listContactAppointmentsTool,
       cancelAppointment: cancelAppointmentTool,
+      rescheduleAppointment: rescheduleAppointmentTool,
       createPaymentLink: createPaymentLinkTool,
     },
     memory,

@@ -74,6 +74,14 @@ export class CreateAppointmentDto {
   recoveredFromAppointmentId?: string;
 
   @IsOptional()
+  @IsUUID()
+  replacesAppointmentId?: string;
+
+  @IsOptional()
+  @IsString()
+  agentKey?: string;
+
+  @IsOptional()
   @IsEnum(PaymentStatus)
   paymentStatus?: PaymentStatus;
 }

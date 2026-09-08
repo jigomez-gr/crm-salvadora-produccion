@@ -142,8 +142,11 @@ export { NestMastraModule };
           listContactAppointments: async (contactId: string) => {
             return appointmentsService.findByContact(contactId);
           },
-          cancelAppointment: async (appointmentId: string) => {
-            return appointmentsService.cancelAppointment(appointmentId);
+          cancelAppointment: async (appointmentId: string, reason?: string) => {
+            return appointmentsService.cancel(appointmentId, 'agent', reason);
+          },
+          rescheduleAppointment: async (appointmentId: string, newStartsAt: string, reason?: string) => {
+            return appointmentsService.rescheduleAppointment(appointmentId, newStartsAt, reason);
           },
           createPaymentLink: traced('createPaymentLink', async (params) => {
             return paymentsService.createCheckoutSession({

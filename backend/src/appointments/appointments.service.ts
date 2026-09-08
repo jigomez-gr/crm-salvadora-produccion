@@ -158,6 +158,24 @@ export class AppointmentsService implements OnModuleInit {
   }
 
   async create(dto: CreateAppointmentDto): Promise<Appointment> {
+    if (dto.replacesAppointmentId) {
+      const toCancel = await this.appointmentsRepo.findOne({
+        where: { id: dto.replacesAppointmentId },
+      });
+      if (toCancel && toCancel.status !== AppointmentStatus.CANCELLED) {
+        toCancel.status = AppointmentStatus.CANCELLED;
+        toCancel.cancelledAt = new Date();
+        toCancel.cancelledBy = 'agent';
+        toCancel.cancellationReason = 'Reprogramada al nuevo horario';
+        await this.appointmentsRepo.save(toCancel);
+        if (toCancel.calBookingUid) {
+          this.calcomService
+            .cancelBooking(toCancel.calBookingUid, toCancel.cancellationReason)
+            .catch(() => null);
+        }
+      }
+    }
+
     const startsAt = new Date(parseFlexibleStartsAt(dto.startsAt));
     let endsAt = dto.endsAt ? new Date(parseFlexibleStartsAt(dto.endsAt)) : startsAt;
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1950,6 +1968,76 @@ export class AppointmentsService implements OnModuleInit {
   /** Cancellation requested by the AI agent (on the customer's behalf). */
   async cancelAppointment(id: string): Promise<Appointment> {
     return this.cancel(id, 'agent');
+  }
+
+  /**
+   * Reschedule an appointment requested by the AI agent:
+   * First cancels the previous appointment, and then registers the new appointment
+   * on the requested day/time.
+   * If the previous appointment was a free trial class (isFirstClass = true), the new one
+   * preserves isFirstClass = true and price = 0.00.
+   */
+  async rescheduleAppointment(
+    id: string,
+    newStartsAtIso: string,
+    reason?: string,
+  ): Promise<Appointment> {
+    const oldAppt = await this.findOne(id);
+    if (!oldAppt) {
+      throw new NotFoundException(`No se encontró la cita con ID ${id}`);
+    }
+
+    if (oldAppt.status === AppointmentStatus.CANCELLED) {
+      throw new BadRequestException('Esta cita ya se encuentra cancelada.');
+    }
+
+    const durationMs =
+      oldAppt.endsAt.getTime() - oldAppt.startsAt.getTime() || 90 * 60_000;
+    const timezone = 'Europe/Madrid';
+    const startDate = new Date(parseFlexibleStartsAt(newStartsAtIso, timezone));
+    const endDate = new Date(startDate.getTime() + durationMs);
+
+    // 1. Cancel the previous appointment first (as requested)
+    oldAppt.status = AppointmentStatus.CANCELLED;
+    oldAppt.cancelledAt = new Date();
+    oldAppt.cancelledBy = 'agent';
+    const formattedDate = format(new TZDate(startDate, timezone), 'dd/MM/yyyy HH:mm');
+    oldAppt.cancellationReason = reason || `Reprogramada para el ${formattedDate}`;
+    await this.appointmentsRepo.save(oldAppt);
+
+    if (oldAppt.calBookingUid) {
+      this.calcomService
+        .cancelBooking(oldAppt.calBookingUid, oldAppt.cancellationReason)
+        .catch(() => null);
+    }
+
+    // 2. Create the new appointment on the new date
+    try {
+      const newAppt = await this.create({
+        contactId: oldAppt.contactId,
+        service: oldAppt.service,
+        serviceId: oldAppt.serviceId || undefined,
+        calendarId: oldAppt.calendarId || undefined,
+        startsAt: startDate.toISOString(),
+        endsAt: endDate.toISOString(),
+        price: oldAppt.price || undefined,
+        modality: oldAppt.modality || undefined,
+        isFirstClass: oldAppt.isFirstClass,
+        reason: reason || (oldAppt.reason ? `${oldAppt.reason} (Reprogramada)` : 'Cita reprogramada'),
+        notes: oldAppt.notes || undefined,
+        agentKey: oldAppt.agentKey || undefined,
+      });
+
+      return newAppt;
+    } catch (err) {
+      // If booking the new slot fails, restore old appt so customer is not left without appointment
+      oldAppt.status = AppointmentStatus.SCHEDULED;
+      oldAppt.cancelledAt = null;
+      oldAppt.cancelledBy = null;
+      oldAppt.cancellationReason = null;
+      await this.appointmentsRepo.save(oldAppt);
+      throw err;
+    }
   }
 
   async findByContact(contactId: string): Promise<Appointment[]> {
