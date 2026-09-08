@@ -13,6 +13,36 @@ Esta carpeta contiene todo lo necesario para integrar el **Agente de IA**, la **
 
 ---
 
+## 🧘 REGLAS DE NEGOCIO, HORARIOS Y TARIFAS OFICIALES (Actualizado)
+
+Cualquier landing page o interfaz que use estos componentes debe reflejar con total exactitud las siguientes políticas comerciales:
+
+### 1. Hatha Yoga Terapéutico (Sesiones de 90 min)
+* **Horarios Oficiales:**
+  * **Martes:** `09:45`, `11:15`, `17:00`, `18:30`, `20:00`
+  * **Miércoles:** `20:15`
+  * **Jueves:** `09:45`, `11:15`, `16:00` *(¡IMPORTANTE: a las 16:00, nunca 16:30!)*, `17:30`, `19:00`
+* **Oferta de Bienvenida / Primera Clase:**
+  * **¡NO SE COBRA, SE LA REGALAMOS!** (100% gratuita, 0,00 €).
+* **Opciones después de la prueba:**
+  * **Clases sueltas / esporádicas:** 10,00 € por clase (para no alumnos, sin matrícula ni compromiso).
+  * **Alumno 1 clase semanal:** 25,00 € al mes (con turno fijo semanal asignado).
+  * **Alumno 2 clases semanales:** 42,00 € al mes (con 2 turnos fijos semanales asignados).
+* **Flexibilidad y condiciones de alumno:**
+  * Los alumnos tienen un **horario fijo semanal** asignado para que no tengan que reservar manualmente cada semana.
+  * **Recuperación de clases:** Si un alumno no puede acudir y avisa, puede recuperar su clase en cualquiera de los otros turnos disponibles durante **3 meses (90 días)**.
+  * Alta o baja como alumno en cualquier momento bajo petición.
+  * Cada cambio de horario o reprogramación dispara automáticamente un **correo electrónico** y un **SMS** para dejar constancia fehaciente.
+
+### 2. Meditaciones Guiadas (Sesiones de 30 min)
+* **Horarios:** Martes y Jueves de `09:15` a `09:45`.
+* **Tarifas:**
+  * **Alumnos de Yoga matriculados:** **¡GRATIS!** (Incluido en su cuota).
+  * **No alumnos:** **15,00 € al mes** (acceso a todas las meditaciones) o **3,00 €** por meditación suelta.
+* **Aforo y flexibilidad:** Aforo máximo de 28 plazas por sala. Movilidad flexible entre martes y jueves respetando plazas libres.
+
+---
+
 ## 📦 OPCIÓN 1: Integración en 1 Línea (HTML, WordPress, Webflow, Shopify, etc.)
 
 Para añadir la **Burbuja Flotante del Agente de IA** en cualquier web sin programar componentes, pega esta línea antes de la etiqueta de cierre `</body>`:
