@@ -114,7 +114,7 @@ describe('Yoga Appointments & Student Lifecycle', () => {
         weeklySchedule: {
           2: ['09:45', '11:15', '17:00', '18:30', '20:00'],
           3: ['20:15'],
-          4: ['09:45', '11:15', '16:30', '17:30', '19:00'],
+          4: ['09:45', '11:15', '16:00', '17:30', '19:00'],
         },
       });
     }),
@@ -166,8 +166,8 @@ describe('Yoga Appointments & Student Lifecycle', () => {
     );
   });
 
-  it('reserva la primera cita para un no-alumno con isFirstClass=true y precio de clase suelta 10€', async () => {
-    // Martes 8 de Septiembre de 2026 a las 09:45
+  it('reserva la primera cita para un no-alumno con isFirstClass=true y precio gratuito (regalo de bienvenida)', async () => {
+    // Martes 15 de Septiembre de 2026 a las 09:45
     const startsAt = '2026-09-15T07:45:00.000Z';
     const endsAt = '2026-09-15T09:15:00.000Z';
 
@@ -179,37 +179,50 @@ describe('Yoga Appointments & Student Lifecycle', () => {
     });
 
     expect(appt.isFirstClass).toBe(true);
-    expect(appt.price).toBe('10.00');
-    expect(appt.notes).toContain('Primera cita (10,00 €)');
+    expect(appt.price).toBe('0.00');
+    expect(appt.paymentStatus).toBe(PaymentStatus.EXEMPT);
+    expect(appt.notes).toContain('Primera clase de prueba (gratuita / regalo del centro)');
   });
 
-  it('al convertir al usuario en alumno, bonifica su primera cita a 0.00€ y actualiza el contacto', async () => {
-    // 1. Crear primera cita
+  it('si un no-alumno vuelve a reservar tras su clase de prueba, se cobra a 10.00€ como clase suelta esporádica', async () => {
+    // 1. Simular primera cita ya realizada
+    inMemoryAppointments.push({
+      id: 'appt-primera-prueba',
+      contactId: 'contact-ana-1',
+      service: 'Hatha Yoga Terapéutico (1 clase semanal)',
+      startsAt: new Date('2026-09-08T07:45:00.000Z'),
+      endsAt: new Date('2026-09-08T09:15:00.000Z'),
+      status: AppointmentStatus.COMPLETED,
+    });
+
+    // 2. Segunda cita
     const startsAt = '2026-09-15T07:45:00.000Z';
     const endsAt = '2026-09-15T09:15:00.000Z';
 
-    const created = await appointmentsService.create({
+    const appt = await appointmentsService.create({
       contactId: 'contact-ana-1',
       service: 'Hatha Yoga Terapéutico (1 clase semanal)',
       startsAt,
       endsAt,
     });
-    expect(created.price).toBe('10.00');
 
-    // 2. Convertir en alumno con modalidad 1 clase semanal
-    const updatedContact = await contactsService.convertToStudent('contact-ana-1', '1_clase_semanal');
+    expect(appt.isFirstClass).toBe(false);
+    expect(appt.price).toBe('10.00');
+    expect(appt.paymentStatus).toBe(PaymentStatus.UNPAID);
+    expect(appt.notes).toContain('Clase suelta esporádica (10,00 €)');
+  });
+
+  it('al convertir al usuario en alumno, actualiza el contacto y su horario fijo semanal', async () => {
+    const updatedContact = await contactsService.convertToStudent('contact-ana-1', '1_clase_semanal', [
+      { day: 2, time: '09:45' },
+    ]);
 
     expect(updatedContact.isStudent).toBe(true);
     expect(updatedContact.studentModality).toBe('1_clase_semanal');
+    expect(updatedContact.studentSchedule).toEqual([{ day: 2, time: '09:45' }]);
     expect(updatedContact.studentEnrolledAt).toBeInstanceOf(Date);
     expect(updatedContact.tags).toContain('alumno');
     expect(updatedContact.status).toBe(ContactStatus.ACTIVE);
-
-    // 3. Verificar que la primera cita se bonificó a 0€ y EXEMPT
-    const apptInDb = inMemoryAppointments.find((a) => a.id === created.id);
-    expect(apptInDb.price).toBe('0.00');
-    expect(apptInDb.paymentStatus).toBe(PaymentStatus.EXEMPT);
-    expect(apptInDb.paymentNotes).toContain('Primera clase gratuita por confirmación de alta como alumno');
   });
 
   it('las citas posteriores de un alumno se crean con precio 0.00€ e isFirstClass=false (cubiertas por cuota mensual)', async () => {

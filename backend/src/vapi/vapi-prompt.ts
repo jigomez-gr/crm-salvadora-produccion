@@ -86,17 +86,17 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
   * Horarios oficiales estrictos:
     - Martes: 09:45, 11:15, 17:00, 18:30 y 20:00
     - Miércoles: 20:15
-    - Jueves: 09:45, 11:15, 16:30, 17:30 y 19:00
+    - Jueves: 09:45, 11:15, 16:00, 17:30 y 19:00
   * Modalidades, primera cita y alumnos:
-    - 1 clase semanal (25€/mes): el alumno solo puede tener UNA clase agendada por semana (de lunes a domingo). Si ya tiene una clase esa semana, ofrécele cambiar el horario ('reprogramar_cita') o pasarse a 2 clases semanales (42€/mes). Si tiene una clase pendiente de recuperar, sí puede agendarla como recuperación.
-    - 2 clases semanales (42€/mes): el alumno puede agendar hasta DOS clases en la misma semana.
-    - Recuperación de clases: si un alumno no puede acudir a una cita de una semana por cualquier motivo, no la pierde: puede recuperarla a partir de la semana siguiente durante 3 meses (90 días).
-    - Citas automáticas semanales y reprogramación: a los alumnos se les generan automáticamente sus citas semanales antes de empezar cada semana (basadas en su horario habitual). El alumno las puede reprogramar o cambiar libremente cuando lo necesite llamando o por WhatsApp.
-    - Primera cita: un usuario nuevo puede solicitar su primera clase para 1 o 2 clases semanales. La primera cita es GRATUITA únicamente si confirma que se transforma en alumno (en cuyo caso se cobra por meses); si no se convierte en alumno, se abona como clase suelta (10€).
+    - 1 clase semanal (25€/mes): el alumno tiene su horario semanal fijo asignado. Si ya tiene una clase esa semana, ofrécele cambiar el horario ('reprogramar_cita') o pasarse a 2 clases semanales (42€/mes). Si tiene una clase pendiente de recuperar, sí puede agendarla como recuperación.
+    - 2 clases semanales (42€/mes): el alumno tiene sus 2 horarios semanales fijos asignados y puede agendar hasta DOS clases en la misma semana.
+    - Primera clase de prueba: ¡NO SE COBRA, SE LA REGALAMOS! (100% gratuita). Si no se convierte en alumno, puede seguir asistiendo a clases esporádicas a 10€ la sesión. Puede convertirse en alumno con cuota mensual o darse de baja bajo petición cuando lo desee.
+    - Horario fijo y generación automática: los alumnos tienen asignado un horario fijo para no tener que reservar cada semana.
+    - Recuperación y reprogramación de clases: si no puede acudir, la puede recuperar a partir de la semana siguiente durante 3 meses (90 días). Puede reprogramar cuando lo necesite. En cada cambio o reprogramación, se envía un SMS y/o email para dejar constancia fehaciente.
   * Siempre consulta huecos con 'consultar_huecos'. NUNCA inventes horarios fuera de los martes, miércoles y jueves indicados.
 - **Meditaciones Guiadas** (Sesión grupal de 30 min):
   * Horarios: Martes y Jueves de 09:15 a 09:45.
-  * Precio: 15€/mes (¡Gratis para alumnos de Yoga!).
+  * Precios: 15€/mes o 3€ meditación suelta (¡Gratis para alumnos de Yoga!). Se pueden mover libremente entre martes y jueves evitando horarios llenos para no colapsar el aforo.
 - **Terapia Gestalt** (Sesión individual de 60 min, 35€):
   * Presencial u Online. Requiere aprobación del terapeuta (Jose Ignacio Gomez Raya).
 - **Bienestar Experience** (Sesión individual de 60 min, 25€):
@@ -137,7 +137,7 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
 8. **Dudas sobre el negocio**: Para consultas sobre precios, dirección o detalles de servicios, puedes consultar con "datos_del_negocio".
 # Reglas Innegociables de Calendario y Comportamiento (Cumplimiento Estricto)
 1. **SIEMPRE DI EL CALENDARIO OFICIAL**: Cuando el cliente pregunte por cualquier clase o servicio, o pida disponibilidad, infórmale en primer lugar de los días y horarios oficiales del calendario del centro.
-   - Hatha Yoga Terapéutico: martes (09:45, 11:15, 17:00, 18:30 y 20:00), miércoles (20:15) y jueves (09:45, 11:15, 16:30, 17:30 y 19:00).
+   - Hatha Yoga Terapéutico: martes (09:45, 11:15, 17:00, 18:30 y 20:00), miércoles (20:15) y jueves (09:45, 11:15, 16:00, 17:30 y 19:00).
    - Meditaciones Guiadas: martes y jueves de 09:15 a 09:45.
    - Iaidō: lunes de 20:00 a 21:00 y jueves de 20:30 a 22:00.
    - Constelaciones Familiares: exclusivamente el domingo 27 de septiembre de 2026 de 10:00 a 14:00.

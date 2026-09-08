@@ -222,7 +222,7 @@ export class AppointmentsService implements OnModuleInit {
       const HATHA_YOGA_TIMETABLE: Record<number, string[]> = {
         2: ['09:45', '11:15', '17:00', '18:30', '20:00'],
         3: ['20:15'],
-        4: ['09:45', '11:15', '16:30', '17:30', '19:00'],
+        4: ['09:45', '11:15', '16:00', '17:30', '19:00'],
       };
       const effectiveTimetable =
         serviceEntity?.weeklySchedule && Object.keys(serviceEntity.weeklySchedule).length > 0
@@ -234,7 +234,7 @@ export class AppointmentsService implements OnModuleInit {
       const allowed = effectiveTimetable[dayOfWeek] || [];
       if (!allowed.includes(timeStr)) {
         throw new BadRequestException(
-          'Ese horario no corresponde a los turnos oficiales de Hatha Yoga Terapéutico (Martes 9:45, 11:15, 17:00, 18:30, 20:00; Miércoles 20:15; Jueves 9:45, 11:15, 16:30, 17:30, 19:00).',
+          'Ese horario no corresponde a los turnos oficiales de Hatha Yoga Terapéutico (Martes 9:45, 11:15, 17:00, 18:30, 20:00; Miércoles 20:15; Jueves 9:45, 11:15, 16:00, 17:30, 19:00).',
         );
       }
 
@@ -264,12 +264,14 @@ export class AppointmentsService implements OnModuleInit {
           const hasPriorYoga = priorYogaAppts.some((a) => /yoga/i.test(a.service));
           if (!hasPriorYoga) {
             isFirstClass = true;
-            computedPrice = dto.price !== undefined ? dto.price : '10.00';
-            additionalNotes = 'Primera cita (10,00 €). Gratuita si confirma ser alumno con cuota mensual.';
+            computedPrice = dto.price !== undefined ? dto.price : '0.00';
+            computedPaymentStatus = PaymentStatus.EXEMPT;
+            additionalNotes = 'Primera clase de prueba (gratuita / regalo del centro).';
           } else {
             isFirstClass = false;
             computedPrice = dto.price !== undefined ? dto.price : '10.00';
-            additionalNotes = 'Clase suelta (10,00 €).';
+            computedPaymentStatus = PaymentStatus.UNPAID;
+            additionalNotes = 'Clase suelta esporádica (10,00 €).';
           }
         }
 
@@ -320,11 +322,45 @@ export class AppointmentsService implements OnModuleInit {
       }
     }
 
+    const isMeditacion = /meditaci/i.test(cleanServiceName);
+    if (isMeditacion) {
+      const MEDITACION_TIMETABLE: Record<number, string[]> = {
+        2: ['09:15'],
+        4: ['09:15'],
+      };
+      const effectiveTimetable =
+        serviceEntity?.weeklySchedule && Object.keys(serviceEntity.weeklySchedule).length > 0
+          ? serviceEntity.weeklySchedule
+          : MEDITACION_TIMETABLE;
+      const zoned = new TZDate(startsAt.getTime(), 'Europe/Madrid');
+      const dayOfWeek = zoned.getDay();
+      const timeStr = format(zoned, 'HH:mm');
+      const allowed = effectiveTimetable[dayOfWeek] || [];
+      if (!allowed.includes(timeStr)) {
+        throw new BadRequestException(
+          'Ese horario no corresponde a los turnos oficiales de Meditaciones Guiadas (Martes y Jueves de 09:15 a 09:45).',
+        );
+      }
+
+      if (dto.contactId) {
+        const isStudent = Boolean(contact?.isStudent);
+        if (isStudent) {
+          computedPrice = '0.00';
+          computedPaymentStatus = PaymentStatus.EXEMPT;
+          additionalNotes = 'Meditación guiada (gratuita para alumnos del centro de yoga).';
+        } else {
+          computedPrice = dto.price !== undefined ? dto.price : '3.00';
+          computedPaymentStatus = PaymentStatus.UNPAID;
+          additionalNotes = 'Meditación guiada sesión suelta (3,00 €) o abono mensual (15,00 €/mes).';
+        }
+      }
+    }
+
     const calendarId = dto.calendarId || serviceEntity?.calendarId || 'default';
     const serviceName = dto.service || serviceEntity?.name || 'General';
     const serviceId =
       serviceEntity?.id ?? (dto.serviceId && UUID_REGEX.test(dto.serviceId) ? dto.serviceId : null);
-    const price = dto.price !== undefined ? dto.price : (isYoga ? computedPrice : (serviceEntity?.price ?? null));
+    const price = dto.price !== undefined ? dto.price : (isYoga || isMeditacion ? computedPrice : (serviceEntity?.price ?? null));
     const defaultStatus = serviceEntity?.requiresApproval
       ? AppointmentStatus.PENDING_APPROVAL
       : AppointmentStatus.SCHEDULED;
@@ -445,7 +481,7 @@ export class AppointmentsService implements OnModuleInit {
           isFirstClass,
           isRecovery: dto.isRecovery ?? false,
           recoveredFromAppointmentId: dto.recoveredFromAppointmentId ?? null,
-          paymentStatus: isYoga && contact?.isStudent ? computedPaymentStatus : (dto.paymentStatus ?? PaymentStatus.UNPAID),
+          paymentStatus: (isYoga || isMeditacion) && (contact?.isStudent || isFirstClass) ? computedPaymentStatus : (dto.paymentStatus ?? PaymentStatus.UNPAID),
           calBookingId,
           calBookingUid,
           calMeetingUrl,
@@ -535,8 +571,8 @@ export class AppointmentsService implements OnModuleInit {
       });
       const withContact = await this.findOne(saved.id);
       this.eventEmitter.emit('appointment.created', withContact);
-      // Enviar confirmación por email con el nuevo horario reprogramado
-      this.notifyStudentDecision(withContact, 'accepted', 'Centro de Yoga Salvadora Conesa').catch(() => null);
+      // Enviar confirmación por email y SMS con el nuevo horario reprogramado
+      this.notifyStudentDecision(withContact, 'accepted', 'Centro de Yoga Salvadora Conesa', undefined, undefined, true).catch(() => null);
       return withContact;
     }
 
@@ -912,6 +948,7 @@ export class AppointmentsService implements OnModuleInit {
     managerName: string,
     rejectionReason?: string,
     proposedTimes?: string,
+    isRescheduled: boolean = false,
   ): Promise<void> {
     try {
       const contact =
@@ -1034,7 +1071,14 @@ export class AppointmentsService implements OnModuleInit {
           this.logger.warn(`[Email] Contact ${contact.id} (${contact.name}) has NO email. Cannot send pending_approval notification.`);
         }
       } else if (decision === 'accepted') {
-        const subject = `✅ Confirmación de tu cita: ${appt.service} - ${formattedDate}`;
+        const isResched = isRescheduled || Boolean(appt.notes && /reprogramad/i.test(appt.notes));
+        const subject = isResched
+          ? `🔄 Cita reprogramada: ${appt.service} - ${formattedDate}`
+          : `✅ Confirmación de tu cita: ${appt.service} - ${formattedDate}`;
+        const headerTitle = isResched ? '¡Cita reprogramada con éxito!' : '¡Tu cita está confirmada!';
+        const headerSubtitle = isResched
+          ? `Te confirmamos que el cambio de horario para tu cita de <strong>${appt.service}</strong> ha quedado registrado correctamente.`
+          : `Nos complace confirmarte que tu reserva para <strong>${appt.service}</strong> ha quedado formalizada.`;
 
         const reminderSectionHtml = serviceEntity?.reminderNotes
           ? `
@@ -1070,12 +1114,12 @@ export class AppointmentsService implements OnModuleInit {
         const emailHtml = `
           <div style="font-family: Arial, sans-serif; color: #1f2937; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 10px; padding: 24px; background-color: #ffffff;">
             <div style="text-align: center; margin-bottom: 20px; border-bottom: 1px solid #f3f4f6; padding-bottom: 16px;">
-              <h2 style="color: #10b981; margin: 0; font-size: 22px;">¡Tu cita está confirmada!</h2>
+              <h2 style="color: #10b981; margin: 0; font-size: 22px;">${headerTitle}</h2>
               <p style="margin: 6px 0 0 0; color: #6b7280; font-size: 14px;">Centro de Yoga Salvadora Conesa & Club Social Parque Granada</p>
             </div>
             
             <p style="font-size: 15px;">Hola <strong>${contact.name || 'Alumno'}</strong>,</p>
-            <p style="font-size: 14px; color: #374151;">Nos complace confirmarte que tu reserva para <strong>${appt.service}</strong> ha quedado formalizada.</p>
+            <p style="font-size: 14px; color: #374151;">${headerSubtitle}</p>
             
             <div style="background-color: #f9fafb; border: 1px solid #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0;">
               <p style="margin: 6px 0;">📌 <strong>Servicio / Actividad:</strong> ${appt.service}</p>
@@ -1347,8 +1391,11 @@ export class AppointmentsService implements OnModuleInit {
 
       // Dispatch SMS Webhook for n8n / C# notification system
       let smsText = '';
+      const isResched = isRescheduled || Boolean(appt.notes && /reprogramad/i.test(appt.notes));
       if (decision === 'pending_approval') {
         smsText = `Hola ${contact.name || ''}, tu solicitud para ${appt.service} el ${formattedDate} ha sido recibida y está pendiente de confirmación del profesor. Centro de Yoga Salvadora Conesa.`;
+      } else if (decision === 'accepted' && isResched) {
+        smsText = `Hola ${contact.name || ''}, confirmamos el cambio de tu cita para ${appt.service}: tu nuevo horario es el ${formattedDate} a las ${formattedStartTime}. Centro de Yoga Salvadora Conesa.`;
       } else if (decision === 'accepted') {
         smsText = `Hola ${contact.name || ''}, tu cita para ${appt.service} el ${formattedDate} a las ${formattedStartTime} ha sido confirmada en Centro de Yoga Salvadora Conesa. ¡Te esperamos!`;
       } else if (decision === 'reschedule_requested') {
@@ -1791,7 +1838,7 @@ export class AppointmentsService implements OnModuleInit {
     const HATHA_YOGA_TIMETABLE: Record<number, string[]> = {
       2: ['09:45', '11:15', '17:00', '18:30', '20:00'], // Martes
       3: ['20:15'],                                     // Miércoles
-      4: ['09:45', '11:15', '16:30', '17:30', '19:00'], // Jueves
+      4: ['09:45', '11:15', '16:00', '17:30', '19:00'], // Jueves
     };
 
     const MEDITACION_TIMETABLE: Record<number, string[]> = {
@@ -2095,7 +2142,7 @@ export class AppointmentsService implements OnModuleInit {
     // Official Hatha Yoga timetable:
     // Martes (2): 09:45, 11:15, 17:00, 18:30, 20:00
     // Miércoles (3): 20:15
-    // Jueves (4): 09:45, 11:15, 16:30, 17:30, 19:00
+    // Jueves (4): 09:45, 11:15, 16:00, 17:30, 19:00
     const DEFAULT_SLOTS: { day: number; time: string; service: string }[] = [
       { day: 2, time: '09:45', service: 'Hatha Yoga Terapéutico' }, // Martes 09:45
       { day: 4, time: '17:30', service: 'Hatha Yoga Terapéutico' }, // Jueves 17:30
@@ -2123,27 +2170,43 @@ export class AppointmentsService implements OnModuleInit {
       }
 
       const neededCount = quota - existingYogaNextWeek.length;
-
-      // Inspect appointments from the culminating week (or recent active weeks) to preserve student preferences
-      const pastYogaAppts = await this.appointmentsRepo.find({
-        where: {
-          contactId: student.id,
-          status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.COMPLETED]),
-          startsAt: Between(subMonths(referenceDate, 1), thisWeekEnd),
-        },
-        order: { startsAt: 'DESC' },
-      });
-
       const recurringPatterns: { day: number; time: string; service: string }[] = [];
-      for (const past of pastYogaAppts) {
-        if (!/yoga/i.test(past.service)) continue;
-        const zoned = new TZDate(new Date(past.startsAt).getTime(), 'Europe/Madrid');
-        const day = zoned.getDay();
-        const time = format(zoned, 'HH:mm');
-        if (!recurringPatterns.some((p) => p.day === day && p.time === time)) {
-          recurringPatterns.push({ day, time, service: past.service });
+
+      // 1. If student has an assigned fixed weekly schedule (studentSchedule), respect it primarily
+      if (student.studentSchedule && Array.isArray(student.studentSchedule) && student.studentSchedule.length > 0) {
+        for (const slot of student.studentSchedule) {
+          if (slot?.day !== undefined && slot?.time) {
+            recurringPatterns.push({
+              day: Number(slot.day),
+              time: String(slot.time),
+              service: `Hatha Yoga Terapéutico (${modality === '2_clases_semanales' ? '2 clases semanales' : '1 clase semanal'})`,
+            });
+            if (recurringPatterns.length >= quota) break;
+          }
         }
-        if (recurringPatterns.length >= quota) break;
+      }
+
+      // 2. If not enough slots from studentSchedule, inspect appointments from previous active weeks
+      if (recurringPatterns.length < quota) {
+        const pastYogaAppts = await this.appointmentsRepo.find({
+          where: {
+            contactId: student.id,
+            status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.COMPLETED]),
+            startsAt: Between(subMonths(referenceDate, 1), thisWeekEnd),
+          },
+          order: { startsAt: 'DESC' },
+        });
+
+        for (const past of pastYogaAppts) {
+          if (!/yoga/i.test(past.service)) continue;
+          const zoned = new TZDate(new Date(past.startsAt).getTime(), 'Europe/Madrid');
+          const day = zoned.getDay();
+          const time = format(zoned, 'HH:mm');
+          if (!recurringPatterns.some((p) => p.day === day && p.time === time)) {
+            recurringPatterns.push({ day, time, service: past.service });
+          }
+          if (recurringPatterns.length >= quota) break;
+        }
       }
 
       // Fill with default slots if no past pattern found

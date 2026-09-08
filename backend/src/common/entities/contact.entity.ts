@@ -91,6 +91,10 @@ export class Contact {
   @Column({ type: 'varchar', nullable: true })
   studentModality: string | null;
 
+  // Fixed recurring weekly schedule: Array of { day: number, time: string } (e.g. [{ day: 2, time: '09:45' }])
+  @Column({ type: 'jsonb', nullable: true })
+  studentSchedule: Array<{ day: number; time: string }> | null;
+
   @Column({ type: 'timestamptz', nullable: true })
   studentEnrolledAt: Date | null;
 

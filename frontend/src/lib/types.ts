@@ -77,6 +77,7 @@ export interface Contact {
   // Student status & modalities (Yoga Salvadora)
   isStudent?: boolean;
   studentModality?: "1_clase_semanal" | "2_clases_semanales" | string | null;
+  studentSchedule?: Array<{ day: number; time: string }> | null;
   studentEnrolledAt?: string | null;
   createdAt: string;
 }

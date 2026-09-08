@@ -52,15 +52,15 @@ export const OFFICIAL_SERVICES: OfficialServiceConfig[] = [
     name: 'Hatha Yoga Terapéutico',
     aliases: /hatha|yoga.*terap/i,
     category: 'recurring_schedule',
-    scheduleSummary: 'martes (9:45, 11:15, 17:00, 18:30 y 20:00), miércoles (20:15) y jueves (9:45, 11:15, 16:30, 17:30 y 19:00)',
+    scheduleSummary: 'martes (9:45, 11:15, 17:00, 18:30 y 20:00), miércoles (20:15) y jueves (9:45, 11:15, 16:00, 17:30 y 19:00)',
     timetable: {
       2: ['09:45', '11:15', '17:00', '18:30', '20:00'], // Martes
       3: ['20:15'],                                     // Miércoles
-      4: ['09:45', '11:15', '16:30', '17:30', '19:00'], // Jueves
+      4: ['09:45', '11:15', '16:00', '17:30', '19:00'], // Jueves
     },
     durationMinutes: 90,
     maxCapacity: 20,
-    priceInfo: '1 clase semanal (25€/mes) o 2 clases semanales (42€/mes)',
+    priceInfo: '1 clase semanal (25€/mes) o 2 clases semanales (42€/mes). ¡1ª clase de prueba gratis de regalo! Clases sueltas esporádicas: 10€.',
   },
   {
     id: 'meditacion',
@@ -74,7 +74,7 @@ export const OFFICIAL_SERVICES: OfficialServiceConfig[] = [
     },
     durationMinutes: 30,
     maxCapacity: 28,
-    priceInfo: '15€/mes (Gratuito para alumnos de Yoga)',
+    priceInfo: '15€/mes o 3€ meditación suelta (Gratuito para alumnos de Yoga)',
   },
   {
     id: 'iaido',
@@ -631,10 +631,10 @@ export class VapiWebhookService {
     const timetable = officialSvc?.timetable || {
       2: ['09:45', '11:15', '17:00', '18:30', '20:00'],
       3: ['20:15'],
-      4: ['09:45', '11:15', '16:30', '17:30', '19:00'],
+      4: ['09:45', '11:15', '16:00', '17:30', '19:00'],
     };
     const svcName = officialSvc?.name || requestedService;
-    const scheduleSummary = officialSvc?.scheduleSummary || 'martes (9:45, 11:15, 17:00, 18:30 y 20:00), miércoles (20:15) y jueves (9:45, 11:15, 16:30, 17:30 y 19:00)';
+    const scheduleSummary = officialSvc?.scheduleSummary || 'martes (9:45, 11:15, 17:00, 18:30 y 20:00), miércoles (20:15) y jueves (9:45, 11:15, 16:00, 17:30 y 19:00)';
     const durationMinutes = officialSvc?.durationMinutes || 90;
 
     const weekdayMap: Record<string, number> = {
@@ -874,7 +874,7 @@ export class VapiWebhookService {
       const HATHA_YOGA_TIMETABLE: Record<number, string[]> = {
         2: ['09:45', '11:15', '17:00', '18:30', '20:00'],
         3: ['20:15'],
-        4: ['09:45', '11:15', '16:30', '17:30', '19:00'],
+        4: ['09:45', '11:15', '16:00', '17:30', '19:00'],
       };
 
       const hathaExisting = existingThisWeek.filter((a) => {

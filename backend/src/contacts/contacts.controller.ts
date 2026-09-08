@@ -158,7 +158,7 @@ export class ContactsController {
     @CurrentUser() actor: AuthUser,
     @Ip() ip: string,
   ) {
-    const contact = await this.contactsService.convertToStudent(id, dto.modality);
+    const contact = await this.contactsService.convertToStudent(id, dto.modality, dto.schedule);
     this.audit({
       actor: { id: actor.id, email: actor.email },
       action: AuditAction.CONTACT_UPDATE,

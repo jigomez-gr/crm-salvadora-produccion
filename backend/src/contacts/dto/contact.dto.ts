@@ -115,6 +115,10 @@ export class UpdateContactDto {
   @IsString()
   studentModality?: string;
 
+  @IsOptional()
+  @IsArray()
+  studentSchedule?: Array<{ day: number; time: string }>;
+
   // Sales-funnel stage (Kanban). Set when dragging a card between columns; also
   // valid on the contact form. `boardPosition` orders within a column.
   @IsOptional()
@@ -129,6 +133,10 @@ export class UpdateContactDto {
 export class ConvertToStudentDto {
   @IsString()
   modality: '1_clase_semanal' | '2_clases_semanales' | string;
+
+  @IsOptional()
+  @IsArray()
+  schedule?: Array<{ day: number; time: string }>;
 }
 
 /** CSV import payload — the raw CSV text (frontend reads the file and posts it). */

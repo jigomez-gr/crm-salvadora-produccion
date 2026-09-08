@@ -35,19 +35,20 @@ Documento maestro de referencia sobre la filosofía, historia, servicios, clases
 * **Horarios Oficiales Semanales (9 clases)**:
   * **Martes**: `09:45` · `11:15` · `17:00` · `18:30` · `20:00`
   * **Miércoles**: `20:15`
-  * **Jueves**: `09:45` · `11:15` · `16:30` · `17:30` · `19:00`
+  * **Jueves**: `09:45` · `11:15` · `16:00` · `17:30` · `19:00`
 * **Tarifas, Modalidades y Condición de Alumno**:
   * **Modalidad 1 clase semanal**: `25.00 € / mes`.
   * **Modalidad 2 clases semanales**: `42.00 € / mes`.
-  * **Regla Oficial de Primera Cita y Alumnos**:
-    * Un nuevo usuario puede solicitar su primera cita en cualquiera de las dos modalidades (1 clase o 2 clases a la semana).
-    * **La primera cita es GRATUITA únicamente si confirma que se transforma en alumno del centro**, en cuyo caso todas las citas semanales pasan a cobrarse por meses con la cuota mensual correspondiente (25€ o 42€/mes).
-    * **La primera cita NO es gratis salvo que se convierta en alumno**: si asiste a la clase de prueba y no continúa como alumno, abona la sesión suelta (`10.00 €`).
-  * **Política de Recuperación de Clases**:
-    * Si un estudiante no puede acudir a su cita de yoga de una semana por cualquier motivo, **la puede recuperar a partir de la semana siguiente durante un plazo de 3 meses (90 días)**.
-  * **Generación Automática Semanal de Citas y Reprogramación**:
-    * A los alumnos matriculados se les generan automáticamente las citas de la semana siguiente antes de que empiece la nueva semana (cada domingo por la tarde), basándose en sus horarios habituales.
-    * El alumno puede reprogramar o cambiar cualquiera de esas citas en cualquier momento de manera flexible llamando por teléfono o por WhatsApp.
+  * **Regla Oficial de Primera Cita y Clases Esporádicas**:
+    * Un nuevo usuario puede solicitar su primera clase para probar cualquiera de las dos modalidades.
+    * **La primera clase de prueba NO SE COBRA, SE LA REGALAMOS** (100% gratuita, sin compromiso de permanencia ni cobro previo).
+    * Si el asistente no formaliza su cuota mensual tras la clase de prueba, puede seguir asistiendo a **clases esporádicas sueltas a 10.00 € por clase** a todos los efectos.
+    * Cualquier persona puede **convertirse en alumno con cuota mensual cuando quiera**, o **dejar de ser alumno bajo petición** cuando lo desee.
+  * **Horario Fijo Semanal del Alumno y Notificación de Cambios**:
+    * Una vez que un usuario adquiere la condición de alumno, tiene asignado un **horario fijo para el día o días de la semana** según su modalidad (1 o 2 clases a la semana), para que **no tenga que reservar cada cita semana a semana**.
+    * A los alumnos matriculados se les generan automáticamente sus citas semanales basándose en sus horarios fijos habituales.
+    * **Cambios de horario y recuperaciones**: El alumno puede cambiar de horario o recuperar clases a las que haya faltado (dispone de un plazo de 3 meses / 90 días a partir de la semana siguiente).
+    * **Constancia fehaciente**: En cada cambio de horario o recuperación, **se enviará un correo electrónico o un SMS si la gestión es por voz** (o ambos) para dejar constancia inmediata del nuevo turno.
   * **Aforo por clase**: `20 plazas` regulares (hasta `28 plazas` de aforo físico para permitir la recuperación de clases a las que no se haya podido asistir).
   * **Identificador de Calendario**: `cal-hatha-yoga` (ambas tarifas comparten el mismo aforo y sala).
   * **Pago**: Directamente en el centro.
@@ -59,8 +60,10 @@ Documento maestro de referencia sobre la filosofía, historia, servicios, clases
 * **Duración**: **30 minutos**.
 * **Horario**: Martes y Jueves de `09:15 a 09:45`.
 * **Tarifas**:
-  * **Alumnos de Yoga**: `Gratuito`.
-  * **No alumnos**: `15.00 € / mes`.
+  * **Alumnos de Yoga**: `Gratuito` (incluido para todos los alumnos matriculados).
+  * **No alumnos**: `15.00 € / mes` (abono mensual) o `3.00 € por meditación suelta`.
+* **Flexibilidad de Asistencia y Control de Aforo**:
+  * Los practicantes se pueden mover por los horarios de meditación libremente entre martes y jueves, siempre respetando los turnos que estén completos para no colapsar el aforo.
 * **Aforo**: `28 personas`.
 * **Identificador de Calendario**: `cal-meditacion`.
 

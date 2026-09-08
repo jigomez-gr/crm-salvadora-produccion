@@ -369,13 +369,13 @@ export class ServicesService implements OnModuleInit {
       for (const s of dbServices) {
         let updated = false;
         if (/hatha.*yoga|yoga.*terap/i.test(s.name)) {
-          if (!s.weeklySchedule || Object.keys(s.weeklySchedule).length === 0) {
+          if (!s.weeklySchedule || Object.keys(s.weeklySchedule).length === 0 || s.weeklySchedule[4]?.includes('16:30')) {
             s.weeklySchedule = {
               2: ['09:45', '11:15', '17:00', '18:30', '20:00'],
               3: ['20:15'],
-              4: ['09:45', '11:15', '16:30', '17:30', '19:00'],
+              4: ['09:45', '11:15', '16:00', '17:30', '19:00'],
             };
-            s.scheduleText = 'Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15) y Jueves (9:45, 11:15, 16:30, 17:30, 19:00)';
+            s.scheduleText = 'Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15) y Jueves (9:45, 11:15, 16:00, 17:30, 19:00)';
             updated = true;
           }
         } else if (/meditaci/i.test(s.name)) {

@@ -121,6 +121,7 @@ export class ContactsService {
       await this.contactsRepo.query(`
         ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "isStudent" boolean DEFAULT false;
         ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "studentModality" character varying;
+        ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "studentSchedule" jsonb;
         ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "studentEnrolledAt" timestamptz;
       `);
     } catch {
@@ -438,6 +439,7 @@ export class ContactsService {
       'boardPosition',
       'isStudent',
       'studentModality',
+      'studentSchedule',
     ] as const;
     const target = contact as unknown as Record<string, unknown>;
     for (const key of simpleFields) {
@@ -470,14 +472,22 @@ export class ContactsService {
    * Formalize a contact as an active student of Centro de Yoga Salvadora Conesa.
    * - Sets isStudent = true
    * - Sets studentModality ('1_clase_semanal' or '2_clases_semanales')
+   * - Optionally sets studentSchedule (fixed weekly slots)
    * - Sets studentEnrolledAt = new Date()
    * - Adds 'alumno' to tags
    * - If the contact has any first class / trial appointments for yoga, marks them as free (price = '0.00', paymentStatus = EXEMPT)
    */
-  async convertToStudent(id: string, modality: string): Promise<Contact> {
+  async convertToStudent(
+    id: string,
+    modality: string,
+    schedule?: Array<{ day: number; time: string }>,
+  ): Promise<Contact> {
     const contact = await this.findOne(id);
     contact.isStudent = true;
     contact.studentModality = modality;
+    if (schedule !== undefined) {
+      contact.studentSchedule = schedule;
+    }
     contact.studentEnrolledAt = new Date();
     contact.status = ContactStatus.ACTIVE;
     if (!contact.tags) contact.tags = [];
@@ -524,6 +534,7 @@ export class ContactsService {
     const contact = await this.findOne(id);
     contact.isStudent = false;
     contact.studentModality = null;
+    contact.studentSchedule = null;
     contact.studentEnrolledAt = null;
     if (contact.tags) {
       contact.tags = contact.tags.filter((t) => t !== 'alumno');

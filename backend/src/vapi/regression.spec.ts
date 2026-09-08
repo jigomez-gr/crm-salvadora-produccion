@@ -135,7 +135,7 @@ describe('Batería de Pruebas de Regresión Exhaustiva: Ciclo de Vida de Citas y
           weeklySchedule: {
             2: ['09:45', '11:15', '17:00', '18:30', '20:00'],
             3: ['20:15'],
-            4: ['09:45', '11:15', '16:30', '17:30', '19:00'],
+            4: ['09:45', '11:15', '16:00', '17:30', '19:00'],
           },
         },
         {
@@ -147,7 +147,7 @@ describe('Batería de Pruebas de Regresión Exhaustiva: Ciclo de Vida de Citas y
           weeklySchedule: {
             2: ['09:45', '11:15', '17:00', '18:30', '20:00'],
             3: ['20:15'],
-            4: ['09:45', '11:15', '16:30', '17:30', '19:00'],
+            4: ['09:45', '11:15', '16:00', '17:30', '19:00'],
           },
         },
         {

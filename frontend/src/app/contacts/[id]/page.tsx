@@ -79,8 +79,23 @@ export default function ContactDetailPage({
   const [aiCropAppt, setAiCropAppt] = useState<Appointment | null>(null);
   const [aiSpecialty, setAiSpecialty] = useState<SpecialtyType>("dental");
 
+  const OFFICIAL_YOGA_SLOTS = [
+    { day: 2, label: "Martes", time: "09:45" },
+    { day: 2, label: "Martes", time: "11:15" },
+    { day: 2, label: "Martes", time: "17:00" },
+    { day: 2, label: "Martes", time: "18:30" },
+    { day: 2, label: "Martes", time: "20:00" },
+    { day: 3, label: "Miércoles", time: "20:15" },
+    { day: 4, label: "Jueves", time: "09:45" },
+    { day: 4, label: "Jueves", time: "11:15" },
+    { day: 4, label: "Jueves", time: "16:00" },
+    { day: 4, label: "Jueves", time: "17:30" },
+    { day: 4, label: "Jueves", time: "19:00" },
+  ];
+
   const [studentModalOpen, setStudentModalOpen] = useState(false);
   const [studentModality, setStudentModality] = useState<"1_clase_semanal" | "2_clases_semanales">("1_clase_semanal");
+  const [selectedSlots, setSelectedSlots] = useState<Array<{ day: number; time: string }>>([]);
   const [studentSaving, setStudentSaving] = useState(false);
   const [recoveriesData, setRecoveriesData] = useState<{
     availableCount: number;
@@ -93,10 +108,13 @@ export default function ContactDetailPage({
     try {
       await apiFetch(`/api/contacts/${id}/student`, {
         method: "POST",
-        body: JSON.stringify({ modality: studentModality }),
+        body: JSON.stringify({
+          modality: studentModality,
+          schedule: selectedSlots,
+        }),
       });
       toast.success(
-        `¡Contacto formalizado como alumno (${studentModality === "2_clases_semanales" ? "2 clases/semana" : "1 clase/semana"})! Su primera cita ha sido bonificada a 0,00 €.`
+        `¡Contacto formalizado como alumno (${studentModality === "2_clases_semanales" ? "2 clases/semana" : "1 clase/semana"})!`
       );
       setStudentModalOpen(false);
       refresh();
@@ -301,6 +319,11 @@ export default function ContactDetailPage({
                 <Badge variant="success" className="bg-emerald-100 text-emerald-800 border-emerald-300 font-medium">
                   🧘 Alumno ({contact.studentModality === "2_clases_semanales" ? "2 clases/sem · 42€/mes" : "1 clase/sem · 25€/mes"})
                 </Badge>
+                {contact.studentSchedule && contact.studentSchedule.length > 0 ? (
+                  <Badge variant="info" className="bg-emerald-50 text-emerald-900 border-emerald-300 font-medium">
+                    🗓️ Horario fijo: {contact.studentSchedule.map((s) => `${s.day === 2 ? "Mar" : s.day === 3 ? "Mié" : "Jue"} ${s.time}`).join(" y ")}
+                  </Badge>
+                ) : null}
                 {recoveriesData && recoveriesData.availableCount > 0 ? (
                   <Badge variant="info" className="bg-amber-100 text-amber-900 border-amber-300 font-medium">
                     ♻️ {recoveriesData.availableCount} clase(s) pendiente(s) de recuperar (3 meses)
@@ -350,6 +373,7 @@ export default function ContactDetailPage({
                     ? "2_clases_semanales"
                     : "1_clase_semanal"
                 );
+                setSelectedSlots(contact.studentSchedule || []);
                 setStudentModalOpen(true);
               }}
               title="Gestionar alta como alumno y modalidades de clase de yoga"
@@ -751,9 +775,9 @@ export default function ContactDetailPage({
             )}
           </p>
 
-          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900 leading-relaxed">
-            <span className="font-semibold block mb-0.5">⭐ Regla oficial de primera cita:</span>
-            La primera cita es <strong>gratis si confirma que se transforma en alumno</strong> (en cuyo caso todas las citas semanales pasan a cobrarse por meses). Si no se convierte en alumno, esa primera cita se abona como clase suelta (10 €).
+          <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-900 leading-relaxed">
+            <span className="font-semibold block mb-0.5">🎁 Regla oficial de primera clase:</span>
+            La primera clase de prueba <strong>NO SE COBRA, SE LA REGALAMOS</strong> (100% gratuita). Si la persona decide no continuar como alumno regular, puede seguir asistiendo a clases esporádicas a <strong>10 €/sesión</strong>. Puede convertirse en alumno con cuota mensual o solicitar su baja bajo petición cuando lo desee.
           </div>
 
           <div>
@@ -775,12 +799,17 @@ export default function ContactDetailPage({
                     name="studentModality"
                     value="1_clase_semanal"
                     checked={studentModality === "1_clase_semanal"}
-                    onChange={() => setStudentModality("1_clase_semanal")}
+                    onChange={() => {
+                      setStudentModality("1_clase_semanal");
+                      if (selectedSlots.length > 1) {
+                        setSelectedSlots(selectedSlots.slice(0, 1));
+                      }
+                    }}
                     className="h-4 w-4 text-emerald-600"
                   />
                 </div>
                 <span className="mt-1 text-lg font-bold text-emerald-700">25,00 € <span className="text-xs font-normal text-neutral-500">/ mes</span></span>
-                <span className="mt-1 text-[11px] text-neutral-500">Máximo 1 cita por semana.</span>
+                <span className="mt-1 text-[11px] text-neutral-500">1 turno semanal fijo asignado.</span>
               </label>
 
               <label
@@ -802,18 +831,63 @@ export default function ContactDetailPage({
                   />
                 </div>
                 <span className="mt-1 text-lg font-bold text-emerald-700">42,00 € <span className="text-xs font-normal text-neutral-500">/ mes</span></span>
-                <span className="mt-1 text-[11px] text-neutral-500">Hasta 2 citas por semana.</span>
+                <span className="mt-1 text-[11px] text-neutral-500">2 turnos semanales fijos asignados.</span>
               </label>
             </div>
           </div>
 
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
+                Turnos semanales fijos ({studentModality === "2_clases_semanales" ? "selecciona 2" : "selecciona 1"})
+              </label>
+              <span className="text-[11px] text-neutral-500">
+                {selectedSlots.length} de {studentModality === "2_clases_semanales" ? 2 : 1} seleccionados
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-40 overflow-y-auto p-1.5 border border-neutral-200 rounded-lg bg-neutral-50/60">
+              {OFFICIAL_YOGA_SLOTS.map((slot) => {
+                const isSelected = selectedSlots.some((s) => s.day === slot.day && s.time === slot.time);
+                return (
+                  <button
+                    key={`${slot.day}-${slot.time}`}
+                    type="button"
+                    onClick={() => {
+                      const maxSlots = studentModality === "2_clases_semanales" ? 2 : 1;
+                      if (isSelected) {
+                        setSelectedSlots(selectedSlots.filter((s) => !(s.day === slot.day && s.time === slot.time)));
+                      } else {
+                        if (selectedSlots.length >= maxSlots) {
+                          setSelectedSlots([...selectedSlots.slice(1), { day: slot.day, time: slot.time }]);
+                        } else {
+                          setSelectedSlots([...selectedSlots, { day: slot.day, time: slot.time }]);
+                        }
+                      }
+                    }}
+                    className={`text-left px-2.5 py-1.5 rounded-md border text-xs transition-all ${
+                      isSelected
+                        ? "bg-emerald-600 text-white border-emerald-600 font-semibold shadow-xs"
+                        : "bg-white text-neutral-700 border-neutral-200 hover:border-neutral-300"
+                    }`}
+                  >
+                    <span className="block font-medium">{slot.label}</span>
+                    <span className={`text-[11px] ${isSelected ? "text-emerald-100" : "text-neutral-500"}`}>{slot.time} h</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-[11px] text-neutral-400">
+              El alumno no tendrá que reservar cada cita: sus clases se generarán automáticamente para estos turnos.
+            </p>
+          </div>
+
           <div className="rounded-lg bg-sky-50 border border-sky-200 p-3 text-xs text-sky-900 leading-relaxed space-y-1">
-            <span className="font-semibold block">♻️ Recuperación y agenda automática:</span>
+            <span className="font-semibold block">♻️ Horario fijo, recuperaciones y constancia de cambios:</span>
             <p>
-              • <strong>Recuperación de clases:</strong> Si no puede acudir a una cita semanal por cualquier razón, la puede recuperar a partir de la semana siguiente durante <strong>3 meses (90 días)</strong>.
+              • <strong>Recuperación de clases:</strong> Si no puede acudir a una cita semanal por cualquier motivo, la puede recuperar a partir de la semana siguiente durante <strong>3 meses (90 días)</strong>.
             </p>
             <p>
-              • <strong>Generación semanal:</strong> Cada domingo por la tarde se le agendan automáticamente sus clases para la nueva semana según su horario habitual, con posibilidad de reprogramarlas en cualquier momento.
+              • <strong>Constancia fehaciente:</strong> En cada cambio de horario o recuperación se enviará una notificación por <strong>correo electrónico y/o SMS</strong> para dejar constancia por escrito.
             </p>
           </div>
 

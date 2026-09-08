@@ -23,7 +23,7 @@ async function resetServices() {
     const services = [
       {
         name: 'Hatha Yoga Terapéutico (1 clase semanal)',
-        description: 'Práctica consciente de asanas, alineación corporal, respiración terapéutica y relajación profunda. Horarios: Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15) y Jueves (9:45, 11:15, 16:30, 17:30, 19:00). Aforo del listado: 20 plazas (con margen de hasta 28 para recuperaciones). Precio: 25€/mes. Pago en el centro.',
+        description: 'Práctica consciente de asanas, alineación corporal, respiración terapéutica y relajación profunda. Horarios: Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15) y Jueves (9:45, 11:15, 16:00, 17:30, 19:00). Aforo: 20 plazas (margen de 28 para recuperaciones). Precio: 25€/mes. 1ª clase de prueba de regalo (gratis). Clases sueltas esporádicas: 10€. Pago en el centro.',
         serviceType: 'recurring',
         durationMinutes: 90,
         price: '25.00',
@@ -37,7 +37,7 @@ async function resetServices() {
       },
       {
         name: 'Hatha Yoga Terapéutico (2 clases semanales)',
-        description: 'Práctica consciente de asanas, alineación corporal, respiración terapéutica y relajación profunda (2 clases a la semana). Horarios: Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15) y Jueves (9:45, 11:15, 16:30, 17:30, 19:00). Aforo del listado: 20 plazas. Precio: 42€/mes. Pago en el centro.',
+        description: 'Práctica consciente de asanas, alineación corporal, respiración terapéutica y relajación profunda (2 clases a la semana). Horarios: Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15) y Jueves (9:45, 11:15, 16:00, 17:30, 19:00). Aforo: 20 plazas. Precio: 42€/mes. 1ª clase de prueba de regalo (gratis). Clases sueltas esporádicas: 10€. Pago en el centro.',
         serviceType: 'recurring',
         durationMinutes: 90,
         price: '42.00',
@@ -51,7 +51,7 @@ async function resetServices() {
       },
       {
         name: 'Meditaciones Guiadas',
-        description: 'Sesión grupal de meditación y centramiento. Martes y Jueves de 9:15 a 9:45. Gratuitas para alumnos del centro de Yoga. Precio general: 15€/mes. Pago en el centro.',
+        description: 'Sesión grupal de meditación y centramiento. Martes y Jueves de 9:15 a 9:45. Gratuitas para alumnos del centro de Yoga. No alumnos: 15€/mes o 3€ meditación suelta. Pago en el centro.',
         serviceType: 'recurring',
         durationMinutes: 30,
         price: '15.00',
@@ -253,12 +253,14 @@ Servicios y Actividades principales del centro:
    - Horarios semanales fijos:
      * Martes: 9:45, 11:15, 17:00, 18:30 y 20:00
      * Miércoles: 20:15
-     * Jueves: 9:45, 11:15, 16:30, 17:30 y 19:00
+     * Jueves: 9:45, 11:15, 16:00, 17:30 y 19:00
    - Aforo máximo de clase: 20 plazas fijas (hasta 28 para recuperaciones de clases perdidas).
+   - ¡Primera clase de prueba de regalo (gratis)! Si no se convierte en alumno, clases esporádicas a 10€ la sesión.
+   - Los alumnos tienen asignado horario fijo semanal, con recuperaciones (3 meses) y confirmación por email/SMS en cada cambio.
    - Todos los pagos se realizan directamente en el centro.
 
-2. Meditaciones Guiadas (15€/mes, gratuitas para alumnos de Yoga):
-   - Martes y Jueves de 9:15 a 9:45 (30 min).
+2. Meditaciones Guiadas (15€/mes o 3€ meditación suelta, gratuitas para alumnos de Yoga):
+   - Martes y Jueves de 9:15 a 9:45 (30 min). Movilidad flexible evitando turnos llenos.
 
 3. Terapia Gestalt (35€ / sesión de 1h):
    - Individual, presencial u online (videollamada). Se coordina horario específico.
