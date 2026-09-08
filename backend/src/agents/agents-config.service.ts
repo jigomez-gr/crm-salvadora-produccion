@@ -99,10 +99,26 @@ export class AgentsConfigService implements OnModuleInit {
         whatsappNumber: process.env.YCLOUD_WHATSAPP_NUMBER || undefined,
         enabled: true,
       });
-      await this.configRepo.save(config);
-    } else if (!existing.whatsappNumber && process.env.YCLOUD_WHATSAPP_NUMBER) {
-      existing.whatsappNumber = process.env.YCLOUD_WHATSAPP_NUMBER;
-      await this.configRepo.save(existing);
+    } else {
+      let updated = false;
+      if (!existing.whatsappNumber && process.env.YCLOUD_WHATSAPP_NUMBER) {
+        existing.whatsappNumber = process.env.YCLOUD_WHATSAPP_NUMBER;
+        updated = true;
+      }
+      if (existing.customInstructions && existing.customInstructions.includes('16:30')) {
+        existing.customInstructions = existing.customInstructions.replace(/16:30/g, '16:00');
+        updated = true;
+      }
+      if (existing.services && Array.isArray(existing.services)) {
+        const str = JSON.stringify(existing.services);
+        if (str.includes('16:30')) {
+          existing.services = JSON.parse(str.replace(/16:30/g, '16:00'));
+          updated = true;
+        }
+      }
+      if (updated) {
+        await this.configRepo.save(existing);
+      }
     }
   }
 

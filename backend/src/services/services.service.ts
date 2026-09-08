@@ -382,6 +382,14 @@ export class ServicesService implements OnModuleInit {
             s.scheduleText = 'Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15) y Jueves (9:45, 11:15, 16:00, 17:30, 19:00)';
             updated = true;
           }
+          if (s.description && s.description.includes('16:30')) {
+            s.description = s.description.replace(/16:30/g, '16:00');
+            updated = true;
+          }
+          if (s.scheduleText && s.scheduleText.includes('16:30')) {
+            s.scheduleText = s.scheduleText.replace(/16:30/g, '16:00');
+            updated = true;
+          }
         } else if (/meditaci/i.test(s.name) && !/baño.*gong/i.test(s.name)) {
           if (!s.maxCapacity || s.maxCapacity < 28) {
             s.maxCapacity = 28;
@@ -553,6 +561,16 @@ export class ServicesService implements OnModuleInit {
           changed = true;
         }
 
+        if (agentConfig.customInstructions && agentConfig.customInstructions.includes('16:30')) {
+          agentConfig.customInstructions = agentConfig.customInstructions.replace(/16:30/g, '16:00');
+          changed = true;
+        }
+        const jsonStr = JSON.stringify(agentConfig.services);
+        if (jsonStr.includes('16:30')) {
+          agentConfig.services = JSON.parse(jsonStr.replace(/16:30/g, '16:00'));
+          changed = true;
+        }
+
         if (changed) {
           await this.agentConfigRepo.save(agentConfig);
         }
@@ -575,19 +593,15 @@ export class ServicesService implements OnModuleInit {
             s.reminderNotes =
               'Llevar ropa cómoda de abrigo, calcetines cálidos y, si lo deseas, tu propia manta o cojín para disfrutar de la experiencia sonora con el máximo confort.';
             changed = true;
-          } else if (/puja/i.test(s.name)) {
+          } else if (/puja de gongs/i.test(s.name)) {
             s.reminderNotes =
-              'Traer esterilla cómoda o colchoneta fina, saco de dormir o mantas, almohada/cojín, botella de agua y ropa cómoda para toda la noche.';
+              'Experiencia sonora durante toda la noche (11 horas). Llevar saco de dormir, esterilla aislante gruesa, ropa cómoda y cálida, y botella de agua.';
             changed = true;
           } else if (/constelaci/i.test(s.name)) {
             s.reminderNotes =
-              'Llevar ropa cómoda, cuaderno para notas si lo deseas y botella de agua.';
+              'Llegar con 10-15 minutos de antelación para formalizar la acreditación y dar inicio puntual al taller grupal.';
             changed = true;
-          } else if (/gestalt/i.test(s.name)) {
-            s.reminderNotes =
-              'Para sesión presencial: acudir 5 minutos antes al centro. Para sesión online: conectarse puntualmente al enlace de videollamada desde un lugar tranquilo y privado con buena conexión.';
-            changed = true;
-          } else if (/bienestar/i.test(s.name)) {
+          } else if (/gestalt|bienestar/i.test(s.name)) {
             s.reminderNotes =
               'Para sesión presencial: acudir con puntualidad. Para sesión online: conectarse puntualmente al enlace de videollamada con cámara y audio activados.';
             changed = true;
@@ -609,6 +623,50 @@ export class ServicesService implements OnModuleInit {
           await this.serviceRepo.save(s);
         }
       }
+
+      // 6. Global safety sweep: ensure all database records replace 16:30 with 16:00
+      await this.serviceRepo.query(`
+        UPDATE services 
+        SET description = replace(description, '16:30', '16:00'),
+            "scheduleText" = replace("scheduleText", '16:30', '16:00')
+        WHERE description LIKE '%16:30%' OR "scheduleText" LIKE '%16:30%';
+      `).catch(() => null);
+
+      await this.serviceRepo.query(`
+        UPDATE agent_configs
+        SET "customInstructions" = replace("customInstructions", '16:30', '16:00')
+        WHERE "customInstructions" LIKE '%16:30%';
+      `).catch(() => null);
+
+      await this.serviceRepo.query(`
+        UPDATE agent_configs
+        SET services = replace(services::text, '16:30', '16:00')::jsonb
+        WHERE services::text LIKE '%16:30%';
+      `).catch(() => null);
+
+      await this.serviceRepo.query(`
+        UPDATE knowledge_documents
+        SET content = replace(content, '16:30', '16:00')
+        WHERE content LIKE '%16:30%';
+      `).catch(() => null);
+
+      await this.serviceRepo.query(`
+        UPDATE knowledge_chunks
+        SET content = replace(content, '16:30', '16:00')
+        WHERE content LIKE '%16:30%';
+      `).catch(() => null);
+
+      await this.serviceRepo.query(`
+        DO $$ 
+        BEGIN
+          IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'mastra_messages') THEN
+            UPDATE mastra_messages SET content = replace(content, '16:30', '16:00') WHERE content LIKE '%16:30%';
+          END IF;
+          IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'messages') THEN
+            UPDATE messages SET body = replace(body, '16:30', '16:00') WHERE body LIKE '%16:30%';
+          END IF;
+        END $$;
+      `).catch(() => null);
     } catch {
       // Non-fatal on init
     }

@@ -170,6 +170,26 @@ export class SettingsService {
             "studentSchedule" = NULL,
             "studentEnrolledAt" = NULL
       `);
+
+      // 6. Guarantee schedule sanitization (16:30 -> 16:00) across services, agent configs and knowledge
+      await m.query(`
+        UPDATE services 
+        SET description = replace(description, '16:30', '16:00'),
+            "scheduleText" = replace("scheduleText", '16:30', '16:00')
+        WHERE description LIKE '%16:30%' OR "scheduleText" LIKE '%16:30%';
+        UPDATE agent_configs
+        SET "customInstructions" = replace("customInstructions", '16:30', '16:00')
+        WHERE "customInstructions" LIKE '%16:30%';
+        UPDATE agent_configs
+        SET services = replace(services::text, '16:30', '16:00')::jsonb
+        WHERE services::text LIKE '%16:30%';
+        UPDATE knowledge_documents
+        SET content = replace(content, '16:30', '16:00')
+        WHERE content LIKE '%16:30%';
+        UPDATE knowledge_chunks
+        SET content = replace(content, '16:30', '16:00')
+        WHERE content LIKE '%16:30%';
+      `);
     });
 
     const contactsCount = await this.dataSource.query('SELECT COUNT(*) FROM contacts');

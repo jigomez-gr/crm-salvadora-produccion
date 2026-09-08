@@ -246,9 +246,9 @@ ON CONFLICT ("agentKey") DO UPDATE SET name = EXCLUDED.name, "systemPrompt" = EX
 
 -- Servicios y Clases Oficiales
 INSERT INTO services (name, description, "durationMinutes", price, currency, "maxCapacity", "isActive") VALUES
-('Hatha Yoga Terapéutico - 1 clase semanal', 'Horarios: Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15), Jueves (9:45, 11:15, 16:30, 17:30, 19:00). 1 clase/semana (4 clases/mes). Aforo máximo 20 personas. Pago en el centro.', 90, 25.00, 'EUR', 20, true),
-('Hatha Yoga Terapéutico - 2 clases semanales', 'Horarios: Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15), Jueves (9:45, 11:15, 16:30, 17:30, 19:00). 2 clases/semana (8 clases/mes). Aforo máximo 20 personas. Pago en el centro.', 90, 45.00, 'EUR', 20, true),
-('Hatha Yoga Terapéutico - 3 clases semanales', 'Horarios: Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15), Jueves (9:45, 11:15, 16:30, 17:30, 19:00). 3 clases/semana. Aforo máximo 20 personas. Pago en el centro.', 90, 60.00, 'EUR', 20, true),
+('Hatha Yoga Terapéutico - 1 clase semanal', 'Horarios: Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15), Jueves (9:45, 11:15, 16:00, 17:30, 19:00). 1 clase/semana (4 clases/mes). Aforo máximo 20 personas. Pago en el centro.', 90, 25.00, 'EUR', 20, true),
+('Hatha Yoga Terapéutico - 2 clases semanales', 'Horarios: Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15), Jueves (9:45, 11:15, 16:00, 17:30, 19:00). 2 clases/semana (8 clases/mes). Aforo máximo 20 personas. Pago en el centro.', 90, 45.00, 'EUR', 20, true),
+('Hatha Yoga Terapéutico - 3 clases semanales', 'Horarios: Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15), Jueves (9:45, 11:15, 16:00, 17:30, 19:00). 3 clases/semana. Aforo máximo 20 personas. Pago en el centro.', 90, 60.00, 'EUR', 20, true),
 ('Hatha Yoga Terapéutico - Clase Suelta', 'Asistencia puntual a una clase de Hatha Yoga Terapéutico de 90 minutos. Pago en el centro.', 90, 10.00, 'EUR', 20, true),
 ('Iaidō (Esgrima Japonesa)', 'Arte marcial tradicional japonés de desenvaine de katana. Concentración y precisión. Pago en el centro.', 90, 40.00, 'EUR', 15, true),
 ('Bienestar Experience (Longevidad & Bienestar)', 'Programa integral para vitalidad, salud articular y longevidad activa. Pago en el centro.', 90, 45.00, 'EUR', 20, true),
