@@ -21,7 +21,8 @@ import { VapiAccount } from '../common/entities/vapi-account.entity';
 import { CalcomService } from '../calcom/calcom.service';
 import { ZadarmaSmsService } from '../sms/zadarma-sms.service';
 import { TZDate } from '@date-fns/tz';
-import { format, startOfWeek, endOfWeek } from 'date-fns';
+import { format, startOfWeek, endOfWeek, subMonths, addDays } from 'date-fns';
+import { Cron } from '@nestjs/schedule';
 import { businessDayWindow } from './business-day';
 import { computeFreeSlots, TimeSlot } from './availability';
 import { parseFlexibleStartsAt } from '../common/time';
@@ -82,8 +83,11 @@ export class AppointmentsService implements OnModuleInit {
         ALTER TABLE "appointments" ADD COLUMN IF NOT EXISTS "paymentNotes" text;
         ALTER TABLE "appointments" ADD COLUMN IF NOT EXISTS "paymentRecordedBy" character varying;
         ALTER TABLE "appointments" ADD COLUMN IF NOT EXISTS "paidAt" timestamptz;
+        ALTER TABLE "appointments" ADD COLUMN IF NOT EXISTS "isFirstClass" boolean DEFAULT false;
+        ALTER TABLE "appointments" ADD COLUMN IF NOT EXISTS "isRecovery" boolean DEFAULT false;
+        ALTER TABLE "appointments" ADD COLUMN IF NOT EXISTS "recoveredFromAppointmentId" character varying;
       `);
-      this.logger.log('Payment schema columns verified on appointments table.');
+      this.logger.log('Payment schema, isFirstClass, and isRecovery columns verified on appointments table.');
     } catch (err) {
       this.logger.warn(`Could not run payment schema migration on appointments table: ${err}`);
     }
@@ -202,8 +206,19 @@ export class AppointmentsService implements OnModuleInit {
       }
     }
 
+    // Load contact info upfront
+    const contact = dto.contactId
+      ? await this.contactsRepo.findOne({ where: { id: dto.contactId } })
+      : null;
+
+    const isYoga = /hatha.*yoga|yoga.*terap/i.test(cleanServiceName);
+    let isFirstClass = dto.isFirstClass ?? false;
+    let computedPrice = dto.price !== undefined ? dto.price : (serviceEntity?.price ?? null);
+    let computedPaymentStatus = PaymentStatus.UNPAID;
+    let additionalNotes = '';
+
     // 2. Strict validation: Hatha Yoga Terapéutico
-    if (/hatha.*yoga|yoga.*terap/i.test(cleanServiceName)) {
+    if (isYoga) {
       const HATHA_YOGA_TIMETABLE: Record<number, string[]> = {
         2: ['09:45', '11:15', '17:00', '18:30', '20:00'],
         3: ['20:15'],
@@ -225,7 +240,39 @@ export class AppointmentsService implements OnModuleInit {
 
       if (dto.contactId) {
         const isTwoClasses = /2\s*clases|dos\s*clases/i.test(cleanServiceName);
-        const maxAllowed = isTwoClasses ? 2 : 1;
+        const isStudent = Boolean(contact?.isStudent);
+        let maxAllowed = isTwoClasses ? 2 : 1;
+
+        if (isStudent) {
+          if (contact?.studentModality === '2_clases_semanales') {
+            maxAllowed = 2;
+          } else if (contact?.studentModality === '1_clase_semanal') {
+            maxAllowed = 1;
+          }
+          isFirstClass = false;
+          computedPrice = '0.00';
+          computedPaymentStatus = PaymentStatus.EXEMPT;
+          additionalNotes = `Cuota mensual de alumno (${maxAllowed === 1 ? '1 clase semanal - 25€/mes' : '2 clases semanales - 42€/mes'})`;
+        } else {
+          // Check if contact has prior yoga appointments
+          const priorYogaAppts = await this.appointmentsRepo.find({
+            where: {
+              contactId: dto.contactId,
+              status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.PENDING_APPROVAL, AppointmentStatus.COMPLETED]),
+            },
+          });
+          const hasPriorYoga = priorYogaAppts.some((a) => /yoga/i.test(a.service));
+          if (!hasPriorYoga) {
+            isFirstClass = true;
+            computedPrice = dto.price !== undefined ? dto.price : '10.00';
+            additionalNotes = 'Primera cita (10,00 €). Gratuita si confirma ser alumno con cuota mensual.';
+          } else {
+            isFirstClass = false;
+            computedPrice = dto.price !== undefined ? dto.price : '10.00';
+            additionalNotes = 'Clase suelta (10,00 €).';
+          }
+        }
+
         const weekStart = startOfWeek(startsAt, { weekStartsOn: 1 });
         const weekEnd = endOfWeek(startsAt, { weekStartsOn: 1 });
         const existingThisWeek = await this.appointmentsRepo.find({
@@ -240,11 +287,34 @@ export class AppointmentsService implements OnModuleInit {
           const z = new TZDate(new Date(a.startsAt).getTime(), 'Europe/Madrid');
           return effectiveTimetable[z.getDay()]?.includes(format(z, 'HH:mm'));
         });
-        if (hathaExisting.length >= maxAllowed) {
+
+        const isRecovery = Boolean(dto.isRecovery);
+        if (isRecovery) {
+          // Verify student has available recoverable yoga classes
+          if (!isStudent) {
+            throw new BadRequestException('Solo los alumnos matriculados pueden disfrutar de clases de recuperación.');
+          }
+          const recoverable = await this.getAvailableYogaRecoveries(dto.contactId, startsAt);
+          if (recoverable.availableCount <= 0) {
+            throw new BadRequestException(
+              'No tienes clases de recuperación pendientes o han caducado (plazo máximo de 3 meses a partir de la semana siguiente a la clase perdida).',
+            );
+          }
+          // Mark recovery link
+          computedPrice = '0.00';
+          computedPaymentStatus = PaymentStatus.EXEMPT;
+          additionalNotes = `Clase de recuperación de yoga (válida por 3 meses). ${additionalNotes}`.trim();
+        } else if (hathaExisting.length >= maxAllowed) {
+          // If already at weekly max, check if contact has pending recoveries to suggest
+          const recoverable = isStudent ? await this.getAvailableYogaRecoveries(dto.contactId, startsAt) : { availableCount: 0 };
+          const recoverySuggestion =
+            recoverable.availableCount > 0
+              ? ` Tienes ${recoverable.availableCount} clase(s) pendiente(s) de recuperar que puedes agendar indicando 'recuperación'.`
+              : '';
           throw new BadRequestException(
             maxAllowed === 1
-              ? 'Ya tienes una clase de Hatha Yoga agendada para esa semana en la modalidad de 1 clase semanal.'
-              : 'Ya tienes 2 clases de Hatha Yoga agendadas para esa semana en la modalidad de 2 clases semanales.',
+              ? `Ya tienes una clase de Hatha Yoga agendada para esa semana en la modalidad de 1 clase semanal.${recoverySuggestion}`
+              : `Ya tienes 2 clases de Hatha Yoga agendadas para esa semana en la modalidad de 2 clases semanales.${recoverySuggestion}`,
           );
         }
       }
@@ -254,7 +324,7 @@ export class AppointmentsService implements OnModuleInit {
     const serviceName = dto.service || serviceEntity?.name || 'General';
     const serviceId =
       serviceEntity?.id ?? (dto.serviceId && UUID_REGEX.test(dto.serviceId) ? dto.serviceId : null);
-    const price = dto.price !== undefined ? dto.price : (serviceEntity?.price ?? null);
+    const price = dto.price !== undefined ? dto.price : (isYoga ? computedPrice : (serviceEntity?.price ?? null));
     const defaultStatus = serviceEntity?.requiresApproval
       ? AppointmentStatus.PENDING_APPROVAL
       : AppointmentStatus.SCHEDULED;
@@ -271,13 +341,13 @@ export class AppointmentsService implements OnModuleInit {
     }
 
     const reason = dto.reason || null;
+    const finalNotes = additionalNotes
+      ? (dto.notes ? `${dto.notes} | ${additionalNotes}` : additionalNotes)
+      : (dto.notes || null);
     let calBookingId: string | null = null;
     let calBookingUid: string | null = null;
     let calMeetingUrl: string | null = null;
     let calStatus: string | null = null;
-
-    // Load contact info for virtual meeting synchronization
-    const contact = await this.contactsRepo.findOne({ where: { id: dto.contactId } });
 
     // Sincronización automática con Cal.com para citas virtuales (solo si ya está confirmada / no requiere aprobación)
     if (modality === 'virtual' && contact && status !== AppointmentStatus.PENDING_APPROVAL) {
@@ -351,6 +421,10 @@ export class AppointmentsService implements OnModuleInit {
           existingPending.calendarId = calendarId;
           existingPending.price = price;
           existingPending.modality = modality;
+          existingPending.isFirstClass = isFirstClass;
+          existingPending.isRecovery = dto.isRecovery ?? existingPending.isRecovery ?? false;
+          existingPending.recoveredFromAppointmentId = dto.recoveredFromAppointmentId ?? existingPending.recoveredFromAppointmentId;
+          existingPending.notes = finalNotes || existingPending.notes;
           existingPending.reason = reason || existingPending.reason;
           existingPending.status = AppointmentStatus.PENDING_APPROVAL;
           return repo.save(existingPending);
@@ -367,6 +441,11 @@ export class AppointmentsService implements OnModuleInit {
           endsAt,
           modality,
           reason,
+          notes: finalNotes,
+          isFirstClass,
+          isRecovery: dto.isRecovery ?? false,
+          recoveredFromAppointmentId: dto.recoveredFromAppointmentId ?? null,
+          paymentStatus: isYoga && contact?.isStudent ? computedPaymentStatus : (dto.paymentStatus ?? PaymentStatus.UNPAID),
           calBookingId,
           calBookingUid,
           calMeetingUrl,
@@ -427,6 +506,8 @@ export class AppointmentsService implements OnModuleInit {
     if (dto.reason !== undefined) appt.reason = dto.reason || null;
     if (dto.calMeetingUrl !== undefined) appt.calMeetingUrl = dto.calMeetingUrl || null;
     if (dto.responseDocument !== undefined) appt.responseDocument = (dto.responseDocument as any) || null;
+    if (dto.isRecovery !== undefined) appt.isRecovery = dto.isRecovery;
+    if (dto.recoveredFromAppointmentId !== undefined) appt.recoveredFromAppointmentId = dto.recoveredFromAppointmentId;
 
     if (dto.price !== undefined) {
       appt.price = dto.price === '' ? null : dto.price;
@@ -1898,4 +1979,242 @@ export class AppointmentsService implements OnModuleInit {
     this.eventEmitter.emit('appointment.updated', withContact);
     return withContact;
   }
+
+  /**
+   * Retrieves available yoga class recoveries for an enrolled student.
+   * Rule: If a student misses/cancels a yoga class, they can recover it
+   * starting from the FOLLOWING week for up to 3 MONTHS (90 days).
+   */
+  async getAvailableYogaRecoveries(
+    contactId: string,
+    targetDate: Date = new Date(),
+  ): Promise<{
+    availableCount: number;
+    missedClasses: { id: string; startsAt: Date; cancellationReason: string | null; expiresAt: Date }[];
+    usedRecoveries: { id: string; startsAt: Date }[];
+  }> {
+    const contact = await this.contactsRepo.findOne({ where: { id: contactId } });
+    if (!contact || !contact.isStudent) {
+      return { availableCount: 0, missedClasses: [], usedRecoveries: [] };
+    }
+
+    // A class can be recovered for up to 3 months (90 days)
+    const threeMonthsAgo = subMonths(targetDate, 3);
+    const currentWeekStart = startOfWeek(targetDate, { weekStartsOn: 1 });
+
+    // 1. Find cancelled yoga appointments in the last 3 months that took place BEFORE the current week
+    const cancelledAppts = await this.appointmentsRepo.find({
+      where: {
+        contactId,
+        status: AppointmentStatus.CANCELLED,
+        startsAt: Between(threeMonthsAgo, currentWeekStart),
+      },
+      order: { startsAt: 'ASC' },
+    });
+
+    const missedYoga = cancelledAppts
+      .filter((a) => /yoga/i.test(a.service))
+      .map((a) => ({
+        id: a.id,
+        startsAt: new Date(a.startsAt),
+        cancellationReason: a.cancellationReason,
+        expiresAt: addDays(new Date(a.startsAt), 90),
+      }))
+      .filter((m) => m.expiresAt.getTime() >= targetDate.getTime());
+
+    // 2. Find appointments that were booked as recoveries during this period
+    const recoveryAppts = await this.appointmentsRepo.find({
+      where: {
+        contactId,
+        isRecovery: true,
+        status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.COMPLETED, AppointmentStatus.PENDING_APPROVAL]),
+        startsAt: Between(threeMonthsAgo, addDays(targetDate, 30)),
+      },
+    });
+
+    const usedRecoveries = recoveryAppts.map((a) => ({
+      id: a.id,
+      startsAt: new Date(a.startsAt),
+    }));
+
+    const availableCount = Math.max(0, missedYoga.length - usedRecoveries.length);
+
+    return {
+      availableCount,
+      missedClasses: missedYoga,
+      usedRecoveries,
+    };
+  }
+
+  /**
+   * Cron job that runs every Sunday evening at 20:00 (Europe/Madrid)
+   * to auto-generate next week's appointments for all active students.
+   */
+  @Cron('0 20 * * 0')
+  async handleWeeklyYogaScheduleCron(): Promise<void> {
+    try {
+      this.logger.log('Executing Sunday Cron: auto-generating next week yoga appointments for active students...');
+      const result = await this.generateWeeklyStudentAppointments();
+      this.logger.log(
+        `Weekly yoga auto-generation completed: ${result.createdCount} appointments created for ${result.studentsProcessed} students.`,
+      );
+    } catch (err: any) {
+      this.logger.error(`Error in weekly yoga auto-generation cron: ${err?.message || err}`);
+    }
+  }
+
+  /**
+   * Generates next week's appointments for all active enrolled yoga students.
+   * Can be triggered by the Sunday cron or invoked on demand by administrators.
+   * Base schedule is derived from the student's ending week appointments
+   * or official default slots, fully editable/rescheduleable.
+   */
+  async generateWeeklyStudentAppointments(referenceDate: Date = new Date()): Promise<{
+    studentsProcessed: number;
+    createdCount: number;
+    details: { contactId: string; studentName: string; apptIds: string[] }[];
+  }> {
+    // 1. Find all active students
+    const students = await this.contactsRepo.find({
+      where: {
+        isStudent: true,
+      },
+    });
+
+    const activeStudents = students.filter((s) => s.status !== 'inactive');
+    if (activeStudents.length === 0) {
+      return { studentsProcessed: 0, createdCount: 0, details: [] };
+    }
+
+    // Next week window (starts on next Monday 00:00)
+    const thisWeekStart = startOfWeek(referenceDate, { weekStartsOn: 1 });
+    const thisWeekEnd = endOfWeek(referenceDate, { weekStartsOn: 1 });
+    const nextWeekStart = addDays(thisWeekStart, 7);
+    const nextWeekEnd = addDays(thisWeekEnd, 7);
+
+    // Official Hatha Yoga timetable:
+    // Martes (2): 09:45, 11:15, 17:00, 18:30, 20:00
+    // Miércoles (3): 20:15
+    // Jueves (4): 09:45, 11:15, 16:30, 17:30, 19:00
+    const DEFAULT_SLOTS: { day: number; time: string; service: string }[] = [
+      { day: 2, time: '09:45', service: 'Hatha Yoga Terapéutico' }, // Martes 09:45
+      { day: 4, time: '17:30', service: 'Hatha Yoga Terapéutico' }, // Jueves 17:30
+    ];
+
+    let totalCreated = 0;
+    const details: { contactId: string; studentName: string; apptIds: string[] }[] = [];
+
+    for (const student of activeStudents) {
+      const modality = student.studentModality === '2_clases_semanales' ? '2_clases_semanales' : '1_clase_semanal';
+      const quota = modality === '2_clases_semanales' ? 2 : 1;
+
+      // Check if student already has appointments in the target next week
+      const existingNextWeek = await this.appointmentsRepo.find({
+        where: {
+          contactId: student.id,
+          status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.PENDING_APPROVAL]),
+          startsAt: Between(nextWeekStart, nextWeekEnd),
+        },
+      });
+
+      const existingYogaNextWeek = existingNextWeek.filter((a) => /yoga/i.test(a.service));
+      if (existingYogaNextWeek.length >= quota) {
+        continue; // Already scheduled for next week
+      }
+
+      const neededCount = quota - existingYogaNextWeek.length;
+
+      // Inspect appointments from the culminating week (or recent active weeks) to preserve student preferences
+      const pastYogaAppts = await this.appointmentsRepo.find({
+        where: {
+          contactId: student.id,
+          status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.COMPLETED]),
+          startsAt: Between(subMonths(referenceDate, 1), thisWeekEnd),
+        },
+        order: { startsAt: 'DESC' },
+      });
+
+      const recurringPatterns: { day: number; time: string; service: string }[] = [];
+      for (const past of pastYogaAppts) {
+        if (!/yoga/i.test(past.service)) continue;
+        const zoned = new TZDate(new Date(past.startsAt).getTime(), 'Europe/Madrid');
+        const day = zoned.getDay();
+        const time = format(zoned, 'HH:mm');
+        if (!recurringPatterns.some((p) => p.day === day && p.time === time)) {
+          recurringPatterns.push({ day, time, service: past.service });
+        }
+        if (recurringPatterns.length >= quota) break;
+      }
+
+      // Fill with default slots if no past pattern found
+      let fallbackIndex = 0;
+      while (recurringPatterns.length < quota && fallbackIndex < DEFAULT_SLOTS.length) {
+        const fallback = DEFAULT_SLOTS[fallbackIndex];
+        if (!recurringPatterns.some((p) => p.day === fallback.day && p.time === fallback.time)) {
+          recurringPatterns.push({
+            day: fallback.day,
+            time: fallback.time,
+            service: `Hatha Yoga Terapéutico (${modality === '2_clases_semanales' ? '2 clases semanales' : '1 clase semanal'})`,
+          });
+        }
+        fallbackIndex++;
+      }
+
+      const studentCreatedApptIds: string[] = [];
+
+      for (let i = 0; i < neededCount; i++) {
+        const pattern = recurringPatterns[i] || DEFAULT_SLOTS[i % DEFAULT_SLOTS.length];
+        // Compute date in next week for pattern.day
+        // In next week: Monday = nextWeekStart.
+        // If pattern.day = 2 (Martes), offset = 1 day after Monday
+        const dayOffset = pattern.day === 0 ? 6 : pattern.day - 1;
+        const targetDay = addDays(nextWeekStart, dayOffset);
+        const [hours, minutes] = pattern.time.split(':').map(Number);
+
+        const apptStart = new TZDate(
+          targetDay.getFullYear(),
+          targetDay.getMonth(),
+          targetDay.getDate(),
+          hours,
+          minutes,
+          'Europe/Madrid',
+        );
+        const apptEnd = new Date(apptStart.getTime() + 90 * 60 * 1000);
+
+        try {
+          const appt = await this.create({
+            contactId: student.id,
+            service: pattern.service || 'Hatha Yoga Terapéutico',
+            startsAt: apptStart.toISOString(),
+            endsAt: apptEnd.toISOString(),
+            notes: 'Cita semanal generada automáticamente (modalidad alumno). Reprogramable.',
+            price: '0.00',
+            paymentStatus: PaymentStatus.EXEMPT,
+          });
+
+          studentCreatedApptIds.push(appt.id);
+          totalCreated++;
+        } catch (err: any) {
+          this.logger.warn(
+            `Could not auto-generate appointment for student ${student.name} at ${apptStart.toISOString()}: ${err?.message || err}`,
+          );
+        }
+      }
+
+      if (studentCreatedApptIds.length > 0) {
+        details.push({
+          contactId: student.id,
+          studentName: student.name,
+          apptIds: studentCreatedApptIds,
+        });
+      }
+    }
+
+    return {
+      studentsProcessed: activeStudents.length,
+      createdCount: totalCreated,
+      details,
+    };
+  }
 }
+

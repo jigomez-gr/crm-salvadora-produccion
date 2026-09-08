@@ -72,6 +72,11 @@ export class AppointmentsController {
     });
   }
 
+  @Post('generate-weekly-yoga')
+  async generateWeeklyYoga() {
+    return this.appointmentsService.generateWeeklyStudentAppointments();
+  }
+
   @Get('payments')
   getPayments(@Query() query: QueryAppointmentPaymentsDto) {
     return this.appointmentsService.getAppointmentPayments(query);
@@ -114,6 +119,11 @@ export class AppointmentsController {
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Length', buffer.length);
     res.end(buffer);
+  }
+
+  @Get('recoveries/contact/:contactId')
+  async getContactRecoveries(@Param('contactId') contactId: string) {
+    return this.appointmentsService.getAvailableYogaRecoveries(contactId);
   }
 
   @Get(':id')

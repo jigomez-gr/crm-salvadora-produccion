@@ -7,6 +7,7 @@ import { Contact, ContactStatus } from '../common/entities/contact.entity';
 import {
   Appointment,
   AppointmentStatus,
+  PaymentStatus,
 } from '../common/entities/appointment.entity';
 import { CreateContactDto, UpdateContactDto } from './dto/contact.dto';
 import { normalizePhoneStrict, normalizePhoneLoose } from '../common/phone';
@@ -116,6 +117,16 @@ export class ContactsService {
   ) {}
 
   async onModuleInit(): Promise<void> {
+    try {
+      await this.contactsRepo.query(`
+        ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "isStudent" boolean DEFAULT false;
+        ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "studentModality" character varying;
+        ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "studentEnrolledAt" timestamptz;
+      `);
+    } catch {
+      // Non-fatal schema migration
+    }
+
     try {
       const contactsWithAppts = await this.contactsRepo
         .createQueryBuilder('c')
@@ -425,12 +436,18 @@ export class ContactsService {
       'customFields',
       'pipelineStage',
       'boardPosition',
+      'isStudent',
+      'studentModality',
     ] as const;
     const target = contact as unknown as Record<string, unknown>;
     for (const key of simpleFields) {
       if (dto[key] !== undefined) {
         target[key] = dto[key];
       }
+    }
+
+    if (dto.isStudent && !contact.studentEnrolledAt) {
+      contact.studentEnrolledAt = new Date();
     }
 
     if (dto.phone !== undefined) {
@@ -444,6 +461,73 @@ export class ContactsService {
       contact.phone = phone;
     }
 
+    const saved = await this.contactsRepo.save(contact);
+    this.emitUpdated(saved);
+    return saved;
+  }
+
+  /**
+   * Formalize a contact as an active student of Centro de Yoga Salvadora Conesa.
+   * - Sets isStudent = true
+   * - Sets studentModality ('1_clase_semanal' or '2_clases_semanales')
+   * - Sets studentEnrolledAt = new Date()
+   * - Adds 'alumno' to tags
+   * - If the contact has any first class / trial appointments for yoga, marks them as free (price = '0.00', paymentStatus = EXEMPT)
+   */
+  async convertToStudent(id: string, modality: string): Promise<Contact> {
+    const contact = await this.findOne(id);
+    contact.isStudent = true;
+    contact.studentModality = modality;
+    contact.studentEnrolledAt = new Date();
+    contact.status = ContactStatus.ACTIVE;
+    if (!contact.tags) contact.tags = [];
+    if (!contact.tags.includes('alumno')) {
+      contact.tags.push('alumno');
+    }
+    if (!contact.tags.includes('cliente')) {
+      contact.tags.push('cliente');
+    }
+    if (
+      contact.pipelineStage === PipelineStage.NEW ||
+      contact.pipelineStage === PipelineStage.CONTACTED ||
+      contact.pipelineStage === PipelineStage.QUALIFIED ||
+      contact.pipelineStage === PipelineStage.BOOKED
+    ) {
+      contact.pipelineStage = PipelineStage.WON;
+    }
+    const saved = await this.contactsRepo.save(contact);
+
+    // Bonify first class / trial yoga appointments: free for students who convert!
+    const yogaAppointments = await this.appointmentsRepo.find({
+      where: {
+        contactId: id,
+        status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.PENDING_APPROVAL, AppointmentStatus.COMPLETED]),
+      },
+    });
+
+    for (const appt of yogaAppointments) {
+      if (/yoga/i.test(appt.service)) {
+        if (appt.isFirstClass || appt.paymentStatus !== PaymentStatus.PAID) {
+          appt.price = '0.00';
+          appt.paymentStatus = PaymentStatus.EXEMPT;
+          appt.paymentNotes = (appt.paymentNotes ? appt.paymentNotes + ' | ' : '') + 'Primera clase gratuita por confirmación de alta como alumno.';
+          await this.appointmentsRepo.save(appt);
+        }
+      }
+    }
+
+    this.emitUpdated(saved);
+    return saved;
+  }
+
+  async removeStudentStatus(id: string): Promise<Contact> {
+    const contact = await this.findOne(id);
+    contact.isStudent = false;
+    contact.studentModality = null;
+    contact.studentEnrolledAt = null;
+    if (contact.tags) {
+      contact.tags = contact.tags.filter((t) => t !== 'alumno');
+    }
     const saved = await this.contactsRepo.save(contact);
     this.emitUpdated(saved);
     return saved;

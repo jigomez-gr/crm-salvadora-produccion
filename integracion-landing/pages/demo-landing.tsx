@@ -142,11 +142,12 @@ export default function DemoLandingPage() {
       title: "Hatha Yoga Terapéutico (1 clase semanal)",
       category: "Yoga & Salud Postural",
       categoryIcon: "🧘",
+      badge: "1ª Clase gratis si te haces alumno",
       desc: "Práctica consciente de asanas, alineación corporal, respiración terapéutica y relajación profunda.",
       schedules: {
         morning: "Martes y Jueves: 9:45 y 11:15",
         afternoon: "Martes: 17:00, 18:30, 20:00 | Miércoles: 20:15 | Jueves: 16:30, 17:30, 19:00",
-        note: "Clases de 90 min (1h 30m). Aforo máximo de 20 personas (hasta 28 para recuperaciones de clases).",
+        note: "Clases de 90 min (1h 30m). 1ª cita gratis si confirmas ser alumno (10€ sesión suelta si no continúas). Recuperación de clases durante 3 meses.",
       },
       duration: "90 min",
       priceTag: "25.00 € / mes",
@@ -159,11 +160,12 @@ export default function DemoLandingPage() {
       title: "Hatha Yoga Terapéutico (2 clases semanales)",
       category: "Yoga & Práctica Frecuente",
       categoryIcon: "🧘",
+      badge: "1ª Clase gratis si te haces alumno",
       desc: "Inscripción para 2 sesiones semanales en los horarios oficiales de mañana o tarde.",
       schedules: {
         morning: "Martes y Jueves: 9:45 y 11:15",
         afternoon: "Martes: 17:00, 18:30, 20:00 | Miércoles: 20:15 | Jueves: 16:30, 17:30, 19:00",
-        note: "Comparte calendario y aforo con 1 clase semanal (máx 20 plazas fijas).",
+        note: "Comparte calendario y aforo con 1 clase semanal. 1ª cita gratis si te haces alumno (10€ sesión suelta). Recuperación de clases durante 3 meses.",
       },
       duration: "90 min",
       priceTag: "42.00 € / mes",
@@ -749,6 +751,24 @@ export default function DemoLandingPage() {
           </h3>
         </div>
 
+        {/* Banner Informativo Reglas de Yoga */}
+        <div className="mb-6 bg-amber-50/90 border border-amber-200 rounded-2xl p-4 text-xs text-stone-800 shadow-2xs">
+          <div className="flex items-start gap-2.5">
+            <span className="text-base">🧘</span>
+            <div className="space-y-1">
+              <p className="font-bold text-amber-950 text-xs sm:text-sm">
+                Modalidades de Alumno, Clase de Prueba y Recuperaciones:
+              </p>
+              <p className="text-stone-700 leading-relaxed">
+                • <strong>1ª Cita de prueba:</strong> Es <strong>gratuita si confirmas que te transformas en alumno</strong> (cuota mensual de 25€/mes para 1 clase/semana o 42€/mes para 2 clases/semana). Si decides no continuar como alumno, se abona como sesión suelta (10 €).
+              </p>
+              <p className="text-stone-700 leading-relaxed">
+                • <strong>Recuperación de clases (3 meses):</strong> Siendo alumno, si no puedes acudir a tu clase semanal por cualquier motivo, puedes recuperarla a partir de la semana siguiente durante <strong>3 meses (90 días)</strong>.
+              </p>
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
           {regularYogaServices.map((svc) => (
             <div
@@ -764,6 +784,14 @@ export default function DemoLandingPage() {
                     {svc.priceTag}
                   </span>
                 </div>
+
+                {svc.badge && (
+                  <div className="mb-2">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 inline-block">
+                      ⭐ {svc.badge}
+                    </span>
+                  </div>
+                )}
 
                 <h4 className="font-serif text-base font-bold text-stone-900 mb-1.5 leading-snug">
                   {svc.title}

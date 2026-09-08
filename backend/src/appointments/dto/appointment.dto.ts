@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsEnum,
   IsISO8601,
   IsNumberString,
@@ -59,6 +60,22 @@ export class CreateAppointmentDto {
   @IsOptional()
   @IsNumberString()
   price?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isFirstClass?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isRecovery?: boolean;
+
+  @IsOptional()
+  @IsUUID()
+  recoveredFromAppointmentId?: string;
+
+  @IsOptional()
+  @IsEnum(PaymentStatus)
+  paymentStatus?: PaymentStatus;
 }
 
 export class UpdateAppointmentDto {
@@ -112,6 +129,18 @@ export class UpdateAppointmentDto {
   @IsOptional()
   @IsNumberString()
   price?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  isFirstClass?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isRecovery?: boolean;
+
+  @IsOptional()
+  @IsUUID()
+  recoveredFromAppointmentId?: string | null;
 }
 
 export class UploadPatientAttachmentDto {

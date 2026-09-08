@@ -74,6 +74,10 @@ export interface Contact {
   optedOut: boolean;
   optedOutAt?: string | null;
   anonymizedAt?: string | null;
+  // Student status & modalities (Yoga Salvadora)
+  isStudent?: boolean;
+  studentModality?: "1_clase_semanal" | "2_clases_semanales" | string | null;
+  studentEnrolledAt?: string | null;
   createdAt: string;
 }
 
@@ -164,6 +168,9 @@ export interface Appointment {
   aiCroppedImageMime?: string | null;
   // Optional list price (numeric → string), for revenue reporting.
   price?: string | null;
+  isFirstClass?: boolean;
+  isRecovery?: boolean;
+  recoveredFromAppointmentId?: string | null;
   paymentStatus?: PaymentStatus;
   stripeSessionId?: string | null;
   stripePaymentIntentId?: string | null;

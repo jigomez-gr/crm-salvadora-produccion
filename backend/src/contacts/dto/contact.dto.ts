@@ -55,6 +55,14 @@ export class CreateContactDto {
   @IsOptional()
   @IsObject()
   customFields?: Record<string, string>;
+
+  @IsOptional()
+  @IsBoolean()
+  isStudent?: boolean;
+
+  @IsOptional()
+  @IsString()
+  studentModality?: string;
 }
 
 export class UpdateContactDto {
@@ -99,6 +107,14 @@ export class UpdateContactDto {
   @IsObject()
   customFields?: Record<string, string>;
 
+  @IsOptional()
+  @IsBoolean()
+  isStudent?: boolean;
+
+  @IsOptional()
+  @IsString()
+  studentModality?: string;
+
   // Sales-funnel stage (Kanban). Set when dragging a card between columns; also
   // valid on the contact form. `boardPosition` orders within a column.
   @IsOptional()
@@ -108,6 +124,11 @@ export class UpdateContactDto {
   @IsOptional()
   @IsNumber()
   boardPosition?: number;
+}
+
+export class ConvertToStudentDto {
+  @IsString()
+  modality: '1_clase_semanal' | '2_clases_semanales' | string;
 }
 
 /** CSV import payload — the raw CSV text (frontend reads the file and posts it). */

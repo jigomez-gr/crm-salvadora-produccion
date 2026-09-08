@@ -45,6 +45,8 @@ interface ContactFormData {
   tagsText: string;
   source: string;
   customFields: CustomField[];
+  isStudent: boolean;
+  studentModality: string;
 }
 
 function toForm(c?: Contact): ContactFormData {
@@ -60,6 +62,8 @@ function toForm(c?: Contact): ContactFormData {
       key,
       value,
     })),
+    isStudent: c?.isStudent ?? false,
+    studentModality: c?.studentModality ?? "1_clase_semanal",
   };
 }
 
@@ -187,6 +191,34 @@ function ContactModal({
             onChange={(e) => setField("email", e.target.value)}
             placeholder="ana@ejemplo.com"
           />
+        </div>
+        <div className="rounded-lg border border-neutral-200 p-3 bg-neutral-50/70 space-y-2">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.isStudent}
+              onChange={(e) => setField("isStudent", e.target.checked)}
+              className="h-4 w-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span className="text-xs font-semibold text-neutral-800">
+              Es Alumno oficial de Yoga
+            </span>
+          </label>
+          {form.isStudent && (
+            <div className="pl-6 pt-1">
+              <label className="mb-1 block text-[11px] font-medium text-neutral-600">
+                Modalidad de clases semanales
+              </label>
+              <select
+                className={selectClass}
+                value={form.studentModality}
+                onChange={(e) => setField("studentModality", e.target.value)}
+              >
+                <option value="1_clase_semanal">1 clase semanal (25 € / mes)</option>
+                <option value="2_clases_semanales">2 clases semanales (42 € / mes)</option>
+              </select>
+            </div>
+          )}
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-neutral-700">
@@ -476,6 +508,8 @@ function ContactsPageInner() {
         .map((t) => t.trim())
         .filter(Boolean),
       customFields,
+      isStudent: data.isStudent,
+      studentModality: data.isStudent ? (data.studentModality || "1_clase_semanal") : null,
     };
     if (editingContact) {
       await apiFetch(`/api/contacts/${editingContact.id}`, {
@@ -627,9 +661,16 @@ function ContactsPageInner() {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <Badge variant={CONTACT_STATUS_META[c.status].variant}>
-                      {CONTACT_STATUS_META[c.status].label}
-                    </Badge>
+                    <div className="flex flex-col gap-1 items-start">
+                      <Badge variant={CONTACT_STATUS_META[c.status].variant}>
+                        {CONTACT_STATUS_META[c.status].label}
+                      </Badge>
+                      {c.isStudent && (
+                        <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">
+                          🧘 Alumno ({c.studentModality === "2_clases_semanales" ? "2 clases/sem" : "1 clase/sem"})
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-neutral-600">
                     <span className="flex items-center gap-1.5">

@@ -83,6 +83,17 @@ export class Contact {
   @Column({ type: 'timestamptz', nullable: true })
   anonymizedAt: Date | null;
 
+  // Student status (Centro de Yoga Salvadora Conesa)
+  @Column({ default: false })
+  isStudent: boolean;
+
+  // Modality: '1_clase_semanal' | '2_clases_semanales'
+  @Column({ type: 'varchar', nullable: true })
+  studentModality: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  studentEnrolledAt: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

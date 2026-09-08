@@ -36,9 +36,18 @@ Documento maestro de referencia sobre la filosofía, historia, servicios, clases
   * **Martes**: `09:45` · `11:15` · `17:00` · `18:30` · `20:00`
   * **Miércoles**: `20:15`
   * **Jueves**: `09:45` · `11:15` · `16:30` · `17:30` · `19:00`
-* **Tarifas y Aforo**:
-  * **1 clase semanal**: `25.00 € / mes`
-  * **2 clases semanales**: `42.00 € / mes`
+* **Tarifas, Modalidades y Condición de Alumno**:
+  * **Modalidad 1 clase semanal**: `25.00 € / mes`.
+  * **Modalidad 2 clases semanales**: `42.00 € / mes`.
+  * **Regla Oficial de Primera Cita y Alumnos**:
+    * Un nuevo usuario puede solicitar su primera cita en cualquiera de las dos modalidades (1 clase o 2 clases a la semana).
+    * **La primera cita es GRATUITA únicamente si confirma que se transforma en alumno del centro**, en cuyo caso todas las citas semanales pasan a cobrarse por meses con la cuota mensual correspondiente (25€ o 42€/mes).
+    * **La primera cita NO es gratis salvo que se convierta en alumno**: si asiste a la clase de prueba y no continúa como alumno, abona la sesión suelta (`10.00 €`).
+  * **Política de Recuperación de Clases**:
+    * Si un estudiante no puede acudir a su cita de yoga de una semana por cualquier motivo, **la puede recuperar a partir de la semana siguiente durante un plazo de 3 meses (90 días)**.
+  * **Generación Automática Semanal de Citas y Reprogramación**:
+    * A los alumnos matriculados se les generan automáticamente las citas de la semana siguiente antes de que empiece la nueva semana (cada domingo por la tarde), basándose en sus horarios habituales.
+    * El alumno puede reprogramar o cambiar cualquiera de esas citas en cualquier momento de manera flexible llamando por teléfono o por WhatsApp.
   * **Aforo por clase**: `20 plazas` regulares (hasta `28 plazas` de aforo físico para permitir la recuperación de clases a las que no se haya podido asistir).
   * **Identificador de Calendario**: `cal-hatha-yoga` (ambas tarifas comparten el mismo aforo y sala).
   * **Pago**: Directamente en el centro.

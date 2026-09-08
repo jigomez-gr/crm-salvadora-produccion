@@ -84,6 +84,17 @@ export class Appointment {
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 
+  // First session / trial class indicator
+  @Column({ default: false })
+  isFirstClass?: boolean;
+
+  // Yoga class recovery indicator (class can be recovered starting next week for up to 3 months)
+  @Column({ default: false })
+  isRecovery?: boolean;
+
+  @Column({ nullable: true })
+  recoveredFromAppointmentId?: string | null;
+
   // ─── Response Document / Clinical Diagnosis / Consultation Outcome ───
   @Column({ type: 'jsonb', nullable: true })
   responseDocument?: {

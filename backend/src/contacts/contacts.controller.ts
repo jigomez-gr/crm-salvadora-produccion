@@ -18,6 +18,7 @@ import { ContactsService } from './contacts.service';
 import {
   CreateContactDto,
   UpdateContactDto,
+  ConvertToStudentDto,
   ImportContactsDto,
   SetConsentDto,
   ReorderBoardDto,
@@ -146,6 +147,44 @@ export class ContactsController {
       targetId: contact.id,
       ip,
       metadata: { changed: Object.keys(dto) },
+    });
+    return contact;
+  }
+
+  @Post(':id/student')
+  async convertToStudent(
+    @Param('id') id: string,
+    @Body() dto: ConvertToStudentDto,
+    @CurrentUser() actor: AuthUser,
+    @Ip() ip: string,
+  ) {
+    const contact = await this.contactsService.convertToStudent(id, dto.modality);
+    this.audit({
+      actor: { id: actor.id, email: actor.email },
+      action: AuditAction.CONTACT_UPDATE,
+      summary: `Formalizó a ${contact.name} como alumno (${dto.modality})`,
+      targetType: 'contact',
+      targetId: contact.id,
+      ip,
+      metadata: { modality: dto.modality },
+    });
+    return contact;
+  }
+
+  @Delete(':id/student')
+  async removeStudentStatus(
+    @Param('id') id: string,
+    @CurrentUser() actor: AuthUser,
+    @Ip() ip: string,
+  ) {
+    const contact = await this.contactsService.removeStudentStatus(id);
+    this.audit({
+      actor: { id: actor.id, email: actor.email },
+      action: AuditAction.CONTACT_UPDATE,
+      summary: `Dio de baja la condición de alumno de ${contact.name}`,
+      targetType: 'contact',
+      targetId: contact.id,
+      ip,
     });
     return contact;
   }

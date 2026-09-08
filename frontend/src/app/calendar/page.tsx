@@ -94,6 +94,7 @@ interface ApptFormData {
   modality: string;
   reason: string;
   price: string;
+  isRecovery?: boolean;
 }
 
 function AppointmentModal({
@@ -148,6 +149,7 @@ function AppointmentModal({
     modality: initial?.modality ?? "in_person",
     reason: initial?.reason ?? "",
     price: initial?.price ?? "",
+    isRecovery: initial?.isRecovery ?? false,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -604,6 +606,30 @@ function AppointmentModal({
             <option value="completed">Completada</option>
             <option value="cancelled">Cancelada</option>
           </select>
+        </div>
+
+        {/* Checkbox para Cita de Recuperación de Yoga */}
+        <div className="rounded-lg border border-sky-200 bg-sky-50/50 p-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={Boolean(form.isRecovery)}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  isRecovery: e.target.checked,
+                  price: e.target.checked ? "0.00" : f.price,
+                }))
+              }
+              className="h-4 w-4 rounded border-neutral-300 text-sky-600 focus:ring-sky-500"
+            />
+            <span className="text-xs font-semibold text-sky-900">
+              ♻️ Es una clase de recuperación (válida por 3 meses)
+            </span>
+          </label>
+          <p className="mt-1 text-[11px] text-sky-700">
+            Permite agendar una clase adicional para un alumno regular que haya perdido o cancelado una clase previa dentro de los últimos 90 días.
+          </p>
         </div>
 
         {/* Estado y Cobro de la Cita */}
@@ -1454,6 +1480,16 @@ function AppointmentListView({
                     <Badge variant={statusVariant(a.status)}>
                       {statusLabel(a.status)}
                     </Badge>
+                    {a.isFirstClass && (
+                      <Badge variant="info" className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">
+                        ⭐ Primera cita
+                      </Badge>
+                    )}
+                    {a.isRecovery && (
+                      <Badge variant="info" className="text-[10px] bg-sky-50 text-sky-800 border-sky-200">
+                        ♻️ Recuperación (3 meses)
+                      </Badge>
+                    )}
                     {a.price && (
                       <span className="text-xs font-semibold text-neutral-700 bg-neutral-100 px-2 py-0.5 rounded">
                         {a.price} €
@@ -1651,6 +1687,28 @@ function CalendarPageInner() {
       .catch(() => {});
   }, []);
 
+  const [generatingYoga, setGeneratingYoga] = useState(false);
+
+  async function handleGenerateWeeklyYoga() {
+    setGeneratingYoga(true);
+    try {
+      const res = await apiFetch<{ studentsProcessed: number; createdCount: number }>(
+        "/api/appointments/generate-weekly-yoga",
+        { method: "POST" }
+      );
+      toast.success(
+        `¡Generación semanal completada! Se han generado ${res.createdCount} citas para ${res.studentsProcessed} alumnos.`
+      );
+      await refreshRange();
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Error al generar citas semanales de alumnos."
+      );
+    } finally {
+      setGeneratingYoga(false);
+    }
+  }
+
   useEvents({
     "appointment.created": () => refreshRange(),
   });
@@ -1699,6 +1757,7 @@ function CalendarPageInner() {
       endsAt: data.endsAt,
       status: data.status,
       price,
+      isRecovery: data.isRecovery ?? false,
     };
     if (editingAppt) {
       await apiFetch(`/api/appointments/${editingAppt.id}`, {
@@ -1885,6 +1944,17 @@ function CalendarPageInner() {
               </Button>
             </div>
           )}
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={generatingYoga}
+            onClick={handleGenerateWeeklyYoga}
+            title="Genera automáticamente las citas de la próxima semana para todos los alumnos activos según su modalidad y horario habitual"
+            className="text-xs border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-indigo-600 mr-1" />
+            {generatingYoga ? "Generando…" : "Auto-generar Citas Alumnos"}
+          </Button>
           <Button
             size="sm"
             onClick={() => {

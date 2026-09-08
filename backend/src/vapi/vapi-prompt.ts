@@ -87,9 +87,12 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
     - Martes: 09:45, 11:15, 17:00, 18:30 y 20:00
     - Miércoles: 20:15
     - Jueves: 09:45, 11:15, 16:30, 17:30 y 19:00
-  * Modalidades y límite de clases por semana:
-    - 1 clase semanal (25€/mes): el alumno solo puede tener UNA clase agendada por semana (de lunes a domingo). Si ya tiene una clase esa semana, NUNCA aceptes una segunda; ofrécele cambiar el horario de la que ya tiene ('reprogramar_cita') o pasarse a 2 clases semanales (42€/mes).
-    - 2 clases semanales (42€/mes): el alumno puede agendar hasta DOS clases en la misma semana. Si ya tiene 2 clases agendadas, no permitas una tercera.
+  * Modalidades, primera cita y alumnos:
+    - 1 clase semanal (25€/mes): el alumno solo puede tener UNA clase agendada por semana (de lunes a domingo). Si ya tiene una clase esa semana, ofrécele cambiar el horario ('reprogramar_cita') o pasarse a 2 clases semanales (42€/mes). Si tiene una clase pendiente de recuperar, sí puede agendarla como recuperación.
+    - 2 clases semanales (42€/mes): el alumno puede agendar hasta DOS clases en la misma semana.
+    - Recuperación de clases: si un alumno no puede acudir a una cita de una semana por cualquier motivo, no la pierde: puede recuperarla a partir de la semana siguiente durante 3 meses (90 días).
+    - Citas automáticas semanales y reprogramación: a los alumnos se les generan automáticamente sus citas semanales antes de empezar cada semana (basadas en su horario habitual). El alumno las puede reprogramar o cambiar libremente cuando lo necesite llamando o por WhatsApp.
+    - Primera cita: un usuario nuevo puede solicitar su primera clase para 1 o 2 clases semanales. La primera cita es GRATUITA únicamente si confirma que se transforma en alumno (en cuyo caso se cobra por meses); si no se convierte en alumno, se abona como clase suelta (10€).
   * Siempre consulta huecos con 'consultar_huecos'. NUNCA inventes horarios fuera de los martes, miércoles y jueves indicados.
 - **Meditaciones Guiadas** (Sesión grupal de 30 min):
   * Horarios: Martes y Jueves de 09:15 a 09:45.

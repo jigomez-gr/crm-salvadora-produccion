@@ -17,6 +17,7 @@ import {
   ExternalLink,
   Video,
   Paperclip,
+  GraduationCap,
 } from "lucide-react";
 import Link from "next/link";
 import { apiFetch, ApiError, apiUrl } from "@/lib/api";
@@ -78,9 +79,60 @@ export default function ContactDetailPage({
   const [aiCropAppt, setAiCropAppt] = useState<Appointment | null>(null);
   const [aiSpecialty, setAiSpecialty] = useState<SpecialtyType>("dental");
 
+  const [studentModalOpen, setStudentModalOpen] = useState(false);
+  const [studentModality, setStudentModality] = useState<"1_clase_semanal" | "2_clases_semanales">("1_clase_semanal");
+  const [studentSaving, setStudentSaving] = useState(false);
+  const [recoveriesData, setRecoveriesData] = useState<{
+    availableCount: number;
+    missedClasses: { id: string; startsAt: string; cancellationReason: string | null; expiresAt: string }[];
+    usedRecoveries: { id: string; startsAt: string }[];
+  } | null>(null);
+
+  async function handleConvertToStudent() {
+    setStudentSaving(true);
+    try {
+      await apiFetch(`/api/contacts/${id}/student`, {
+        method: "POST",
+        body: JSON.stringify({ modality: studentModality }),
+      });
+      toast.success(
+        `¡Contacto formalizado como alumno (${studentModality === "2_clases_semanales" ? "2 clases/semana" : "1 clase/semana"})! Su primera cita ha sido bonificada a 0,00 €.`
+      );
+      setStudentModalOpen(false);
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Error al registrar como alumno.");
+    } finally {
+      setStudentSaving(false);
+    }
+  }
+
+  async function handleRemoveStudent() {
+    setStudentSaving(true);
+    try {
+      await apiFetch(`/api/contacts/${id}/student`, {
+        method: "DELETE",
+      });
+      toast.success("Se ha retirado la condición de alumno para este contacto.");
+      setStudentModalOpen(false);
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Error al actualizar estado.");
+    } finally {
+      setStudentSaving(false);
+    }
+  }
+
   useEffect(() => {
     apiFetch<ContactWithAppointments>(`/api/contacts/${id}`)
-      .then(setContact)
+      .then((c) => {
+        setContact(c);
+        if (c?.isStudent) {
+          apiFetch<any>(`/api/appointments/recoveries/contact/${id}`)
+            .then(setRecoveriesData)
+            .catch(() => null);
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
     apiFetch<EmailStatus>("/api/email/status")
@@ -147,7 +199,14 @@ export default function ContactDetailPage({
     const fresh = await apiFetch<ContactWithAppointments>(
       `/api/contacts/${id}`
     ).catch(() => null);
-    if (fresh) setContact(fresh);
+    if (fresh) {
+      setContact(fresh);
+      if (fresh.isStudent) {
+        apiFetch<any>(`/api/appointments/recoveries/contact/${id}`)
+          .then(setRecoveriesData)
+          .catch(() => null);
+      }
+    }
   }
 
   async function toggleOptOut() {
@@ -237,6 +296,22 @@ export default function ContactDetailPage({
             <Badge variant={CONTACT_STATUS_META[contact.status].variant}>
               {CONTACT_STATUS_META[contact.status].label}
             </Badge>
+            {contact.isStudent ? (
+              <>
+                <Badge variant="success" className="bg-emerald-100 text-emerald-800 border-emerald-300 font-medium">
+                  🧘 Alumno ({contact.studentModality === "2_clases_semanales" ? "2 clases/sem · 42€/mes" : "1 clase/sem · 25€/mes"})
+                </Badge>
+                {recoveriesData && recoveriesData.availableCount > 0 ? (
+                  <Badge variant="info" className="bg-amber-100 text-amber-900 border-amber-300 font-medium">
+                    ♻️ {recoveriesData.availableCount} clase(s) pendiente(s) de recuperar (3 meses)
+                  </Badge>
+                ) : null}
+              </>
+            ) : (
+              <Badge variant="default" className="text-neutral-600">
+                No alumno
+              </Badge>
+            )}
             {contact.optedOut && (
               <Badge variant="warning">Baja (opt-out)</Badge>
             )}
@@ -265,6 +340,23 @@ export default function ContactDetailPage({
 
         {!contact.anonymizedAt && (
           <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
+            <Button
+              size="sm"
+              variant={contact.isStudent ? "secondary" : "primary"}
+              disabled={busy}
+              onClick={() => {
+                setStudentModality(
+                  contact.studentModality === "2_clases_semanales"
+                    ? "2_clases_semanales"
+                    : "1_clase_semanal"
+                );
+                setStudentModalOpen(true);
+              }}
+              title="Gestionar alta como alumno y modalidades de clase de yoga"
+            >
+              <GraduationCap className="h-3.5 w-3.5" />
+              {contact.isStudent ? "Condición de Alumno" : "Convertir en Alumno"}
+            </Button>
             <Button
               size="sm"
               disabled={!contact.email || !emailStatus?.configured}
@@ -639,6 +731,127 @@ export default function ContactDetailPage({
           </Button>
         </div>
       </Modal>
+
+      {/* Student Management Modal */}
+      <Modal
+        open={studentModalOpen}
+        onClose={() => setStudentModalOpen(false)}
+        title={contact.isStudent ? "Condición de Alumno (Yoga Salvadora)" : "Convertir en Alumno"}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-neutral-600">
+            {contact.isStudent ? (
+              <>
+                <strong>{contact.name}</strong> es actualmente alumno activo de la escuela. Puedes actualizar su modalidad de clases semanales o tramitar su baja.
+              </>
+            ) : (
+              <>
+                Formaliza a <strong>{contact.name}</strong> como alumno oficial de la escuela.
+              </>
+            )}
+          </p>
+
+          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900 leading-relaxed">
+            <span className="font-semibold block mb-0.5">⭐ Regla oficial de primera cita:</span>
+            La primera cita es <strong>gratis si confirma que se transforma en alumno</strong> (en cuyo caso todas las citas semanales pasan a cobrarse por meses). Si no se convierte en alumno, esa primera cita se abona como clase suelta (10 €).
+          </div>
+
+          <div>
+            <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-neutral-500">
+              Modalidad de clases semanales
+            </label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label
+                className={`flex cursor-pointer flex-col rounded-xl border p-3.5 transition-all ${
+                  studentModality === "1_clase_semanal"
+                    ? "border-emerald-600 bg-emerald-50/60 ring-2 ring-emerald-600/20"
+                    : "border-neutral-200 bg-white hover:border-neutral-300"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-neutral-900">1 clase semanal</span>
+                  <input
+                    type="radio"
+                    name="studentModality"
+                    value="1_clase_semanal"
+                    checked={studentModality === "1_clase_semanal"}
+                    onChange={() => setStudentModality("1_clase_semanal")}
+                    className="h-4 w-4 text-emerald-600"
+                  />
+                </div>
+                <span className="mt-1 text-lg font-bold text-emerald-700">25,00 € <span className="text-xs font-normal text-neutral-500">/ mes</span></span>
+                <span className="mt-1 text-[11px] text-neutral-500">Máximo 1 cita por semana.</span>
+              </label>
+
+              <label
+                className={`flex cursor-pointer flex-col rounded-xl border p-3.5 transition-all ${
+                  studentModality === "2_clases_semanales"
+                    ? "border-emerald-600 bg-emerald-50/60 ring-2 ring-emerald-600/20"
+                    : "border-neutral-200 bg-white hover:border-neutral-300"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-neutral-900">2 clases semanales</span>
+                  <input
+                    type="radio"
+                    name="studentModality"
+                    value="2_clases_semanales"
+                    checked={studentModality === "2_clases_semanales"}
+                    onChange={() => setStudentModality("2_clases_semanales")}
+                    className="h-4 w-4 text-emerald-600"
+                  />
+                </div>
+                <span className="mt-1 text-lg font-bold text-emerald-700">42,00 € <span className="text-xs font-normal text-neutral-500">/ mes</span></span>
+                <span className="mt-1 text-[11px] text-neutral-500">Hasta 2 citas por semana.</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-sky-50 border border-sky-200 p-3 text-xs text-sky-900 leading-relaxed space-y-1">
+            <span className="font-semibold block">♻️ Recuperación y agenda automática:</span>
+            <p>
+              • <strong>Recuperación de clases:</strong> Si no puede acudir a una cita semanal por cualquier razón, la puede recuperar a partir de la semana siguiente durante <strong>3 meses (90 días)</strong>.
+            </p>
+            <p>
+              • <strong>Generación semanal:</strong> Cada domingo por la tarde se le agendan automáticamente sus clases para la nueva semana según su horario habitual, con posibilidad de reprogramarlas en cualquier momento.
+            </p>
+          </div>
+
+          {contact.studentEnrolledAt && (
+            <p className="text-xs text-neutral-400">
+              Fecha de alta como alumno: {format(parseISO(contact.studentEnrolledAt), "d 'de' MMMM 'de' yyyy", { locale: es })}
+            </p>
+          )}
+
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-neutral-100 pt-3">
+            {contact.isStudent ? (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={handleRemoveStudent}
+                disabled={studentSaving}
+              >
+                Dar de baja como alumno
+              </Button>
+            ) : (
+              <div />
+            )}
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setStudentModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleConvertToStudent}
+                disabled={studentSaving}
+              >
+                <GraduationCap className="h-3.5 w-3.5" />
+                {studentSaving ? "Guardando…" : contact.isStudent ? "Actualizar modalidad" : "Confirmar como Alumno"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -681,11 +894,26 @@ function AppointmentList({
                   ? "📞 Telefónica"
                   : "🏢 Presencial"}
               </Badge>
+              {a.isFirstClass && (
+                <Badge variant="info" className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">
+                  ⭐ Primera cita (Prueba)
+                </Badge>
+              )}
+              {a.isRecovery && (
+                <Badge variant="info" className="text-[10px] bg-sky-50 text-sky-800 border-sky-200">
+                  ♻️ Clase de Recuperación
+                </Badge>
+              )}
               {a.paymentStatus === "paid" && (
                 <Badge variant="success">Pagado {a.price ? `(${a.price} €)` : ""}</Badge>
               )}
               {a.paymentStatus === "pending" && (
                 <Badge variant="warning">Pago pendiente {a.price ? `(${a.price} €)` : ""}</Badge>
+              )}
+              {a.paymentStatus === "exempt" && (
+                <Badge variant="success" className="text-[10px] bg-emerald-50 text-emerald-800 border-emerald-200">
+                  Gratuita (Cuota mensual)
+                </Badge>
               )}
               {(!a.paymentStatus || a.paymentStatus === "unpaid") && a.price && (
                 <Badge variant="default">{a.price} €</Badge>
