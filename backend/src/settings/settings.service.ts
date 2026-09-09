@@ -189,6 +189,16 @@ export class SettingsService {
         UPDATE knowledge_chunks
         SET content = replace(content, '16:30', '16:00')
         WHERE content LIKE '%16:30%';
+        UPDATE agent_configs
+        SET "workingHours" = '[
+          {"day": 1, "open": "07:00", "close": "22:30"},
+          {"day": 2, "open": "07:00", "close": "22:30"},
+          {"day": 3, "open": "07:00", "close": "22:30"},
+          {"day": 4, "open": "07:00", "close": "22:30"},
+          {"day": 5, "open": "07:00", "close": "22:30"},
+          {"day": 6, "open": "09:00", "close": "20:00"},
+          {"day": 0, "open": "10:00", "close": "14:00"}
+        ]'::jsonb;
       `);
     });
 

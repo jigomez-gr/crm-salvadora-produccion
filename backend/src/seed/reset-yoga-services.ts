@@ -294,8 +294,21 @@ Pautas de reserva:
       `UPDATE agent_configs
        SET services = $1::jsonb,
            "businessName" = 'Centro de Yoga y Bienestar Salvadora',
-           "customInstructions" = $2`,
-      [JSON.stringify(agentServices), yogaCustomInstructions]
+           "customInstructions" = $2,
+           "workingHours" = $3::jsonb`,
+      [
+        JSON.stringify(agentServices),
+        yogaCustomInstructions,
+        JSON.stringify([
+          { day: 1, open: '07:00', close: '22:30' },
+          { day: 2, open: '07:00', close: '22:30' },
+          { day: 3, open: '07:00', close: '22:30' },
+          { day: 4, open: '07:00', close: '22:30' },
+          { day: 5, open: '07:00', close: '22:30' },
+          { day: 6, open: '09:00', close: '20:00' },
+          { day: 0, open: '10:00', close: '14:00' },
+        ]),
+      ]
     );
 
     console.log('AI Agent configurations updated successfully.');

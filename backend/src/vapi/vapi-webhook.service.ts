@@ -435,12 +435,13 @@ export class VapiWebhookService {
       agent?.workingHours && agent.workingHours.length > 0
         ? agent.workingHours
         : [
-            { day: 1, open: '09:00', close: '21:00' },
-            { day: 2, open: '09:00', close: '21:00' },
-            { day: 3, open: '09:00', close: '21:00' },
-            { day: 4, open: '09:00', close: '21:00' },
-            { day: 5, open: '09:00', close: '21:00' },
-            { day: 6, open: '09:00', close: '15:00' },
+            { day: 1, open: '07:00', close: '22:30' },
+            { day: 2, open: '07:00', close: '22:30' },
+            { day: 3, open: '07:00', close: '22:30' },
+            { day: 4, open: '07:00', close: '22:30' },
+            { day: 5, open: '07:00', close: '22:30' },
+            { day: 6, open: '09:00', close: '20:00' },
+            { day: 0, open: '10:00', close: '14:00' },
           ];
 
     const requestedService = (params?.servicio || params?.service || params?.clase || 'Hatha Yoga Terapéutico').toString().trim();
@@ -487,6 +488,22 @@ export class VapiWebhookService {
         domingo: 0, lunes: 1, martes: 2, miercoles: 3, miércoles: 3, jueves: 4, viernes: 5, sabado: 6, sábado: 6,
       };
 
+      let targetHourNorm: string | null = null;
+      if (rawHora) {
+        const match = rawHora.match(/(\d{1,2})(?::(\d{2}))?/);
+        if (match) {
+          let h = parseInt(match[1], 10);
+          const m = match[2] ? match[2] : '00';
+          const isTarde = rawHora.includes('tarde') || rawHora.includes('pm');
+          if (isTarde && h < 12) h += 12;
+          targetHourNorm = `${h.toString().padStart(2, '0')}:${m}`;
+
+          if (h < 9 || h > 19 || (h === 19 && parseInt(m, 10) > 0) || h >= 20) {
+            return `El horario oficial para «${officialSvc.name}» es de lunes a viernes entre las 09:00 y las 20:00. Las ${rawHora} queda fuera del horario de atención. ${officialSvc.priceInfo}. ¿Te vendría bien dentro de la franja de 09:00 a 20:00?`;
+          }
+        }
+      }
+
       const isWeekendRequested =
         rawFecha.includes('sabado') ||
         rawFecha.includes('sábado') ||
@@ -508,7 +525,29 @@ export class VapiWebhookService {
             const targetDayNum = weekdayMap[matchedDay];
             const currentDayNum = now.getDay();
             let daysAhead = targetDayNum - currentDayNum;
-            if (daysAhead <= 0) daysAhead += 7;
+            if (daysAhead < 0) {
+              daysAhead += 7;
+            } else if (daysAhead === 0) {
+              if (targetHourNorm) {
+                const [thH, thM] = targetHourNorm.split(':').map(Number);
+                const zonedNow = new TZDate(now.getTime(), ctx.timezone);
+                const slotToday = new TZDate(
+                  zonedNow.getFullYear(),
+                  zonedNow.getMonth(),
+                  zonedNow.getDate(),
+                  thH,
+                  thM,
+                  ctx.timezone,
+                );
+                if (slotToday.getTime() <= now.getTime()) {
+                  daysAhead = 7;
+                } else {
+                  daysAhead = 0;
+                }
+              } else {
+                daysAhead = 0;
+              }
+            }
             startDate = addDays(now, daysAhead);
           } else {
             try {
@@ -532,22 +571,6 @@ export class VapiWebhookService {
         startDate = addDays(startDate, 2);
         if (isWeekendRequested) {
           weekendNotice = `Las sesiones de «${officialSvc.name}» se atienden de lunes a viernes de 09:00 a 20:00 (no hay servicio en fines de semana). `;
-        }
-      }
-
-      let targetHourNorm: string | null = null;
-      if (rawHora) {
-        const match = rawHora.match(/(\d{1,2})(?::(\d{2}))?/);
-        if (match) {
-          let h = parseInt(match[1], 10);
-          const m = match[2] ? match[2] : '00';
-          const isTarde = rawHora.includes('tarde') || rawHora.includes('pm');
-          if (isTarde && h < 12) h += 12;
-          targetHourNorm = `${h.toString().padStart(2, '0')}:${m}`;
-
-          if (h < 9 || h > 19 || (h === 19 && parseInt(m, 10) > 0) || h >= 20) {
-            return `El horario oficial para «${officialSvc.name}» es de lunes a viernes entre las 09:00 y las 20:00. Las ${rawHora} queda fuera del horario de atención. ${officialSvc.priceInfo}. ¿Te vendría bien dentro de la franja de 09:00 a 20:00?`;
-          }
         }
       }
 
@@ -682,7 +705,30 @@ export class VapiWebhookService {
           const targetDayNum = weekdayMap[matchedDay];
           const currentDayNum = now.getDay();
           let daysAhead = targetDayNum - currentDayNum;
-          if (daysAhead <= 0) daysAhead += 7;
+          if (daysAhead < 0) {
+            daysAhead += 7;
+          } else if (daysAhead === 0) {
+            // Hoy es el día solicitado (ej. miércoles)
+            if (targetHourNorm) {
+              const [thH, thM] = targetHourNorm.split(':').map(Number);
+              const zonedNow = new TZDate(now.getTime(), ctx.timezone);
+              const slotToday = new TZDate(
+                zonedNow.getFullYear(),
+                zonedNow.getMonth(),
+                zonedNow.getDate(),
+                thH,
+                thM,
+                ctx.timezone,
+              );
+              if (slotToday.getTime() <= now.getTime()) {
+                daysAhead = 7;
+              } else {
+                daysAhead = 0;
+              }
+            } else {
+              daysAhead = 0;
+            }
+          }
           startDate = addDays(now, daysAhead);
         } else {
           try {

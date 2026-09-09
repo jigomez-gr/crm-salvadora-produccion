@@ -170,6 +170,14 @@ export function parseFlexibleStartsAt(
     }
   }
 
+  // 1b. Date-only ISO "YYYY-MM-DD"
+  const ymdMatch = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (ymdMatch) {
+    const [, y, m, d] = ymdMatch;
+    const zoned = new TZDate(Number(y), Number(m) - 1, Number(d), 0, 0, 0, timezone);
+    return new Date(zoned.getTime()).toISOString();
+  }
+
   // 2. Date + Time without timezone offset (e.g. "2026-09-03 16:30", "2026-09-03T16:30:00", "2026-09-03 16 y 30")
   const dateMatch = normalized.match(
     /^(\d{4})-(\d{2})-(\d{2})[T ]\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/,
@@ -204,6 +212,79 @@ export function parseFlexibleStartsAt(
       timezone,
     );
     return new Date(zoned.getTime()).toISOString();
+  }
+
+  // 3b. Day of week expressions (e.g. "el miercoles a las 20:15", "miercoles 20:15", "el jueves a las 16:00", "hoy a las 20:15", "mañana a las 09:45")
+  const lower = normalized.toLowerCase();
+  const weekdayMap: Record<string, number> = {
+    domingo: 0,
+    lunes: 1,
+    martes: 2,
+    miercoles: 3,
+    miércoles: 3,
+    jueves: 4,
+    viernes: 5,
+    sabado: 6,
+    sábado: 6,
+  };
+
+  const matchedWeekday = Object.keys(weekdayMap).find((w) => lower.includes(w));
+  const isHoy = lower.includes('hoy') || lower.includes('esta tarde') || lower.includes('esta mañana');
+  const isManana = !lower.includes('pasado') && (lower.includes('mañana') || lower.includes('manana'));
+  const isPasadoManana = lower.includes('pasado mañana') || lower.includes('pasado manana');
+
+  if (matchedWeekday !== undefined || isHoy || isManana || isPasadoManana) {
+    const zonedFallback = new TZDate(fallbackDate.getTime(), timezone);
+    const currDay = zonedFallback.getDay();
+    const hm = extractHourAndMinute(trimmed);
+    const targetH = hm ? hm.hour : 0;
+    const targetM = hm ? hm.minute : 0;
+
+    let daysDiff = 0;
+    if (isPasadoManana) {
+      daysDiff = 2;
+    } else if (isManana) {
+      daysDiff = 1;
+    } else if (isHoy) {
+      daysDiff = 0;
+    } else if (matchedWeekday !== undefined) {
+      const targetDay = weekdayMap[matchedWeekday];
+      daysDiff = targetDay - currDay;
+      if (daysDiff < 0) {
+        daysDiff += 7;
+      } else if (daysDiff === 0) {
+        // Same day of the week as today: check if target hour has already passed
+        if (hm) {
+          const slotToday = new TZDate(
+            zonedFallback.getFullYear(),
+            zonedFallback.getMonth(),
+            zonedFallback.getDate(),
+            targetH,
+            targetM,
+            0,
+            timezone,
+          );
+          if (slotToday.getTime() <= fallbackDate.getTime()) {
+            daysDiff = 7;
+          } else {
+            daysDiff = 0;
+          }
+        } else {
+          daysDiff = 0;
+        }
+      }
+    }
+
+    const resolvedDate = new TZDate(
+      zonedFallback.getFullYear(),
+      zonedFallback.getMonth(),
+      zonedFallback.getDate() + daysDiff,
+      targetH,
+      targetM,
+      0,
+      timezone,
+    );
+    return new Date(resolvedDate.getTime()).toISOString();
   }
 
   // 4. Time-only extracted (e.g. "16:30", "16 y 30", "16 y media", "las 16 y 30", "4 y media de la tarde")

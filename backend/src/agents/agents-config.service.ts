@@ -70,11 +70,11 @@ export class AgentsConfigService implements OnModuleInit {
           { name: 'Sesión Mensual de Fin de Semana (Baño de Gong / Talleres)', durationMinutes: 120 },
         ],
         workingHours: [
-          { day: 1, open: '07:00', close: '22:00' }, // Lunes
-          { day: 2, open: '07:00', close: '22:00' }, // Martes
-          { day: 3, open: '07:00', close: '22:00' }, // Miércoles
-          { day: 4, open: '07:00', close: '22:00' }, // Jueves
-          { day: 5, open: '07:00', close: '22:00' }, // Viernes
+          { day: 1, open: '07:00', close: '22:30' }, // Lunes
+          { day: 2, open: '07:00', close: '22:30' }, // Martes
+          { day: 3, open: '07:00', close: '22:30' }, // Miércoles (Yoga 20:15 hasta 21:45)
+          { day: 4, open: '07:00', close: '22:30' }, // Jueves (Iaido 20:30 hasta 22:00)
+          { day: 5, open: '07:00', close: '22:30' }, // Viernes
           { day: 6, open: '09:00', close: '20:00' }, // Sábado
           { day: 0, open: '10:00', close: '14:00' }, // Domingo
         ],
@@ -113,6 +113,27 @@ export class AgentsConfigService implements OnModuleInit {
         const str = JSON.stringify(existing.services);
         if (str.includes('16:30')) {
           existing.services = JSON.parse(str.replace(/16:30/g, '16:00'));
+          updated = true;
+        }
+      }
+      if (existing.workingHours && Array.isArray(existing.workingHours)) {
+        const wednesday = existing.workingHours.find((h: any) => h.day === 3);
+        const thursday = existing.workingHours.find((h: any) => h.day === 4);
+        if (
+          !wednesday ||
+          !thursday ||
+          (wednesday.close && wednesday.close < '22:00') ||
+          (thursday.close && thursday.close < '22:00')
+        ) {
+          existing.workingHours = [
+            { day: 1, open: '07:00', close: '22:30' },
+            { day: 2, open: '07:00', close: '22:30' },
+            { day: 3, open: '07:00', close: '22:30' },
+            { day: 4, open: '07:00', close: '22:30' },
+            { day: 5, open: '07:00', close: '22:30' },
+            { day: 6, open: '09:00', close: '20:00' },
+            { day: 0, open: '10:00', close: '14:00' },
+          ];
           updated = true;
         }
       }

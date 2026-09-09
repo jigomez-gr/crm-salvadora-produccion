@@ -331,4 +331,50 @@ describe('Yoga & Meditacion Group Availability (Aforo vs Agenda Profesor)', () =
     // 09:15 (07:15 UTC) debe estar disponible
     expect(starts).toContain('2026-09-10T07:15:00.000Z');
   });
+
+  it('El miércoles a las 20:15 SÍ está disponible para Hatha Yoga aunque workingHours cierre antes de las 21:45', async () => {
+    // Miércoles 9 de septiembre de 2026
+    const targetDate = new Date('2026-09-09T00:00:00.000Z');
+    const restrictiveWorkingHours = [
+      { day: 3, open: '09:00', close: '20:00' }, // horario restrictivo
+    ];
+
+    // Consulta realizada a las 07:50 de la mañana del mismo miércoles (día de hoy)
+    const now = new Date('2026-09-09T05:50:00.000Z'); // 07:50 local (UTC+2)
+
+    const slots = await appointmentsService.getAvailableSlots(
+      targetDate,
+      90,
+      restrictiveWorkingHours,
+      'Europe/Madrid',
+      now,
+      'cal-hatha-yoga',
+      'svc-yoga-1',
+      'Hatha Yoga Terapéutico (1 clase semanal)',
+    );
+
+    const starts = slots.map((s) => s.startsAt.toISOString());
+    // 20:15 local en verano es 18:15 UTC
+    expect(starts).toContain('2026-09-09T18:15:00.000Z');
+  });
+
+  it('El miércoles a las 20:15 no se ofrece si la hora actual ya ha pasado de las 20:15', async () => {
+    const targetDate = new Date('2026-09-09T00:00:00.000Z');
+    // Consulta realizada a las 20:30 de la noche del mismo miércoles (hora ya pasada)
+    const nowPast = new Date('2026-09-09T18:30:00.000Z'); // 20:30 local
+
+    const slots = await appointmentsService.getAvailableSlots(
+      targetDate,
+      90,
+      [],
+      'Europe/Madrid',
+      nowPast,
+      'cal-hatha-yoga',
+      'svc-yoga-1',
+      'Hatha Yoga Terapéutico (1 clase semanal)',
+    );
+
+    const starts = slots.map((s) => s.startsAt.toISOString());
+    expect(starts).not.toContain('2026-09-09T18:15:00.000Z');
+  });
 });

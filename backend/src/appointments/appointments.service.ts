@@ -1920,12 +1920,6 @@ export class AppointmentsService implements OnModuleInit {
 
     const existing = await qb.getMany();
 
-    const rawSlots = computeFreeSlots(date, durationMinutes, workingHours, existing, {
-      timezone,
-      now,
-      maxCapacity,
-    });
-
     // Enforce official service timetables strictly across all channels (VAPI, WhatsApp, Landing)
     const isHathaYoga = isYoga;
     const isIaido = /iaido|iaidō|esgrima/i.test(serviceName || targetService?.name || '');
@@ -1960,12 +1954,46 @@ export class AppointmentsService implements OnModuleInit {
     if (effectiveTimetable) {
       const targetDay = zoned.getDay();
       const allowed = effectiveTimetable[targetDay] || [];
-      return rawSlots.filter((s) => {
-        const slotDate = s.startsAt instanceof Date ? s.startsAt : new Date(s.startsAt);
-        const zonedSlot = new TZDate(slotDate.getTime(), timezone);
-        return allowed.includes(format(zonedSlot, 'HH:mm'));
-      });
+      const slots: TimeSlot[] = [];
+      const durationMs = durationMinutes * 60 * 1000;
+      const activeAppts = existing.filter(
+        (a) => a.status !== AppointmentStatus.CANCELLED,
+      );
+
+      for (const timeStr of allowed) {
+        const [h, m] = timeStr.split(':').map(Number);
+        const slotStart = new TZDate(
+          zoned.getFullYear(),
+          zoned.getMonth(),
+          zoned.getDate(),
+          h,
+          m,
+          timezone,
+        );
+        const slotEnd = new Date(slotStart.getTime() + durationMs);
+
+        const isPast = slotStart.getTime() <= now.getTime();
+        const overlappingCount = activeAppts.filter(
+          (a) =>
+            new Date(a.startsAt).getTime() < slotEnd.getTime() &&
+            new Date(a.endsAt).getTime() > slotStart.getTime(),
+        ).length;
+
+        if (!isPast && overlappingCount < maxCapacity) {
+          slots.push({
+            startsAt: new Date(slotStart.getTime()),
+            endsAt: slotEnd,
+          });
+        }
+      }
+      return slots;
     }
+
+    const rawSlots = computeFreeSlots(date, durationMinutes, workingHours, existing, {
+      timezone,
+      now,
+      maxCapacity,
+    });
 
     return rawSlots;
   }
