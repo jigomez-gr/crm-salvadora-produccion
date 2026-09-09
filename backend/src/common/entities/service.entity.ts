@@ -136,6 +136,32 @@ export class Service {
   @Column({ default: false })
   notifyBySms: boolean;
 
+  // Appointment reminder channels prior to the appointment
+  @Column({ default: true })
+  reminderWhatsapp: boolean;
+
+  @Column({ default: true })
+  reminderEmail: boolean;
+
+  @Column({ default: false })
+  reminderVoice: boolean;
+
+  @Column({ default: false })
+  reminderSms: boolean;
+
+  // Customizable advance reminder times
+  @Column({ default: true })
+  reminderHoursEnabled: boolean;
+
+  @Column({ default: 24 })
+  reminderHours: number;
+
+  @Column({ default: true })
+  reminderMinutesEnabled: boolean;
+
+  @Column({ default: 120 })
+  reminderMinutes: number;
+
   // Computed/transient fields for events
   attendeesCount?: number;
   availableSeats?: number | null;

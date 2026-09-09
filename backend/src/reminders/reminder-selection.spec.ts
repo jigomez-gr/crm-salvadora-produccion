@@ -20,13 +20,13 @@ describe('selectDueReminders', () => {
   it('fires the 24h reminder exactly at the trigger', () => {
     const appts = [apptIn('a', 1440)]; // exactly 24h away
     const due = selectDueReminders(appts, new Set(), NOW, OFFSETS, 30);
-    expect(due).toEqual([{ appointmentId: 'a', offsetLabel: '24h' }]);
+    expect(due).toEqual([{ appointmentId: 'a', offsetLabel: '24h', channel: 'whatsapp' }]);
   });
 
   it('fires the 24h reminder within the grace band (just past the trigger)', () => {
     const appts = [apptIn('a', 1420)]; // 23h40m → inside (1410, 1440]
     const due = selectDueReminders(appts, new Set(), NOW, OFFSETS, 30);
-    expect(due).toEqual([{ appointmentId: 'a', offsetLabel: '24h' }]);
+    expect(due).toEqual([{ appointmentId: 'a', offsetLabel: '24h', channel: 'whatsapp' }]);
   });
 
   it('does NOT fire the 24h reminder before its band', () => {
@@ -44,7 +44,7 @@ describe('selectDueReminders', () => {
   it('fires the 2h reminder in its band', () => {
     const appts = [apptIn('a', 110)]; // inside (90, 120]
     const due = selectDueReminders(appts, new Set(), NOW, OFFSETS, 30);
-    expect(due).toEqual([{ appointmentId: 'a', offsetLabel: '2h' }]);
+    expect(due).toEqual([{ appointmentId: 'a', offsetLabel: '2h', channel: 'whatsapp' }]);
   });
 
   it('a same-day booking never gets a "24h before" reminder', () => {
@@ -58,7 +58,7 @@ describe('selectDueReminders', () => {
 
   it('skips reminders already sent (idempotency)', () => {
     const appts = [apptIn('a', 1440)];
-    const sent = new Set([reminderKey('a', '24h')]);
+    const sent = new Set([reminderKey('a', '24h', 'whatsapp')]);
     const due = selectDueReminders(appts, sent, NOW, OFFSETS, 30);
     expect(due).toEqual([]);
   });
@@ -79,16 +79,67 @@ describe('selectDueReminders', () => {
     ];
     const due = selectDueReminders(appts, new Set(), NOW, OFFSETS, 30);
     expect(due).toEqual([
-      { appointmentId: 'due24', offsetLabel: '24h' },
-      { appointmentId: 'due2', offsetLabel: '2h' },
+      { appointmentId: 'due24', offsetLabel: '24h', channel: 'whatsapp' },
+      { appointmentId: 'due2', offsetLabel: '2h', channel: 'whatsapp' },
     ]);
   });
 
   it('only the unsent offset fires when one of two was already sent', () => {
     // Appointment 2h away whose 24h reminder already went out earlier.
     const appts = [apptIn('a', 115)];
-    const sent = new Set([reminderKey('a', '24h')]);
+    const sent = new Set([reminderKey('a', '24h', 'whatsapp')]);
     const due = selectDueReminders(appts, sent, NOW, OFFSETS, 30);
-    expect(due).toEqual([{ appointmentId: 'a', offsetLabel: '2h' }]);
+    expect(due).toEqual([{ appointmentId: 'a', offsetLabel: '2h', channel: 'whatsapp' }]);
+  });
+
+  it('fires multiple channels when candidate specifies multiple channels', () => {
+    const appts = [
+      {
+        id: 'multi',
+        startsAt: new Date(NOW.getTime() + 1435 * 60_000), // 24h band
+        channels: ['whatsapp', 'email', 'voice'],
+      },
+    ];
+    const due = selectDueReminders(appts, new Set(), NOW, OFFSETS, 30);
+    expect(due).toEqual([
+      { appointmentId: 'multi', offsetLabel: '24h', channel: 'whatsapp' },
+      { appointmentId: 'multi', offsetLabel: '24h', channel: 'email' },
+      { appointmentId: 'multi', offsetLabel: '24h', channel: 'voice' },
+    ]);
+  });
+
+  it('allows one channel to fire if another channel was already sent (multichannel idempotency)', () => {
+    const appts = [
+      {
+        id: 'multi',
+        startsAt: new Date(NOW.getTime() + 1435 * 60_000),
+        channels: ['whatsapp', 'email'],
+      },
+    ];
+    // WhatsApp already sent, Email not yet
+    const sent = new Set([reminderKey('multi', '24h', 'whatsapp')]);
+    const due = selectDueReminders(appts, sent, NOW, OFFSETS, 30);
+    expect(due).toEqual([
+      { appointmentId: 'multi', offsetLabel: '24h', channel: 'email' },
+    ]);
+  });
+
+  it('supports custom service offsets at candidate level', () => {
+    const appts = [
+      {
+        id: 'custom-offsets',
+        startsAt: new Date(NOW.getTime() + 290 * 60_000), // ~5h away
+        offsets: [
+          { label: '5h', minutes: 300 }, // 300 min, band is (270, 300]
+          { label: '30m', minutes: 30 },
+        ],
+        channels: ['email', 'sms'],
+      },
+    ];
+    const due = selectDueReminders(appts, new Set(), NOW, OFFSETS, 30);
+    expect(due).toEqual([
+      { appointmentId: 'custom-offsets', offsetLabel: '5h', channel: 'email' },
+      { appointmentId: 'custom-offsets', offsetLabel: '5h', channel: 'sms' },
+    ]);
   });
 });

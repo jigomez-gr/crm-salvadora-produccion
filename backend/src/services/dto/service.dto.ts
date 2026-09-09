@@ -107,6 +107,38 @@ export class CreateServiceDto {
   @IsBoolean()
   @IsOptional()
   notifyBySms?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  reminderWhatsapp?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  reminderEmail?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  reminderVoice?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  reminderSms?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  reminderHoursEnabled?: boolean;
+
+  @IsNumber()
+  @IsOptional()
+  reminderHours?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  reminderMinutesEnabled?: boolean;
+
+  @IsNumber()
+  @IsOptional()
+  reminderMinutes?: number;
 }
 
 export class UpdateServiceDto {
@@ -216,4 +248,36 @@ export class UpdateServiceDto {
   @IsBoolean()
   @IsOptional()
   notifyBySms?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  reminderWhatsapp?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  reminderEmail?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  reminderVoice?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  reminderSms?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  reminderHoursEnabled?: boolean;
+
+  @IsNumber()
+  @IsOptional()
+  reminderHours?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  reminderMinutesEnabled?: boolean;
+
+  @IsNumber()
+  @IsOptional()
+  reminderMinutes?: number;
 }

@@ -45,6 +45,14 @@ export interface Service {
   notifyByEmail?: boolean;
   notifyByWhatsapp?: boolean;
   notifyBySms?: boolean;
+  reminderWhatsapp?: boolean;
+  reminderEmail?: boolean;
+  reminderVoice?: boolean;
+  reminderSms?: boolean;
+  reminderHoursEnabled?: boolean;
+  reminderHours?: number;
+  reminderMinutesEnabled?: boolean;
+  reminderMinutes?: number;
   createdAt?: string;
   updatedAt?: string;
 }

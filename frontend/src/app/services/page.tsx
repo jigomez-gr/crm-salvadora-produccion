@@ -35,6 +35,14 @@ interface ServiceFormData {
   notifyByEmail: boolean;
   notifyByWhatsapp: boolean;
   notifyBySms: boolean;
+  reminderWhatsapp: boolean;
+  reminderEmail: boolean;
+  reminderVoice: boolean;
+  reminderSms: boolean;
+  reminderHoursEnabled: boolean;
+  reminderHours: number | string;
+  reminderMinutesEnabled: boolean;
+  reminderMinutes: number | string;
 }
 
 export default function ServicesPage() {
@@ -71,6 +79,14 @@ export default function ServicesPage() {
     notifyByEmail: true,
     notifyByWhatsapp: true,
     notifyBySms: false,
+    reminderWhatsapp: true,
+    reminderEmail: true,
+    reminderVoice: false,
+    reminderSms: false,
+    reminderHoursEnabled: true,
+    reminderHours: 24,
+    reminderMinutesEnabled: true,
+    reminderMinutes: 120,
   });
 
   const refreshData = useCallback(async () => {
@@ -135,6 +151,14 @@ export default function ServicesPage() {
       notifyByEmail: true,
       notifyByWhatsapp: true,
       notifyBySms: false,
+      reminderWhatsapp: true,
+      reminderEmail: true,
+      reminderVoice: false,
+      reminderSms: false,
+      reminderHoursEnabled: true,
+      reminderHours: 24,
+      reminderMinutesEnabled: true,
+      reminderMinutes: 120,
     });
     setError("");
     setModalOpen(true);
@@ -165,6 +189,14 @@ export default function ServicesPage() {
       notifyByEmail: svc.notifyByEmail !== false,
       notifyByWhatsapp: svc.notifyByWhatsapp !== false,
       notifyBySms: Boolean(svc.notifyBySms),
+      reminderWhatsapp: svc.reminderWhatsapp !== false,
+      reminderEmail: svc.reminderEmail !== false,
+      reminderVoice: Boolean(svc.reminderVoice),
+      reminderSms: Boolean(svc.reminderSms),
+      reminderHoursEnabled: svc.reminderHoursEnabled !== false,
+      reminderHours: svc.reminderHours ?? 24,
+      reminderMinutesEnabled: svc.reminderMinutesEnabled !== false,
+      reminderMinutes: svc.reminderMinutes ?? 120,
     });
     setError("");
     setModalOpen(true);
@@ -211,6 +243,14 @@ export default function ServicesPage() {
       notifyByEmail: form.notifyByEmail,
       notifyByWhatsapp: form.notifyByWhatsapp,
       notifyBySms: form.notifyBySms,
+      reminderWhatsapp: form.reminderWhatsapp,
+      reminderEmail: form.reminderEmail,
+      reminderVoice: form.reminderVoice,
+      reminderSms: form.reminderSms,
+      reminderHoursEnabled: form.reminderHoursEnabled,
+      reminderHours: Number(form.reminderHours) || 24,
+      reminderMinutesEnabled: form.reminderMinutesEnabled,
+      reminderMinutes: Number(form.reminderMinutes) || 120,
     };
 
     try {
@@ -502,6 +542,36 @@ export default function ServicesPage() {
                         📱 SMS
                       </span>
                     )}
+                  </div>
+
+                  <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] font-medium text-neutral-500">Recordatorios:</span>
+                    {s.reminderWhatsapp !== false && (
+                      <span className="inline-flex items-center rounded bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-700 border border-green-200" title="Recordatorio por WhatsApp">
+                        💬 WA
+                      </span>
+                    )}
+                    {s.reminderEmail !== false && (
+                      <span className="inline-flex items-center rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 border border-sky-200" title="Recordatorio por Email">
+                        ✉️ Email
+                      </span>
+                    )}
+                    {s.reminderVoice && (
+                      <span className="inline-flex items-center rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 border border-amber-200" title="Recordatorio por Llamada de Voz IA">
+                        📞 Voz IA
+                      </span>
+                    )}
+                    {s.reminderSms && (
+                      <span className="inline-flex items-center rounded bg-purple-50 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 border border-purple-200" title="Recordatorio por SMS">
+                        📱 SMS
+                      </span>
+                    )}
+                    <span className="text-[10px] text-neutral-400 font-mono">
+                      ({[
+                        s.reminderHoursEnabled !== false ? `${s.reminderHours ?? 24}h` : null,
+                        s.reminderMinutesEnabled !== false ? `${s.reminderMinutes ?? 120}m` : null,
+                      ].filter(Boolean).join(" + ") || "Desactivados"})
+                    </span>
                   </div>
                 </div>
               </div>
@@ -959,6 +1029,118 @@ export default function ServicesPage() {
                 />
                 <span>📱 Confirmar por SMS</span>
               </label>
+            </div>
+          </div>
+
+          {/* Recordatorios automáticos previos a la cita */}
+          <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3.5 space-y-3">
+            <div>
+              <h4 className="text-xs font-semibold text-neutral-800 flex items-center gap-1.5">
+                <span>⏰ Recordatorios automáticos previos a la cita</span>
+              </h4>
+              <p className="text-[11px] text-neutral-500">
+                Selecciona por qué canales y con qué antelación se enviarán los recordatorios automáticos al alumno antes de su cita.
+              </p>
+            </div>
+
+            {/* Canales de recordatorio */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-semibold text-neutral-700 block">Vías de recordatorio:</span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <label className="flex items-center gap-2 text-xs font-medium text-neutral-700 cursor-pointer bg-white p-2 rounded-md border border-neutral-200 hover:border-emerald-400 hover:bg-emerald-50/20 transition shadow-sm">
+                  <input
+                    type="checkbox"
+                    className="rounded border-neutral-300 text-emerald-600 focus:ring-emerald-500"
+                    checked={form.reminderWhatsapp}
+                    onChange={(e) => setForm((f) => ({ ...f, reminderWhatsapp: e.target.checked }))}
+                  />
+                  <span>💬 WhatsApp</span>
+                </label>
+
+                <label className="flex items-center gap-2 text-xs font-medium text-neutral-700 cursor-pointer bg-white p-2 rounded-md border border-neutral-200 hover:border-sky-400 hover:bg-sky-50/20 transition shadow-sm">
+                  <input
+                    type="checkbox"
+                    className="rounded border-neutral-300 text-sky-600 focus:ring-sky-500"
+                    checked={form.reminderEmail}
+                    onChange={(e) => setForm((f) => ({ ...f, reminderEmail: e.target.checked }))}
+                  />
+                  <span>✉️ Email</span>
+                </label>
+
+                <label className="flex items-center gap-2 text-xs font-medium text-neutral-700 cursor-pointer bg-white p-2 rounded-md border border-neutral-200 hover:border-amber-400 hover:bg-amber-50/20 transition shadow-sm">
+                  <input
+                    type="checkbox"
+                    className="rounded border-neutral-300 text-amber-600 focus:ring-amber-500"
+                    checked={form.reminderVoice}
+                    onChange={(e) => setForm((f) => ({ ...f, reminderVoice: e.target.checked }))}
+                  />
+                  <span>📞 Voz IA</span>
+                </label>
+
+                <label className="flex items-center gap-2 text-xs font-medium text-neutral-700 cursor-pointer bg-white p-2 rounded-md border border-neutral-200 hover:border-purple-400 hover:bg-purple-50/20 transition shadow-sm">
+                  <input
+                    type="checkbox"
+                    className="rounded border-neutral-300 text-purple-600 focus:ring-purple-500"
+                    checked={form.reminderSms}
+                    onChange={(e) => setForm((f) => ({ ...f, reminderSms: e.target.checked }))}
+                  />
+                  <span>📱 SMS</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Momentos de aviso previo (horas y minutos) */}
+            <div className="space-y-2 pt-1 border-t border-amber-200/60">
+              <span className="text-[11px] font-semibold text-neutral-700 block">Anticipación de aviso:</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Aviso en horas */}
+                <div className="flex items-center gap-2.5 bg-white p-2.5 rounded-md border border-neutral-200">
+                  <input
+                    type="checkbox"
+                    id="chk-reminder-hours"
+                    className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+                    checked={form.reminderHoursEnabled}
+                    onChange={(e) => setForm((f) => ({ ...f, reminderHoursEnabled: e.target.checked }))}
+                  />
+                  <label htmlFor="chk-reminder-hours" className="text-xs text-neutral-700 cursor-pointer whitespace-nowrap">
+                    Avisar con
+                  </label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="168"
+                    disabled={!form.reminderHoursEnabled}
+                    className="w-16 h-7 text-xs px-2 text-center"
+                    value={form.reminderHours}
+                    onChange={(e) => setForm((f) => ({ ...f, reminderHours: e.target.value }))}
+                  />
+                  <span className="text-xs text-neutral-600 font-medium">horas de antelación</span>
+                </div>
+
+                {/* Aviso en minutos */}
+                <div className="flex items-center gap-2.5 bg-white p-2.5 rounded-md border border-neutral-200">
+                  <input
+                    type="checkbox"
+                    id="chk-reminder-minutes"
+                    className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+                    checked={form.reminderMinutesEnabled}
+                    onChange={(e) => setForm((f) => ({ ...f, reminderMinutesEnabled: e.target.checked }))}
+                  />
+                  <label htmlFor="chk-reminder-minutes" className="text-xs text-neutral-700 cursor-pointer whitespace-nowrap">
+                    Avisar con
+                  </label>
+                  <Input
+                    type="number"
+                    min="5"
+                    max="1440"
+                    disabled={!form.reminderMinutesEnabled}
+                    className="w-16 h-7 text-xs px-2 text-center"
+                    value={form.reminderMinutes}
+                    onChange={(e) => setForm((f) => ({ ...f, reminderMinutes: e.target.value }))}
+                  />
+                  <span className="text-xs text-neutral-600 font-medium">minutos de antelación</span>
+                </div>
+              </div>
             </div>
           </div>
 

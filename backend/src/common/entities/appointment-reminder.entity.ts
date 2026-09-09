@@ -16,14 +16,21 @@ export enum ReminderStatus {
   FAILED = 'failed',
 }
 
+export enum ReminderChannel {
+  WHATSAPP = 'whatsapp',
+  EMAIL = 'email',
+  VOICE = 'voice',
+  SMS = 'sms',
+}
+
 /**
- * Records that a reminder for a given appointment + offset was (or is being)
- * sent. The unique `(appointmentId, offsetLabel)` is the idempotency key: the
+ * Records that a reminder for a given appointment + offset + channel was (or is being)
+ * sent. The unique `(appointmentId, offsetLabel, channel)` is the idempotency key: the
  * reminders cron claims a row before sending, so overlapping ticks — or multiple
  * app instances — never send the same reminder twice.
  */
 @Entity('appointment_reminders')
-@Unique(['appointmentId', 'offsetLabel'])
+@Unique(['appointmentId', 'offsetLabel', 'channel'])
 export class AppointmentReminder {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -39,6 +46,10 @@ export class AppointmentReminder {
   // Which reminder this is, e.g. '24h' or '2h' (see REMINDER_OFFSETS).
   @Column()
   offsetLabel: string;
+
+  // Delivery channel: 'whatsapp', 'email', 'voice', or 'sms'
+  @Column({ default: ReminderChannel.WHATSAPP })
+  channel: string;
 
   @Column({ type: 'enum', enum: ReminderStatus, default: ReminderStatus.PENDING })
   status: ReminderStatus;

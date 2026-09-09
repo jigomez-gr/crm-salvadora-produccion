@@ -31,16 +31,23 @@ export const REMINDER_GRACE_MINUTES = 30;
 export interface ReminderCandidate {
   id: string;
   startsAt: Date;
+  offsets?: ReminderOffset[];
+  channels?: string[];
 }
 
 export interface DueReminder {
   appointmentId: string;
   offsetLabel: string;
+  channel: string;
 }
 
 /** Key used both here and by the service to dedupe against sent reminders. */
-export function reminderKey(appointmentId: string, offsetLabel: string): string {
-  return `${appointmentId}:${offsetLabel}`;
+export function reminderKey(
+  appointmentId: string,
+  offsetLabel: string,
+  channel: string = 'whatsapp',
+): string {
+  return `${appointmentId}:${offsetLabel}:${channel}`;
 }
 
 export function selectDueReminders(
@@ -57,13 +64,27 @@ export function selectDueReminders(
     const minutesUntil = (appt.startsAt.getTime() - nowMs) / 60000;
     if (minutesUntil <= 0) continue; // already started / past
 
-    for (const offset of offsets) {
+    const apptOffsets =
+      appt.offsets && appt.offsets.length > 0 ? appt.offsets : offsets;
+    const apptChannels =
+      appt.channels && appt.channels.length > 0 ? appt.channels : ['whatsapp'];
+
+    for (const offset of apptOffsets) {
       const inBand =
         minutesUntil <= offset.minutes &&
         minutesUntil > offset.minutes - graceMinutes;
       if (!inBand) continue;
-      if (alreadySent.has(reminderKey(appt.id, offset.label))) continue;
-      due.push({ appointmentId: appt.id, offsetLabel: offset.label });
+
+      for (const channel of apptChannels) {
+        if (alreadySent.has(reminderKey(appt.id, offset.label, channel))) {
+          continue;
+        }
+        due.push({
+          appointmentId: appt.id,
+          offsetLabel: offset.label,
+          channel,
+        });
+      }
     }
   }
 
