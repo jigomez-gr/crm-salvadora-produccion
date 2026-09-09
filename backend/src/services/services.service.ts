@@ -44,6 +44,9 @@ export class ServicesService implements OnModuleInit {
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "stripePriceId" character varying;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "stripeProductId" character varying;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "weeklySchedule" jsonb;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "notifyByEmail" boolean DEFAULT true;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "notifyByWhatsapp" boolean DEFAULT true;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "notifyBySms" boolean DEFAULT false;
         `);
       } catch (colErr) {
         console.warn('Auto-migration warning in services table:', colErr);
@@ -766,6 +769,9 @@ export class ServicesService implements OnModuleInit {
       calEventTypeId: dto.calEventTypeId !== undefined ? dto.calEventTypeId : null,
       reminderNotes: dto.reminderNotes !== undefined ? dto.reminderNotes : null,
       price: dto.price !== undefined ? (dto.price === '' ? null : dto.price) : null,
+      notifyByEmail: dto.notifyByEmail !== undefined ? dto.notifyByEmail : true,
+      notifyByWhatsapp: dto.notifyByWhatsapp !== undefined ? dto.notifyByWhatsapp : true,
+      notifyBySms: dto.notifyBySms !== undefined ? dto.notifyBySms : false,
     });
 
     const saved = await this.serviceRepo.save(service);
@@ -820,6 +826,9 @@ export class ServicesService implements OnModuleInit {
     if (dto.calEventTypeId !== undefined) service.calEventTypeId = dto.calEventTypeId;
     if (dto.reminderNotes !== undefined) service.reminderNotes = dto.reminderNotes || null;
     if (dto.isActive !== undefined) service.isActive = dto.isActive;
+    if (dto.notifyByEmail !== undefined) service.notifyByEmail = dto.notifyByEmail;
+    if (dto.notifyByWhatsapp !== undefined) service.notifyByWhatsapp = dto.notifyByWhatsapp;
+    if (dto.notifyBySms !== undefined) service.notifyBySms = dto.notifyBySms;
 
     const saved = await this.serviceRepo.save(service);
     return this.enrichService(saved);

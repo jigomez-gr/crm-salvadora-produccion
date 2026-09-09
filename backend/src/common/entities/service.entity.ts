@@ -126,6 +126,16 @@ export class Service {
   @Column({ default: true })
   isActive: boolean;
 
+  // Notification channels for appointments of this service
+  @Column({ default: true })
+  notifyByEmail: boolean;
+
+  @Column({ default: true })
+  notifyByWhatsapp: boolean;
+
+  @Column({ default: false })
+  notifyBySms: boolean;
+
   // Computed/transient fields for events
   attendeesCount?: number;
   availableSeats?: number | null;

@@ -42,6 +42,9 @@ export interface Service {
   calEventTypeId?: number | null;
   reminderNotes?: string | null;
   isActive?: boolean;
+  notifyByEmail?: boolean;
+  notifyByWhatsapp?: boolean;
+  notifyBySms?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }

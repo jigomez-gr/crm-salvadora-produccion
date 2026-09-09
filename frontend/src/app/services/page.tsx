@@ -32,6 +32,9 @@ interface ServiceFormData {
   calEventTypeId: string;
   reminderNotes: string;
   isActive: boolean;
+  notifyByEmail: boolean;
+  notifyByWhatsapp: boolean;
+  notifyBySms: boolean;
 }
 
 export default function ServicesPage() {
@@ -65,6 +68,9 @@ export default function ServicesPage() {
     calEventTypeId: "",
     reminderNotes: "",
     isActive: true,
+    notifyByEmail: true,
+    notifyByWhatsapp: true,
+    notifyBySms: false,
   });
 
   const refreshData = useCallback(async () => {
@@ -126,6 +132,9 @@ export default function ServicesPage() {
       calEventTypeId: "",
       reminderNotes: "",
       isActive: true,
+      notifyByEmail: true,
+      notifyByWhatsapp: true,
+      notifyBySms: false,
     });
     setError("");
     setModalOpen(true);
@@ -153,6 +162,9 @@ export default function ServicesPage() {
       calEventTypeId: svc.calEventTypeId ? String(svc.calEventTypeId) : "",
       reminderNotes: svc.reminderNotes ?? "",
       isActive: svc.isActive ?? true,
+      notifyByEmail: svc.notifyByEmail !== false,
+      notifyByWhatsapp: svc.notifyByWhatsapp !== false,
+      notifyBySms: Boolean(svc.notifyBySms),
     });
     setError("");
     setModalOpen(true);
@@ -196,6 +208,9 @@ export default function ServicesPage() {
       calEventTypeId: form.calEventTypeId.trim() ? Number(form.calEventTypeId) : undefined,
       reminderNotes: form.reminderNotes.trim() || undefined,
       isActive: form.isActive,
+      notifyByEmail: form.notifyByEmail,
+      notifyByWhatsapp: form.notifyByWhatsapp,
+      notifyBySms: form.notifyBySms,
     };
 
     try {
@@ -469,6 +484,25 @@ export default function ServicesPage() {
                       <span className="line-clamp-2">{s.reminderNotes}</span>
                     </div>
                   )}
+
+                  <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] font-medium text-neutral-500">Avisos:</span>
+                    {s.notifyByEmail !== false && (
+                      <span className="inline-flex items-center rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 border border-emerald-200" title="Confirmación por Email activa">
+                        ✉️ Email
+                      </span>
+                    )}
+                    {s.notifyByWhatsapp !== false && (
+                      <span className="inline-flex items-center rounded bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-700 border border-green-200" title="Confirmación por WhatsApp activa">
+                        💬 WhatsApp
+                      </span>
+                    )}
+                    {s.notifyBySms && (
+                      <span className="inline-flex items-center rounded bg-purple-50 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 border border-purple-200" title="Confirmación por SMS activa">
+                        📱 SMS
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -882,6 +916,50 @@ export default function ServicesPage() {
                 </p>
               </div>
             )}
+          </div>
+
+          {/* Canales de confirmación automáticos al alumno */}
+          <div className="rounded-lg border border-neutral-200 bg-neutral-50/70 p-3.5 space-y-2.5">
+            <div>
+              <h4 className="text-xs font-semibold text-neutral-800">
+                Canales de confirmación y comunicación con el alumno
+              </h4>
+              <p className="text-[11px] text-neutral-500">
+                Selecciona por qué vías recibirá el alumno los avisos de este servicio (aceptación, cancelación, reprogramación o espera de aprobación del profesor).
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+              <label className="flex items-center gap-2 text-xs font-medium text-neutral-700 cursor-pointer bg-white p-2.5 rounded-md border border-neutral-200 hover:border-indigo-400 hover:bg-indigo-50/20 transition shadow-sm">
+                <input
+                  type="checkbox"
+                  className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+                  checked={form.notifyByEmail}
+                  onChange={(e) => setForm((f) => ({ ...f, notifyByEmail: e.target.checked }))}
+                />
+                <span>✉️ Confirmar por Email</span>
+              </label>
+
+              <label className="flex items-center gap-2 text-xs font-medium text-neutral-700 cursor-pointer bg-white p-2.5 rounded-md border border-neutral-200 hover:border-indigo-400 hover:bg-indigo-50/20 transition shadow-sm">
+                <input
+                  type="checkbox"
+                  className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+                  checked={form.notifyByWhatsapp}
+                  onChange={(e) => setForm((f) => ({ ...f, notifyByWhatsapp: e.target.checked }))}
+                />
+                <span>💬 Confirmar por WhatsApp</span>
+              </label>
+
+              <label className="flex items-center gap-2 text-xs font-medium text-neutral-700 cursor-pointer bg-white p-2.5 rounded-md border border-neutral-200 hover:border-indigo-400 hover:bg-indigo-50/20 transition shadow-sm">
+                <input
+                  type="checkbox"
+                  className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+                  checked={form.notifyBySms}
+                  onChange={(e) => setForm((f) => ({ ...f, notifyBySms: e.target.checked }))}
+                />
+                <span>📱 Confirmar por SMS</span>
+              </label>
+            </div>
           </div>
 
           <div className="space-y-2 pt-2">

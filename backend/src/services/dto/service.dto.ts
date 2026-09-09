@@ -95,6 +95,18 @@ export class CreateServiceDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  notifyByEmail?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  notifyByWhatsapp?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  notifyBySms?: boolean;
 }
 
 export class UpdateServiceDto {
@@ -192,4 +204,16 @@ export class UpdateServiceDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  notifyByEmail?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  notifyByWhatsapp?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  notifyBySms?: boolean;
 }

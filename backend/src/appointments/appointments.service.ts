@@ -1042,11 +1042,13 @@ export class AppointmentsService implements OnModuleInit {
         ? 'Online (Videollamada)'
         : 'Presencial en el centro';
 
+      let subject = '';
+      let emailHtml = '';
       let chatMessageText = '';
 
       if (decision === 'pending_approval') {
-        const subject = `📋 Solicitud de cita recibida: ${appt.service} - ${formattedDate}`;
-        const emailHtml = `
+        subject = `📋 Solicitud de cita recibida: ${appt.service} - ${formattedDate}`;
+        emailHtml = `
           <div style="font-family: Arial, sans-serif; color: #1f2937; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 10px; padding: 24px; background-color: #ffffff;">
             <div style="text-align: center; margin-bottom: 20px; border-bottom: 1px solid #f3f4f6; padding-bottom: 16px;">
               <h2 style="color: #2563eb; margin: 0; font-size: 22px;">Solicitud de Cita Recibida</h2>
@@ -1072,30 +1074,9 @@ export class AppointmentsService implements OnModuleInit {
         `;
 
         chatMessageText = `¡Hola ${contact.name || ''}! Hemos recibido tu solicitud para *${appt.service}* el *${formattedDate}* a las *${formattedTime}*. Se encuentra pendiente de confirmación por el profesor (${effectiveManager}). En cuanto se confirme recibirás los detalles.`;
-
-        if (contact.email) {
-          this.logger.log(`[Email] Sending pending_approval email to ${contact.email} for appt ${appt.id}...`);
-          const res = await this.emailService
-            .sendNotification(
-              contact.email,
-              contact.name,
-              subject,
-              emailHtml,
-              chatMessageText,
-              undefined,
-              contact.id,
-            )
-            .catch((err) => {
-              this.logger.error(`[Email] Error sending pending_approval email to ${contact.email}: ${err}`);
-              return { ok: false, error: String(err) };
-            });
-          this.logger.log(`[Email] Result for ${contact.email}: ${JSON.stringify(res)}`);
-        } else {
-          this.logger.warn(`[Email] Contact ${contact.id} (${contact.name}) has NO email. Cannot send pending_approval notification.`);
-        }
       } else if (decision === 'accepted') {
         const isResched = isRescheduled || Boolean(appt.notes && /reprogramad/i.test(appt.notes));
-        const subject = isResched
+        subject = isResched
           ? `🔄 Cita reprogramada: ${appt.service} - ${formattedDate}`
           : `✅ Confirmación de tu cita: ${appt.service} - ${formattedDate}`;
         const headerTitle = isResched ? '¡Cita reprogramada con éxito!' : '¡Tu cita está confirmada!';
@@ -1134,7 +1115,7 @@ export class AppointmentsService implements OnModuleInit {
           ? `<p style="margin: 8px 0; font-size: 13px; color: #4b5563; line-height: 1.4;"><strong>Detalles de la sesión / actividad:</strong> ${serviceEntity.description}</p>`
           : '';
 
-        const emailHtml = `
+        emailHtml = `
           <div style="font-family: Arial, sans-serif; color: #1f2937; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 10px; padding: 24px; background-color: #ffffff;">
             <div style="text-align: center; margin-bottom: 20px; border-bottom: 1px solid #f3f4f6; padding-bottom: 16px;">
               <h2 style="color: #10b981; margin: 0; font-size: 22px;">${headerTitle}</h2>
@@ -1173,51 +1154,12 @@ export class AppointmentsService implements OnModuleInit {
           : 'Presencial en Club Social Parque Granada (C/ Holanda 1, Fuenlabrada)';
 
         chatMessageText = `¡Hola ${contact.name || ''}! Te confirmamos que tu cita para *${appt.service}* ha quedado formalizada.\n\n📅 *Fecha:* ${formattedDate}\n⏰ *Hora:* ${formattedTime}\n📍 *Modalidad:* ${locationWhatsApp}\n👤 *Responsable:* ${effectiveManager}${reminderWhatsApp}\n\n¡Muchas gracias y nos vemos pronto!`;
-
-        if (contact.email) {
-          this.logger.log(`[Email] Sending accepted confirmation email to ${contact.email} for appt ${appt.id}...`);
-          const res = await this.emailService
-            .sendNotification(
-              contact.email,
-              contact.name,
-              subject,
-              emailHtml,
-              chatMessageText,
-              undefined,
-              contact.id,
-            )
-            .catch((err) => {
-              this.logger.error(`[Email] Error sending accepted email to ${contact.email}: ${err}`);
-              return { ok: false, error: String(err) };
-            });
-          this.logger.log(`[Email] Result for ${contact.email}: ${JSON.stringify(res)}`);
-        } else {
-          this.logger.warn(`[Email] Contact ${contact.id} (${contact.name}) has NO email. Cannot send accepted confirmation email.`);
-        }
-
-        if (contact.phone) {
-          const config = await this.agentsConfigService
-            .findByKey('booking')
-            .catch(() => null);
-          const fromNumber =
-            config?.whatsappPhoneNumber ||
-            process.env.YCLOUD_FROM_PHONE ||
-            '+34600000000';
-          await this.ycloudClient
-            .sendTextMessage(
-              fromNumber,
-              contact.phone,
-              chatMessageText,
-              config?.ycloudApiKey,
-            )
-            .catch(() => null);
-        }
       } else if (decision === 'reschedule_requested') {
         const reasonText =
           rejectionReason ||
           'El horario solicitado no está disponible en este momento.';
-        const subject = `🔄 Solicitud de otra fecha para tu cita de ${appt.service}`;
-        const emailHtml = `
+        subject = `🔄 Solicitud de otra fecha para tu cita de ${appt.service}`;
+        emailHtml = `
           <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 24px;">
             <h2 style="color: #f59e0b; margin-top: 0;">Solicitud de otra fecha / horario</h2>
             <p>Hola <strong>${contact.name}</strong>,</p>
@@ -1234,43 +1176,11 @@ export class AppointmentsService implements OnModuleInit {
         `;
 
         chatMessageText = `Hola ${contact.name}. Para tu solicitud de *${appt.service}* el *${formattedDate}* a las *${formattedTime}*, el terapeuta/responsable (${managerName}) te solicita cambiar de fecha u horario.\n\n*Motivo:* ${reasonText}${proposedTimes ? `\n*Horarios sugeridos:* ${proposedTimes}` : ''}\n\nPor favor, responde a este mensaje indicándome qué otro día y hora te vendría mejor para intentar formalizarla.`;
-
-        if (contact.email) {
-          await this.emailService
-            .sendNotification(
-              contact.email,
-              contact.name,
-              subject,
-              emailHtml,
-              chatMessageText,
-              undefined,
-              contact.id,
-            )
-            .catch(() => null);
-        }
-
-        if (contact.phone) {
-          const config = await this.agentsConfigService
-            .findByKey('booking')
-            .catch(() => null);
-          const fromNumber =
-            config?.whatsappPhoneNumber ||
-            process.env.YCLOUD_FROM_PHONE ||
-            '+34600000000';
-          await this.ycloudClient
-            .sendTextMessage(
-              fromNumber,
-              contact.phone,
-              chatMessageText,
-              config?.ycloudApiKey,
-            )
-            .catch(() => null);
-        }
       } else if (decision === 'cancelled') {
         const reasonText =
           rejectionReason || appt.cancellationReason || 'Cancelación solicitada por el alumno o por el centro.';
-        const subject = `❌ Cancelación de tu cita: ${appt.service} - ${formattedDate}`;
-        const emailHtml = `
+        subject = `❌ Cancelación de tu cita: ${appt.service} - ${formattedDate}`;
+        emailHtml = `
           <div style="font-family: Arial, sans-serif; color: #1f2937; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 10px; padding: 24px; background-color: #ffffff;">
             <div style="text-align: center; margin-bottom: 20px; border-bottom: 1px solid #f3f4f6; padding-bottom: 16px;">
               <h2 style="color: #ef4444; margin: 0; font-size: 22px;">Cita Cancelada</h2>
@@ -1293,44 +1203,12 @@ export class AppointmentsService implements OnModuleInit {
         `;
 
         chatMessageText = `Hola ${contact.name || ''}. Te confirmamos que tu cita para *${appt.service}* del *${formattedDate}* a las *${formattedTime}* ha sido cancelada.\n\n📝 *Motivo:* ${reasonText}\n\nSi deseas reprogramar o reservar en otro horario, indícanoslo y te ayudamos encantados.`;
-
-        if (contact.email) {
-          await this.emailService
-            .sendNotification(
-              contact.email,
-              contact.name,
-              subject,
-              emailHtml,
-              chatMessageText,
-              undefined,
-              contact.id,
-            )
-            .catch(() => null);
-        }
-
-        if (contact.phone) {
-          const config = await this.agentsConfigService
-            .findByKey('booking')
-            .catch(() => null);
-          const fromNumber =
-            config?.whatsappPhoneNumber ||
-            process.env.YCLOUD_FROM_PHONE ||
-            '+34600000000';
-          await this.ycloudClient
-            .sendTextMessage(
-              fromNumber,
-              contact.phone,
-              chatMessageText,
-              config?.ycloudApiKey,
-            )
-            .catch(() => null);
-        }
       } else {
         const reasonText =
           rejectionReason ||
           'El horario solicitado no está disponible en este momento.';
-        const subject = `Información sobre tu solicitud de cita de ${appt.service}`;
-        const emailHtml = `
+        subject = `Información sobre tu solicitud de cita de ${appt.service}`;
+        emailHtml = `
           <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 24px;">
             <h2 style="color: #ef4444; margin-top: 0;">Solicitud de cita no confirmada</h2>
             <p>Hola <strong>${contact.name}</strong>,</p>
@@ -1342,9 +1220,18 @@ export class AppointmentsService implements OnModuleInit {
         `;
 
         chatMessageText = `Hola ${contact.name}. Lamentamos comunicarte que tu solicitud para *${appt.service}* el *${formattedDate}* a las *${formattedTime}* no ha podido ser confirmada.\n\nMotivo: ${reasonText}\n\nPor favor, indícanos si deseas consultar otro día u horario para agendarla.`;
+      }
 
+      // Notification channel preferences configured per Service (defaults: Email=true, WhatsApp=true, SMS=false)
+      const shouldEmail = serviceEntity ? serviceEntity.notifyByEmail !== false : true;
+      const shouldWhatsapp = serviceEntity ? serviceEntity.notifyByWhatsapp !== false : true;
+      const shouldSms = serviceEntity ? Boolean(serviceEntity.notifyBySms) : false;
+
+      // 1. Dispatch Email notification if enabled for this service
+      if (shouldEmail) {
         if (contact.email) {
-          await this.emailService
+          this.logger.log(`[Email] Sending ${decision} email to ${contact.email} for appt ${appt.id}...`);
+          const res = await this.emailService
             .sendNotification(
               contact.email,
               contact.name,
@@ -1354,9 +1241,20 @@ export class AppointmentsService implements OnModuleInit {
               undefined,
               contact.id,
             )
-            .catch(() => null);
+            .catch((err) => {
+              this.logger.error(`[Email] Error sending ${decision} email to ${contact.email}: ${err}`);
+              return { ok: false, error: String(err) };
+            });
+          this.logger.log(`[Email] Result for ${contact.email}: ${JSON.stringify(res)}`);
+        } else {
+          this.logger.warn(`[Email] Contact ${contact.id} (${contact.name}) has NO email. Cannot send ${decision} notification.`);
         }
+      } else {
+        this.logger.log(`[Email] Service "${appt.service}" has notifyByEmail=false. Skipping email notification.`);
+      }
 
+      // 2. Dispatch WhatsApp notification if enabled for this service
+      if (shouldWhatsapp) {
         if (contact.phone) {
           const config = await this.agentsConfigService
             .findByKey('booking')
@@ -1372,8 +1270,14 @@ export class AppointmentsService implements OnModuleInit {
               chatMessageText,
               config?.ycloudApiKey,
             )
-            .catch(() => null);
+            .catch((err) => {
+              this.logger.warn(`[WhatsApp] Error sending WhatsApp to ${contact.phone} for appt ${appt.id}: ${err}`);
+            });
+        } else {
+          this.logger.warn(`[WhatsApp] Contact ${contact.id} (${contact.name}) has NO phone. Cannot send WhatsApp notification.`);
         }
+      } else {
+        this.logger.log(`[WhatsApp] Service "${appt.service}" has notifyByWhatsapp=false. Skipping WhatsApp notification.`);
       }
 
       // Sincronizar y registrar el mensaje en la conversación del CRM / Inbox
@@ -1429,8 +1333,8 @@ export class AppointmentsService implements OnModuleInit {
         smsText = `Hola ${contact.name || ''}, lamentamos informarte de que tu solicitud para ${appt.service} el ${formattedDate} no ha podido ser confirmada.`;
       }
 
-      // Direct Zadarma SMS dispatch if enabled and contact has phone
-      if (contact.phone && this.zadarmaSms) {
+      // Direct Zadarma SMS dispatch if enabled for this service and contact has phone
+      if (shouldSms && contact.phone && this.zadarmaSms) {
         try {
           const vapiAcc = await this.appointmentsRepo.manager
             .getRepository(VapiAccount)
