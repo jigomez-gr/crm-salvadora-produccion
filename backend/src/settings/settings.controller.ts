@@ -112,12 +112,12 @@ export class SettingsController {
 
   /**
    * Reset CRM test environment:
-   * 1. Resets all contacts to 'lead' & 'new' pipeline stage, removing student status
+   * 1. Deletes all contacts
    * 2. Deletes all conversations & messages
    * 3. Deletes all appointments & reminders
    * 4. Deletes all calls & zadarma sms logs
    * 5. Deletes all audit records
-   * 6. Funnel data is reset as a result of contacts reset and appointments deletion
+   * 6. Funnel data is reset as a result of deleting contacts and appointments
    * Accessible by Admin via session JWT or x-admin-password header.
    */
   @Post('reset-test-data')

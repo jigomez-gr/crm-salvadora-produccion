@@ -8,15 +8,15 @@ echo       CRM SALVADORA - REINICIAR ENTORNO PARA PRUEBAS (DGX SPARC)
 echo =====================================================================
 echo.
 echo Este script ejecuta las siguientes acciones en la base de datos (DGX SPARC):
-echo   1. Inicializa todos los contactos a LEADS y sin ser alumnos de yoga.
+echo   1. Elimina por completo todos los contactos.
 echo   2. Elimina por completo todas las conversaciones y mensajes de chat.
 echo   3. Elimina todas las citas y recordatorios de la agenda.
 echo   4. Elimina todas las llamadas telefonicas y registros SMS.
 echo   5. Elimina todos los registros de auditoria.
 echo   6. Resetea a cero los datos del embudo de conversion.
 echo.
-echo NOTA: Los contactos NO se borran; se conservan sus nombres y telefonos,
-echo pero vuelven a estado inicial (lead/nuevo).
+echo NOTA: Todos los contactos y datos seran eliminados por completo
+echo para dejar el entorno de pruebas limpio a cero.
 echo =====================================================================
 echo.
 
@@ -79,7 +79,7 @@ goto :END
 :SUCCESS
 echo =====================================================================
 echo [EXITO] Entorno de pruebas REINICIADO correctamente en DGX SPARC:
-echo   - Contactos reseteados a leads (sin citas ni condicion de alumno).
+echo   - Contactos eliminados al 100%%.
 echo   - Conversaciones y mensajes borrados al 100%%.
 echo   - Citas y recordatorios borrados al 100%%.
 echo   - Registro de llamadas y SMS borrados al 100%%.

@@ -103,7 +103,7 @@ export class SettingsService {
 
   /**
    * Reset the CRM for testing:
-   * 1. Resets all contacts to 'lead' and 'new' pipeline stage, removing student status
+   * 1. Deletes all contacts
    * 2. Deletes all conversations & messages (including mastra and email messages)
    * 3. Deletes all appointments & reminders
    * 4. Deletes all calls & zadarma sms logs
@@ -114,6 +114,7 @@ export class SettingsService {
     ok: true;
     contactsReset: number;
     deleted: {
+      contacts: boolean;
       conversations: boolean;
       appointments: boolean;
       calls: boolean;
@@ -159,17 +160,8 @@ export class SettingsService {
       // 4. Delete audit records
       await m.query('DELETE FROM audit_logs');
 
-      // 5. Reset all contacts: lead, new pipeline stage, clear student status
-      await m.query(`
-        UPDATE contacts
-        SET status = 'lead',
-            "pipelineStage" = 'new',
-            "boardPosition" = 0,
-            "isStudent" = false,
-            "studentModality" = NULL,
-            "studentSchedule" = NULL,
-            "studentEnrolledAt" = NULL
-      `);
+      // 5. Delete all contacts
+      await m.query('DELETE FROM contacts');
 
       // 6. Guarantee schedule sanitization (16:30 -> 16:00) across services, agent configs and knowledge
       await m.query(`
@@ -208,6 +200,7 @@ export class SettingsService {
       ok: true,
       contactsReset: parseInt(contactsCount[0]?.count || '0', 10),
       deleted: {
+        contacts: true,
         conversations: true,
         appointments: true,
         calls: true,

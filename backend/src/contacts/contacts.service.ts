@@ -546,6 +546,15 @@ export class ContactsService {
 
   async remove(id: string): Promise<void> {
     const contact = await this.findOne(id);
+    try {
+      await this.contactsRepo.query(
+        `UPDATE calls SET "contactId" = NULL WHERE "contactId" = $1;
+         UPDATE zadarma_sms_respuesta SET contact_id = NULL WHERE contact_id = $1;`,
+        [id],
+      );
+    } catch {
+      // Non-fatal if tables don't exist
+    }
     await this.contactsRepo.remove(contact);
     this.events.emit('contact.updated', { id, deleted: true });
   }

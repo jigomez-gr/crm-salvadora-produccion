@@ -54,13 +54,14 @@ describe('SettingsService - resetTestData', () => {
     service = moduleRef.get<SettingsService>(SettingsService);
   });
 
-  it('resets contacts to lead/new, clears student fields, and deletes test data', async () => {
+  it('deletes contacts and deletes test data', async () => {
     const res = await service.resetTestData();
 
     expect(res).toEqual({
       ok: true,
       contactsReset: 15,
       deleted: {
+        contacts: true,
         conversations: true,
         appointments: true,
         calls: true,

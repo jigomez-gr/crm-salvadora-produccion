@@ -62,6 +62,17 @@ async function forwardRequest(req: NextRequest, { params }: { params: Promise<{ 
       resHeaders.set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
       resHeaders.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept");
 
+      // HTTP status 204 (No Content), 205 (Reset Content), and 304 (Not Modified)
+      // MUST NOT include a response body in the Web API Response constructor,
+      // otherwise Node.js/Undici throws "TypeError: Response constructor: Invalid response status code 204".
+      if (res.status === 204 || res.status === 205 || res.status === 304) {
+        return new NextResponse(null, {
+          status: res.status,
+          statusText: res.statusText,
+          headers: resHeaders,
+        });
+      }
+
       const resBody = await res.arrayBuffer();
 
       return new NextResponse(resBody, {
