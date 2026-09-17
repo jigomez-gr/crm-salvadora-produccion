@@ -11,6 +11,7 @@ import { AuthModule } from '../auth/auth.module';
 import { KnowledgeModule } from '../knowledge/knowledge.module';
 import { SettingsModule } from '../settings/settings.module';
 import { ServicesModule } from '../services/services.module';
+import { CategoriesModule } from '../categories/categories.module';
 import { AppointmentsModule } from '../appointments/appointments.module';
 import { EmailModule } from '../email/email.module';
 import { UsersModule } from '../users/users.module';
@@ -28,6 +29,7 @@ import { VapiModule } from '../vapi/vapi.module';
     KnowledgeModule,
     SettingsModule,
     ServicesModule,
+    CategoriesModule,
     AppointmentsModule,
     EmailModule,
     UsersModule,

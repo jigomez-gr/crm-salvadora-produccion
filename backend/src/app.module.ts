@@ -21,6 +21,10 @@ import { EmailMessage } from './common/entities/email-message.entity';
 import { PaymentAccount } from './common/entities/payment-account.entity';
 import { CalcomAccount } from './common/entities/calcom-account.entity';
 import { Service } from './common/entities/service.entity';
+import { ServiceCategory } from './common/entities/service-category.entity';
+import { MediaAsset } from './common/entities/media-asset.entity';
+import { CategoriesModule } from './categories/categories.module';
+import { MediaModule } from './media/media.module';
 import { Call } from './common/entities/call.entity';
 import { VapiAccount } from './common/entities/vapi-account.entity';
 import { ZadarmaSmsLog } from './sms/zadarma-sms-log.entity';
@@ -62,6 +66,8 @@ import { AgentsModule } from './agents/agents.module';
         Contact,
         Appointment,
         Service,
+        ServiceCategory,
+        MediaAsset,
         AgentConfig,
         Message,
         Conversation,
@@ -93,6 +99,8 @@ import { AgentsModule } from './agents/agents.module';
     ContactsModule,
     AppointmentsModule,
     ServicesModule,
+    CategoriesModule,
+    MediaModule,
     ConversationsModule,
     DashboardModule,
     ReportsModule,

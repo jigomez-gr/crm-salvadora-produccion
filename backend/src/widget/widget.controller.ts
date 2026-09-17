@@ -18,6 +18,7 @@ import { MessagesService, toMessageView } from '../conversations/messages.servic
 import { ContactsService } from '../contacts/contacts.service';
 import { SettingsService } from '../settings/settings.service';
 import { ServicesService } from '../services/services.service';
+import { CategoriesService } from '../categories/categories.service';
 import { AnalizaIaService } from '../appointments/analiza-ia.service';
 import { EmailService } from '../email/email.service';
 import { UsersService } from '../users/users.service';
@@ -84,6 +85,7 @@ export class WidgetController {
     private readonly contactsService: ContactsService,
     private readonly settingsService: SettingsService,
     private readonly servicesService: ServicesService,
+    private readonly categoriesService: CategoriesService,
     private readonly analizaIaService: AnalizaIaService,
     private readonly emailService: EmailService,
     private readonly usersService: UsersService,
@@ -153,6 +155,7 @@ export class WidgetController {
   @Get('services')
   async getPublicServices() {
     const dbServices = await this.servicesService.findAll(true).catch(() => []);
+    const dbCategories = await this.categoriesService.findAll(true).catch(() => []);
     const [agentConfig] = await this.agentsConfigService.findAll().catch(() => []);
     const branding = await this.settingsService.getBranding().catch(() => null);
     const whatsappPhone = agentConfig?.whatsappNumber || '34695172625';
@@ -165,6 +168,13 @@ export class WidgetController {
       brandColor: branding?.brandColor || '#800020',
       logoUrl: branding?.logoUrl || null,
       whatsappNumber: whatsappPhone,
+      categories: dbCategories.map((c) => ({
+        id: c.id,
+        code: c.code,
+        name: c.name,
+        description: c.description,
+        displayOrder: c.displayOrder,
+      })),
       services: dbServices.map((s) => {
         const isYoga = /yoga/i.test(s.name);
         const isIaido = /iaido|iaidō/i.test(s.name);
@@ -185,6 +195,12 @@ export class WidgetController {
           externalPaymentUrl: s.externalPaymentUrl,
           allowedModalities: s.allowedModalities || ['in_person'],
           requiresApproval: Boolean(s.requiresApproval),
+          categoryId: s.categoryId,
+          categoryCode: s.category?.code || null,
+          categoryName: s.category?.name || null,
+          categoryDescription: s.category?.description || null,
+          flyerPath: s.flyerPath,
+          flyerUrl: s.flyerUrl,
           firstClassFree: isYoga || isIaido,
           freeForYogaStudents: isMeditacion,
           whatsappBookingUrl: `https://wa.me/${cleanWaPhone}?text=${encodeURIComponent(

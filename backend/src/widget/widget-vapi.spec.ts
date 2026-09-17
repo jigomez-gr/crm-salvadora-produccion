@@ -32,6 +32,7 @@ describe('WidgetController - VAPI Outbound Call Integration', () => {
       {} as any, // contactsService
       {} as any, // settingsService
       {} as any, // servicesService
+      {} as any, // categoriesService
       {} as any, // analizaIaService
       {} as any, // emailService
       {} as any, // usersService

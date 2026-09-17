@@ -47,6 +47,14 @@ export class CreateServiceDto {
 
   @IsString()
   @IsOptional()
+  flyerPath?: string;
+
+  @IsUUID()
+  @IsOptional()
+  categoryId?: string;
+
+  @IsString()
+  @IsOptional()
   eventStartDate?: string;
 
   @IsString()
@@ -168,6 +176,14 @@ export class UpdateServiceDto {
   @IsString()
   @IsOptional()
   flyerUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  flyerPath?: string;
+
+  @IsUUID()
+  @IsOptional()
+  categoryId?: string;
 
   @IsString()
   @IsOptional()

@@ -2,10 +2,15 @@ import { Injectable, NotFoundException, ConflictException, OnModuleInit } from '
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository, ILike } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Service, ServiceType } from '../common/entities/service.entity';
+import { ServiceCategory } from '../common/entities/service-category.entity';
 import { User, UserRole } from '../common/entities/user.entity';
 import { Appointment, AppointmentStatus } from '../common/entities/appointment.entity';
 import { AgentConfig } from '../common/entities/agent-config.entity';
+import { KnowledgeDocument } from '../common/entities/knowledge-document.entity';
+import { KnowledgeChunk } from '../common/entities/knowledge-chunk.entity';
+import { AUDIT_EVENT } from '../audit/audit.types';
 import { CreateServiceDto, UpdateServiceDto } from './dto/service.dto';
 import { parseWeeklyScheduleFromText } from './schedule-parser';
 
@@ -14,12 +19,19 @@ export class ServicesService implements OnModuleInit {
   constructor(
     @InjectRepository(Service)
     private readonly serviceRepo: Repository<Service>,
+    @InjectRepository(ServiceCategory)
+    private readonly categoryRepo: Repository<ServiceCategory>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     @InjectRepository(Appointment)
     private readonly appointmentRepo: Repository<Appointment>,
     @InjectRepository(AgentConfig)
     private readonly agentConfigRepo: Repository<AgentConfig>,
+    @InjectRepository(KnowledgeDocument)
+    private readonly knowledgeDocRepo: Repository<KnowledgeDocument>,
+    @InjectRepository(KnowledgeChunk)
+    private readonly knowledgeChunkRepo: Repository<KnowledgeChunk>,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -55,6 +67,36 @@ export class ServicesService implements OnModuleInit {
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "reminderHours" integer DEFAULT 24;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "reminderMinutesEnabled" boolean DEFAULT true;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "reminderMinutes" integer DEFAULT 120;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "flyerPath" text;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "categoryId" uuid;
+
+          CREATE TABLE IF NOT EXISTS service_categories (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            code character varying(100) UNIQUE NOT NULL,
+            name character varying(200) NOT NULL,
+            description text,
+            "displayOrder" integer DEFAULT 0,
+            "isActive" boolean DEFAULT true,
+            "createdAt" timestamptz DEFAULT now(),
+            "updatedAt" timestamptz DEFAULT now()
+          );
+
+          CREATE TABLE IF NOT EXISTS media_assets (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            key character varying(100) UNIQUE NOT NULL,
+            title character varying(255) NOT NULL,
+            "mediaType" character varying(50) DEFAULT 'video',
+            "mimeType" character varying(100) NOT NULL,
+            "physicalPath" text NOT NULL,
+            "publicUrl" text,
+            "fileSizeBytes" bigint,
+            "serviceId" uuid,
+            metadata jsonb DEFAULT '{}',
+            "isActive" boolean DEFAULT true,
+            "displayOrder" integer DEFAULT 0,
+            "createdAt" timestamptz DEFAULT now(),
+            "updatedAt" timestamptz DEFAULT now()
+          );
         `);
       } catch (colErr) {
         console.warn('Auto-migration warning in services table:', colErr);
@@ -679,6 +721,125 @@ export class ServicesService implements OnModuleInit {
           END IF;
         END $$;
       `).catch(() => null);
+
+      // 7. Ensure default categories exist and link existing services
+      try {
+        const defaultCategories = [
+          {
+            code: 'longevidad_artes',
+            name: 'Longevidad (Bienestar Experience) & Iaidō',
+            description: 'ACTIVIDADES DESTACADAS · CLUB SOCIAL PARQUE GRANADA & CENTRO',
+            displayOrder: 1,
+          },
+          {
+            code: 'yoga_meditacion',
+            name: 'Clases Regulares de Yoga y Meditación',
+            description: 'ESCUELA SALVADORA CONESA · CLASES REGULARES\nHatha Yoga Terapéutico, Meditaciones y Terapias',
+            displayOrder: 2,
+          },
+          {
+            code: 'talleres_eventos',
+            name: 'Talleres Vivenciales, Retiros y Eventos',
+            description: 'ENCUENTROS, RETIROS Y EXPERIENCIAS TRANSFORMADORAS',
+            displayOrder: 3,
+          },
+          {
+            code: 'salud_terapeutica',
+            name: 'Salud Terapéutica y Sesiones Individuales',
+            description: 'CONSULTAS PERSONALIZADAS Y ACOMPAÑAMIENTO INDIVIDUAL',
+            displayOrder: 4,
+          },
+        ];
+
+        for (const catData of defaultCategories) {
+          let cat = await this.categoryRepo.findOne({ where: { code: catData.code } });
+          if (!cat) {
+            await this.categoryRepo.save(this.categoryRepo.create(catData));
+          }
+        }
+
+        const catLongevidad = await this.categoryRepo.findOne({ where: { code: 'longevidad_artes' } });
+        const catYoga = await this.categoryRepo.findOne({ where: { code: 'yoga_meditacion' } });
+        const catEventos = await this.categoryRepo.findOne({ where: { code: 'talleres_eventos' } });
+        const catSalud = await this.categoryRepo.findOne({ where: { code: 'salud_terapeutica' } });
+
+        const currentServices = await this.serviceRepo.find();
+        for (const s of currentServices) {
+          let changed = false;
+          const lower = s.name.toLowerCase();
+
+          // Link category
+          if (!s.categoryId) {
+            if (lower.includes('bienestar') || lower.includes('iaido') || lower.includes('iaidō')) {
+              s.categoryId = catLongevidad?.id || null;
+              changed = true;
+            } else if (lower.includes('gestalt')) {
+              s.categoryId = catSalud?.id || null;
+              changed = true;
+            } else if (
+              s.serviceType === ServiceType.EVENT ||
+              lower.includes('gong') ||
+              lower.includes('puja') ||
+              lower.includes('constelaci') ||
+              lower.includes('ayuno') ||
+              lower.includes('mujeres')
+            ) {
+              s.categoryId = catEventos?.id || null;
+              changed = true;
+            } else {
+              s.categoryId = catYoga?.id || null;
+              changed = true;
+            }
+          }
+
+          // Link flyerPath and flyerUrl
+          if (!s.flyerPath) {
+            if (lower.includes('hatha') || lower.includes('yoga')) {
+              s.flyerPath = 'public/flyers/yoga.jpeg';
+              s.flyerUrl = s.flyerUrl || '/flyers/yoga.jpeg';
+              changed = true;
+            } else if (lower.includes('meditaci')) {
+              s.flyerPath = 'public/flyers/meditacion.jpeg';
+              s.flyerUrl = s.flyerUrl || '/flyers/meditacion.jpeg';
+              changed = true;
+            } else if (lower.includes('bienestar')) {
+              s.flyerPath = 'public/flyers/bienestar.png';
+              s.flyerUrl = s.flyerUrl || '/flyers/bienestar.png';
+              changed = true;
+            } else if (lower.includes('iaido') || lower.includes('iaidō')) {
+              s.flyerPath = 'public/flyers/iaido.jpg';
+              s.flyerUrl = s.flyerUrl || '/flyers/iaido.jpg';
+              changed = true;
+            } else if (lower.includes('gestalt')) {
+              s.flyerPath = 'public/flyers/gestalt.jpeg';
+              s.flyerUrl = s.flyerUrl || '/flyers/gestalt.jpeg';
+              changed = true;
+            } else if (lower.includes('gong')) {
+              s.flyerPath = 'public/flyers/banogong.jpeg';
+              s.flyerUrl = s.flyerUrl || '/flyers/banogong.jpeg';
+              changed = true;
+            } else if (lower.includes('constelaci')) {
+              s.flyerPath = 'public/flyers/constalaciones.jpeg';
+              s.flyerUrl = s.flyerUrl || '/flyers/constalaciones.jpeg';
+              changed = true;
+            } else if (lower.includes('ayuno')) {
+              s.flyerPath = 'public/flyers/ayuno.jpeg';
+              s.flyerUrl = s.flyerUrl || '/flyers/ayuno.jpeg';
+              changed = true;
+            } else if (lower.includes('mujeres')) {
+              s.flyerPath = 'public/flyers/encuentros_mujeres.jpeg';
+              s.flyerUrl = s.flyerUrl || '/flyers/encuentros_mujeres.jpeg';
+              changed = true;
+            }
+          }
+
+          if (changed) {
+            await this.serviceRepo.save(s);
+          }
+        }
+      } catch (catErr) {
+        console.warn('Notice seeding categories or linking services:', catErr);
+      }
     } catch {
       // Non-fatal on init
     }
@@ -716,6 +877,7 @@ export class ServicesService implements OnModuleInit {
     const qb = this.serviceRepo
       .createQueryBuilder('s')
       .leftJoinAndSelect('s.manager', 'manager')
+      .leftJoinAndSelect('s.category', 'category')
       .orderBy('s.name', 'ASC');
 
     if (activeOnly) {
@@ -729,7 +891,7 @@ export class ServicesService implements OnModuleInit {
   async findOne(id: string): Promise<Service> {
     const service = await this.serviceRepo.findOne({
       where: { id },
-      relations: ['manager'],
+      relations: ['manager', 'category'],
     });
     if (!service) {
       throw new NotFoundException(`Servicio ${id} no encontrado`);
@@ -740,7 +902,7 @@ export class ServicesService implements OnModuleInit {
   async findByName(name: string): Promise<Service | null> {
     const service = await this.serviceRepo.findOne({
       where: { name },
-      relations: ['manager'],
+      relations: ['manager', 'category'],
     });
     if (!service) return null;
     return this.enrichService(service);
@@ -788,6 +950,9 @@ export class ServicesService implements OnModuleInit {
       reminderHours: dto.reminderHours !== undefined ? dto.reminderHours : 24,
       reminderMinutesEnabled: dto.reminderMinutesEnabled !== undefined ? dto.reminderMinutesEnabled : true,
       reminderMinutes: dto.reminderMinutes !== undefined ? dto.reminderMinutes : 120,
+      categoryId: dto.categoryId || null,
+      flyerPath: dto.flyerPath || null,
+      flyerUrl: dto.flyerUrl || null,
     });
 
     const saved = await this.serviceRepo.save(service);
@@ -853,15 +1018,81 @@ export class ServicesService implements OnModuleInit {
     if (dto.reminderHours !== undefined) service.reminderHours = dto.reminderHours;
     if (dto.reminderMinutesEnabled !== undefined) service.reminderMinutesEnabled = dto.reminderMinutesEnabled;
     if (dto.reminderMinutes !== undefined) service.reminderMinutes = dto.reminderMinutes;
+    if (dto.categoryId !== undefined) service.categoryId = dto.categoryId || null;
+    if (dto.flyerPath !== undefined) service.flyerPath = dto.flyerPath || null;
+    if (dto.flyerUrl !== undefined) service.flyerUrl = dto.flyerUrl || null;
 
     const saved = await this.serviceRepo.save(service);
     return this.enrichService(saved);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, actor?: { id?: string | null; email?: string | null }): Promise<void> {
     const service = await this.findOne(id);
-    // Soft-deactivate or delete
-    service.isActive = false;
-    await this.serviceRepo.save(service);
+    if (!service) {
+      throw new NotFoundException(`Servicio ${id} no encontrado`);
+    }
+
+    const serviceName = service.name;
+
+    // 1. Delete all associated appointments
+    const appts = await this.appointmentRepo.find({
+      where: [
+        { serviceId: service.id },
+        { service: serviceName },
+      ],
+    });
+    const apptCount = appts.length;
+    if (apptCount > 0) {
+      await this.appointmentRepo.remove(appts);
+    }
+
+    // 2. Remove service from all agent configs (and clean customInstructions if mentioning service)
+    const agentConfigs = await this.agentConfigRepo.find();
+    for (const agent of agentConfigs) {
+      let changed = false;
+      if (Array.isArray(agent.services)) {
+        const prevLen = agent.services.length;
+        agent.services = agent.services.filter(
+          (s: any) => (s.name || '').trim().toLowerCase() !== serviceName.trim().toLowerCase(),
+        );
+        if (agent.services.length !== prevLen) {
+          changed = true;
+        }
+      }
+      if (agent.customInstructions && agent.customInstructions.toLowerCase().includes(serviceName.toLowerCase())) {
+        const lines = agent.customInstructions.split('\n');
+        const filtered = lines.filter((l) => !l.toLowerCase().includes(serviceName.toLowerCase()));
+        agent.customInstructions = filtered.join('\n');
+        changed = true;
+      }
+      if (changed) {
+        await this.agentConfigRepo.save(agent);
+      }
+    }
+
+    // 3. Clean up knowledge documents / chunks specifically mentioning this service
+    try {
+      const docs = await this.knowledgeDocRepo.find({
+        where: { filename: ILike(`%${serviceName}%`) },
+      });
+      for (const doc of docs) {
+        await this.knowledgeChunkRepo.delete({ documentId: doc.id });
+        await this.knowledgeDocRepo.delete(doc.id);
+      }
+    } catch {
+      // non-fatal
+    }
+
+    // 4. Delete the service record itself
+    await this.serviceRepo.delete(service.id);
+
+    // 5. Emit audit event
+    this.eventEmitter.emit(AUDIT_EVENT, {
+      actor: actor || { id: null, email: 'admin' },
+      action: 'service.delete',
+      summary: `Servicio "${serviceName}" eliminado permanentemente junto con ${apptCount} citas asociadas`,
+      targetId: service.id,
+      targetType: 'service',
+    });
   }
 }

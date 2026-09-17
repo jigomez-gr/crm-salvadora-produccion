@@ -9,6 +9,7 @@ import {
   Index,
 } from 'typeorm';
 import { User } from './user.entity';
+import { ServiceCategory } from './service-category.entity';
 
 export enum ServicePaymentType {
   STRIPE = 'stripe',
@@ -55,6 +56,10 @@ export class Service {
   // Flyer / promotional graphic image URL
   @Column({ type: 'text', nullable: true })
   flyerUrl: string | null;
+
+  // Flyer physical storage path (e.g. /app/media/flyers/yoga.jpeg or public/flyers/yoga.jpeg)
+  @Column({ type: 'text', nullable: true })
+  flyerPath: string | null;
 
   @Column({ type: 'timestamptz', nullable: true })
   eventStartDate: Date | null;
@@ -103,6 +108,17 @@ export class Service {
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'managerId' })
   manager: User | null;
+
+  @Index()
+  @Column({ nullable: true })
+  categoryId: string | null;
+
+  @ManyToOne(() => ServiceCategory, (category) => category.services, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'categoryId' })
+  category: ServiceCategory | null;
 
   @Column({ default: true })
   requiresApproval: boolean;

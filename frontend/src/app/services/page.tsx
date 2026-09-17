@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Edit2, Sparkles, Calendar, UserCheck, Clock, Tag, AlertCircle, ExternalLink, CreditCard, Compass, Users, CheckCircle2 } from "lucide-react";
+import { Plus, Edit2, Sparkles, Calendar, UserCheck, Clock, Tag, AlertCircle, ExternalLink, CreditCard, Compass, Users, CheckCircle2, Trash2, FolderTree, Image as ImageIcon, Layers, AlertTriangle } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
-import { Service, User } from "@/lib/types";
+import { Service, ServiceCategory, User } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
@@ -26,6 +26,9 @@ interface ServiceFormData {
   externalPaymentUrl: string;
   calendarId: string;
   managerId: string;
+  categoryId: string;
+  flyerPath: string;
+  flyerUrl: string;
   requiresApproval: boolean;
   allowedModalities: string[];
   requiresReason: boolean;
@@ -70,6 +73,9 @@ export default function ServicesPage() {
     externalPaymentUrl: "",
     calendarId: "",
     managerId: "",
+    categoryId: "",
+    flyerPath: "",
+    flyerUrl: "",
     requiresApproval: false,
     allowedModalities: ["in_person"],
     requiresReason: false,
@@ -89,14 +95,34 @@ export default function ServicesPage() {
     reminderMinutes: 120,
   });
 
+  const [categories, setCategories] = useState<ServiceCategory[]>([]);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<ServiceCategory | null>(null);
+  const [categoryForm, setCategoryForm] = useState({
+    code: "",
+    name: "",
+    description: "",
+    displayOrder: 0,
+    isActive: true,
+  });
+  const [categoryError, setCategoryError] = useState("");
+  const [savingCategory, setSavingCategory] = useState(false);
+
+  // Delete service confirmation state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [serviceToDelete, setServiceToDelete] = useState<Service | null>(null);
+  const [deletingService, setDeletingService] = useState(false);
+
   const refreshData = useCallback(async () => {
     try {
-      const [svcs, mgrs] = await Promise.all([
+      const [svcs, mgrs, cats] = await Promise.all([
         apiFetch<Service[]>("/api/services"),
         apiFetch<User[]>("/api/services/managers/list"),
+        apiFetch<ServiceCategory[]>("/api/categories"),
       ]);
       setServices(svcs);
       setManagers(mgrs);
+      setCategories(cats);
     } catch {
       toast.error("Error al cargar los servicios");
     } finally {
@@ -109,11 +135,13 @@ export default function ServicesPage() {
     Promise.all([
       apiFetch<Service[]>("/api/services"),
       apiFetch<User[]>("/api/services/managers/list"),
+      apiFetch<ServiceCategory[]>("/api/categories"),
     ])
-      .then(([svcs, mgrs]) => {
+      .then(([svcs, mgrs, cats]) => {
         if (!active) return;
         setServices(svcs);
         setManagers(mgrs);
+        setCategories(cats);
         setLoading(false);
       })
       .catch(() => {
@@ -142,6 +170,9 @@ export default function ServicesPage() {
       externalPaymentUrl: "",
       calendarId: "",
       managerId: managers[0]?.id ?? "",
+      categoryId: categories[0]?.id ?? "",
+      flyerPath: "",
+      flyerUrl: "",
       requiresApproval: false,
       allowedModalities: ["in_person"],
       requiresReason: false,
@@ -180,6 +211,9 @@ export default function ServicesPage() {
       externalPaymentUrl: svc.externalPaymentUrl ?? "",
       calendarId: svc.calendarId ?? "",
       managerId: svc.managerId ?? "",
+      categoryId: svc.categoryId ?? "",
+      flyerPath: svc.flyerPath ?? "",
+      flyerUrl: svc.flyerUrl ?? "",
       requiresApproval: Boolean(svc.requiresApproval),
       allowedModalities: svc.allowedModalities?.length ? svc.allowedModalities : ["in_person"],
       requiresReason: Boolean(svc.requiresReason),
@@ -200,6 +234,116 @@ export default function ServicesPage() {
     });
     setError("");
     setModalOpen(true);
+  }
+
+  function openCategoriesManager() {
+    setCategoryModalOpen(true);
+    setEditingCategory(null);
+    setCategoryForm({
+      code: "",
+      name: "",
+      description: "",
+      displayOrder: (categories.length + 1) * 10,
+      isActive: true,
+    });
+    setCategoryError("");
+  }
+
+  function startEditCategory(cat: ServiceCategory) {
+    setEditingCategory(cat);
+    setCategoryForm({
+      code: cat.code,
+      name: cat.name,
+      description: cat.description || "",
+      displayOrder: cat.displayOrder,
+      isActive: cat.isActive,
+    });
+    setCategoryError("");
+  }
+
+  async function handleCategorySubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!categoryForm.code.trim() || !categoryForm.name.trim()) {
+      setCategoryError("El código y nombre de categoría son obligatorios.");
+      return;
+    }
+    setSavingCategory(true);
+    setCategoryError("");
+    try {
+      if (editingCategory) {
+        await apiFetch(`/api/categories/${editingCategory.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            code: categoryForm.code.trim().toLowerCase(),
+            name: categoryForm.name.trim(),
+            description: categoryForm.description.trim() || undefined,
+            displayOrder: Number(categoryForm.displayOrder) || 0,
+            isActive: categoryForm.isActive,
+          }),
+        });
+        toast.success("Categoría actualizada");
+      } else {
+        await apiFetch("/api/categories", {
+          method: "POST",
+          body: JSON.stringify({
+            code: categoryForm.code.trim().toLowerCase(),
+            name: categoryForm.name.trim(),
+            description: categoryForm.description.trim() || undefined,
+            displayOrder: Number(categoryForm.displayOrder) || 0,
+            isActive: categoryForm.isActive,
+          }),
+        });
+        toast.success("Categoría creada");
+      }
+      setEditingCategory(null);
+      setCategoryForm({
+        code: "",
+        name: "",
+        description: "",
+        displayOrder: 0,
+        isActive: true,
+      });
+      await refreshData();
+    } catch (err) {
+      setCategoryError(err instanceof ApiError ? err.message : "Error al guardar la categoría");
+    } finally {
+      setSavingCategory(false);
+    }
+  }
+
+  async function handleDeleteCategory(id: string) {
+    if (!confirm("¿Eliminar esta categoría? Los servicios asociados quedarán sin categoría.")) return;
+    try {
+      await apiFetch(`/api/categories/${id}`, { method: "DELETE" });
+      toast.success("Categoría eliminada");
+      if (editingCategory?.id === id) {
+        setEditingCategory(null);
+      }
+      await refreshData();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Error al eliminar categoría");
+    }
+  }
+
+  function confirmDeleteService(svc: Service) {
+    setServiceToDelete(svc);
+    setDeleteModalOpen(true);
+  }
+
+  async function handleDeleteService() {
+    if (!serviceToDelete?.id) return;
+    setDeletingService(true);
+    try {
+      await apiFetch(`/api/services/${serviceToDelete.id}`, { method: "DELETE" });
+      toast.success(`Servicio "${serviceToDelete.name}" eliminado correctamente.`);
+      setDeleteModalOpen(false);
+      setServiceToDelete(null);
+      await refreshData();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Error al eliminar el servicio");
+    } finally {
+      setDeletingService(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -234,6 +378,9 @@ export default function ServicesPage() {
       externalPaymentUrl: form.externalPaymentUrl.trim() || undefined,
       calendarId: form.calendarId.trim() || undefined,
       managerId: form.managerId || undefined,
+      categoryId: form.categoryId || undefined,
+      flyerPath: form.flyerPath.trim() || undefined,
+      flyerUrl: form.flyerUrl.trim() || undefined,
       requiresApproval: form.requiresApproval,
       allowedModalities: form.allowedModalities,
       requiresReason: form.requiresReason,
@@ -293,10 +440,20 @@ export default function ServicesPage() {
         </div>
 
         {(user?.role === "admin" || user?.role === "service_manager") && (
-          <Button onClick={openCreate} className="flex items-center gap-1.5">
-            <Plus className="h-4 w-4" />
-            Nuevo Servicio / Calendario
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={openCategoriesManager}
+              className="flex items-center gap-1.5"
+            >
+              <FolderTree className="h-4 w-4" />
+              Gestionar Categorías ({categories.length})
+            </Button>
+            <Button onClick={openCreate} className="flex items-center gap-1.5">
+              <Plus className="h-4 w-4" />
+              Nuevo Servicio / Calendario
+            </Button>
+          </div>
         )}
       </div>
 
@@ -325,6 +482,18 @@ export default function ServicesPage() {
                         Viaje / Evento puntual
                       </Badge>
                     )}
+                    <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                      {s.category && (
+                        <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 border border-amber-200">
+                          📁 {s.category.name}
+                        </span>
+                      )}
+                      {(s.flyerUrl || s.flyerPath) && (
+                        <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 border border-slate-200" title={`Flyer: ${s.flyerPath || s.flyerUrl}`}>
+                          🖼️ Flyer
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-1">
                     {s.isActive ? (
@@ -576,7 +745,22 @@ export default function ServicesPage() {
                 </div>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-neutral-100 flex justify-end">
+              <div className="mt-4 pt-3 border-t border-neutral-100 flex items-center justify-between">
+                {user?.role === "admin" ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => confirmDeleteService(s)}
+                    className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                    title="Eliminar este servicio y todo lo relacionado"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Eliminar
+                  </Button>
+                ) : (
+                  <span />
+                )}
+
                 <Button
                   variant="secondary"
                   size="sm"
@@ -725,6 +909,116 @@ export default function ServicesPage() {
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               placeholder="Indica de qué trata el servicio, detalles de la actividad o requisitos…"
             />
+          </div>
+
+          {/* Categoría de Agrupación para Catálogo */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700 flex items-center justify-between">
+              <span className="flex items-center gap-1.5 font-semibold text-neutral-800">
+                <FolderTree className="h-3.5 w-3.5 text-amber-600" />
+                Categoría de Agrupación (Catálogo Web)
+              </span>
+              <button
+                type="button"
+                onClick={openCategoriesManager}
+                className="text-[11px] text-indigo-600 hover:underline flex items-center gap-1"
+              >
+                + Gestionar categorías
+              </button>
+            </label>
+            <select
+              value={form.categoryId}
+              onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
+              className="w-full rounded-lg border border-neutral-300 bg-white p-2 text-xs focus:border-indigo-500 focus:outline-none"
+            >
+              <option value="">-- Sin categoría asignada --</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} (Orden: {c.displayOrder})
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-neutral-400">
+              Agrupa los servicios en el catálogo público sincronizado para la reserva de plazas.
+            </p>
+          </div>
+
+          {/* Flyer / Gráfica del Servicio */}
+          <div className="rounded-lg border border-neutral-200 bg-neutral-50/60 p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-neutral-800 flex items-center gap-1.5">
+                <ImageIcon className="h-3.5 w-3.5 text-indigo-600" />
+                Flyer del Servicio (Ruta física y visualización)
+              </label>
+              {(form.flyerUrl || form.flyerPath) && (
+                <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 font-medium">
+                  Flyer asignado
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                  Path físico del archivo en servidor
+                </label>
+                <Input
+                  value={form.flyerPath}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setForm((f) => ({
+                      ...f,
+                      flyerPath: val,
+                      flyerUrl: f.flyerUrl || (val.startsWith("public/") ? val.replace(/^public/, "") : f.flyerUrl),
+                    }));
+                  }}
+                  placeholder="ej. public/flyers/yoga.jpeg o /var/media/flyers/yoga.jpeg"
+                  className="text-xs font-mono"
+                />
+                <p className="mt-0.5 text-[10px] text-neutral-400">
+                  Ruta física en disco donde se encuentra el archivo fuera de Git.
+                </p>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                  URL servida / visualización del flyer
+                </label>
+                <Input
+                  value={form.flyerUrl}
+                  onChange={(e) => setForm((f) => ({ ...f, flyerUrl: e.target.value }))}
+                  placeholder="ej. /flyers/yoga.jpeg o https://..."
+                  className="text-xs"
+                />
+                <p className="mt-0.5 text-[10px] text-neutral-400">
+                  Ruta pública para renderizar en la web y catálogo sincronizado.
+                </p>
+              </div>
+            </div>
+
+            {/* Visualizador / Preview del Flyer */}
+            {(form.flyerUrl || form.flyerPath) && (
+              <div className="rounded-md border border-neutral-200 bg-white p-2 flex items-center gap-3">
+                <div className="relative h-16 w-16 overflow-hidden rounded border border-neutral-200 bg-neutral-100 shrink-0 flex items-center justify-center">
+                  <img
+                    src={form.flyerUrl || form.flyerPath}
+                    alt="Previsualización flyer"
+                    className="h-full w-full object-cover z-10"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = "none";
+                    }}
+                  />
+                  <ImageIcon className="h-6 w-6 text-neutral-300 absolute" />
+                </div>
+                <div className="min-w-0 text-xs">
+                  <p className="font-medium text-neutral-800">Previsualización de Gráfica</p>
+                  <p className="text-[11px] text-neutral-500 truncate max-w-xs">{form.flyerUrl || form.flyerPath}</p>
+                  <p className="text-[10px] text-neutral-400 mt-0.5">
+                    Se mostrará en la ficha del servicio y en el catálogo web sincronizado.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           <div>
@@ -1177,6 +1471,237 @@ export default function ServicesPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Modal Gestión de Categorías */}
+      <Modal
+        open={categoryModalOpen}
+        onClose={() => setCategoryModalOpen(false)}
+        title="Gestión de Categorías de Servicios (Catálogo Web)"
+      >
+        <div className="space-y-6">
+          {/* Formulario Crear / Editar Categoría */}
+          <form
+            onSubmit={handleCategorySubmit}
+            className="rounded-lg border border-neutral-200 bg-neutral-50/70 p-4 space-y-3"
+          >
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-semibold text-neutral-900 flex items-center gap-1.5">
+                <FolderTree className="h-4 w-4 text-indigo-600" />
+                {editingCategory ? "Editar Categoría" : "Nueva Categoría de Agrupación"}
+              </h4>
+              {editingCategory && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingCategory(null);
+                    setCategoryForm({
+                      code: "",
+                      name: "",
+                      description: "",
+                      displayOrder: (categories.length + 1) * 10,
+                      isActive: true,
+                    });
+                  }}
+                  className="text-[11px] text-neutral-500 hover:text-neutral-800 underline"
+                >
+                  Cancelar edición
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                  Código identificador <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  value={categoryForm.code}
+                  onChange={(e) => setCategoryForm((f) => ({ ...f, code: e.target.value }))}
+                  placeholder="ej. yoga_meditacion"
+                  className="text-xs font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                  Nombre visible <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  value={categoryForm.name}
+                  onChange={(e) => setCategoryForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="ej. Clases Regulares de Yoga"
+                  className="text-xs"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                Descripción / Cabecera (aparece en la web para reservar plazas)
+              </label>
+              <textarea
+                rows={2}
+                value={categoryForm.description}
+                onChange={(e) => setCategoryForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder="ej. ESCUELA SALVADORA CONESA · CLASES REGULARES&#10;Hatha Yoga Terapéutico, Meditaciones y Terapias"
+                className="block w-full rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-4 pt-1">
+              <div className="flex items-center gap-3">
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                    Orden de aparición
+                  </label>
+                  <Input
+                    type="number"
+                    value={categoryForm.displayOrder}
+                    onChange={(e) => setCategoryForm((f) => ({ ...f, displayOrder: Number(e.target.value) }))}
+                    className="text-xs w-24"
+                  />
+                </div>
+                <label className="flex items-center gap-1.5 text-xs font-medium text-neutral-700 cursor-pointer mt-4">
+                  <input
+                    type="checkbox"
+                    checked={categoryForm.isActive}
+                    onChange={(e) => setCategoryForm((f) => ({ ...f, isActive: e.target.checked }))}
+                    className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>Activa</span>
+                </label>
+              </div>
+
+              <div className="mt-4">
+                <Button type="submit" size="sm" disabled={savingCategory} className="text-xs">
+                  {savingCategory ? "Guardando…" : editingCategory ? "Actualizar Categoría" : "Añadir Categoría"}
+                </Button>
+              </div>
+            </div>
+
+            {categoryError && <p className="text-xs text-red-600 font-medium">{categoryError}</p>}
+          </form>
+
+          {/* Lista de Categorías Existentes */}
+          <div className="space-y-2">
+            <h4 className="text-xs font-semibold text-neutral-700">
+              Categorías Configuradas ({categories.length})
+            </h4>
+
+            {categories.length === 0 ? (
+              <p className="text-xs text-neutral-400 py-4 text-center">No hay categorías configuradas.</p>
+            ) : (
+              <div className="divide-y divide-neutral-200 rounded-lg border border-neutral-200 bg-white overflow-hidden max-h-64 overflow-y-auto">
+                {categories.map((c) => (
+                  <div key={c.id} className="p-3 flex items-start justify-between gap-2 hover:bg-neutral-50/80">
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[11px] bg-neutral-100 text-neutral-700 px-1.5 py-0.5 rounded font-bold">
+                          #{c.displayOrder}
+                        </span>
+                        <span className="font-semibold text-xs text-neutral-900">{c.name}</span>
+                        <span className="text-[10px] text-neutral-400 font-mono">({c.code})</span>
+                        {c.isActive ? (
+                          <Badge variant="success" className="text-[9px] py-0 px-1">Activa</Badge>
+                        ) : (
+                          <Badge variant="danger" className="text-[9px] py-0 px-1">Inactiva</Badge>
+                        )}
+                      </div>
+                      {c.description && (
+                        <p className="text-[11px] text-neutral-500 whitespace-pre-line line-clamp-2">
+                          {c.description}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => startEditCategory(c)}
+                        className="text-[11px] p-1 h-7"
+                      >
+                        <Edit2 className="h-3 w-3" />
+                      </Button>
+                      {user?.role === "admin" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteCategory(c.id)}
+                          className="text-[11px] p-1 h-7 text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-2 border-t border-neutral-100">
+            <Button variant="secondary" onClick={() => setCategoryModalOpen(false)}>
+              Cerrar
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal de Confirmación de Borrado de Servicio */}
+      <Modal
+        open={deleteModalOpen}
+        onClose={() => {
+          if (!deletingService) {
+            setDeleteModalOpen(false);
+            setServiceToDelete(null);
+          }
+        }}
+        title="Confirmar Eliminación de Servicio"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3.5 flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+            <div className="text-xs text-red-900 space-y-1.5">
+              <p className="font-semibold text-sm">
+                ¿Deseas eliminar permanentemente el servicio &quot;{serviceToDelete?.name}&quot;?
+              </p>
+              <p className="text-red-800">
+                Esta acción es <strong>irreversible</strong> y solo puede ser ejecutada por el Administrador.
+              </p>
+              <ul className="list-disc list-inside space-y-0.5 text-red-700 pt-1">
+                <li>Se eliminarán <strong>todas las citas y reservas</strong> asociadas a este servicio.</li>
+                <li>Se retirará el servicio del <strong>agente de IA de WhatsApp</strong> y sus instrucciones/reglas.</li>
+                <li>Se limpiarán los fragmentos de conocimiento (RAG) vinculados a esta actividad.</li>
+                <li>La acción quedará registrada en el registro de auditoría.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={deletingService}
+              onClick={() => {
+                setDeleteModalOpen(false);
+                setServiceToDelete(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              disabled={deletingService}
+              onClick={handleDeleteService}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {deletingService ? "Eliminando…" : "Sí, Eliminar Definitivamente"}
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { ServicesService } from './services.service';
@@ -50,8 +51,9 @@ export class ServicesController {
 
   @Delete(':id')
   @Roles(UserRole.ADMIN)
-  async remove(@Param('id') id: string) {
-    await this.servicesService.remove(id);
+  async remove(@Param('id') id: string, @Req() req: any) {
+    const actor = req.user ? { id: req.user.id, email: req.user.email } : undefined;
+    await this.servicesService.remove(id, actor);
     return { success: true };
   }
 }

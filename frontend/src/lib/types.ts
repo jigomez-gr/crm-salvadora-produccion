@@ -13,6 +13,35 @@ export interface User {
   updatedAt: string;
 }
 
+export interface ServiceCategory {
+  id: string;
+  code: string;
+  name: string;
+  description?: string | null;
+  displayOrder: number;
+  isActive: boolean;
+  services?: Service[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface MediaAsset {
+  id: string;
+  key: string;
+  title: string;
+  mediaType: "video" | "document" | "flyer" | "audio" | "image";
+  mimeType: string;
+  physicalPath: string;
+  publicUrl?: string | null;
+  fileSizeBytes?: number | null;
+  serviceId?: string | null;
+  metadata?: Record<string, any>;
+  isActive: boolean;
+  displayOrder: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Service {
   id?: string;
   name: string;
@@ -21,6 +50,9 @@ export interface Service {
   eventDatesText?: string | null;
   scheduleText?: string | null;
   flyerUrl?: string | null;
+  flyerPath?: string | null;
+  categoryId?: string | null;
+  category?: ServiceCategory | null;
   eventStartDate?: string | null;
   eventEndDate?: string | null;
   maxCapacity?: number | null;
