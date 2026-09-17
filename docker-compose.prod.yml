@@ -64,6 +64,13 @@ services:
       ZADARMA_API_KEY: ${ZADARMA_API_KEY:-45dc42d6f22439899024}
       ZADARMA_API_SECRET: ${ZADARMA_API_SECRET:-34061190a934a453aa99}
       ZADARMA_SENDER_ID: ${ZADARMA_SENDER_ID:-Teamsale}
+      # ─── Media Storage (External from Git) ───
+      MEDIA_STORAGE_ROOT: ${MEDIA_STORAGE_ROOT:-/var/data/salvadora/media}
+      MEDIA_VIDEOS_DIR: ${MEDIA_VIDEOS_DIR:-/var/data/salvadora/media/videos}
+      MEDIA_DOCUMENTS_DIR: ${MEDIA_DOCUMENTS_DIR:-/var/data/salvadora/media/documentos}
+      MEDIA_FLYERS_DIR: ${MEDIA_FLYERS_DIR:-/var/data/salvadora/media/flyers}
+    volumes:
+      - /var/data/salvadora/media:/var/data/salvadora/media:rw
     networks:
       - internal
       - dokploy-network
