@@ -85,7 +85,7 @@ import { AgentsModule } from './agents/agents.module';
         VapiAccount,
         ZadarmaSmsLog,
       ],
-      synchronize: process.env.TYPEORM_SYNCHRONIZE === 'false' ? false : true,
+      synchronize: false,
       migrationsRun: false,
       retryAttempts: 15,
       retryDelay: 3000,

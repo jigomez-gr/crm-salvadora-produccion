@@ -29,8 +29,8 @@ export class Call {
   id: string;
 
   @Index({ unique: true })
-  @Column({ type: 'varchar', length: 255 })
-  vapiCallId: string;
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  vapiCallId: string | null;
 
   @Column({
     type: 'varchar',
