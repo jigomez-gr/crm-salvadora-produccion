@@ -53,6 +53,7 @@ export interface Service {
   flyerPath?: string | null;
   categoryId?: string | null;
   category?: ServiceCategory | null;
+  displayOrder?: number;
   eventStartDate?: string | null;
   eventEndDate?: string | null;
   maxCapacity?: number | null;

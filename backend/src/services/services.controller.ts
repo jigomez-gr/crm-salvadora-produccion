@@ -23,8 +23,12 @@ export class ServicesController {
   constructor(private readonly servicesService: ServicesService) {}
 
   @Get()
-  async findAll(@Query('activeOnly') activeOnly?: string) {
-    return this.servicesService.findAll(activeOnly === 'true');
+  async findAll(
+    @Query('activeOnly') activeOnly?: string,
+    @Query('categoryId') categoryId?: string,
+    @Query('serviceType') serviceType?: string,
+  ) {
+    return this.servicesService.findAll(activeOnly === 'true', categoryId, serviceType);
   }
 
   @Get('managers/list')
@@ -55,5 +59,13 @@ export class ServicesController {
     const actor = req.user ? { id: req.user.id, email: req.user.email } : undefined;
     await this.servicesService.remove(id, actor);
     return { success: true };
+  }
+
+  @Post('bulk-delete')
+  @Roles(UserRole.ADMIN)
+  async bulkDelete(@Body() body: { ids: string[] }, @Req() req: any) {
+    const actor = req.user ? { id: req.user.id, email: req.user.email } : undefined;
+    const result = await this.servicesService.removeBulk(body.ids || [], actor);
+    return { success: true, ...result };
   }
 }

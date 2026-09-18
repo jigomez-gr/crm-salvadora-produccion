@@ -53,6 +53,10 @@ export class CreateServiceDto {
   @IsOptional()
   categoryId?: string;
 
+  @IsNumber()
+  @IsOptional()
+  displayOrder?: number;
+
   @IsString()
   @IsOptional()
   eventStartDate?: string;
@@ -184,6 +188,10 @@ export class UpdateServiceDto {
   @IsUUID()
   @IsOptional()
   categoryId?: string;
+
+  @IsNumber()
+  @IsOptional()
+  displayOrder?: number;
 
   @IsString()
   @IsOptional()

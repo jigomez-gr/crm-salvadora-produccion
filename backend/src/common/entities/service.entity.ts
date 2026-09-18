@@ -120,6 +120,10 @@ export class Service {
   @JoinColumn({ name: 'categoryId' })
   category: ServiceCategory | null;
 
+  // Display order within its category (0 = first)
+  @Column({ type: 'int', default: 0 })
+  displayOrder: number;
+
   @Column({ default: true })
   requiresApproval: boolean;
 

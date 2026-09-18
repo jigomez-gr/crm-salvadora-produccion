@@ -69,6 +69,7 @@ export class ServicesService implements OnModuleInit {
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "reminderMinutes" integer DEFAULT 120;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "flyerPath" text;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "categoryId" uuid;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "displayOrder" integer DEFAULT 0;
 
           CREATE TABLE IF NOT EXISTS service_categories (
             id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -873,15 +874,29 @@ export class ServicesService implements OnModuleInit {
     });
   }
 
-  async findAll(activeOnly = false): Promise<Service[]> {
+  async findAll(
+    activeOnly = false,
+    categoryId?: string,
+    serviceType?: string,
+  ): Promise<Service[]> {
     const qb = this.serviceRepo
       .createQueryBuilder('s')
       .leftJoinAndSelect('s.manager', 'manager')
       .leftJoinAndSelect('s.category', 'category')
-      .orderBy('s.name', 'ASC');
+      .orderBy('COALESCE(category.displayOrder, 999)', 'ASC')
+      .addOrderBy('s.displayOrder', 'ASC')
+      .addOrderBy('s.name', 'ASC');
 
     if (activeOnly) {
       qb.where('s.isActive = :active', { active: true });
+    }
+
+    if (categoryId && categoryId !== 'all') {
+      qb.andWhere('(s.categoryId = :catId OR category.code = :catId)', { catId: categoryId });
+    }
+
+    if (serviceType && serviceType !== 'all') {
+      qb.andWhere('s.serviceType = :sType', { sType: serviceType });
     }
 
     const services = await qb.getMany();
@@ -951,6 +966,7 @@ export class ServicesService implements OnModuleInit {
       reminderMinutesEnabled: dto.reminderMinutesEnabled !== undefined ? dto.reminderMinutesEnabled : true,
       reminderMinutes: dto.reminderMinutes !== undefined ? dto.reminderMinutes : 120,
       categoryId: dto.categoryId || null,
+      displayOrder: dto.displayOrder !== undefined ? dto.displayOrder : 0,
       flyerPath: dto.flyerPath || null,
       flyerUrl: dto.flyerUrl || null,
     });
@@ -1019,6 +1035,7 @@ export class ServicesService implements OnModuleInit {
     if (dto.reminderMinutesEnabled !== undefined) service.reminderMinutesEnabled = dto.reminderMinutesEnabled;
     if (dto.reminderMinutes !== undefined) service.reminderMinutes = dto.reminderMinutes;
     if (dto.categoryId !== undefined) service.categoryId = dto.categoryId || null;
+    if (dto.displayOrder !== undefined) service.displayOrder = dto.displayOrder;
     if (dto.flyerPath !== undefined) service.flyerPath = dto.flyerPath || null;
     if (dto.flyerUrl !== undefined) service.flyerUrl = dto.flyerUrl || null;
 
@@ -1094,5 +1111,22 @@ export class ServicesService implements OnModuleInit {
       targetId: service.id,
       targetType: 'service',
     });
+  }
+
+  async removeBulk(ids: string[], actor?: { id?: string | null; email?: string | null }): Promise<{ deleted: number }> {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return { deleted: 0 };
+    }
+
+    let deleted = 0;
+    for (const id of ids) {
+      try {
+        await this.remove(id, actor);
+        deleted++;
+      } catch (err) {
+        console.warn(`[removeBulk] Error deleting service ${id}:`, err);
+      }
+    }
+    return { deleted };
   }
 }

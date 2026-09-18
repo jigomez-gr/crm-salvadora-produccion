@@ -34,6 +34,7 @@ interface ServiceFormData {
   requiresReason: boolean;
   calEventTypeId: string;
   reminderNotes: string;
+  displayOrder: number;
   isActive: boolean;
   notifyByEmail: boolean;
   notifyByWhatsapp: boolean;
@@ -81,6 +82,7 @@ export default function ServicesPage() {
     requiresReason: false,
     calEventTypeId: "",
     reminderNotes: "",
+    displayOrder: 0,
     isActive: true,
     notifyByEmail: true,
     notifyByWhatsapp: true,
@@ -108,7 +110,16 @@ export default function ServicesPage() {
   const [categoryError, setCategoryError] = useState("");
   const [savingCategory, setSavingCategory] = useState(false);
 
-  // Delete service confirmation state
+  // Filters state
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>("all");
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>("all");
+
+  // Selection and bulk delete state
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
+  const [deletingBulk, setDeletingBulk] = useState(false);
+
+  // Delete single service confirmation state
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [serviceToDelete, setServiceToDelete] = useState<Service | null>(null);
   const [deletingService, setDeletingService] = useState(false);
@@ -178,6 +189,7 @@ export default function ServicesPage() {
       requiresReason: false,
       calEventTypeId: "",
       reminderNotes: "",
+      displayOrder: (services.length + 1) * 10,
       isActive: true,
       notifyByEmail: true,
       notifyByWhatsapp: true,
@@ -219,6 +231,7 @@ export default function ServicesPage() {
       requiresReason: Boolean(svc.requiresReason),
       calEventTypeId: svc.calEventTypeId ? String(svc.calEventTypeId) : "",
       reminderNotes: svc.reminderNotes ?? "",
+      displayOrder: svc.displayOrder ?? 0,
       isActive: svc.isActive ?? true,
       notifyByEmail: svc.notifyByEmail !== false,
       notifyByWhatsapp: svc.notifyByWhatsapp !== false,
@@ -338,6 +351,7 @@ export default function ServicesPage() {
       toast.success(`Servicio "${serviceToDelete.name}" eliminado correctamente.`);
       setDeleteModalOpen(false);
       setServiceToDelete(null);
+      setSelectedIds((prev) => prev.filter((id) => id !== serviceToDelete.id));
       await refreshData();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Error al eliminar el servicio");
@@ -345,6 +359,52 @@ export default function ServicesPage() {
       setDeletingService(false);
     }
   }
+
+  async function handleBulkDelete() {
+    if (selectedIds.length === 0) return;
+    setDeletingBulk(true);
+    try {
+      const res = await apiFetch<{ deletedCount: number }>("/api/services/bulk-delete", {
+        method: "POST",
+        body: JSON.stringify({ ids: selectedIds }),
+      });
+      toast.success(`Se han eliminado ${res.deletedCount || selectedIds.length} servicios correctamente.`);
+      setSelectedIds([]);
+      setBulkDeleteModalOpen(false);
+      await refreshData();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Error al eliminar servicios seleccionados");
+    } finally {
+      setDeletingBulk(false);
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.length === filteredServices.length && filteredServices.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(
+        filteredServices
+          .map((s) => s.id)
+          .filter((id): id is string => Boolean(id))
+      );
+    }
+  }
+
+  const filteredServices = services.filter((s) => {
+    if (selectedCategoryFilter !== "all") {
+      if (selectedCategoryFilter === "none" && s.categoryId) return false;
+      if (selectedCategoryFilter !== "none" && s.categoryId !== selectedCategoryFilter) return false;
+    }
+    if (selectedTypeFilter !== "all" && s.serviceType !== selectedTypeFilter) return false;
+    return true;
+  });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -386,6 +446,7 @@ export default function ServicesPage() {
       requiresReason: form.requiresReason,
       calEventTypeId: form.calEventTypeId.trim() ? Number(form.calEventTypeId) : undefined,
       reminderNotes: form.reminderNotes.trim() || undefined,
+      displayOrder: Number(form.displayOrder) || 0,
       isActive: form.isActive,
       notifyByEmail: form.notifyByEmail,
       notifyByWhatsapp: form.notifyByWhatsapp,
@@ -457,6 +518,80 @@ export default function ServicesPage() {
         )}
       </div>
 
+      {/* Barra de Filtros y Acciones por Lote */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-xl border border-neutral-200">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1.5 text-xs text-neutral-600">
+            <span className="font-semibold text-neutral-700">Categoría:</span>
+            <select
+              value={selectedCategoryFilter}
+              onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+              className="rounded-lg border border-neutral-300 bg-neutral-50 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
+            >
+              <option value="all">Todas las categorías ({services.length})</option>
+              <option value="none">Sin categoría</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} (#{c.displayOrder})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-xs text-neutral-600">
+            <span className="font-semibold text-neutral-700">Tipo:</span>
+            <select
+              value={selectedTypeFilter}
+              onChange={(e) => setSelectedTypeFilter(e.target.value)}
+              className="rounded-lg border border-neutral-300 bg-neutral-50 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
+            >
+              <option value="all">Todos los tipos</option>
+              <option value="recurring">Citas habituales</option>
+              <option value="event">Viajes / Eventos</option>
+            </select>
+          </div>
+
+          <span className="text-xs text-neutral-400">
+            Mostrando {filteredServices.length} de {services.length}
+          </span>
+        </div>
+
+        {user?.role === "admin" && filteredServices.length > 0 && (
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1.5 text-xs text-neutral-600 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={selectedIds.length > 0 && selectedIds.length === filteredServices.length}
+                onChange={toggleSelectAll}
+                className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+              />
+              <span className="font-medium">
+                {selectedIds.length === filteredServices.length
+                  ? "Deseleccionar todos"
+                  : `Seleccionar todos (${filteredServices.length})`}
+              </span>
+            </label>
+
+            {selectedIds.length > 0 && (
+              <div className="flex items-center gap-2 pl-2 border-l border-neutral-200">
+                <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                  {selectedIds.length} seleccionados
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setBulkDeleteModalOpen(true)}
+                  className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center gap-1 h-7 px-2"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Eliminar seleccionados
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Grid of services */}
       {loading ? (
         <div className="py-12 text-center text-sm text-neutral-400">Cargando servicios…</div>
@@ -466,33 +601,58 @@ export default function ServicesPage() {
           <h3 className="mt-3 text-base font-medium text-neutral-900">No hay servicios definidos</h3>
           <p className="mt-1 text-sm text-neutral-500">Crea los servicios y asígnalos a los responsables.</p>
         </div>
+      ) : filteredServices.length === 0 ? (
+        <div className="rounded-xl border border-neutral-200 bg-white p-12 text-center">
+          <AlertCircle className="mx-auto h-8 w-8 text-neutral-300" />
+          <h3 className="mt-3 text-base font-medium text-neutral-900">Sin resultados con los filtros actuales</h3>
+          <p className="mt-1 text-sm text-neutral-500">Cambia la categoría o el tipo de servicio seleccionado.</p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {services.map((s) => (
+          {filteredServices.map((s) => (
             <div
-              key={s.id}
-              className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between"
+              key={s.id || s.name}
+              className={cn(
+                "rounded-xl border bg-white p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between",
+                s.id && selectedIds.includes(s.id) ? "border-indigo-400 ring-2 ring-indigo-200 bg-indigo-50/20" : "border-neutral-200"
+              )}
             >
               <div>
                 <div className="flex items-start justify-between gap-2">
-                  <div className="space-y-1">
-                    <h3 className="font-semibold text-neutral-900 text-base">{s.name}</h3>
-                    {s.serviceType === "event" && (
-                      <Badge variant="info" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200">
-                        Viaje / Evento puntual
-                      </Badge>
+                  <div className="flex items-start gap-2.5">
+                    {user?.role === "admin" && s.id && (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(s.id)}
+                        onChange={() => s.id && toggleSelect(s.id)}
+                        className="mt-1 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 shrink-0"
+                        title="Seleccionar para borrado en lote"
+                      />
                     )}
-                    <div className="flex flex-wrap items-center gap-1 mt-0.5">
-                      {s.category && (
-                        <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 border border-amber-200">
-                          📁 {s.category.name}
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-mono text-[10px] bg-neutral-100 text-neutral-600 px-1.5 py-0.5 rounded font-bold" title="Orden de visualización">
+                          #{s.displayOrder ?? 0}
                         </span>
+                        <h3 className="font-semibold text-neutral-900 text-base">{s.name}</h3>
+                      </div>
+                      {s.serviceType === "event" && (
+                        <Badge variant="info" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200">
+                          Viaje / Evento puntual
+                        </Badge>
                       )}
-                      {(s.flyerUrl || s.flyerPath) && (
-                        <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 border border-slate-200" title={`Flyer: ${s.flyerPath || s.flyerUrl}`}>
-                          🖼️ Flyer
-                        </span>
-                      )}
+                      <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                        {s.category && (
+                          <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 border border-amber-200">
+                            📁 {s.category.name}
+                          </span>
+                        )}
+                        {(s.flyerUrl || s.flyerPath) && (
+                          <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 border border-slate-200" title={`Flyer: ${s.flyerPath || s.flyerUrl}`}>
+                            🖼️ Flyer
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
@@ -940,6 +1100,28 @@ export default function ServicesPage() {
             </select>
             <p className="mt-1 text-[11px] text-neutral-400">
               Agrupa los servicios en el catálogo público sincronizado para la reserva de plazas.
+            </p>
+          </div>
+
+          {/* Orden de visualización del servicio */}
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-neutral-800 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Layers className="h-3.5 w-3.5 text-indigo-600" />
+                Orden de prioridad / visualización
+              </span>
+              <span className="text-[11px] text-neutral-400 font-normal">
+                Menor número aparece antes (ej. 1, 2, 3...)
+              </span>
+            </label>
+            <Input
+              type="number"
+              value={form.displayOrder}
+              onChange={(e) => setForm((f) => ({ ...f, displayOrder: Number(e.target.value) || 0 }))}
+              placeholder="0"
+            />
+            <p className="mt-1 text-[11px] text-neutral-400">
+              Controla el orden en que se muestra este servicio dentro de su categoría tanto en el CRM como en la web pública.
             </p>
           </div>
 
@@ -1699,6 +1881,66 @@ export default function ServicesPage() {
               className="bg-red-600 hover:bg-red-700 text-white"
             >
               {deletingService ? "Eliminando…" : "Sí, Eliminar Definitivamente"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal de Confirmación de Borrado en Lote */}
+      <Modal
+        open={bulkDeleteModalOpen}
+        onClose={() => {
+          if (!deletingBulk) {
+            setBulkDeleteModalOpen(false);
+          }
+        }}
+        title="Confirmar Eliminación en Lote"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3.5 flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+            <div className="text-xs text-red-900 space-y-1.5">
+              <p className="font-semibold text-sm">
+                ¿Deseas eliminar permanentemente los {selectedIds.length} servicios seleccionados?
+              </p>
+              <p className="text-red-800">
+                Esta acción es <strong>irreversible</strong> y eliminará en bloque todos los servicios marcados:
+              </p>
+              <div className="max-h-36 overflow-y-auto rounded bg-white/70 p-2 border border-red-200 space-y-1 my-1">
+                {services
+                  .filter((s): s is Service & { id: string } => Boolean(s.id && selectedIds.includes(s.id)))
+                  .map((s) => (
+                    <div key={s.id} className="font-medium text-[11px] text-red-950 flex items-center justify-between">
+                      <span>• {s.name}</span>
+                      <span className="text-[10px] text-neutral-500 font-mono">#{s.displayOrder ?? 0}</span>
+                    </div>
+                  ))}
+              </div>
+              <ul className="list-disc list-inside space-y-0.5 text-red-700 pt-1">
+                <li>Se cancelarán y purgarán las reservas y calendarios asociados.</li>
+                <li>Se desvincularán del agente de IA y de los catálogos web.</li>
+                <li>Quedará registrado en la auditoría de seguridad.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={deletingBulk}
+              onClick={() => setBulkDeleteModalOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              disabled={deletingBulk}
+              onClick={handleBulkDelete}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {deletingBulk ? "Eliminando en lote…" : `Sí, Eliminar ${selectedIds.length} Servicios`}
             </Button>
           </div>
         </div>

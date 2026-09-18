@@ -4,6 +4,7 @@ import {
   Post,
   Param,
   Body,
+  Query,
   Res,
   NotFoundException,
   BadRequestException,
@@ -153,8 +154,11 @@ export class WidgetController {
    * Returns live services, prices, schedules, and booking URLs directly from DB.
    */
   @Get('services')
-  async getPublicServices() {
-    const dbServices = await this.servicesService.findAll(true).catch(() => []);
+  async getPublicServices(
+    @Query('category') categoryFilter?: string,
+    @Query('type') typeFilter?: string,
+  ) {
+    const dbServices = await this.servicesService.findAll(true, categoryFilter, typeFilter).catch(() => []);
     const dbCategories = await this.categoriesService.findAll(true).catch(() => []);
     const [agentConfig] = await this.agentsConfigService.findAll().catch(() => []);
     const branding = await this.settingsService.getBranding().catch(() => null);
@@ -199,6 +203,7 @@ export class WidgetController {
           categoryCode: s.category?.code || null,
           categoryName: s.category?.name || null,
           categoryDescription: s.category?.description || null,
+          displayOrder: s.displayOrder ?? 0,
           flyerPath: s.flyerPath,
           flyerUrl: s.flyerUrl,
           firstClassFree: isYoga || isIaido,
