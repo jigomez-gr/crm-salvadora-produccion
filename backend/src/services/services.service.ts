@@ -892,7 +892,7 @@ export class ServicesService implements OnModuleInit {
     }
 
     if (categoryId && categoryId !== 'all') {
-      qb.andWhere('(s.categoryId = :catId OR category.code = :catId)', { catId: categoryId });
+      qb.andWhere('(s.categoryId::text = :catId OR category.code = :catId)', { catId: categoryId });
     }
 
     if (serviceType && serviceType !== 'all') {

@@ -120,6 +120,7 @@ import { AgentsModule } from './agents/agents.module';
     UsersModule,
     WhatsappModule,
     AgentsModule,
+    EventsModule,
   ],
   providers: [
     {

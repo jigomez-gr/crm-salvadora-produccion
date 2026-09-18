@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { Plus, Edit2, Sparkles, Calendar, UserCheck, Clock, Tag, AlertCircle, ExternalLink, CreditCard, Compass, Users, CheckCircle2, Trash2, FolderTree, Image as ImageIcon, Layers, AlertTriangle } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { Service, ServiceCategory, User } from "@/lib/types";
@@ -406,6 +406,55 @@ export default function ServicesPage() {
     return true;
   });
 
+  const sortedCategories = useMemo(() => {
+    return [...categories].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+  }, [categories]);
+
+  const groupedCategories = useMemo(() => {
+    const groups: { category: ServiceCategory | null; services: Service[] }[] = [];
+
+    if (selectedCategoryFilter !== "all" && selectedCategoryFilter !== "none") {
+      const cat = sortedCategories.find((c) => c.id === selectedCategoryFilter);
+      if (cat) {
+        const catServices = filteredServices
+          .filter((s) => s.categoryId === cat.id)
+          .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+        groups.push({ category: cat, services: catServices });
+      }
+      return groups;
+    }
+
+    if (selectedCategoryFilter === "none") {
+      const uncategorized = filteredServices
+        .filter((s) => !s.categoryId)
+        .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+      if (uncategorized.length > 0) {
+        groups.push({ category: null, services: uncategorized });
+      }
+      return groups;
+    }
+
+    // All categories in order of displayOrder
+    for (const cat of sortedCategories) {
+      const catServices = filteredServices
+        .filter((s) => s.categoryId === cat.id)
+        .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+      if (catServices.length > 0) {
+        groups.push({ category: cat, services: catServices });
+      }
+    }
+
+    // Plus uncategorized services at the end
+    const uncategorized = filteredServices
+      .filter((s) => !s.categoryId)
+      .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+    if (uncategorized.length > 0) {
+      groups.push({ category: null, services: uncategorized });
+    }
+
+    return groups;
+  }, [sortedCategories, filteredServices, selectedCategoryFilter]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name.trim()) {
@@ -608,8 +657,38 @@ export default function ServicesPage() {
           <p className="mt-1 text-sm text-neutral-500">Cambia la categoría o el tipo de servicio seleccionado.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredServices.map((s) => (
+        <div className="space-y-8">
+          {groupedCategories.map(({ category, services: groupServices }) => (
+            <div key={category ? category.id : "uncategorized"} className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200 pb-2">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  {category ? (
+                    <>
+                      <span className="font-mono text-xs font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded border border-amber-300">
+                        Orden #{category.displayOrder}
+                      </span>
+                      <h2 className="text-lg font-bold text-neutral-900 flex items-center gap-1.5">
+                        <span>📁</span> {category.name}
+                      </h2>
+                      {category.description && (
+                        <span className="text-xs text-neutral-500 max-w-xl truncate hidden md:inline">
+                          — {category.description}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <h2 className="text-lg font-bold text-neutral-500 italic flex items-center gap-1.5">
+                      <span>📂</span> Sin Categoría Asignada
+                    </h2>
+                  )}
+                </div>
+                <span className="text-xs font-medium text-neutral-600 bg-neutral-100 px-2.5 py-0.5 rounded-full border border-neutral-200">
+                  {groupServices.length} {groupServices.length === 1 ? "actividad" : "actividades"}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {groupServices.map((s) => (
             <div
               key={s.id || s.name}
               className={cn(
@@ -934,7 +1013,10 @@ export default function ServicesPage() {
             </div>
           ))}
         </div>
-      )}
+      </div>
+    ))}
+  </div>
+)}
 
       {/* Modal Crear / Editar */}
       <Modal
