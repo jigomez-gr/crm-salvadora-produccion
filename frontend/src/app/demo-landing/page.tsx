@@ -7,28 +7,18 @@ import {
   Sparkles,
   Calendar,
   Clock,
-  MapPin,
   MessageSquare,
   X,
   Send,
   RotateCcw,
   CheckCircle2,
   Maximize2,
-  ChevronRight,
   Phone,
   User,
   Mail,
   ArrowUpRight,
   ShieldCheck,
-  Zap,
-  HeartHandshake,
-  Compass,
   Users,
-  FolderTree,
-  Video,
-  Layers,
-  Filter,
-  ExternalLink,
   Film,
   Image as ImageIcon,
 } from "lucide-react";
@@ -45,6 +35,7 @@ interface WidgetCategory {
   id: string;
   code: string;
   name: string;
+  description?: string;
   displayOrder: number;
 }
 
@@ -56,34 +47,163 @@ interface WidgetService {
   eventDatesText?: string;
   scheduleText?: string;
   maxCapacity?: number;
-  minQuorum?: number;
   durationMinutes: number;
   price?: string;
+  currency?: string;
   paymentType: "stripe" | "external_url" | "in_person" | "free";
   externalPaymentUrl?: string;
-  calendarId?: string;
   allowedModalities?: string[];
-  requiresReason?: boolean;
-  reminderNotes?: string;
+  requiresApproval?: boolean;
+  firstClassFree?: boolean;
+  freeForYogaStudents?: boolean;
+  whatsappBookingUrl?: string;
+  categoryId?: string | null;
+  categoryCode?: string | null;
+  categoryName?: string | null;
+  categoryDescription?: string | null;
   displayOrder?: number;
-  flyerUrl?: string;
-  flyerPath?: string;
-  flyerParticularUrl?: string;
-  flyerParticularPath?: string;
-  videoParticularUrl?: string;
-  videoParticularPath?: string;
-  fechaDesde?: string;
-  fechaHasta?: string;
+  flyerUrl?: string | null;
+  flyerPath?: string | null;
+  flyerParticularUrl?: string | null;
+  flyerParticularPath?: string | null;
+  videoParticularUrl?: string | null;
+  videoParticularPath?: string | null;
+  fechaDesde?: string | null;
+  fechaHasta?: string | null;
   category?: WidgetCategory | null;
 }
+
+const FALLBACK_CATEGORIES: WidgetCategory[] = [
+  {
+    id: "cat-longevidad",
+    code: "longevidad_artes",
+    name: "Longevidad, Artes Tradicionales y Experiencias Exclusivas",
+    description: "BIENESTAR INTEGRAL · CLUB SOCIAL PARQUE GRANADA Y CENTRO SALVADORA CONESA",
+    displayOrder: 1,
+  },
+  {
+    id: "cat-yoga",
+    code: "yoga_meditacion",
+    name: "Clases Regulares de Yoga y Meditación",
+    description: "PRÁCTICA CONSCIENTE, ALINEACIÓN Y SALUD POSTURAL",
+    displayOrder: 2,
+  },
+  {
+    id: "cat-eventos",
+    code: "talleres_eventos",
+    name: "Talleres, Retiros y Eventos Especiales",
+    description: "INMERSIÓN, TRANSFORMACIÓN Y DESARROLLO PERSONAL",
+    displayOrder: 3,
+  },
+  {
+    id: "cat-salud",
+    code: "salud_terapeutica",
+    name: "Salud Terapéutica y Sesiones Individuales",
+    description: "CONSULTAS PERSONALIZADAS Y ACOMPAÑAMIENTO INDIVIDUAL",
+    displayOrder: 4,
+  },
+];
+
+function formatServicePrice(s: WidgetService): string {
+  if (s.price === "0.00" || s.price === "0" || !s.price) {
+    if (s.firstClassFree || /yoga|iaidō|iaido|daruma|ninjutsu/i.test(s.name)) {
+      return "0 € (Prueba Gratis)";
+    }
+    return "Gratuito";
+  }
+  return `${s.price} €`;
+}
+
+function formatDuration(minutes: number): string {
+  if (!minutes) return "60 min";
+  if (minutes < 60) return `${minutes} min`;
+  if (minutes % 60 === 0) return `${minutes / 60} horas`;
+  const hrs = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${hrs}h ${mins}min`;
+}
+
+function serviceMatchesCategory(s: WidgetService, cat: WidgetCategory): boolean {
+  if (s.categoryId && (s.categoryId === cat.id || s.categoryId === cat.code)) return true;
+  if (s.categoryCode && (s.categoryCode === cat.code || s.categoryCode === cat.id)) return true;
+  if (s.category && (s.category.id === cat.id || s.category.code === cat.code)) return true;
+
+  const lower = (s.name || "").toLowerCase();
+  if (cat.code === "longevidad_artes" || cat.code === "longevidad") {
+    return (
+      lower.includes("bienestar") ||
+      lower.includes("iaidō") ||
+      lower.includes("iaido") ||
+      lower.includes("orientales") ||
+      lower.includes("daruma") ||
+      lower.includes("kaisai") ||
+      lower.includes("kobudo") ||
+      lower.includes("bujinkan") ||
+      lower.includes("ninjutsu") ||
+      lower.includes("funcional") ||
+      lower.includes("pilates") ||
+      lower.includes("taichi") ||
+      lower.includes("tai chi")
+    );
+  }
+  if (cat.code === "salud_terapeutica") {
+    return (
+      lower.includes("médica") ||
+      lower.includes("medica") ||
+      lower.includes("fisioterapia") ||
+      lower.includes("gestalt") ||
+      lower.includes("clínico") ||
+      lower.includes("clinico")
+    );
+  }
+  if (cat.code === "talleres_eventos") {
+    return (
+      s.serviceType === "event" ||
+      lower.includes("gong") ||
+      lower.includes("puja") ||
+      lower.includes("constelaciones") ||
+      lower.includes("retiro") ||
+      lower.includes("conferencia") ||
+      lower.includes("encuentro") ||
+      lower.includes("ayuno")
+    );
+  }
+  if (cat.code === "yoga_meditacion") {
+    return (
+      lower.includes("yoga") ||
+      lower.includes("hatha") ||
+      lower.includes("meditaci")
+    );
+  }
+  return false;
+}
+
+const getCategoryMeta = (svc: WidgetService) => {
+  const lower = (svc.name || "").toLowerCase();
+  if (lower.includes("bienestar")) return { icon: "🌿", label: "Longevidad & Biohacking" };
+  if (lower.includes("iaidō") || lower.includes("iaido")) return { icon: "⚔️", label: "Arte de la Katana" };
+  if (lower.includes("hatha") || lower.includes("yoga")) return { icon: "🧘", label: "Yoga & Salud Postural" };
+  if (lower.includes("meditaci")) return { icon: "✨", label: "Conciencia & Silencio" };
+  if (lower.includes("gestalt")) return { icon: "🌱", label: "Psicoterapia Gestalt" };
+  if (lower.includes("gong") && lower.includes("puja")) return { icon: "🌙", label: "Inmersión Nocturna Anual" };
+  if (lower.includes("gong")) return { icon: "🔔", label: "Sonoterapia Mensual" };
+  if (lower.includes("constelaci")) return { icon: "🕊️", label: "Taller Vivencial" };
+  if (lower.includes("ayuno")) return { icon: "🏕️", label: "Retiro Residencial" };
+  if (lower.includes("mujeres")) return { icon: "🌸", label: "Círculo Femenino" };
+  if (lower.includes("médica") || lower.includes("clinico")) return { icon: "🩺", label: "Consulta Médica" };
+  if (lower.includes("fisioterapia")) return { icon: "💆", label: "Rehabilitación Postural" };
+  if (lower.includes("bujinkan") || lower.includes("ninjutsu") || lower.includes("orientales")) return { icon: "🥋", label: "Artes Orientales" };
+  if (lower.includes("funcional") || lower.includes("pilates")) return { icon: "💪", label: "Entrenamiento & Core" };
+  return { icon: "🌟", label: svc.serviceType === "recurring" ? "Actividad Regular" : "Evento Especial" };
+};
 
 function ServiceMediaPreview({ svc }: { svc: WidgetService }) {
   const videoSrc = svc.videoParticularUrl || svc.videoParticularPath;
   const flyerSrc =
     svc.flyerParticularUrl ||
     svc.flyerParticularPath ||
-    svc.flyerUrl ||
-    svc.flyerPath;
+    (svc.flyerUrl !== "/flyer-parque-granada.png" ? svc.flyerUrl : null) ||
+    (svc.flyerPath !== "public/flyer-parque-granada.png" ? svc.flyerPath : null);
   const hasBoth = Boolean(videoSrc && flyerSrc);
 
   const [activeTab, setActiveTab] = useState<"video" | "flyer">("video");
@@ -207,7 +327,8 @@ export default function DemoLandingPage() {
   const [businessName, setBusinessName] = useState("Centro de Yoga y Bienestar Salvadora");
   const [selectedService, setSelectedService] = useState<string | null>(null);
 
-  // Dynamic services & filters
+  // Dynamic services & categories from CRM API
+  const [categories, setCategories] = useState<WidgetCategory[]>(FALLBACK_CATEGORIES);
   const [services, setServices] = useState<WidgetService[]>([]);
   const [servicesLoading, setServicesLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -239,17 +360,19 @@ export default function DemoLandingPage() {
     fetch(`${API_BASE}/api/widget/services`)
       .then((r) => r.json())
       .then((data) => {
-        const rawList = Array.isArray(data) ? data : (data && Array.isArray(data.services) ? data.services : []);
-        const normalized = rawList.map((s: any) => ({
-          ...s,
-          category: s.category || (s.categoryId || s.categoryName ? {
-            id: s.categoryId || s.categoryCode || "cat-default",
-            code: s.categoryCode || "general",
-            name: s.categoryName || "General",
-            displayOrder: s.category?.displayOrder ?? 0,
-          } : null),
-        }));
-        setServices(normalized);
+        if (data && Array.isArray(data.categories) && data.categories.length > 0) {
+          setCategories(
+            [...data.categories].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
+          );
+        }
+        const rawList = Array.isArray(data)
+          ? data
+          : data && Array.isArray(data.services)
+          ? data.services
+          : [];
+        setServices(
+          [...rawList].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
+        );
         setServicesLoading(false);
       })
       .catch((err) => {
@@ -283,69 +406,61 @@ export default function DemoLandingPage() {
       });
   }, []);
 
-  const categories = useMemo(() => {
-    const map = new Map<string, WidgetCategory>();
-    services.forEach((s) => {
-      if (s.category && s.category.id) {
-        map.set(s.category.id, s.category);
-      }
-    });
-    return Array.from(map.values()).sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
-  }, [services]);
-
-  const filteredServices = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    return services.filter((s) => {
-      if (s.fechaDesde && s.fechaDesde.slice(0, 10) > today) return false;
-      if (s.fechaHasta && s.fechaHasta.slice(0, 10) < today) return false;
-      if (selectedCategory !== "all") {
-        if (selectedCategory === "none" && s.category) return false;
-        if (selectedCategory !== "none" && s.category?.id !== selectedCategory) return false;
-      }
-      if (selectedType !== "all" && s.serviceType !== selectedType) return false;
-      return true;
-    });
-  }, [services, selectedCategory, selectedType]);
-
-  const groupedServices = useMemo(() => {
-    const groups: { category: WidgetCategory | null; services: WidgetService[] }[] = [];
-
-    for (const cat of categories) {
-      if (selectedCategory !== "all" && selectedCategory !== cat.id) continue;
-      const catServices = filteredServices
-        .filter((s) => s.category?.id === cat.id)
-        .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
-      if (catServices.length > 0) {
-        groups.push({ category: cat, services: catServices });
-      }
-    }
-
-    if (selectedCategory === "all" || selectedCategory === "none") {
-      const uncategorized = filteredServices
-        .filter((s) => !s.category?.id)
-        .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
-      if (uncategorized.length > 0) {
-        groups.push({ category: null, services: uncategorized });
-      }
-    }
-
-    return groups;
-  }, [categories, filteredServices, selectedCategory]);
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping]);
+    if (isOpen) {
+      setTimeout(scrollToBottom, 100);
+    }
+  }, [messages, isOpen]);
 
-  const handleSend = async (textToSend?: string, serviceName?: string) => {
-    const text = (textToSend || inputValue).trim();
-    if (!text && !serviceName) return;
+  // Sorted categories
+  const sortedCategories = useMemo(() => {
+    return [...categories].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+  }, [categories]);
 
-    if (serviceName) setSelectedService(serviceName);
+  // Filter services by type
+  const filterByType = (list: WidgetService[]) =>
+    list.filter((s) => selectedType === "all" || s.serviceType === selectedType);
+
+  // Dynamic grouped sections by category
+  const groupedSections = useMemo(() => {
+    const sections: { category: WidgetCategory; services: WidgetService[] }[] = [];
+    for (const cat of sortedCategories) {
+      if (selectedCategory !== "all" && selectedCategory !== cat.code && selectedCategory !== cat.id) {
+        continue;
+      }
+      const catSvcs = filterByType(
+        services.filter((s) => serviceMatchesCategory(s, cat))
+      ).sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+
+      if (catSvcs.length > 0) {
+        sections.push({ category: cat, services: catSvcs });
+      }
+    }
+    return sections;
+  }, [services, sortedCategories, selectedCategory, selectedType]);
+
+  const uncategorizedServices = useMemo(() => {
+    if (selectedCategory !== "all") return [];
+    return filterByType(
+      services.filter((s) => !sortedCategories.some((cat) => serviceMatchesCategory(s, cat)))
+    ).sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+  }, [services, sortedCategories, selectedCategory, selectedType]);
+
+  const totalFilteredCount =
+    groupedSections.reduce((acc, g) => acc + g.services.length, 0) + uncategorizedServices.length;
+
+  const handleSend = async (text?: string, serviceName?: string) => {
+    const msgText = text || inputValue.trim();
+    if (!msgText) return;
 
     const userMsg: ChatMessage = {
       id: "user_" + Date.now(),
       direction: "inbound",
-      body: text || `Información y reserva para ${serviceName}`,
+      body: msgText,
     };
 
     setMessages((prev) => [...prev, userMsg]);
@@ -470,7 +585,7 @@ export default function DemoLandingPage() {
           <div className="flex items-center gap-2 text-center sm:text-left">
             <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400 animate-pulse" />
             <span className="font-medium">
-              <strong>Portal de Reservas & Traspaso a WhatsApp:</strong> Prueba el registro de alumnos y citas en tiempo real.
+              <strong>Simulación en Vivo de la Landing Web</strong> · Conectado en tiempo real con el CRM Salvadora
             </span>
           </div>
           <Link
@@ -486,17 +601,17 @@ export default function DemoLandingPage() {
       <div className="bg-[#0B4A72] text-white px-3 sm:px-4 py-2 text-xs text-center font-bold tracking-wide flex items-center justify-center gap-3 sm:gap-4 flex-wrap shadow-inner">
         <span>📍 CLUB SOCIAL PARQUE GRANADA & CENTRO SALVADORA CONESA</span>
         <span className="bg-emerald-500 text-white px-2.5 py-0.5 rounded text-[11px] font-extrabold uppercase tracking-wide">
-          💳 Pagos en el Centro · Pronto también con Stripe y Giglon
+          💳 Pagos en el Centro · Sincronizado en tiempo real
         </span>
         <button
           onClick={() => setSimuladorOpen(true)}
-          className="inline-flex items-center gap-1 bg-amber-400 hover:bg-amber-300 text-stone-950 px-3 py-0.5 rounded-full text-xs font-bold transition shadow-xs"
+          className="inline-flex items-center gap-1 bg-amber-400 hover:bg-amber-300 text-stone-950 px-3 py-0.5 rounded-full text-xs font-bold transition shadow-xs cursor-pointer"
         >
           🔬 Simulador IA
         </button>
         <button
           onClick={() => setWaModalOpen(true)}
-          className="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 px-3 py-0.5 rounded-full text-white font-semibold transition shadow-xs"
+          className="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 px-3 py-0.5 rounded-full text-white font-semibold transition shadow-xs cursor-pointer"
         >
           📱 Continuar por WhatsApp
         </button>
@@ -542,19 +657,19 @@ export default function DemoLandingPage() {
 
             <button
               onClick={() => setSimuladorOpen(true)}
-              className="bg-amber-400 hover:bg-amber-500 text-stone-950 px-3 py-2 rounded-lg text-xs font-bold transition shadow-xs flex items-center gap-1.5"
+              className="bg-amber-400 hover:bg-amber-500 text-stone-950 px-3 py-2 rounded-lg text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5" /> Simulador IA
             </button>
             <button
               onClick={() => setWaModalOpen(true)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-xs font-bold transition shadow-xs flex items-center gap-1.5"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
             >
               <Phone className="w-3.5 h-3.5" /> WhatsApp Alta Rápida
             </button>
             <button
               onClick={() => setIsOpen(true)}
-              className="bg-[#800020] text-white px-3.5 py-2 rounded-lg text-xs font-bold hover:bg-[#800020]/90 transition shadow-xs flex items-center gap-1.5"
+              className="bg-[#800020] text-white px-3.5 py-2 rounded-lg text-xs font-bold hover:bg-[#800020]/90 transition shadow-xs flex items-center gap-1.5 cursor-pointer"
             >
               <MessageSquare className="w-3.5 h-3.5" /> Abrir Asistente
             </button>
@@ -572,18 +687,18 @@ export default function DemoLandingPage() {
             Descubre tus Actividades de Salud, Conciencia y Armonía
           </h2>
           <p className="text-stone-700 text-sm sm:text-base max-w-3xl leading-relaxed">
-            Explora las clases regulares de <strong>Hatha Yoga Terapéutico</strong>, nuestro programa <strong>Bienestar Experience (Longevidad & Biohacking)</strong>, las sesiones de <strong>Iaidō</strong> en Parque Granada, meditaciones y retiros especiales. <strong>Pagos en el centro</strong> (pronto también disponibles online con <strong>Stripe</strong> y venta de entradas en <strong>Giglon</strong>).
+            Catálogo completo actualizado en vivo desde nuestra base de datos. Consulta las clases regulares de <strong>Hatha Yoga Terapéutico</strong>, el programa <strong>Bienestar Experience</strong>, las sesiones de <strong>Iaidō</strong> en Parque Granada, meditaciones, sonoterapia y retiros.
           </p>
           <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 pt-2">
             <button
               onClick={() => setIsOpen(true)}
-              className="bg-[#800020] hover:bg-[#800020]/90 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm"
+              className="bg-[#800020] hover:bg-[#800020]/90 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm cursor-pointer"
             >
               <Calendar className="w-4 h-4" /> Consultar Disponibilidad en Vivo
             </button>
             <button
               onClick={() => setWaModalOpen(true)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm cursor-pointer"
             >
               <Phone className="w-4 h-4" /> Traspasar Consulta a WhatsApp
             </button>
@@ -591,93 +706,96 @@ export default function DemoLandingPage() {
         </div>
       </section>
 
-      {/* ─── FILTROS DINÁMICOS DE CATÁLOGO (CATEGORÍAS Y TIPOS) ─── */}
-      <section className="max-w-6xl mx-auto px-4 pt-4 pb-2">
-        <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-xs space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-[#800020]" />
-              <span className="text-xs font-bold uppercase tracking-wider text-stone-800">
-                Filtros del Catálogo en Vivo
-              </span>
-              <span className="text-[11px] text-stone-500 font-medium">
-                ({filteredServices.length} {filteredServices.length === 1 ? "servicio disponible" : "servicios disponibles"})
-              </span>
+      {/* ─── BARRA DE FILTRADO POR CATEGORÍA Y TIPO ─── */}
+      <section className="max-w-6xl mx-auto px-4 pt-2 pb-4">
+        <div className="bg-white rounded-2xl p-4 border border-stone-200 shadow-xs space-y-3">
+          {/* Fila 1: Filtro por Categoría */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs font-bold text-stone-700 shrink-0">
+              <span className="text-base">📁</span>
+              <span>Categoría:</span>
             </div>
 
-            {/* Selector de Tipo */}
-            <div className="flex items-center gap-1.5 bg-stone-100 p-1 rounded-xl">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              <button
+                onClick={() => setSelectedCategory("all")}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  selectedCategory === "all"
+                    ? "bg-[#800020] text-white shadow-xs"
+                    : "bg-stone-100 text-stone-700 hover:bg-stone-200"
+                }`}
+              >
+                Todas las Categorías ({filterByType(services).length})
+              </button>
+
+              {sortedCategories.map((cat) => {
+                const count = filterByType(
+                  services.filter((s) => serviceMatchesCategory(s, cat))
+                ).length;
+
+                return (
+                  <button
+                    key={cat.id || cat.code}
+                    onClick={() => setSelectedCategory(cat.code || cat.id)}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      selectedCategory === cat.code || selectedCategory === cat.id
+                        ? "bg-[#800020] text-white shadow-xs"
+                        : "bg-stone-100 text-stone-700 hover:bg-stone-200"
+                    }`}
+                  >
+                    <span className="font-mono text-[10px] opacity-75">#{cat.displayOrder}</span>
+                    <span>{cat.name}</span>
+                    <span className="opacity-80">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Fila 2: Filtro por Tipo de Servicio */}
+          <div className="pt-2.5 border-t border-stone-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs font-bold text-stone-700 shrink-0">
+              <span className="text-base">🏷️</span>
+              <span>Tipo de Actividad:</span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setSelectedType("all")}
-                className={cn(
-                  "px-3 py-1 rounded-lg text-xs font-bold transition",
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                   selectedType === "all"
-                    ? "bg-white text-[#800020] shadow-xs"
-                    : "text-stone-600 hover:text-stone-900"
-                )}
+                    ? "bg-[#0B4A72] text-white font-bold shadow-xs"
+                    : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                }`}
               >
                 Todos los tipos
               </button>
               <button
                 onClick={() => setSelectedType("recurring")}
-                className={cn(
-                  "px-3 py-1 rounded-lg text-xs font-bold transition",
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                   selectedType === "recurring"
-                    ? "bg-white text-[#800020] shadow-xs"
-                    : "text-stone-600 hover:text-stone-900"
-                )}
+                    ? "bg-[#0B4A72] text-white font-bold shadow-xs"
+                    : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                }`}
               >
-                Clases periódicas
+                🗓️ Clases y Citas Periódicas
               </button>
               <button
                 onClick={() => setSelectedType("event")}
-                className={cn(
-                  "px-3 py-1 rounded-lg text-xs font-bold transition",
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                   selectedType === "event"
-                    ? "bg-white text-[#800020] shadow-xs"
-                    : "text-stone-600 hover:text-stone-900"
-                )}
+                    ? "bg-purple-700 text-white font-bold shadow-xs"
+                    : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                }`}
               >
-                Viajes y eventos puntuales
+                ✨ Eventos, Talleres y Retiros
               </button>
             </div>
-          </div>
-
-          {/* Selector de Categorías */}
-          <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-stone-100">
-            <span className="text-[11px] font-semibold text-stone-500 mr-1 flex items-center gap-1">
-              <FolderTree className="w-3 h-3 text-amber-600" /> Categorías:
-            </span>
-            <button
-              onClick={() => setSelectedCategory("all")}
-              className={cn(
-                "px-2.5 py-1 rounded-full text-xs font-semibold transition border",
-                selectedCategory === "all"
-                  ? "bg-[#800020] text-white border-[#800020]"
-                  : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
-              )}
-            >
-              Todas las categorías
-            </button>
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={cn(
-                  "px-2.5 py-1 rounded-full text-xs font-semibold transition border",
-                  selectedCategory === cat.id
-                    ? "bg-[#800020] text-white border-[#800020]"
-                    : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
-                )}
-              >
-                📁 {cat.name}
-              </button>
-            ))}
           </div>
         </div>
       </section>
 
-      {/* ─── SERVICIOS DINÁMICOS AGRUPADOS POR CATEGORÍA Y ORDEN ─── */}
+      {/* ─── SECCIONES DINÁMICAS POR CATEGORÍA EN ORDEN ESPECIFICADO (displayOrder) ─── */}
       {servicesLoading ? (
         <section className="max-w-6xl mx-auto px-4 py-16 text-center">
           <div className="inline-flex items-center gap-2 text-stone-600 text-sm font-medium">
@@ -685,158 +803,377 @@ export default function DemoLandingPage() {
             Cargando catálogo en tiempo real desde el CRM...
           </div>
         </section>
-      ) : groupedServices.length === 0 ? (
+      ) : groupedSections.length === 0 && uncategorizedServices.length === 0 ? (
         <section className="max-w-6xl mx-auto px-4 py-16 text-center">
           <div className="bg-white rounded-2xl border border-stone-200 p-8 max-w-md mx-auto space-y-2">
-            <p className="text-stone-700 font-semibold text-sm">No se han encontrado servicios disponibles.</p>
-            <p className="text-xs text-stone-500">Prueba a cambiar los filtros de categoría o tipo de actividad.</p>
+            <p className="text-stone-700 font-semibold text-sm">No se han encontrado actividades con estos filtros.</p>
+            <p className="text-xs text-stone-500">Prueba a seleccionar todas las categorías o todos los tipos.</p>
             <button
               onClick={() => {
                 setSelectedCategory("all");
                 setSelectedType("all");
               }}
-              className="mt-2 text-xs font-bold text-[#800020] hover:underline"
+              className="mt-2 text-xs font-bold text-[#800020] hover:underline cursor-pointer"
             >
               Restablecer filtros
             </button>
           </div>
         </section>
       ) : (
-        groupedServices.map((group, idx) => (
-          <section key={group.category?.id || `uncat-${idx}`} className="max-w-6xl mx-auto px-4 py-8">
-            <div className="mb-6 pb-3 border-b-2 border-[#0B4A72]/40 flex flex-col sm:flex-row sm:items-end justify-between gap-2">
-              <div>
-                <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#0B4A72] flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                  {group.category ? `CATEGORÍA: ${group.category.name.toUpperCase()}` : "ACTIVIDADES Y DISCIPLINAS"}
-                </span>
-                <h3 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900 mt-1">
-                  {group.category ? group.category.name : "Servicios Generales"}
-                </h3>
-              </div>
-              <span className="text-xs text-stone-600 font-semibold bg-stone-100 px-3 py-1 rounded-full border border-stone-200 self-start sm:self-auto">
-                {group.services.length} {group.services.length === 1 ? "actividad" : "actividades"}
-              </span>
-            </div>
+        groupedSections.map(({ category: cat, services: catServices }) => {
+          const isYogaCategory =
+            cat.code === "yoga_meditacion" ||
+            cat.code === "yoga" ||
+            cat.name.toLowerCase().includes("yoga");
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {group.services.map((svc) => (
-                <div
-                  key={svc.id}
-                  className="bg-white rounded-3xl border border-stone-200 p-5 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between hover:border-[#800020] relative overflow-hidden group"
-                >
+          const isLongevidadCategory =
+            cat.code === "longevidad_artes" ||
+            cat.code === "longevidad" ||
+            cat.name.toLowerCase().includes("longevidad");
+
+          const isTalleresCategory =
+            cat.code === "talleres_eventos" ||
+            cat.name.toLowerCase().includes("taller") ||
+            cat.name.toLowerCase().includes("retiro") ||
+            cat.name.toLowerCase().includes("gong");
+
+          // Border & Accent coloring per category
+          const borderTopColor = isYogaCategory
+            ? "border-[#800020]"
+            : isLongevidadCategory
+            ? "border-[#0B4A72]"
+            : isTalleresCategory
+            ? "border-purple-600"
+            : "border-stone-400";
+
+          const tagColor = isYogaCategory
+            ? "text-[#800020]"
+            : isLongevidadCategory
+            ? "text-[#0B4A72]"
+            : isTalleresCategory
+            ? "text-purple-900"
+            : "text-stone-700";
+
+          return (
+            <section key={cat.id || cat.code} className="max-w-6xl mx-auto px-4 py-8">
+              <div className={`mb-6 pb-3 border-b-2 ${borderTopColor}`}>
+                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
                   <div>
-                    {/* Visor Multimedia Inteligente (Vídeo / Flyer / Selector) */}
-                    <ServiceMediaPreview svc={svc} />
-
-                    {/* Cabecera de Ficha: Categoría y Precio */}
-                    <div className="flex items-center justify-between gap-1 mb-2.5 flex-wrap">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 flex items-center gap-1 border border-stone-200">
-                        📁 {svc.category?.name || "General"}
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="font-mono text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                        Orden #{cat.displayOrder}
                       </span>
-                      <span className="text-xs font-extrabold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
-                        {svc.price ? `${svc.price} €` : svc.paymentType === "free" ? "Gratuito" : "Consultar"}
+                      <span className={`text-[11px] font-extrabold uppercase tracking-widest ${tagColor} flex items-center gap-1.5`}>
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        ESCUELA SALVADORA CONESA · {isLongevidadCategory ? "CLUB SOCIAL PARQUE GRANADA & CENTRO" : "SEDE OFICIAL"}
                       </span>
                     </div>
-
-                    {svc.serviceType === "event" && (
-                      <div className="mb-2">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 border border-purple-200 inline-block">
-                          🧭 Viaje / Evento puntual
-                        </span>
-                      </div>
-                    )}
-
-                    <h4 className="font-serif text-lg font-bold text-stone-900 mb-1.5 leading-snug group-hover:text-[#800020] transition-colors">
-                      {svc.name}
-                    </h4>
-
-                    {svc.description && (
-                      <p className="text-xs text-stone-600 leading-relaxed mb-3 line-clamp-3">
-                        {svc.description}
+                    <h3 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900 mt-1">
+                      {cat.name}
+                    </h3>
+                    {cat.description && (
+                      <p className="text-xs sm:text-sm text-stone-600 mt-1 max-w-2xl whitespace-pre-line">
+                        {cat.description}
                       </p>
                     )}
-
-                    {/* Fechas para eventos / Horarios oficiales */}
-                    {svc.serviceType === "event" && svc.eventDatesText && (
-                      <div className="bg-purple-50 rounded-xl p-2.5 border border-purple-200 text-xs text-purple-950 font-semibold mb-3 flex items-center gap-1.5">
-                        <Compass className="w-3.5 h-3.5 text-purple-700 shrink-0" />
-                        <span>Fechas: {svc.eventDatesText}</span>
-                      </div>
-                    )}
-
-                    {svc.scheduleText && (
-                      <div className="bg-[#FAF9F6] rounded-xl p-2.5 border border-stone-200 text-xs space-y-1 mb-3">
-                        <div className="font-bold text-[#800020] text-[11px] uppercase flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-[#0B4A72]" /> Horarios oficiales:
-                        </div>
-                        <p className="text-[11px] text-stone-800">{svc.scheduleText}</p>
-                      </div>
-                    )}
-
-                    {svc.reminderNotes && (
-                      <div className="text-[11px] text-amber-900 bg-amber-50/70 p-2 rounded-lg border border-amber-200/60 mb-3 italic">
-                        💡 {svc.reminderNotes}
-                      </div>
-                    )}
-
-                    {/* Meta info: Duración, Aforo, Modalidades */}
-                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-stone-500 mb-3">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-stone-400" /> {svc.durationMinutes} min
-                      </span>
-                      {svc.maxCapacity && svc.maxCapacity > 1 && (
-                        <span className="flex items-center gap-1 text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
-                          <Users className="w-3 h-3 text-indigo-500" /> Aforo: {svc.maxCapacity} plazas
-                        </span>
-                      )}
-                      {svc.allowedModalities && svc.allowedModalities.length > 0 && (
-                        <span className="text-[10px] text-stone-500">
-                          ({svc.allowedModalities.map((m) => m === "in_person" ? "Presencial" : m === "phone" ? "Telefónica" : "Online").join(", ")})
-                        </span>
-                      )}
-                    </div>
                   </div>
+                  <span className="text-xs text-stone-600 font-medium whitespace-nowrap">
+                    {catServices.length} {catServices.length === 1 ? "actividad" : "actividades"}
+                  </span>
+                </div>
+              </div>
 
-                  {/* Acciones de Reserva y WhatsApp */}
-                  <div className="pt-3 border-t border-stone-100 space-y-2">
-                    <button
-                      onClick={() => handleServiceSelect(svc)}
-                      className="w-full py-2.5 px-4 bg-[#800020] hover:bg-[#800020]/90 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-xs"
-                    >
-                      <Calendar className="w-4 h-4" /> Reservar / Consultar Disponibilidad
-                    </button>
-                    <div className="flex items-center justify-between text-xs pt-1">
-                      <button
-                        onClick={() => {
-                          setSelectedService(svc.name);
-                          setWaModalOpen(true);
-                        }}
-                        className="text-emerald-700 hover:text-emerald-900 font-bold flex items-center gap-1"
-                      >
-                        <Phone className="w-3.5 h-3.5" /> Pedir por WhatsApp
-                      </button>
-                      {svc.paymentType === "external_url" && svc.externalPaymentUrl ? (
-                        <a
-                          href={svc.externalPaymentUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:underline"
-                        >
-                          Giglon / Entradas <ExternalLink className="w-3 h-3" />
-                        </a>
-                      ) : (
-                        <span className="text-stone-500 text-[11px]">
-                          {svc.paymentType === "free" ? "Gratuito" : "Pago en centro / Stripe"}
-                        </span>
-                      )}
+              {/* Banner Informativo Políticas de Yoga */}
+              {isYogaCategory && (
+                <div className="mb-6 bg-amber-50/95 border-2 border-amber-200/90 rounded-2xl p-5 text-xs text-stone-800 shadow-sm space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🧘</span>
+                    <h4 className="font-bold text-amber-950 text-sm sm:text-base">
+                      Condiciones de Matriculación y Flexibilidad para Alumnos:
+                    </h4>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1 text-stone-700 leading-relaxed">
+                    <div className="space-y-2">
+                      <p>
+                        • 🎁 <strong>1ª Clase de prueba de REGALO:</strong> Tu primera clase en las disciplinas marcadas es gratuita (0 €), sin compromiso ni permanencia.
+                      </p>
+                      <p>
+                        • 📅 <strong>Cuotas de Alumno con Turno Fijo:</strong> 1 clase semanal (25 €/mes) o 2 clases semanales (42 €/mes) con plaza reservada fija garantizada.
+                      </p>
+                      <p>
+                        • 🎟️ <strong>Clases sueltas / esporádicas:</strong> 10 € por clase para quien no desee matricularse mensualmente.
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <p>
+                        • 🔄 <strong>Política de recuperaciones (hasta 3 meses / 90 días):</strong> Si avisas con antelación, puedes recuperar tus clases en cualquier otro turno disponible.
+                      </p>
+                      <p>
+                        • ✨ <strong>Meditaciones Guiadas:</strong> Gratuitas para los alumnos matriculados en Yoga. No alumnos: 15 €/mes (o 3 € sesión suelta).
+                      </p>
+                      <p>
+                        • 📩 <strong>Confirmación Inmediata:</strong> Avisos por SMS y correo electrónico al confirmar cada plaza o reserva.
+                      </p>
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </section>
-        ))
+              )}
+
+              {/* Grid de Servicios */}
+              <div
+                className={`grid ${
+                  isLongevidadCategory
+                    ? "grid-cols-1 lg:grid-cols-2 gap-6"
+                    : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
+                }`}
+              >
+                {catServices.map((act) => {
+                  const meta = getCategoryMeta(act);
+                  const isBienestar = act.name.toLowerCase().includes("bienestar experience");
+                  const priceDisplay = formatServicePrice(act);
+                  const durationDisplay = formatDuration(act.durationMinutes);
+
+                  return (
+                    <div
+                      key={act.id}
+                      className="bg-white rounded-3xl border-2 border-stone-200 p-6 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col justify-between hover:border-[#800020] relative overflow-hidden group"
+                    >
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-linear-to-bl from-amber-100/50 via-transparent to-transparent rounded-bl-full pointer-events-none" />
+
+                      <div>
+                        {/* Header Badges */}
+                        <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+                          <span className="text-xs font-bold px-3 py-1 rounded-full bg-stone-100 text-stone-800 flex items-center gap-1.5 border border-stone-200">
+                            <span>{meta.icon}</span> {meta.label}
+                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {act.firstClassFree && (
+                              <span className="text-[11px] font-extrabold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 uppercase">
+                                Prueba Gratis
+                              </span>
+                            )}
+                            {act.freeForYogaStudents && (
+                              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-900 border border-purple-300">
+                                ✨ ¡Gratis Alumnos Yoga!
+                              </span>
+                            )}
+                            {act.maxCapacity && (
+                              <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-stone-100 text-stone-600 border border-stone-200 flex items-center gap-1">
+                                <Users className="w-3 h-3" /> Aforo: {act.maxCapacity} {act.maxCapacity === 1 ? "plaza" : "plazas"}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Visor Multimedia Inteligente (Vídeo / Flyer / Selector) */}
+                        <ServiceMediaPreview svc={act} />
+
+                        {/* Title & Emblem for Bienestar Experience */}
+                        {isBienestar ? (
+                          <div className="space-y-4 mb-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-full bg-stone-900 text-white flex items-center justify-center p-2 border-2 border-amber-500 shadow-md text-center">
+                                <div className="leading-tight">
+                                  <span className="block text-[8px] font-bold tracking-widest text-amber-300 uppercase">BIEN</span>
+                                  <span className="block text-[10px] font-extrabold tracking-wider uppercase">ESTAR</span>
+                                  <span className="block text-[8px] font-bold tracking-widest text-stone-300 uppercase">EXP</span>
+                                </div>
+                              </div>
+                              <div>
+                                <h4 className="font-serif text-xl sm:text-2xl font-bold text-stone-900 group-hover:text-[#800020] transition-colors leading-snug">
+                                  {act.name}
+                                </h4>
+                                <p className="text-xs font-semibold text-emerald-700 mt-0.5">
+                                  {priceDisplay} • {act.allowedModalities?.map((m) => m === "in_person" ? "Presencial" : m === "virtual" ? "Online" : m).join(" · ") || "Presencial y Online"}
+                                </p>
+                              </div>
+                            </div>
+
+                            <p className="text-xs sm:text-sm text-stone-700 leading-relaxed whitespace-pre-line">
+                              {act.description}
+                            </p>
+
+                            <div className="pt-2">
+                              <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#0B4A72] block mb-1.5">
+                                🔬 Disciplinas y Áreas Incluidas:
+                              </span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {[
+                                  "Biohacking",
+                                  "Longevidad",
+                                  "Rejuvenecimiento",
+                                  "Ciclos Circadianos",
+                                  "Psicología Positiva",
+                                  "Terapia de Sonido",
+                                  "Nutrición Celular",
+                                  "Meditación",
+                                ].map((t) => (
+                                  <span
+                                    key={t}
+                                    className="inline-block bg-amber-50 text-amber-900 border border-amber-200/80 px-2 py-0.5 rounded-md text-[10px] font-medium"
+                                  >
+                                    • {t}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="flex justify-between items-start mb-2 gap-2">
+                              <h4 className="font-serif text-lg sm:text-xl font-bold text-stone-900 group-hover:text-[#800020] transition-colors leading-snug">
+                                {act.name}
+                              </h4>
+                              <span className="font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg text-xs border border-emerald-200 shrink-0 ml-2">
+                                {priceDisplay}
+                              </span>
+                            </div>
+
+                            {act.eventDatesText && (
+                              <div className="mb-2 inline-block bg-purple-100 text-purple-950 font-bold text-[11px] px-2.5 py-0.5 rounded-md">
+                                🗓️ {act.eventDatesText}
+                              </div>
+                            )}
+
+                            <p className="text-xs sm:text-sm text-stone-700 leading-relaxed mb-4 whitespace-pre-line">
+                              {act.description}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Horarios dinámicos desde CRM */}
+                        {(act.scheduleText || act.eventDatesText) && (
+                          <div className="bg-[#FAF9F6] rounded-2xl p-4 border border-stone-200/90 space-y-2 mb-4">
+                            <div className="text-xs font-bold text-[#800020] uppercase tracking-wider flex items-center gap-1.5">
+                              <Clock className="w-4 h-4 text-[#0B4A72]" /> Horarios y Turnos Oficiales:
+                            </div>
+                            <div className="text-xs text-stone-800">
+                              {act.scheduleText || act.eventDatesText}
+                            </div>
+                            <div className="text-[11px] text-stone-600 italic pt-1 border-t border-stone-200 flex items-center justify-between">
+                              <span>Duración: {durationDisplay}</span>
+                              {act.maxCapacity && <span>Aforo: {act.maxCapacity} plazas</span>}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="pt-3 border-t border-stone-100 space-y-2.5">
+                        <button
+                          onClick={() => handleServiceSelect(act)}
+                          className="w-full py-3 px-4 bg-[#800020] hover:bg-[#800020]/90 text-white rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider transition shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <Calendar className="w-4 h-4" /> Reservar / Consultar Disponibilidad
+                        </button>
+                        <div className="flex items-center justify-between text-xs pt-1">
+                          {act.whatsappBookingUrl ? (
+                            <a
+                              href={act.whatsappBookingUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-emerald-700 hover:text-emerald-900 font-bold flex items-center gap-1"
+                            >
+                              <Phone className="w-3.5 h-3.5" /> Pedir por WhatsApp
+                            </a>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setSelectedService(act.name);
+                                setWaModalOpen(true);
+                              }}
+                              className="text-emerald-700 hover:text-emerald-900 font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              <Phone className="w-3.5 h-3.5" /> Pedir por WhatsApp
+                            </button>
+                          )}
+                          <span className="text-stone-500 font-medium text-[11px]">Pago en centro</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })
+      )}
+
+      {/* ─── SECCIÓN PARA OTRAS ACTIVIDADES SIN CATEGORÍA ─── */}
+      {uncategorizedServices.length > 0 && (
+        <section className="max-w-6xl mx-auto px-4 py-8">
+          <div className="mb-6 pb-3 border-b-2 border-stone-400">
+            <h3 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900">
+              Otras Actividades y Consultas
+            </h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {uncategorizedServices.map((act) => {
+              const meta = getCategoryMeta(act);
+              const priceDisplay = formatServicePrice(act);
+              const durationDisplay = formatDuration(act.durationMinutes);
+
+              return (
+                <div
+                  key={act.id}
+                  className="bg-white rounded-2xl border border-stone-200 p-5 shadow-xs hover:shadow-md transition flex flex-col justify-between hover:border-[#800020]/40"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1 mb-2.5">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 flex items-center gap-1">
+                        <span>{meta.icon}</span> {meta.label}
+                      </span>
+                      <span className="text-[11px] font-extrabold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                        {priceDisplay}
+                      </span>
+                    </div>
+
+                    <ServiceMediaPreview svc={act} />
+
+                    <h4 className="font-serif text-base font-bold text-stone-900 mb-1.5 leading-snug">
+                      {act.name}
+                    </h4>
+                    <p className="text-xs text-stone-600 leading-relaxed mb-3 whitespace-pre-line">
+                      {act.description}
+                    </p>
+
+                    {act.scheduleText && (
+                      <div className="bg-[#FAF9F6] rounded-xl p-3 border border-stone-200 text-xs space-y-1 mb-3">
+                        <div className="font-bold text-[#800020] text-[11px] uppercase flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5" /> Horario:
+                        </div>
+                        <div className="text-[11px] text-stone-800">
+                          {act.scheduleText}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-stone-100 space-y-2">
+                    <button
+                      onClick={() => handleServiceSelect(act)}
+                      className="w-full py-2 px-3 bg-[#800020] hover:bg-[#800020]/90 text-white rounded-lg text-xs font-bold uppercase tracking-wider transition flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Calendar className="w-3.5 h-3.5" /> Reservar Plaza
+                    </button>
+                    <div className="flex items-center justify-between text-[11px] text-stone-500">
+                      <span>{durationDisplay}</span>
+                      <button
+                        onClick={() => {
+                          setSelectedService(act.name);
+                          setWaModalOpen(true);
+                        }}
+                        className="text-emerald-700 font-bold hover:underline cursor-pointer"
+                      >
+                        WhatsApp
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       )}
 
       {/* Footer */}
@@ -847,11 +1184,10 @@ export default function DemoLandingPage() {
           </p>
           <p>Actividades en Club Social Parque Granada (Cafetería Bar • Entrada Libre).</p>
           <p className="text-stone-400 text-[11px]">
-            Consultas y reservas por WhatsApp: <strong>695 172 625</strong> · <strong>Pagos en el centro</strong> (pronto también disponibles con <strong>Stripe</strong> y <strong>Giglon</strong>).
+            Consultas y reservas por WhatsApp: <strong>695 172 625</strong> · <strong>Pagos en el centro</strong>.
           </p>
         </div>
 
-        {/* Legal Links, Copyright and Webmaster */}
         <div className="max-w-6xl mx-auto px-4 pt-4 border-t border-stone-800 text-center space-y-2">
           <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-medium text-stone-400">
             <a
@@ -898,35 +1234,27 @@ export default function DemoLandingPage() {
         </div>
       </footer>
 
-      {/* ─── MODAL WHATSAPP HANDOFF (RESPONSIVE & TOUCH FRIENDLY) ─── */}
+      {/* ─── MODAL WHATSAPP HANDOFF (ALTA RÁPIDA EN CRM) ─── */}
       {waModalOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200"
-          onClick={() => setWaModalOpen(false)}
-        >
-          <div
-            className="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-stone-200 relative max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-stone-200 relative animate-in fade-in zoom-in-95">
             <button
               onClick={() => setWaModalOpen(false)}
-              className="absolute top-4 right-4 p-1.5 text-stone-400 hover:text-stone-700 rounded-lg"
+              className="absolute top-4 right-4 text-stone-400 hover:text-stone-700 p-1.5 rounded-full hover:bg-stone-100 transition cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center gap-2 text-emerald-600 mb-2">
-              <span className="p-2 rounded-xl bg-emerald-100">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="p-2.5 rounded-2xl bg-emerald-100 text-emerald-800">
                 <Phone className="w-5 h-5" />
               </span>
-              <span className="text-xs font-extrabold uppercase tracking-wider">
-                Traspaso directo a WhatsApp
-              </span>
+              <div>
+                <h3 className="font-bold text-stone-900 text-base">Continuar por WhatsApp</h3>
+                <p className="text-xs text-stone-500">Alta rápida en sistema y atención directa</p>
+              </div>
             </div>
 
-            <h3 className="font-serif text-xl font-bold text-stone-900 mb-1.5">
-              Continuar Consulta por WhatsApp
-            </h3>
             <p className="text-xs text-stone-600 mb-4 leading-relaxed">
               Introduce tu nombre y teléfono móvil. <strong>Te registraremos automáticamente en el CRM</strong> y abriremos WhatsApp con tu consulta.
             </p>
@@ -1001,7 +1329,7 @@ export default function DemoLandingPage() {
                   <button
                     type="submit"
                     disabled={waLoading}
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                   >
                     {waLoading ? (
                       "Registrando en CRM..."
@@ -1029,7 +1357,7 @@ export default function DemoLandingPage() {
         onClick={() => setSimuladorOpen(true)}
         aria-label="Abrir Simulador de Diagnóstico IA"
         title="Diagnóstico Visual con IA"
-        className="fixed bottom-24 right-4 sm:right-6 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-linear-to-tr from-sky-600 to-indigo-600 text-white shadow-2xl hover:scale-110 active:scale-95 transition-all duration-300 z-40 flex items-center justify-center border-2 border-white/60 group"
+        className="fixed bottom-24 right-4 sm:right-6 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-linear-to-tr from-sky-600 to-indigo-600 text-white shadow-2xl hover:scale-110 active:scale-95 transition-all duration-300 z-40 flex items-center justify-center border-2 border-white/60 group cursor-pointer"
       >
         <div className="relative flex items-center justify-center">
           <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-amber-300 animate-pulse" />
@@ -1040,7 +1368,7 @@ export default function DemoLandingPage() {
       <button
         onClick={() => setIsOpen(!isOpen)}
         aria-label="Abrir Asistente de Citas"
-        className="fixed bottom-6 right-4 sm:right-6 w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-[#800020] text-white shadow-2xl hover:scale-110 active:scale-95 transition-all duration-300 z-40 flex items-center justify-center border-2 border-white/40 group"
+        className="fixed bottom-6 right-4 sm:right-6 w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-[#800020] text-white shadow-2xl hover:scale-110 active:scale-95 transition-all duration-300 z-40 flex items-center justify-center border-2 border-white/40 group cursor-pointer"
       >
         {isOpen ? (
           <X className="w-6 h-6 sm:w-7 sm:h-7 transition-transform group-hover:rotate-90" />
@@ -1048,141 +1376,121 @@ export default function DemoLandingPage() {
           <div className="relative">
             <MessageSquare className="w-6 h-6 sm:w-7 sm:h-7" />
             <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-[#800020] animate-ping" />
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-[#800020]" />
           </div>
         )}
       </button>
 
-      {/* ─── FLOATING CHAT MODAL WINDOW (FULLY RESPONSIVE) ─── */}
+      {/* ─── CHAT WIDGET WINDOW ─── */}
       {isOpen && (
-        <div className="fixed bottom-22 sm:bottom-24 right-2 sm:right-6 w-[calc(100vw-16px)] sm:w-[410px] h-[550px] sm:h-[600px] max-h-[calc(100vh-100px)] bg-white rounded-2xl shadow-2xl border border-stone-200 z-40 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-300">
-          {/* Header */}
-          <div className="bg-[#800020] text-white p-3.5 flex items-center justify-between shadow-xs">
-            <div>
-              <div className="font-bold text-sm leading-tight flex items-center gap-1.5">
-                <span>{businessName}</span>
+        <div className="fixed bottom-24 right-4 sm:right-6 w-[calc(100vw-2rem)] sm:w-[420px] max-h-[600px] h-[80vh] bg-white rounded-3xl shadow-2xl border border-stone-200 z-50 flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-300">
+          {/* Widget Header */}
+          <div className="bg-[#800020] text-white px-5 py-4 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-lg">
+                🧘
               </div>
-              <div className="text-[11px] text-white/80 flex items-center gap-1.5 mt-0.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
-                <span>Asistente de Reservas • En línea</span>
+              <div>
+                <h3 className="font-bold text-sm leading-tight">{businessName}</h3>
+                <div className="flex items-center gap-1.5 text-[11px] text-amber-200/90">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>En línea para reservas y dudas</span>
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-1">
               <button
-                onClick={() => setWaModalOpen(true)}
-                title="Pasar a WhatsApp"
-                className="bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold px-2 py-1 rounded-lg flex items-center gap-1 transition mr-1"
-              >
-                <Phone className="w-3 h-3" /> WhatsApp
-              </button>
-              <button
                 onClick={resetChat}
-                title="Reiniciar conversación"
-                className="p-1.5 hover:bg-white/15 rounded-lg text-white/80 hover:text-white transition"
+                title="Reiniciar chat"
+                className="p-1.5 hover:bg-white/20 rounded-lg transition text-white/80 hover:text-white cursor-pointer"
               >
                 <RotateCcw className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setIsOpen(false)}
                 title="Cerrar"
-                className="p-1.5 hover:bg-white/15 rounded-lg text-white/80 hover:text-white transition"
+                className="p-1.5 hover:bg-white/20 rounded-lg transition text-white/80 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
           </div>
 
-          {/* Quick Selection Chips Carousel */}
-          <div className="bg-[#FAF9F6] border-b border-stone-200 px-3 py-2 flex gap-1.5 overflow-x-auto scrollbar-none">
-            {filteredServices.slice(0, 8).map((svc) => (
-              <button
-                key={svc.id}
-                onClick={() => handleServiceSelect(svc)}
-                className="bg-white border border-stone-300 hover:bg-[#800020] hover:text-white hover:border-[#800020] rounded-full px-2.5 py-1 text-[10px] font-semibold text-stone-700 whitespace-nowrap transition shadow-2xs flex items-center gap-1"
-              >
-                <span>📁</span>
-                <span>{svc.name.split("(")[0]}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* WhatsApp Handoff Bar */}
-          <div className="bg-emerald-50 border-b border-emerald-200 px-3 py-1.5 flex items-center justify-between text-xs text-emerald-900">
-            <span className="text-[11px] font-medium flex items-center gap-1">
-              <Phone className="w-3 h-3 text-emerald-600" /> ¿Prefieres continuar en tu móvil?
-            </span>
+          {/* Quick Actions Bar */}
+          <div className="bg-stone-50 border-b border-stone-200 px-3 py-2 flex items-center justify-between text-xs shrink-0">
+            <span className="text-[11px] text-stone-500 font-medium">Acción rápida:</span>
             <button
-              onClick={() => setWaModalOpen(true)}
-              className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 underline"
+              onClick={() => {
+                setIsOpen(false);
+                setWaModalOpen(true);
+              }}
+              className="text-emerald-700 hover:text-emerald-800 font-bold flex items-center gap-1 cursor-pointer"
             >
-              Pasar a WhatsApp
+              <Phone className="w-3.5 h-3.5" /> Pasar a WhatsApp
             </button>
           </div>
 
-          {/* Message Feed */}
-          <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 bg-stone-50">
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#FAF9F6]">
             {messages.map((m) => (
               <div
                 key={m.id}
-                className={`flex ${m.direction === "inbound" ? "justify-end" : "justify-start"}`}
+                className={cn(
+                  "flex flex-col max-w-[85%] text-xs leading-relaxed",
+                  m.direction === "inbound" ? "ml-auto items-end" : "mr-auto items-start"
+                )}
               >
                 <div
-                  className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${
+                  className={cn(
+                    "px-4 py-2.5 rounded-2xl shadow-xs",
                     m.direction === "inbound"
-                      ? "bg-[#800020] text-white rounded-br-xs"
-                      : "bg-white text-stone-800 border border-stone-200 shadow-2xs rounded-bl-xs"
-                  }`}
-                  dangerouslySetInnerHTML={{
-                    __html: m.body
-                      .replace(
-                        /(https?:\/\/[^\s]+)/g,
-                        '<a href="$1" target="_blank" rel="noopener" class="underline font-bold text-amber-600 hover:text-amber-700">$1</a>'
-                      )
-                      .replace(/\n/g, "<br/>"),
-                  }}
-                />
+                      ? "bg-[#800020] text-white rounded-tr-xs"
+                      : "bg-white text-stone-800 border border-stone-200 rounded-tl-xs whitespace-pre-line"
+                  )}
+                >
+                  {m.body}
+                </div>
               </div>
             ))}
 
             {isTyping && (
-              <div className="flex justify-start">
-                <div className="bg-white border border-stone-200 rounded-2xl rounded-bl-xs px-4 py-2.5 shadow-2xs flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-stone-400 animate-bounce" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-stone-400 animate-bounce [animation-delay:0.2s]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-stone-400 animate-bounce [animation-delay:0.4s]" />
-                </div>
+              <div className="mr-auto flex items-center gap-1 px-4 py-2.5 bg-white border border-stone-200 rounded-2xl text-stone-500 text-xs">
+                <span className="w-1.5 h-1.5 bg-stone-400 rounded-full animate-bounce" />
+                <span className="w-1.5 h-1.5 bg-stone-400 rounded-full animate-bounce [animation-delay:0.2s]" />
+                <span className="w-1.5 h-1.5 bg-stone-400 rounded-full animate-bounce [animation-delay:0.4s]" />
               </div>
             )}
             <div ref={messagesEndRef} />
           </div>
 
           {/* Input Footer */}
-          <div className="p-2.5 sm:p-3 bg-white border-t border-stone-200 flex items-center gap-2">
-            <input
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
+          <div className="p-3 border-t border-stone-200 bg-white shrink-0">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSend();
               }}
-              placeholder="Ej: ¿Qué turnos hay de Yoga o Iaidō?..."
-              className="flex-1 bg-stone-100 border border-stone-300 focus:border-[#800020] focus:bg-white rounded-full px-3.5 py-2 text-xs text-stone-800 outline-none transition"
-            />
-            <button
-              onClick={() => handleSend()}
-              disabled={isTyping || !inputValue.trim()}
-              className="w-8 h-8 rounded-full bg-[#800020] text-white flex items-center justify-center hover:bg-[#800020]/90 disabled:opacity-40 disabled:cursor-not-allowed transition shrink-0"
+              className="flex items-center gap-2"
             >
-              <Send className="w-3.5 h-3.5" />
-            </button>
+              <input
+                type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                placeholder="Escribe tu consulta o reserva..."
+                className="flex-1 bg-stone-50 border border-stone-300 focus:border-[#800020] focus:bg-white rounded-xl px-3.5 py-2 text-xs text-stone-800 outline-none transition"
+              />
+              <button
+                type="submit"
+                disabled={!inputValue.trim() || isTyping}
+                className="bg-[#800020] hover:bg-[#800020]/90 disabled:opacity-40 text-white p-2.5 rounded-xl transition shadow-xs cursor-pointer"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </form>
           </div>
         </div>
       )}
 
-      {/* ─── SIMULADOR DE DIAGNÓSTICO POR IA (MODAL) ─── */}
+      {/* ─── SIMULADOR IA MODAL ─── */}
       <SimuladorDiagnosticoModal
         open={simuladorOpen}
         onClose={() => setSimuladorOpen(false)}

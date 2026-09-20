@@ -215,6 +215,15 @@ export class WidgetController {
           categoryCode: s.category?.code || null,
           categoryName: s.category?.name || null,
           categoryDescription: s.category?.description || null,
+          category: s.category
+            ? {
+                id: s.category.id,
+                code: s.category.code,
+                name: s.category.name,
+                description: s.category.description,
+                displayOrder: s.category.displayOrder,
+              }
+            : null,
           displayOrder: s.displayOrder ?? 0,
           flyerPath: s.flyerPath,
           flyerUrl: s.flyerUrl,
@@ -224,7 +233,7 @@ export class WidgetController {
           videoParticularUrl: s.videoParticularUrl || null,
           fechaDesde: s.fechaDesde || '2000-01-01',
           fechaHasta: s.fechaHasta || '2099-12-31',
-          firstClassFree: isYoga || isIaido,
+          firstClassFree: isYoga || isIaido || /orientales|daruma|ninjutsu|bujinkan/i.test(s.name),
           freeForYogaStudents: isMeditacion,
           whatsappBookingUrl: `https://wa.me/${cleanWaPhone}?text=${encodeURIComponent(
             `Hola, me gustaría información y disponibilidad para ${s.name}.`,

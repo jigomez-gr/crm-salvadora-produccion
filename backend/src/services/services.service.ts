@@ -793,67 +793,69 @@ export class ServicesService implements OnModuleInit {
           let changed = false;
           const lower = s.name.toLowerCase();
 
-          // Link category
-          if (!s.categoryId) {
-            if (lower.includes('bienestar') || lower.includes('iaido') || lower.includes('iaidō')) {
-              s.categoryId = catLongevidad?.id || null;
-              changed = true;
-            } else if (lower.includes('gestalt')) {
-              s.categoryId = catSalud?.id || null;
-              changed = true;
-            } else if (
-              s.serviceType === ServiceType.EVENT ||
-              lower.includes('gong') ||
-              lower.includes('puja') ||
-              lower.includes('constelaci') ||
-              lower.includes('ayuno') ||
-              lower.includes('mujeres')
-            ) {
-              s.categoryId = catEventos?.id || null;
-              changed = true;
-            } else {
-              s.categoryId = catYoga?.id || null;
-              changed = true;
-            }
+          // Link category with accurate classification
+          let targetCatId: string | null = null;
+          if (
+            lower.includes('bienestar') ||
+            lower.includes('iaido') ||
+            lower.includes('iaidō') ||
+            lower.includes('orientales') ||
+            lower.includes('daruma') ||
+            lower.includes('kaisai') ||
+            lower.includes('kobudo') ||
+            lower.includes('bujinkan') ||
+            lower.includes('ninjutsu') ||
+            lower.includes('funcional') ||
+            lower.includes('pilates') ||
+            lower.includes('taichi') ||
+            lower.includes('tai chi')
+          ) {
+            targetCatId = catLongevidad?.id || null;
+          } else if (
+            lower.includes('gestalt') ||
+            lower.includes('médica') ||
+            lower.includes('medica') ||
+            lower.includes('fisioterapia') ||
+            lower.includes('clínico') ||
+            lower.includes('clinico')
+          ) {
+            targetCatId = catSalud?.id || null;
+          } else if (
+            s.serviceType === ServiceType.EVENT ||
+            lower.includes('gong') ||
+            lower.includes('puja') ||
+            lower.includes('constelaci') ||
+            lower.includes('ayuno') ||
+            lower.includes('mujeres') ||
+            lower.includes('retiro')
+          ) {
+            targetCatId = catEventos?.id || null;
+          } else {
+            targetCatId = catYoga?.id || null;
           }
 
-          // Link flyerPath and flyerUrl
-          if (!s.flyerPath) {
-            if (lower.includes('hatha') || lower.includes('yoga')) {
-              s.flyerPath = 'public/flyers/yoga.jpeg';
-              s.flyerUrl = s.flyerUrl || '/flyers/yoga.jpeg';
+          if (targetCatId && s.categoryId !== targetCatId) {
+            s.categoryId = targetCatId;
+            changed = true;
+          }
+
+          // Clean legacy placeholder flyer that was repeated across all seed services
+          if (s.flyerUrl === '/flyer-parque-granada.png' || s.flyerPath === '/flyer-parque-granada.png') {
+            s.flyerUrl = null;
+            s.flyerPath = null;
+            changed = true;
+          }
+
+          // Ensure specific flyers for activities that have their own flyer
+          if (lower.includes('ayuno')) {
+            if (!s.flyerParticularUrl) {
+              s.flyerParticularUrl = '/flyers/ayuno_particular.jpg';
+              s.flyerParticularPath = 'public/flyers/ayuno_particular.jpg';
               changed = true;
-            } else if (lower.includes('meditaci')) {
-              s.flyerPath = 'public/flyers/meditacion.jpeg';
-              s.flyerUrl = s.flyerUrl || '/flyers/meditacion.jpeg';
-              changed = true;
-            } else if (lower.includes('bienestar')) {
-              s.flyerPath = 'public/flyers/bienestar.png';
-              s.flyerUrl = s.flyerUrl || '/flyers/bienestar.png';
-              changed = true;
-            } else if (lower.includes('iaido') || lower.includes('iaidō')) {
-              s.flyerPath = 'public/flyers/iaido.jpg';
-              s.flyerUrl = s.flyerUrl || '/flyers/iaido.jpg';
-              changed = true;
-            } else if (lower.includes('gestalt')) {
-              s.flyerPath = 'public/flyers/gestalt.jpeg';
-              s.flyerUrl = s.flyerUrl || '/flyers/gestalt.jpeg';
-              changed = true;
-            } else if (lower.includes('gong')) {
-              s.flyerPath = 'public/flyers/banogong.jpeg';
-              s.flyerUrl = s.flyerUrl || '/flyers/banogong.jpeg';
-              changed = true;
-            } else if (lower.includes('constelaci')) {
-              s.flyerPath = 'public/flyers/constalaciones.jpeg';
-              s.flyerUrl = s.flyerUrl || '/flyers/constalaciones.jpeg';
-              changed = true;
-            } else if (lower.includes('ayuno')) {
-              s.flyerPath = 'public/flyers/ayuno.jpeg';
-              s.flyerUrl = s.flyerUrl || '/flyers/ayuno.jpeg';
-              changed = true;
-            } else if (lower.includes('mujeres')) {
-              s.flyerPath = 'public/flyers/encuentros_mujeres.jpeg';
-              s.flyerUrl = s.flyerUrl || '/flyers/encuentros_mujeres.jpeg';
+            }
+            if (!s.videoParticularUrl) {
+              s.videoParticularUrl = '/videos/ayunoterapeuticoparticular.mp4';
+              s.videoParticularPath = 'public/videos/ayunoterapeuticoparticular.mp4';
               changed = true;
             }
           }
