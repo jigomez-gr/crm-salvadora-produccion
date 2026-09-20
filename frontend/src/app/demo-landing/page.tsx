@@ -29,6 +29,8 @@ import {
   Layers,
   Filter,
   ExternalLink,
+  Film,
+  Image as ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SimuladorDiagnosticoModal } from "@/components/SimuladorDiagnosticoModal";
@@ -73,6 +75,126 @@ interface WidgetService {
   fechaDesde?: string;
   fechaHasta?: string;
   category?: WidgetCategory | null;
+}
+
+function ServiceMediaPreview({ svc }: { svc: WidgetService }) {
+  const videoSrc = svc.videoParticularUrl || svc.videoParticularPath;
+  const flyerSrc =
+    svc.flyerParticularUrl ||
+    svc.flyerParticularPath ||
+    svc.flyerUrl ||
+    svc.flyerPath;
+  const hasBoth = Boolean(videoSrc && flyerSrc);
+
+  const [activeTab, setActiveTab] = useState<"video" | "flyer">("video");
+  const [isZoomOpen, setIsZoomOpen] = useState(false);
+
+  if (!videoSrc && !flyerSrc) return null;
+
+  return (
+    <div className="mb-4">
+      {hasBoth && (
+        <div className="flex items-center justify-between gap-2 mb-2 px-0.5">
+          <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">
+            Contenido
+          </span>
+          <div className="inline-flex rounded-lg bg-stone-100 p-0.5 border border-stone-200 text-xs">
+            <button
+              type="button"
+              onClick={() => setActiveTab("video")}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                activeTab === "video"
+                  ? "bg-white text-[#800020] shadow-xs border border-stone-200/80"
+                  : "text-stone-600 hover:text-stone-900"
+              }`}
+            >
+              <Film className="w-3.5 h-3.5" />
+              <span>Ver Vídeo</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("flyer")}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                activeTab === "flyer"
+                  ? "bg-white text-[#0B4A72] shadow-xs border border-stone-200/80"
+                  : "text-stone-600 hover:text-stone-900"
+              }`}
+            >
+              <ImageIcon className="w-3.5 h-3.5" />
+              <span>Ver Flyer</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Visor Multimedia Principal */}
+      {(activeTab === "video" && videoSrc) || (!flyerSrc && videoSrc) ? (
+        <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black shadow-xs">
+          <video
+            src={videoSrc}
+            controls
+            playsInline
+            preload="metadata"
+            className="w-full h-full object-cover"
+          />
+        </div>
+      ) : flyerSrc ? (
+        <div className="relative group aspect-video w-full rounded-2xl overflow-hidden bg-stone-100 shadow-xs">
+          <img
+            src={flyerSrc}
+            alt={svc.name}
+            className="w-full h-full object-cover group-hover:scale-105 transition duration-300 cursor-pointer"
+            onClick={() => setIsZoomOpen(true)}
+            onError={(e) => {
+              (e.target as HTMLElement).style.display = "none";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => setIsZoomOpen(true)}
+            className="absolute bottom-2.5 right-2.5 bg-black/70 hover:bg-black/90 text-white text-[11px] font-medium px-2.5 py-1 rounded-lg backdrop-blur-xs flex items-center gap-1 shadow-sm transition opacity-90 group-hover:opacity-100 cursor-pointer"
+            title="Ampliar flyer"
+          >
+            <Maximize2 className="w-3 h-3" /> Ampliar flyer
+          </button>
+        </div>
+      ) : null}
+
+      {/* Modal Zoom / Lightbox para el flyer */}
+      {isZoomOpen && flyerSrc && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm transition-opacity"
+          onClick={() => setIsZoomOpen(false)}
+        >
+          <div
+            className="relative max-w-4xl max-h-[90vh] bg-stone-950 rounded-2xl overflow-hidden shadow-2xl border border-stone-800 p-3 flex flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-full flex items-center justify-between pb-2 px-2 text-white border-b border-stone-800 mb-2">
+              <span className="text-xs font-semibold text-stone-200 truncate max-w-xs sm:max-w-md">
+                {svc.name} {svc.flyerParticularUrl || svc.flyerParticularPath ? "— Flyer Informativo" : ""}
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsZoomOpen(false)}
+                className="p-1.5 rounded-full text-stone-400 hover:text-white hover:bg-stone-800 transition cursor-pointer"
+                title="Cerrar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="overflow-auto max-h-[78vh] flex items-center justify-center">
+              <img
+                src={flyerSrc}
+                alt={svc.name}
+                className="max-h-[76vh] w-auto object-contain rounded-lg shadow-md"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function DemoLandingPage() {
@@ -604,43 +726,8 @@ export default function DemoLandingPage() {
                   className="bg-white rounded-3xl border border-stone-200 p-5 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between hover:border-[#800020] relative overflow-hidden group"
                 >
                   <div>
-                    {/* Visualización Multimedia con Prioridad Estricta:
-                        1º Video MP4 Particular
-                        2º Flyer Particular
-                        3º Flyer General / Itinerario */}
-                    {(svc.videoParticularUrl || svc.videoParticularPath) ? (
-                      <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black mb-4 shadow-xs">
-                        <video
-                          src={svc.videoParticularUrl || svc.videoParticularPath}
-                          controls
-                          playsInline
-                          preload="metadata"
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    ) : (svc.flyerParticularUrl || svc.flyerParticularPath) ? (
-                      <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-stone-100 mb-4 shadow-xs">
-                        <img
-                          src={svc.flyerParticularUrl || svc.flyerParticularPath}
-                          alt={svc.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = "none";
-                          }}
-                        />
-                      </div>
-                    ) : (svc.flyerUrl || svc.flyerPath) ? (
-                      <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-stone-100 mb-4 shadow-xs">
-                        <img
-                          src={svc.flyerUrl || svc.flyerPath}
-                          alt={svc.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = "none";
-                          }}
-                        />
-                      </div>
-                    ) : null}
+                    {/* Visor Multimedia Inteligente (Vídeo / Flyer / Selector) */}
+                    <ServiceMediaPreview svc={svc} />
 
                     {/* Cabecera de Ficha: Categoría y Precio */}
                     <div className="flex items-center justify-between gap-1 mb-2.5 flex-wrap">
