@@ -228,24 +228,38 @@ export class ServicesService implements OnModuleInit {
           this.serviceRepo.create({
             name: 'Retiro de Ayuno Terapéutico',
             description:
-              'Retiro semestral (Otoño y Primavera) de depuración celular, ayuno consciente con caldos y tisanas, senderismo suave en la naturaleza, descanso y reconexión holística. Próxima edición: Puente de Octubre (Del 9 al 12 de Octubre de 2026). Aforo: 20 plazas. Pago en el centro.',
+              'Retiro de depuración y ayuno consciente después del verano para subir tu energía vital. Del viernes 9 al lunes 12 de octubre. Lugar paradisíaco y aislado a hora y media de Madrid donde bañarnos y hacer paseos por el monte. Actividades diarias: activación y gimnasia al amanecer, yoga al mediodía, meditación al atardecer y baño de gong en la noche. Dirigido por Salvadora Conesa (40 años como profesora de yoga, 26 como terapeuta Gestalt, 30 años dirigiendo grupos de ayuno). Inversión: 250 € (230 € reservando antes del 12 de septiembre, descuento con acompañante o en grupo). Aforo: 20 plazas.',
             serviceType: ServiceType.EVENT,
-            eventDatesText: 'Del 9 al 12 de Octubre de 2026 (Puente de Octubre)',
+            eventDatesText: 'Del viernes 9 al lunes 12 de Octubre de 2026',
             eventStartDate: new Date('2026-10-09T16:00:00.000Z'),
             eventEndDate: new Date('2026-10-12T16:00:00.000Z'),
             durationMinutes: 1440,
-            price: '180.00',
+            price: '250.00',
             maxCapacity: 20,
             calendarId: 'cal-ayuno-terapeutico',
             managerId: manager.id,
             requiresApproval: false,
             allowedModalities: ['in_person'],
+            flyerUrl: '/flyers/ayuno.jpeg',
+            flyerPath: 'public/flyers/ayuno.jpeg',
+            flyerParticularUrl: '/flyers/ayuno_particular.jpg',
+            flyerParticularPath: 'public/flyers/ayuno_particular.jpg',
             reminderNotes:
               'Llevar ropa cómoda de abrigo para la naturaleza, calzado de senderismo/montaña, botella de agua reutilizable, libreta de notas, bañador y toalla grande para saunas/baños termales si aplica.',
             isActive: true,
           }),
         );
       } else {
+        ayunoSvc.flyerParticularUrl = '/flyers/ayuno_particular.jpg';
+        ayunoSvc.flyerParticularPath = 'public/flyers/ayuno_particular.jpg';
+        if (!ayunoSvc.flyerUrl) {
+          ayunoSvc.flyerUrl = '/flyers/ayuno.jpeg';
+          ayunoSvc.flyerPath = 'public/flyers/ayuno.jpeg';
+        }
+        ayunoSvc.price = '250.00';
+        ayunoSvc.eventDatesText = 'Del viernes 9 al lunes 12 de Octubre de 2026';
+        ayunoSvc.description =
+          'Retiro de depuración y ayuno consciente después del verano para subir tu energía vital. Del viernes 9 al lunes 12 de octubre. Lugar paradisíaco y aislado a hora y media de Madrid donde bañarnos y hacer paseos por el monte. Actividades diarias: activación y gimnasia al amanecer, yoga al mediodía, meditación al atardecer y baño de gong en la noche. Dirigido por Salvadora Conesa (40 años como profesora de yoga, 26 como terapeuta Gestalt, 30 años dirigiendo grupos de ayuno). Inversión: 250 € (230 € reservando antes del 12 de septiembre, descuento con acompañante o en grupo). Aforo: 20 plazas.';
         ayunoSvc.reminderNotes =
           ayunoSvc.reminderNotes ||
           'Llevar ropa cómoda de abrigo para la naturaleza, calzado de senderismo/montaña, botella de agua reutilizable, libreta de notas, bañador y toalla grande para saunas/baños termales si aplica.';
