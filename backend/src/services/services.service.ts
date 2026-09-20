@@ -244,6 +244,8 @@ export class ServicesService implements OnModuleInit {
             flyerPath: 'public/flyers/ayuno.jpeg',
             flyerParticularUrl: '/flyers/ayuno_particular.jpg',
             flyerParticularPath: 'public/flyers/ayuno_particular.jpg',
+            videoParticularUrl: '/videos/ayunoterapeuticoparticular.mp4',
+            videoParticularPath: 'public/videos/ayunoterapeuticoparticular.mp4',
             reminderNotes:
               'Llevar ropa cómoda de abrigo para la naturaleza, calzado de senderismo/montaña, botella de agua reutilizable, libreta de notas, bañador y toalla grande para saunas/baños termales si aplica.',
             isActive: true,
@@ -252,6 +254,8 @@ export class ServicesService implements OnModuleInit {
       } else {
         ayunoSvc.flyerParticularUrl = '/flyers/ayuno_particular.jpg';
         ayunoSvc.flyerParticularPath = 'public/flyers/ayuno_particular.jpg';
+        ayunoSvc.videoParticularUrl = '/videos/ayunoterapeuticoparticular.mp4';
+        ayunoSvc.videoParticularPath = 'public/videos/ayunoterapeuticoparticular.mp4';
         if (!ayunoSvc.flyerUrl) {
           ayunoSvc.flyerUrl = '/flyers/ayuno.jpeg';
           ayunoSvc.flyerPath = 'public/flyers/ayuno.jpeg';

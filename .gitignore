@@ -20,3 +20,4 @@ backups/
 *.dump
 bin/
 obj/
+*.mp4
