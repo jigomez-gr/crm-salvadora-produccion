@@ -208,17 +208,49 @@ Todo se configura **desde la propia app**, sin tocar código. Ve a **Agentes** y
   muestra la app para pegarla en YCloud).
 - Prueba el agente al instante en la pestaña **Playground**.
 
+---
+
+## 💾 Copias de Seguridad y Restauración de Base de Datos
+
+En la carpeta `backups/` se incluyen copias completas de la base de datos de producción con el esquema, servicios, categorías y configuraciones:
+- `backups/backup_crm_salvadora_20260920.dump` (formato binario pg_dump `-Fc`)
+- `backups/backup_crm_salvadora_20260920.sql` (script SQL plano)
+- `backups/latest_production_dump.dump` / `latest_production_dump.sql`
+
+### Para restaurar en tu PostgreSQL local:
+
+```bash
+# Con pg_restore (recomendado para formato .dump):
+pg_restore -h localhost -p 5433 -U crm -d crm_salvadora --clean --if-exists backups/backup_crm_salvadora_20260920.dump
+
+# O directamente con psql (para formato .sql):
+psql -h localhost -p 5433 -U crm -d crm_salvadora -f backups/backup_crm_salvadora_20260920.sql
+```
+
+---
+
+## 🚀 Clonar y Arrancar en Otra Máquina para un Proyecto Similar
+
+Para una guía paso a paso completa sobre cómo clonar y desplegar tanto el CRM como la Landing Page en un equipo nuevo o adaptar el proyecto para otro cliente, consulta:
+
+👉 **[docs/GUIA_CLONAR_PROYECTO_SIMILAR.md](docs/GUIA_CLONAR_PROYECTO_SIMILAR.md)**
+
+---
+
 ## 🗂️ Estructura del proyecto
 
-- `backend/` — API (NestJS + TypeORM) con el agente de IA (Mastra) embebido.
-- `frontend/` — interfaz web (Next.js + Tailwind).
-- `docs/` — documentación: el PRD y las decisiones técnicas (ADRs).
+- `backend/` — API (NestJS + TypeORM) con el agente de IA (Mastra) embebido, pasarela Stripe, Zadarma SMS y VAPI.
+- `frontend/` — interfaz web (Next.js + Tailwind) con panel CRM y demo-landing espejo.
+- `backups/` — dumps y copias de seguridad de la base de datos PostgreSQL.
+- `docs/` — documentación: guía de clonación, despliegue en VPS (Dokploy), PRD y ADRs.
 - `docker-compose.yml` — base de datos para **desarrollo local**.
 - `docker-compose.prod.yml` — stack completo (web + API + base de datos) para el **despliegue**.
 
 ## Documentación
 
+- **[docs/GUIA_CLONAR_PROYECTO_SIMILAR.md](docs/GUIA_CLONAR_PROYECTO_SIMILAR.md)** — **Guía maestra para clonar y arrancar en otra máquina**.
 - **[docs/PRD.md](docs/PRD.md)** — qué hace la app y su alcance (estado actual).
 - **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** — desplegar en un VPS con Dokploy.
 - **[docs/adr/](docs/adr/)** — decisiones técnicas: stack (0001), realtime/SSE (0002),
   WhatsApp/YCloud (0003), proveedor de IA (0004→0005), multi-agente + OpenRouter (0005).
+
