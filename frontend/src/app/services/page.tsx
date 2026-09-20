@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useMemo } from "react";
-import { Plus, Edit2, Sparkles, Calendar, UserCheck, Clock, Tag, AlertCircle, ExternalLink, CreditCard, Compass, Users, CheckCircle2, Trash2, FolderTree, Image as ImageIcon, Layers, AlertTriangle } from "lucide-react";
+import { Plus, Edit2, Sparkles, Calendar, UserCheck, Clock, Tag, AlertCircle, ExternalLink, CreditCard, Compass, Users, CheckCircle2, Trash2, FolderTree, Image as ImageIcon, Layers, AlertTriangle, Copy, Video } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { Service, ServiceCategory, User } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
@@ -29,6 +29,12 @@ interface ServiceFormData {
   categoryId: string;
   flyerPath: string;
   flyerUrl: string;
+  flyerParticularPath: string;
+  flyerParticularUrl: string;
+  videoParticularPath: string;
+  videoParticularUrl: string;
+  fechaDesde: string;
+  fechaHasta: string;
   requiresApproval: boolean;
   allowedModalities: string[];
   requiresReason: boolean;
@@ -55,6 +61,7 @@ export default function ServicesPage() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const toast = useToast();
@@ -77,6 +84,12 @@ export default function ServicesPage() {
     categoryId: "",
     flyerPath: "",
     flyerUrl: "",
+    flyerParticularPath: "",
+    flyerParticularUrl: "",
+    videoParticularPath: "",
+    videoParticularUrl: "",
+    fechaDesde: "2000-01-01",
+    fechaHasta: "2099-12-31",
     requiresApproval: false,
     allowedModalities: ["in_person"],
     requiresReason: false,
@@ -184,6 +197,12 @@ export default function ServicesPage() {
       categoryId: categories[0]?.id ?? "",
       flyerPath: "",
       flyerUrl: "",
+      flyerParticularPath: "",
+      flyerParticularUrl: "",
+      videoParticularPath: "",
+      videoParticularUrl: "",
+      fechaDesde: "2000-01-01",
+      fechaHasta: "2099-12-31",
       requiresApproval: false,
       allowedModalities: ["in_person"],
       requiresReason: false,
@@ -226,6 +245,12 @@ export default function ServicesPage() {
       categoryId: svc.categoryId ?? "",
       flyerPath: svc.flyerPath ?? "",
       flyerUrl: svc.flyerUrl ?? "",
+      flyerParticularPath: svc.flyerParticularPath ?? "",
+      flyerParticularUrl: svc.flyerParticularUrl ?? "",
+      videoParticularPath: svc.videoParticularPath ?? "",
+      videoParticularUrl: svc.videoParticularUrl ?? "",
+      fechaDesde: svc.fechaDesde ? svc.fechaDesde.slice(0, 10) : "2000-01-01",
+      fechaHasta: svc.fechaHasta ? svc.fechaHasta.slice(0, 10) : "2099-12-31",
       requiresApproval: Boolean(svc.requiresApproval),
       allowedModalities: svc.allowedModalities?.length ? svc.allowedModalities : ["in_person"],
       requiresReason: Boolean(svc.requiresReason),
@@ -379,6 +404,22 @@ export default function ServicesPage() {
     }
   }
 
+  async function handleDuplicate(svc: Service) {
+    if (!svc.id) return;
+    setDuplicatingId(svc.id);
+    try {
+      const duplicated = await apiFetch<Service>(`/api/services/${svc.id}/duplicate`, {
+        method: "POST",
+      });
+      toast.success(`Servicio "${duplicated.name}" duplicado con éxito.`);
+      await refreshData();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Error al duplicar el servicio");
+    } finally {
+      setDuplicatingId(null);
+    }
+  }
+
   function toggleSelect(id: string) {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
@@ -490,6 +531,12 @@ export default function ServicesPage() {
       categoryId: form.categoryId || undefined,
       flyerPath: form.flyerPath.trim() || undefined,
       flyerUrl: form.flyerUrl.trim() || undefined,
+      flyerParticularPath: form.flyerParticularPath.trim() || undefined,
+      flyerParticularUrl: form.flyerParticularUrl.trim() || undefined,
+      videoParticularPath: form.videoParticularPath.trim() || undefined,
+      videoParticularUrl: form.videoParticularUrl.trim() || undefined,
+      fechaDesde: form.fechaDesde.trim() || "2000-01-01",
+      fechaHasta: form.fechaHasta.trim() || "2099-12-31",
       requiresApproval: form.requiresApproval,
       allowedModalities: form.allowedModalities,
       requiresReason: form.requiresReason,
@@ -726,9 +773,24 @@ export default function ServicesPage() {
                             📁 {s.category.name}
                           </span>
                         )}
-                        {(s.flyerUrl || s.flyerPath) && (
-                          <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 border border-slate-200" title={`Flyer: ${s.flyerPath || s.flyerUrl}`}>
+                        {(s.videoParticularUrl || s.videoParticularPath) && (
+                          <span className="inline-flex items-center gap-1 rounded bg-purple-50 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 border border-purple-200" title={`Video Particular: ${s.videoParticularPath || s.videoParticularUrl}`}>
+                            🎥 Video
+                          </span>
+                        )}
+                        {(s.flyerParticularUrl || s.flyerParticularPath) && (
+                          <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 border border-amber-200" title={`Flyer Particular: ${s.flyerParticularPath || s.flyerParticularUrl}`}>
+                            🖼️ Flyer Particular
+                          </span>
+                        )}
+                        {(s.flyerUrl || s.flyerPath) && !(s.flyerParticularUrl || s.flyerParticularPath) && (
+                          <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 border border-slate-200" title={`Flyer General: ${s.flyerPath || s.flyerUrl}`}>
                             🖼️ Flyer
+                          </span>
+                        )}
+                        {((s.fechaDesde && !s.fechaDesde.startsWith("2000-01-01")) || (s.fechaHasta && !s.fechaHasta.startsWith("2099-12-31"))) && (
+                          <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 border border-indigo-200" title="Vigencia de visualización">
+                            🗓️ {s.fechaDesde?.slice(0, 10)} al {s.fechaHasta?.slice(0, 10)}
                           </span>
                         )}
                       </div>
@@ -1000,15 +1062,29 @@ export default function ServicesPage() {
                   <span />
                 )}
 
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => openEdit(s)}
-                  className="flex items-center gap-1 text-xs"
-                >
-                  <Edit2 className="h-3 w-3" />
-                  Editar
-                </Button>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleDuplicate(s)}
+                    disabled={duplicatingId === s.id}
+                    className="flex items-center gap-1 text-xs text-neutral-700 hover:text-indigo-600"
+                    title="Duplicar este servicio para crear uno nuevo a partir de sus datos"
+                  >
+                    <Copy className="h-3 w-3" />
+                    {duplicatingId === s.id ? "Duplicando..." : "Duplicar"}
+                  </Button>
+
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => openEdit(s)}
+                    className="flex items-center gap-1 text-xs"
+                  >
+                    <Edit2 className="h-3 w-3" />
+                    Editar
+                  </Button>
+                </div>
               </div>
             </div>
           ))}
@@ -1275,14 +1351,176 @@ export default function ServicesPage() {
                   <ImageIcon className="h-6 w-6 text-neutral-300 absolute" />
                 </div>
                 <div className="min-w-0 text-xs">
-                  <p className="font-medium text-neutral-800">Previsualización de Gráfica</p>
+                  <p className="font-medium text-neutral-800">Previsualización de Gráfica / Flyer General</p>
                   <p className="text-[11px] text-neutral-500 truncate max-w-xs">{form.flyerUrl || form.flyerPath}</p>
                   <p className="text-[10px] text-neutral-400 mt-0.5">
-                    Se mostrará en la ficha del servicio y en el catálogo web sincronizado.
+                    Se mostrará en la ficha del servicio y en el catálogo web sincronizado si no hay flyer o video particular.
                   </p>
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Fechas de Vigencia / Visualización */}
+          <div className="rounded-lg border border-neutral-200 bg-neutral-50/60 p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-neutral-800 flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5 text-indigo-600" />
+                Fechas de Vigencia / Visualización del Icono
+              </label>
+              {(form.fechaDesde !== "2000-01-01" || form.fechaHasta !== "2099-12-31") && (
+                <span className="text-[10px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 font-medium">
+                  Rango personalizado
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-neutral-500">
+              Controla el periodo en el que este servicio es visible en la web pública. Por defecto: desde 01/01/2000 hasta 31/12/2099.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                  Fecha Desde (Aparición)
+                </label>
+                <Input
+                  type="date"
+                  value={form.fechaDesde}
+                  onChange={(e) => setForm((f) => ({ ...f, fechaDesde: e.target.value }))}
+                  className="text-xs"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                  Fecha Hasta (Fin actividad)
+                </label>
+                <Input
+                  type="date"
+                  value={form.fechaHasta}
+                  onChange={(e) => setForm((f) => ({ ...f, fechaHasta: e.target.value }))}
+                  className="text-xs"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Multimedia Particular del Servicio (Prioridad de Visualización) */}
+          <div className="rounded-lg border border-purple-200 bg-purple-50/40 p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-purple-950 flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-purple-600" />
+                Multimedia Particular del Servicio (Prioridad de visualización)
+              </label>
+            </div>
+            <p className="text-[11px] text-purple-800">
+              En la web y catálogo interactivo se mostrará en orden de prioridad: <strong>1º Video MP4 Particular</strong>, si no hay <strong>2º Flyer Particular</strong>, y si no hay <strong>3º Flyer General de Itinerario</strong>.
+            </p>
+
+            {/* Video MP4 Particular */}
+            <div className="space-y-2 pt-1 border-t border-purple-200/60">
+              <label className="text-xs font-medium text-neutral-800 flex items-center gap-1">
+                <Video className="h-3.5 w-3.5 text-purple-600" />
+                Video Particular (MP4)
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                    Path físico del video MP4 en disco
+                  </label>
+                  <Input
+                    value={form.videoParticularPath}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setForm((f) => ({
+                        ...f,
+                        videoParticularPath: val,
+                        videoParticularUrl: f.videoParticularUrl || (val.startsWith("public/") ? val.replace(/^public/, "") : f.videoParticularUrl),
+                      }));
+                    }}
+                    placeholder="ej. public/videos/asanas.mp4"
+                    className="text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                    URL servida / visualización del Video MP4
+                  </label>
+                  <Input
+                    value={form.videoParticularUrl}
+                    onChange={(e) => setForm((f) => ({ ...f, videoParticularUrl: e.target.value }))}
+                    placeholder="ej. /videos/asanas.mp4 o https://..."
+                    className="text-xs"
+                  />
+                </div>
+              </div>
+              {(form.videoParticularUrl || form.videoParticularPath) && (
+                <div className="rounded-md border border-purple-200 bg-white p-2">
+                  <p className="text-[11px] font-medium text-neutral-700 mb-1.5">Previsualización de Video Particular:</p>
+                  <video
+                    src={form.videoParticularUrl || form.videoParticularPath}
+                    controls
+                    playsInline
+                    className="w-full max-h-48 rounded bg-black object-contain"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Flyer Particular */}
+            <div className="space-y-2 pt-2 border-t border-purple-200/60">
+              <label className="text-xs font-medium text-neutral-800 flex items-center gap-1">
+                <ImageIcon className="h-3.5 w-3.5 text-purple-600" />
+                Flyer Particular del Servicio
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                    Path físico del flyer particular en disco
+                  </label>
+                  <Input
+                    value={form.flyerParticularPath}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setForm((f) => ({
+                        ...f,
+                        flyerParticularPath: val,
+                        flyerParticularUrl: f.flyerParticularUrl || (val.startsWith("public/") ? val.replace(/^public/, "") : f.flyerParticularUrl),
+                      }));
+                    }}
+                    placeholder="ej. public/flyers/particular.jpg"
+                    className="text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                    URL servida del flyer particular
+                  </label>
+                  <Input
+                    value={form.flyerParticularUrl}
+                    onChange={(e) => setForm((f) => ({ ...f, flyerParticularUrl: e.target.value }))}
+                    placeholder="ej. /flyers/particular.jpg"
+                    className="text-xs"
+                  />
+                </div>
+              </div>
+              {(form.flyerParticularUrl || form.flyerParticularPath) && (
+                <div className="rounded-md border border-purple-200 bg-white p-2 flex items-center gap-3">
+                  <div className="relative h-16 w-16 overflow-hidden rounded border border-neutral-200 bg-neutral-100 shrink-0 flex items-center justify-center">
+                    <img
+                      src={form.flyerParticularUrl || form.flyerParticularPath}
+                      alt="Previsualización flyer particular"
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = "none";
+                      }}
+                    />
+                  </div>
+                  <div className="min-w-0 text-xs">
+                    <p className="font-medium text-neutral-800">Previsualización de Flyer Particular</p>
+                    <p className="text-[11px] text-neutral-500 truncate">{form.flyerParticularUrl || form.flyerParticularPath}</p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div>

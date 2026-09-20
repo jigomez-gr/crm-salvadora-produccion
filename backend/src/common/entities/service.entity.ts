@@ -53,13 +53,34 @@ export class Service {
   @Column({ type: 'jsonb', nullable: true })
   weeklySchedule: Record<number, string[]> | null;
 
-  // Flyer / promotional graphic image URL
+  // Flyer / promotional graphic image URL (General / Itinerario)
   @Column({ type: 'text', nullable: true })
   flyerUrl: string | null;
 
-  // Flyer physical storage path (e.g. /app/media/flyers/yoga.jpeg or public/flyers/yoga.jpeg)
+  // Flyer physical storage path
   @Column({ type: 'text', nullable: true })
   flyerPath: string | null;
+
+  // Flyer Particular (distinct from the general/itinerary flyer)
+  @Column({ type: 'text', nullable: true })
+  flyerParticularUrl: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  flyerParticularPath: string | null;
+
+  // Video Particular (MP4 URL / storage path)
+  @Column({ type: 'text', nullable: true })
+  videoParticularUrl: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  videoParticularPath: string | null;
+
+  // Date visibility range (fechaDesde and fechaHasta)
+  @Column({ type: 'date', default: '2000-01-01' })
+  fechaDesde: string;
+
+  @Column({ type: 'date', default: '2099-12-31' })
+  fechaHasta: string;
 
   @Column({ type: 'timestamptz', nullable: true })
   eventStartDate: Date | null;

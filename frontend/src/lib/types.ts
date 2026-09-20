@@ -51,6 +51,12 @@ export interface Service {
   scheduleText?: string | null;
   flyerUrl?: string | null;
   flyerPath?: string | null;
+  flyerParticularUrl?: string | null;
+  flyerParticularPath?: string | null;
+  videoParticularUrl?: string | null;
+  videoParticularPath?: string | null;
+  fechaDesde?: string | null;
+  fechaHasta?: string | null;
   categoryId?: string | null;
   category?: ServiceCategory | null;
   displayOrder?: number;

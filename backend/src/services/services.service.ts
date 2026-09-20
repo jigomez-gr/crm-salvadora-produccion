@@ -68,6 +68,12 @@ export class ServicesService implements OnModuleInit {
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "reminderMinutesEnabled" boolean DEFAULT true;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "reminderMinutes" integer DEFAULT 120;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "flyerPath" text;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "flyerParticularUrl" text;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "flyerParticularPath" text;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "videoParticularUrl" text;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "videoParticularPath" text;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "fechaDesde" date DEFAULT '2000-01-01';
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "fechaHasta" date DEFAULT '2099-12-31';
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "categoryId" uuid;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "displayOrder" integer DEFAULT 0;
 
@@ -969,6 +975,12 @@ export class ServicesService implements OnModuleInit {
       displayOrder: dto.displayOrder !== undefined ? dto.displayOrder : 0,
       flyerPath: dto.flyerPath || null,
       flyerUrl: dto.flyerUrl || null,
+      flyerParticularPath: dto.flyerParticularPath || null,
+      flyerParticularUrl: dto.flyerParticularUrl || null,
+      videoParticularPath: dto.videoParticularPath || null,
+      videoParticularUrl: dto.videoParticularUrl || null,
+      fechaDesde: dto.fechaDesde || '2000-01-01',
+      fechaHasta: dto.fechaHasta || '2099-12-31',
     });
 
     const saved = await this.serviceRepo.save(service);
@@ -1038,8 +1050,90 @@ export class ServicesService implements OnModuleInit {
     if (dto.displayOrder !== undefined) service.displayOrder = dto.displayOrder;
     if (dto.flyerPath !== undefined) service.flyerPath = dto.flyerPath || null;
     if (dto.flyerUrl !== undefined) service.flyerUrl = dto.flyerUrl || null;
+    if (dto.flyerParticularPath !== undefined) service.flyerParticularPath = dto.flyerParticularPath || null;
+    if (dto.flyerParticularUrl !== undefined) service.flyerParticularUrl = dto.flyerParticularUrl || null;
+    if (dto.videoParticularPath !== undefined) service.videoParticularPath = dto.videoParticularPath || null;
+    if (dto.videoParticularUrl !== undefined) service.videoParticularUrl = dto.videoParticularUrl || null;
+    if (dto.fechaDesde !== undefined) service.fechaDesde = dto.fechaDesde || '2000-01-01';
+    if (dto.fechaHasta !== undefined) service.fechaHasta = dto.fechaHasta || '2099-12-31';
 
     const saved = await this.serviceRepo.save(service);
+    return this.enrichService(saved);
+  }
+
+  async duplicate(id: string, actor?: { id?: string | null; email?: string | null }): Promise<Service> {
+    const source = await this.findOne(id);
+    if (!source) {
+      throw new NotFoundException(`Servicio original ${id} no encontrado`);
+    }
+
+    // Generate unique name: "Nombre (Copia)" or "Nombre (Copia 2)", etc.
+    let copyName = `${source.name} (Copia)`;
+    let counter = 2;
+    while (await this.findByName(copyName)) {
+      copyName = `${source.name} (Copia ${counter})`;
+      counter++;
+    }
+
+    const generatedCalendarId = `cal-${copyName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+
+    const newService = this.serviceRepo.create({
+      name: copyName,
+      description: source.description,
+      serviceType: source.serviceType,
+      eventDatesText: source.eventDatesText,
+      scheduleText: source.scheduleText,
+      weeklySchedule: source.weeklySchedule,
+      flyerUrl: source.flyerUrl,
+      flyerPath: source.flyerPath,
+      flyerParticularUrl: source.flyerParticularUrl,
+      flyerParticularPath: source.flyerParticularPath,
+      videoParticularUrl: source.videoParticularUrl,
+      videoParticularPath: source.videoParticularPath,
+      fechaDesde: source.fechaDesde || '2000-01-01',
+      fechaHasta: source.fechaHasta || '2099-12-31',
+      eventStartDate: source.eventStartDate,
+      eventEndDate: source.eventEndDate,
+      maxCapacity: source.maxCapacity,
+      minQuorum: source.minQuorum,
+      quorumDeadline: source.quorumDeadline,
+      durationMinutes: source.durationMinutes,
+      price: source.price,
+      paymentType: source.paymentType,
+      externalPaymentUrl: source.externalPaymentUrl,
+      calendarId: generatedCalendarId,
+      managerId: source.managerId,
+      categoryId: source.categoryId,
+      displayOrder: (source.displayOrder ?? 0) + 1,
+      requiresApproval: source.requiresApproval,
+      allowedModalities: source.allowedModalities ? [...source.allowedModalities] : ['in_person'],
+      requiresReason: source.requiresReason,
+      calEventTypeId: source.calEventTypeId,
+      reminderNotes: source.reminderNotes,
+      isActive: true,
+      notifyByEmail: source.notifyByEmail,
+      notifyByWhatsapp: source.notifyByWhatsapp,
+      notifyBySms: source.notifyBySms,
+      reminderWhatsapp: source.reminderWhatsapp,
+      reminderEmail: source.reminderEmail,
+      reminderVoice: source.reminderVoice,
+      reminderSms: source.reminderSms,
+      reminderHoursEnabled: source.reminderHoursEnabled,
+      reminderHours: source.reminderHours,
+      reminderMinutesEnabled: source.reminderMinutesEnabled,
+      reminderMinutes: source.reminderMinutes,
+    });
+
+    const saved = await this.serviceRepo.save(newService);
+
+    this.eventEmitter.emit(AUDIT_EVENT, {
+      actor: actor || { id: null, email: 'system' },
+      action: 'service.duplicate',
+      summary: `Servicio "${source.name}" duplicado como "${saved.name}"`,
+      targetId: saved.id,
+      targetType: 'service',
+    });
+
     return this.enrichService(saved);
   }
 

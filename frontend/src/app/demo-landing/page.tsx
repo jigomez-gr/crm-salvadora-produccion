@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -24,7 +24,13 @@ import {
   HeartHandshake,
   Compass,
   Users,
+  FolderTree,
+  Video,
+  Layers,
+  Filter,
+  ExternalLink,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { SimuladorDiagnosticoModal } from "@/components/SimuladorDiagnosticoModal";
 
 interface ChatMessage {
@@ -33,25 +39,40 @@ interface ChatMessage {
   body: string;
 }
 
-interface ServiceItem {
+interface WidgetCategory {
   id: string;
-  title: string;
-  category: string;
-  categoryIcon: string;
-  desc: string;
-  badge?: string;
-  schedules?: {
-    morning?: string;
-    afternoon?: string;
-    note?: string;
-  };
-  duration: string;
-  priceTag: string;
-  isFreeTrial: boolean;
-  serviceName: string;
-  calendarId: string;
-  modalities?: string[];
-  tags?: string[];
+  code: string;
+  name: string;
+  displayOrder: number;
+}
+
+interface WidgetService {
+  id: string;
+  name: string;
+  description?: string;
+  serviceType: "recurring" | "event";
+  eventDatesText?: string;
+  scheduleText?: string;
+  maxCapacity?: number;
+  minQuorum?: number;
+  durationMinutes: number;
+  price?: string;
+  paymentType: "stripe" | "external_url" | "in_person" | "free";
+  externalPaymentUrl?: string;
+  calendarId?: string;
+  allowedModalities?: string[];
+  requiresReason?: boolean;
+  reminderNotes?: string;
+  displayOrder?: number;
+  flyerUrl?: string;
+  flyerPath?: string;
+  flyerParticularUrl?: string;
+  flyerParticularPath?: string;
+  videoParticularUrl?: string;
+  videoParticularPath?: string;
+  fechaDesde?: string;
+  fechaHasta?: string;
+  category?: WidgetCategory | null;
 }
 
 export default function DemoLandingPage() {
@@ -64,6 +85,12 @@ export default function DemoLandingPage() {
   const [businessName, setBusinessName] = useState("Centro de Yoga y Bienestar Salvadora");
   const [selectedService, setSelectedService] = useState<string | null>(null);
 
+  // Dynamic services & filters
+  const [services, setServices] = useState<WidgetService[]>([]);
+  const [servicesLoading, setServicesLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedType, setSelectedType] = useState<string>("all");
+
   // WhatsApp Handoff Form State
   const [waModalOpen, setWaModalOpen] = useState(false);
   const [waName, setWaName] = useState("");
@@ -74,228 +101,6 @@ export default function DemoLandingPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // ─── 1. SERVICIOS DEL CENTRO / CLUB SOCIAL PARQUE GRANADA (EXCLUSIVAMENTE 2) ───
-  const centroActivities: ServiceItem[] = [
-    {
-      id: "bienestar-experience",
-      title: "Bienestar Experience (Longevidad & Salud Integral)",
-      category: "Longevidad & Biohacking",
-      categoryIcon: "🌿",
-      badge: "Programa de Bienestar Integral",
-      desc: "Experiencia personalizada y asesoramiento de bienestar integral presencial y online para optimizar tu energía vital, descanso, equilibrio emocional y longevidad saludable.",
-      tags: [
-        "Biohacking",
-        "Longevidad",
-        "Rejuvenecimiento",
-        "Biología",
-        "Crecimiento",
-        "Estilo de Vida",
-        "Meditación",
-        "Motivación",
-        "Inspiración",
-        "Conciencia",
-        "Ciencia",
-        "Espiritualidad",
-        "Nutrición",
-        "Medicina Natural",
-        "Ciclos Circadianos",
-        "Psicologías Positivas",
-        "Terapia de Sonido",
-      ],
-      schedules: {
-        morning: "Citas concertadas de mañana (Presencial y Online)",
-        afternoon: "Citas concertadas de tarde (Presencial y Online)",
-        note: "Sesión individual de 60 min • Se acuerda la hora entre alumno y asesor",
-      },
-      duration: "60 min",
-      priceTag: "25.00 € / sesión",
-      isFreeTrial: false,
-      serviceName: "Bienestar Experience (Longevidad y Bienestar Integral)",
-      calendarId: "cal-bienestar-experience",
-      modalities: ["Presencial", "Virtual (Online)"],
-    },
-    {
-      id: "iaido",
-      title: "Iaidō (Esgrima Japonesa Tradicional)",
-      category: "Arte de la Katana",
-      categoryIcon: "⚔️",
-      badge: "Prueba Gratis",
-      desc: "El arte marcial milenario del desenvaine, corte y funda de la katana japonesa. Enfoque en la máxima precisión, concentración, etiqueta marcial y postura corporal.",
-      tags: ["Katana Tradicional", "Concentración", "Arte Marcial", "Prueba Gratuita"],
-      schedules: {
-        afternoon: "Lunes: 20:00 a 21:00 (60 min) | Jueves: 20:30 a 22:00 (90 min)",
-        note: "Lugar: Club Social Parque Granada (Cafetería Bar • Entrada Libre). Prueba gratis en todas las clases.",
-      },
-      duration: "60 - 90 min",
-      priceTag: "Prueba Gratis",
-      isFreeTrial: true,
-      serviceName: "Iaidō (Esgrima Japonesa)",
-      calendarId: "cal-iaido",
-      modalities: ["Presencial en Club Social Parque Granada"],
-    },
-  ];
-
-  // ─── 2. CLASES REGULARES DE LA ESCUELA DE YOGA SALVADORA CONESA ───
-  const regularYogaServices: ServiceItem[] = [
-    {
-      id: "hatha-yoga-1",
-      title: "Hatha Yoga Terapéutico (1 clase semanal)",
-      category: "Yoga & Salud Postural",
-      categoryIcon: "🧘",
-      badge: "1ª Clase GRATIS (te la regalamos)",
-      desc: "Práctica consciente de asanas, alineación corporal, respiración terapéutica y relajación profunda.",
-      schedules: {
-        morning: "Martes y Jueves: 9:45 y 11:15",
-        afternoon: "Martes: 17:00, 18:30, 20:00 | Miércoles: 20:15 | Jueves: 16:00, 17:30, 19:00",
-        note: "Clases de 90 min. 1ª clase de prueba NO SE COBRA, SE LA REGALAMOS. Si no continúas como alumno, puedes acudir a clases esporádicas a 10€/sesión. Alumnos con horario fijo semanal y recuperación de clases (3 meses).",
-      },
-      duration: "90 min",
-      priceTag: "25.00 € / mes",
-      isFreeTrial: true,
-      serviceName: "Hatha Yoga Terapéutico (1 clase semanal)",
-      calendarId: "cal-hatha-yoga",
-    },
-    {
-      id: "hatha-yoga-2",
-      title: "Hatha Yoga Terapéutico (2 clases semanales)",
-      category: "Yoga & Práctica Frecuente",
-      categoryIcon: "🧘",
-      badge: "1ª Clase GRATIS (te la regalamos)",
-      desc: "Inscripción para 2 sesiones semanales en los horarios oficiales de mañana o tarde.",
-      schedules: {
-        morning: "Martes y Jueves: 9:45 y 11:15",
-        afternoon: "Martes: 17:00, 18:30, 20:00 | Miércoles: 20:15 | Jueves: 16:00, 17:30, 19:00",
-        note: "Comparte calendario y aforo con 1 clase semanal. 1ª clase de prueba de regalo (gratis). Clases esporádicas a 10€/sesión. Alumnos con horario fijo semanal y recuperación de clases (3 meses).",
-      },
-      duration: "90 min",
-      priceTag: "42.00 € / mes",
-      isFreeTrial: true,
-      serviceName: "Hatha Yoga Terapéutico (2 clases semanales)",
-      calendarId: "cal-hatha-yoga",
-    },
-    {
-      id: "meditacion",
-      title: "Meditaciones Guiadas",
-      category: "Conciencia & Silencio",
-      categoryIcon: "✨",
-      desc: "Sesión grupal de meditación, respiración y centramiento para iniciar el día en calma y presencia.",
-      schedules: {
-        morning: "Martes y Jueves de 9:15 a 9:45 (30 min)",
-        note: "Gratuitas para alumnos inscritos en Yoga. No alumnos: 15€/mes o 3€ sesión suelta. Asistencia flexible respetando aforo.",
-      },
-      duration: "30 min",
-      priceTag: "15.00 € / mes · 3€ suelta (Gratis alumnos)",
-      isFreeTrial: false,
-      serviceName: "Meditaciones Guiadas",
-      calendarId: "cal-meditacion",
-    },
-    {
-      id: "gestalt",
-      title: "Terapia Gestalt (Sesión Individual)",
-      category: "Psicoterapia & Crecimiento",
-      categoryIcon: "🌱",
-      desc: "Sesión individual de acompañamiento terapéutico y toma de conciencia presencial u online.",
-      schedules: {
-        note: "Hora acordada de forma personalizada entre el alumno y el terapeuta.",
-      },
-      duration: "60 min",
-      priceTag: "35.00 € / sesión",
-      isFreeTrial: false,
-      serviceName: "Terapia Gestalt (Sesión Individual)",
-      calendarId: "cal-gestalt",
-    },
-  ];
-
-  // ─── 3. TALLERES, EVENTOS Y RETIROS ESPECIALES (REALES) ───
-  const eventServices: ServiceItem[] = [
-    {
-      id: "bano-gong",
-      title: "Baño de Gong y Meditación Sonora",
-      category: "Sonoterapia Mensual",
-      categoryIcon: "🔔",
-      badge: "Sábado 26 Septiembre 2026",
-      desc: "Un sábado al mes a finales de mes. Sesión de 2 horas: preparación, inmersión en el sonido envolvente de los gongs y meditación integradora.",
-      schedules: {
-        afternoon: "Sábado 26 de Septiembre de 2026 de 18:00 a 20:00",
-        note: "Aforo máximo: 30 personas. Pago en el centro.",
-      },
-      duration: "120 min (2h)",
-      priceTag: "16.00 €",
-      isFreeTrial: false,
-      serviceName: "Baño de Gong y Meditación Sonora",
-      calendarId: "cal-gong-mensual",
-    },
-    {
-      id: "puja-gongs",
-      title: "Puja de Gongs (Noche de Sonido - 11 Horas)",
-      category: "Inmersión Anual",
-      categoryIcon: "🌙",
-      badge: "Sábado 28 Noviembre 2026",
-      desc: "Evento anual de 11 horas ininterrumpidas de sonido sagrado durante toda la noche. Se medita y descansa envuelto en la vibración.",
-      schedules: {
-        afternoon: "Sábado 28 de Noviembre de 2026 (de 21:00 a 08:00 del domingo)",
-        note: "Aforo: 30 personas. Precio: 95€ (rango 90-100€ según asistentes). Reserva anticipada.",
-      },
-      duration: "660 min (11h)",
-      priceTag: "95.00 €",
-      isFreeTrial: false,
-      serviceName: "Puja de Gongs (Noche Sagrada de Sonido - 11h)",
-      calendarId: "cal-puja-gongs",
-    },
-    {
-      id: "constelaciones",
-      title: "Constelaciones Familiares",
-      category: "Taller Vivencial",
-      categoryIcon: "🕊️",
-      badge: "Domingo 27 Septiembre 2026",
-      desc: "Taller mensual de sanación de vínculos, dinámicas ocultas y orden en el sistema familiar.",
-      schedules: {
-        morning: "Domingo 27 de Septiembre de 2026 (10:00 a 14:00)",
-        note: "Tarifas: Constelar (asunto propio) 60€ / Participar (representante) 20€. Aforo: 25 personas.",
-      },
-      duration: "240 min (4h)",
-      priceTag: "60.00 € / 20.00 €",
-      isFreeTrial: false,
-      serviceName: "Constelaciones Familiares",
-      calendarId: "cal-constelaciones",
-    },
-    {
-      id: "ayuno-terapeutico",
-      title: "Retiro de Ayuno Terapéutico",
-      category: "Retiro Semestral",
-      categoryIcon: "🏕️",
-      badge: "Puente de Octubre (9-12 Oct 2026)",
-      desc: "Retiro residencial en la naturaleza para descanso digestivo, depuración, caminatas conscientes y salud holística.",
-      schedules: {
-        note: "Del 9 al 12 de Octubre de 2026. Aforo: 20 plazas. Precio según estancia y habitación.",
-      },
-      duration: "4 días",
-      priceTag: "Según estancia",
-      isFreeTrial: false,
-      serviceName: "Retiro de Ayuno Terapéutico",
-      calendarId: "cal-ayuno-terapeutico",
-    },
-    {
-      id: "encuentro-mujeres",
-      title: "Encuentro de Mujeres (Primavera)",
-      category: "Círculo Femenino",
-      categoryIcon: "🌸",
-      badge: "Sábado 15 Mayo 2027",
-      desc: "Jornada anual de conexión, rituales de paso, autocuidado y empoderamiento femenino.",
-      schedules: {
-        morning: "Sábado 15 de Mayo de 2027 (10:00 a 16:00)",
-        note: "Aforo máximo: 25 personas. Precio según programa.",
-      },
-      duration: "360 min (6h)",
-      priceTag: "45.00 €",
-      isFreeTrial: false,
-      serviceName: "Encuentro de Mujeres (Primavera)",
-      calendarId: "cal-encuentro-mujeres",
-    },
-  ];
-
-  const allServices = [...centroActivities, ...regularYogaServices, ...eventServices];
-
   useEffect(() => {
     let currentSess = localStorage.getItem("crm_widget_demo_session");
     if (!currentSess) {
@@ -303,6 +108,32 @@ export default function DemoLandingPage() {
       localStorage.setItem("crm_widget_demo_session", currentSess);
     }
     setSessionId(currentSess);
+
+    const API_BASE =
+      typeof window !== "undefined" && window.location.origin.includes("crm-")
+        ? ""
+        : (process.env.NEXT_PUBLIC_API_URL || "https://crm-salvadoraconesa.jigretera.com");
+
+    fetch(`${API_BASE}/api/widget/services`)
+      .then((r) => r.json())
+      .then((data) => {
+        const rawList = Array.isArray(data) ? data : (data && Array.isArray(data.services) ? data.services : []);
+        const normalized = rawList.map((s: any) => ({
+          ...s,
+          category: s.category || (s.categoryId || s.categoryName ? {
+            id: s.categoryId || s.categoryCode || "cat-default",
+            code: s.categoryCode || "general",
+            name: s.categoryName || "General",
+            displayOrder: s.category?.displayOrder ?? 0,
+          } : null),
+        }));
+        setServices(normalized);
+        setServicesLoading(false);
+      })
+      .catch((err) => {
+        console.error("Error cargando servicios del widget:", err);
+        setServicesLoading(false);
+      });
 
     fetch("/api/widget/config/booking")
       .then((r) => r.json())
@@ -329,6 +160,55 @@ export default function DemoLandingPage() {
         ]);
       });
   }, []);
+
+  const categories = useMemo(() => {
+    const map = new Map<string, WidgetCategory>();
+    services.forEach((s) => {
+      if (s.category && s.category.id) {
+        map.set(s.category.id, s.category);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+  }, [services]);
+
+  const filteredServices = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return services.filter((s) => {
+      if (s.fechaDesde && s.fechaDesde.slice(0, 10) > today) return false;
+      if (s.fechaHasta && s.fechaHasta.slice(0, 10) < today) return false;
+      if (selectedCategory !== "all") {
+        if (selectedCategory === "none" && s.category) return false;
+        if (selectedCategory !== "none" && s.category?.id !== selectedCategory) return false;
+      }
+      if (selectedType !== "all" && s.serviceType !== selectedType) return false;
+      return true;
+    });
+  }, [services, selectedCategory, selectedType]);
+
+  const groupedServices = useMemo(() => {
+    const groups: { category: WidgetCategory | null; services: WidgetService[] }[] = [];
+
+    for (const cat of categories) {
+      if (selectedCategory !== "all" && selectedCategory !== cat.id) continue;
+      const catServices = filteredServices
+        .filter((s) => s.category?.id === cat.id)
+        .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+      if (catServices.length > 0) {
+        groups.push({ category: cat, services: catServices });
+      }
+    }
+
+    if (selectedCategory === "all" || selectedCategory === "none") {
+      const uncategorized = filteredServices
+        .filter((s) => !s.category?.id)
+        .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+      if (uncategorized.length > 0) {
+        groups.push({ category: null, services: uncategorized });
+      }
+    }
+
+    return groups;
+  }, [categories, filteredServices, selectedCategory]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -390,13 +270,11 @@ export default function DemoLandingPage() {
     }
   };
 
-  const handleServiceSelect = (svc: ServiceItem, preferredShift?: string) => {
+  const handleServiceSelect = (svc: WidgetService) => {
     setIsOpen(true);
-    setSelectedService(svc.serviceName);
-    const msg = preferredShift
-      ? `Hola, me gustaría reservar para ${svc.title} en turno de ${preferredShift}. ¿Qué disponibilidad tenéis?`
-      : `Hola, me gustaría información y disponibilidad para ${svc.title}.`;
-    handleSend(msg, svc.serviceName);
+    setSelectedService(svc.name);
+    const msg = `Hola, me gustaría información y disponibilidad para el servicio "${svc.name}". ¿Qué plazas u horarios tenéis?`;
+    handleSend(msg, svc.name);
   };
 
   const handleWhatsAppHandoff = async (e: React.FormEvent) => {
@@ -591,343 +469,288 @@ export default function DemoLandingPage() {
         </div>
       </section>
 
-      {/* ─── SECCIÓN 1: OTRAS ACTIVIDADES ADICIONALES DE LA ESCUELA DE YOGA SALVADORA CONESA (EXCLUSIVAMENTE 2) ─── */}
-      <section className="max-w-6xl mx-auto px-4 py-8">
-        <div className="mb-6 pb-3 border-b-2 border-[#0B4A72]">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
-            <div>
-              <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#0B4A72] flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" /> OTRAS ACTIVIDADES ADICIONALES DE LA ESCUELA DE YOGA SALVADORA CONESA
+      {/* ─── FILTROS DINÁMICOS DE CATÁLOGO (CATEGORÍAS Y TIPOS) ─── */}
+      <section className="max-w-6xl mx-auto px-4 pt-4 pb-2">
+        <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-xs space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-[#800020]" />
+              <span className="text-xs font-bold uppercase tracking-wider text-stone-800">
+                Filtros del Catálogo en Vivo
               </span>
-              <h3 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900 mt-1">
-                Longevidad (Bienestar Experience) & Iaidō (Esgrima Japonesa)
-              </h3>
+              <span className="text-[11px] text-stone-500 font-medium">
+                ({filteredServices.length} {filteredServices.length === 1 ? "servicio disponible" : "servicios disponibles"})
+              </span>
             </div>
-            <span className="text-xs text-stone-600 font-medium">
-              Actividades adicionales • Presencial & Online
+
+            {/* Selector de Tipo */}
+            <div className="flex items-center gap-1.5 bg-stone-100 p-1 rounded-xl">
+              <button
+                onClick={() => setSelectedType("all")}
+                className={cn(
+                  "px-3 py-1 rounded-lg text-xs font-bold transition",
+                  selectedType === "all"
+                    ? "bg-white text-[#800020] shadow-xs"
+                    : "text-stone-600 hover:text-stone-900"
+                )}
+              >
+                Todos los tipos
+              </button>
+              <button
+                onClick={() => setSelectedType("recurring")}
+                className={cn(
+                  "px-3 py-1 rounded-lg text-xs font-bold transition",
+                  selectedType === "recurring"
+                    ? "bg-white text-[#800020] shadow-xs"
+                    : "text-stone-600 hover:text-stone-900"
+                )}
+              >
+                Clases periódicas
+              </button>
+              <button
+                onClick={() => setSelectedType("event")}
+                className={cn(
+                  "px-3 py-1 rounded-lg text-xs font-bold transition",
+                  selectedType === "event"
+                    ? "bg-white text-[#800020] shadow-xs"
+                    : "text-stone-600 hover:text-stone-900"
+                )}
+              >
+                Viajes y eventos puntuales
+              </button>
+            </div>
+          </div>
+
+          {/* Selector de Categorías */}
+          <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-stone-100">
+            <span className="text-[11px] font-semibold text-stone-500 mr-1 flex items-center gap-1">
+              <FolderTree className="w-3 h-3 text-amber-600" /> Categorías:
             </span>
+            <button
+              onClick={() => setSelectedCategory("all")}
+              className={cn(
+                "px-2.5 py-1 rounded-full text-xs font-semibold transition border",
+                selectedCategory === "all"
+                  ? "bg-[#800020] text-white border-[#800020]"
+                  : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
+              )}
+            >
+              Todas las categorías
+            </button>
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={cn(
+                  "px-2.5 py-1 rounded-full text-xs font-semibold transition border",
+                  selectedCategory === cat.id
+                    ? "bg-[#800020] text-white border-[#800020]"
+                    : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
+                )}
+              >
+                📁 {cat.name}
+              </button>
+            ))}
           </div>
         </div>
+      </section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {centroActivities.map((act) => (
-            <div
-              key={act.id}
-              className="bg-white rounded-3xl border-2 border-stone-200 p-6 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col justify-between hover:border-[#800020] relative overflow-hidden group"
+      {/* ─── SERVICIOS DINÁMICOS AGRUPADOS POR CATEGORÍA Y ORDEN ─── */}
+      {servicesLoading ? (
+        <section className="max-w-6xl mx-auto px-4 py-16 text-center">
+          <div className="inline-flex items-center gap-2 text-stone-600 text-sm font-medium">
+            <span className="w-4 h-4 rounded-full border-2 border-[#800020] border-t-transparent animate-spin" />
+            Cargando catálogo en tiempo real desde el CRM...
+          </div>
+        </section>
+      ) : groupedServices.length === 0 ? (
+        <section className="max-w-6xl mx-auto px-4 py-16 text-center">
+          <div className="bg-white rounded-2xl border border-stone-200 p-8 max-w-md mx-auto space-y-2">
+            <p className="text-stone-700 font-semibold text-sm">No se han encontrado servicios disponibles.</p>
+            <p className="text-xs text-stone-500">Prueba a cambiar los filtros de categoría o tipo de actividad.</p>
+            <button
+              onClick={() => {
+                setSelectedCategory("all");
+                setSelectedType("all");
+              }}
+              className="mt-2 text-xs font-bold text-[#800020] hover:underline"
             >
-              {/* Background accent */}
-              <div className="absolute top-0 right-0 w-32 h-32 bg-linear-to-bl from-amber-100/50 via-transparent to-transparent rounded-bl-full pointer-events-none" />
-
+              Restablecer filtros
+            </button>
+          </div>
+        </section>
+      ) : (
+        groupedServices.map((group, idx) => (
+          <section key={group.category?.id || `uncat-${idx}`} className="max-w-6xl mx-auto px-4 py-8">
+            <div className="mb-6 pb-3 border-b-2 border-[#0B4A72]/40 flex flex-col sm:flex-row sm:items-end justify-between gap-2">
               <div>
-                {/* Header Badge */}
-                <div className="flex items-center justify-between gap-2 mb-4">
-                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-stone-100 text-stone-800 flex items-center gap-1.5 border border-stone-200">
-                    <span>{act.categoryIcon}</span> {act.category}
-                  </span>
-                  {act.badge && (
-                    <span className="text-[11px] font-extrabold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 uppercase">
-                      {act.badge}
-                    </span>
-                  )}
-                </div>
+                <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#0B4A72] flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  {group.category ? `CATEGORÍA: ${group.category.name.toUpperCase()}` : "ACTIVIDADES Y DISCIPLINAS"}
+                </span>
+                <h3 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900 mt-1">
+                  {group.category ? group.category.name : "Servicios Generales"}
+                </h3>
+              </div>
+              <span className="text-xs text-stone-600 font-semibold bg-stone-100 px-3 py-1 rounded-full border border-stone-200 self-start sm:self-auto">
+                {group.services.length} {group.services.length === 1 ? "actividad" : "actividades"}
+              </span>
+            </div>
 
-                {/* Title & Emblem for Bienestar Experience */}
-                {act.id === "bienestar-experience" ? (
-                  <div className="space-y-4 mb-4">
-                    <div className="flex items-center gap-3">
-                      {/* Emblem SVG inspired by the user's PDF */}
-                      <div className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-full bg-stone-900 text-white flex items-center justify-center p-2 border-2 border-amber-500 shadow-md text-center">
-                        <div className="leading-tight">
-                          <span className="block text-[8px] font-bold tracking-widest text-amber-300 uppercase">BIEN</span>
-                          <span className="block text-[10px] font-extrabold tracking-wider uppercase">ESTAR</span>
-                          <span className="block text-[8px] font-bold tracking-widest text-stone-300 uppercase">EXP</span>
-                        </div>
-                      </div>
-                      <div>
-                        <h4 className="font-serif text-xl sm:text-2xl font-bold text-stone-900 group-hover:text-[#800020] transition-colors leading-snug">
-                          {act.title}
-                        </h4>
-                        <p className="text-xs font-semibold text-emerald-700 mt-0.5">
-                          {act.priceTag} • {act.modalities?.join(" · ")}
-                        </p>
-                      </div>
-                    </div>
-
-                    <p className="text-xs sm:text-sm text-stone-700 leading-relaxed">
-                      {act.desc}
-                    </p>
-
-                    {/* Tags from PDF Emblem */}
-                    {act.tags && (
-                      <div className="pt-2">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#0B4A72] block mb-1.5">
-                          🔬 Disciplinas y Áreas Incluidas (PDF Oficial):
-                        </span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {act.tags.map((t) => (
-                            <span
-                              key={t}
-                              className="inline-block bg-amber-50 text-amber-900 border border-amber-200/80 px-2 py-0.5 rounded-md text-[10px] font-medium"
-                            >
-                              • {t}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {group.services.map((svc) => (
+                <div
+                  key={svc.id}
+                  className="bg-white rounded-3xl border border-stone-200 p-5 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between hover:border-[#800020] relative overflow-hidden group"
+                >
                   <div>
-                    <h4 className="font-serif text-xl sm:text-2xl font-bold text-stone-900 mb-2 group-hover:text-[#800020] transition-colors">
-                      {act.title}
-                    </h4>
-                    <p className="text-xs sm:text-sm text-stone-700 leading-relaxed mb-4">
-                      {act.desc}
-                    </p>
-                    {act.tags && (
-                      <div className="flex flex-wrap gap-1.5 mb-4">
-                        {act.tags.map((t) => (
-                          <span
-                            key={t}
-                            className="bg-stone-100 text-stone-800 px-2 py-0.5 rounded-md text-[11px] font-medium border border-stone-200"
-                          >
-                            ✓ {t}
-                          </span>
-                        ))}
+                    {/* Visualización Multimedia con Prioridad Estricta:
+                        1º Video MP4 Particular
+                        2º Flyer Particular
+                        3º Flyer General / Itinerario */}
+                    {(svc.videoParticularUrl || svc.videoParticularPath) ? (
+                      <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black mb-4 shadow-xs">
+                        <video
+                          src={svc.videoParticularUrl || svc.videoParticularPath}
+                          controls
+                          playsInline
+                          preload="metadata"
+                          className="w-full h-full object-cover"
+                        />
                       </div>
-                    )}
-                  </div>
-                )}
+                    ) : (svc.flyerParticularUrl || svc.flyerParticularPath) ? (
+                      <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-stone-100 mb-4 shadow-xs">
+                        <img
+                          src={svc.flyerParticularUrl || svc.flyerParticularPath}
+                          alt={svc.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = "none";
+                          }}
+                        />
+                      </div>
+                    ) : (svc.flyerUrl || svc.flyerPath) ? (
+                      <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-stone-100 mb-4 shadow-xs">
+                        <img
+                          src={svc.flyerUrl || svc.flyerPath}
+                          alt={svc.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = "none";
+                          }}
+                        />
+                      </div>
+                    ) : null}
 
-                {/* Schedules */}
-                {act.schedules && (
-                  <div className="bg-[#FAF9F6] rounded-2xl p-4 border border-stone-200/90 space-y-2 mb-4">
-                    <div className="text-xs font-bold text-[#800020] uppercase tracking-wider flex items-center gap-1.5">
-                      <Clock className="w-4 h-4 text-[#0B4A72]" /> Horarios y Condiciones:
+                    {/* Cabecera de Ficha: Categoría y Precio */}
+                    <div className="flex items-center justify-between gap-1 mb-2.5 flex-wrap">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 flex items-center gap-1 border border-stone-200">
+                        📁 {svc.category?.name || "General"}
+                      </span>
+                      <span className="text-xs font-extrabold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
+                        {svc.price ? `${svc.price} €` : svc.paymentType === "free" ? "Gratuito" : "Consultar"}
+                      </span>
                     </div>
-                    {act.schedules.afternoon && (
-                      <div className="text-xs text-stone-800">
-                        <strong>Turnos:</strong> {act.schedules.afternoon}
-                      </div>
-                    )}
-                    {act.schedules.morning && (
-                      <div className="text-xs text-stone-800">
-                        <strong>Mañanas:</strong> {act.schedules.morning}
-                      </div>
-                    )}
-                    {act.schedules.note && (
-                      <div className="text-[11px] text-stone-600 italic pt-1 border-t border-stone-200">
-                        ℹ️ {act.schedules.note}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
 
-              {/* Action Buttons */}
-              <div className="pt-3 border-t border-stone-100 space-y-2.5">
-                <button
-                  onClick={() => handleServiceSelect(act)}
-                  className="w-full py-3 px-4 bg-[#800020] hover:bg-[#800020]/90 text-white rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider transition shadow-sm flex items-center justify-center gap-2"
-                >
-                  <Calendar className="w-4 h-4" /> Reservar / Consultar Disponibilidad
-                </button>
-                <div className="flex items-center justify-between text-xs pt-1">
-                  <button
-                    onClick={() => {
-                      setSelectedService(act.serviceName);
-                      setWaModalOpen(true);
-                    }}
-                    className="text-emerald-700 hover:text-emerald-900 font-bold flex items-center gap-1"
-                  >
-                    <Phone className="w-3.5 h-3.5" /> Pedir por WhatsApp
-                  </button>
-                  <span className="text-stone-500 font-medium">Pago en centro (Pronto Stripe & Giglon)</span>
+                    {svc.serviceType === "event" && (
+                      <div className="mb-2">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 border border-purple-200 inline-block">
+                          🧭 Viaje / Evento puntual
+                        </span>
+                      </div>
+                    )}
+
+                    <h4 className="font-serif text-lg font-bold text-stone-900 mb-1.5 leading-snug group-hover:text-[#800020] transition-colors">
+                      {svc.name}
+                    </h4>
+
+                    {svc.description && (
+                      <p className="text-xs text-stone-600 leading-relaxed mb-3 line-clamp-3">
+                        {svc.description}
+                      </p>
+                    )}
+
+                    {/* Fechas para eventos / Horarios oficiales */}
+                    {svc.serviceType === "event" && svc.eventDatesText && (
+                      <div className="bg-purple-50 rounded-xl p-2.5 border border-purple-200 text-xs text-purple-950 font-semibold mb-3 flex items-center gap-1.5">
+                        <Compass className="w-3.5 h-3.5 text-purple-700 shrink-0" />
+                        <span>Fechas: {svc.eventDatesText}</span>
+                      </div>
+                    )}
+
+                    {svc.scheduleText && (
+                      <div className="bg-[#FAF9F6] rounded-xl p-2.5 border border-stone-200 text-xs space-y-1 mb-3">
+                        <div className="font-bold text-[#800020] text-[11px] uppercase flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-[#0B4A72]" /> Horarios oficiales:
+                        </div>
+                        <p className="text-[11px] text-stone-800">{svc.scheduleText}</p>
+                      </div>
+                    )}
+
+                    {svc.reminderNotes && (
+                      <div className="text-[11px] text-amber-900 bg-amber-50/70 p-2 rounded-lg border border-amber-200/60 mb-3 italic">
+                        💡 {svc.reminderNotes}
+                      </div>
+                    )}
+
+                    {/* Meta info: Duración, Aforo, Modalidades */}
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-stone-500 mb-3">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-stone-400" /> {svc.durationMinutes} min
+                      </span>
+                      {svc.maxCapacity && svc.maxCapacity > 1 && (
+                        <span className="flex items-center gap-1 text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                          <Users className="w-3 h-3 text-indigo-500" /> Aforo: {svc.maxCapacity} plazas
+                        </span>
+                      )}
+                      {svc.allowedModalities && svc.allowedModalities.length > 0 && (
+                        <span className="text-[10px] text-stone-500">
+                          ({svc.allowedModalities.map((m) => m === "in_person" ? "Presencial" : m === "phone" ? "Telefónica" : "Online").join(", ")})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Acciones de Reserva y WhatsApp */}
+                  <div className="pt-3 border-t border-stone-100 space-y-2">
+                    <button
+                      onClick={() => handleServiceSelect(svc)}
+                      className="w-full py-2.5 px-4 bg-[#800020] hover:bg-[#800020]/90 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-xs"
+                    >
+                      <Calendar className="w-4 h-4" /> Reservar / Consultar Disponibilidad
+                    </button>
+                    <div className="flex items-center justify-between text-xs pt-1">
+                      <button
+                        onClick={() => {
+                          setSelectedService(svc.name);
+                          setWaModalOpen(true);
+                        }}
+                        className="text-emerald-700 hover:text-emerald-900 font-bold flex items-center gap-1"
+                      >
+                        <Phone className="w-3.5 h-3.5" /> Pedir por WhatsApp
+                      </button>
+                      {svc.paymentType === "external_url" && svc.externalPaymentUrl ? (
+                        <a
+                          href={svc.externalPaymentUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:underline"
+                        >
+                          Giglon / Entradas <ExternalLink className="w-3 h-3" />
+                        </a>
+                      ) : (
+                        <span className="text-stone-500 text-[11px]">
+                          {svc.paymentType === "free" ? "Gratuito" : "Pago en centro / Stripe"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ─── SECCIÓN 2: CLASES Y SERVICIOS REGULARES DE YOGA & TERAPIA ─── */}
-      <section className="max-w-6xl mx-auto px-4 py-8">
-        <div className="mb-6 pb-3 border-b-2 border-stone-300">
-          <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#800020]">
-            ESCUELA SALVADORA CONESA
-          </span>
-          <h3 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900 mt-1">
-            Hatha Yoga Terapéutico, Meditaciones y Terapia Gestalt
-          </h3>
-        </div>
-
-        {/* Banner Informativo Reglas de Yoga */}
-        <div className="mb-6 bg-amber-50/90 border border-amber-200 rounded-2xl p-4 text-xs text-stone-800 shadow-2xs">
-          <div className="flex items-start gap-2.5">
-            <span className="text-base">🧘</span>
-            <div className="space-y-1">
-              <p className="font-bold text-amber-950 text-xs sm:text-sm">
-                Modalidades de Alumno, Clase de Prueba y Recuperaciones:
-              </p>
-              <p className="text-stone-700 leading-relaxed">
-                • <strong>1ª Cita de prueba:</strong> Es <strong>gratuita si confirmas que te transformas en alumno</strong> (cuota mensual de 25€/mes para 1 clase/semana o 42€/mes para 2 clases/semana). Si decides no continuar como alumno, se abona como sesión suelta (10 €).
-              </p>
-              <p className="text-stone-700 leading-relaxed">
-                • <strong>Recuperación de clases (3 meses):</strong> Siendo alumno, si no puedes acudir a tu clase semanal por cualquier motivo, puedes recuperarla a partir de la semana siguiente durante <strong>3 meses (90 días)</strong>.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {regularYogaServices.map((svc) => (
-            <div
-              key={svc.id}
-              className="bg-white rounded-2xl border border-stone-200 p-5 shadow-xs hover:shadow-md transition flex flex-col justify-between hover:border-[#800020]/40"
-            >
-              <div>
-                <div className="flex items-center justify-between gap-1 mb-2.5">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 flex items-center gap-1">
-                    <span>{svc.categoryIcon}</span> {svc.category}
-                  </span>
-                  <span className="text-[11px] font-extrabold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                    {svc.priceTag}
-                  </span>
-                </div>
-
-                {svc.badge && (
-                  <div className="mb-2">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 inline-block">
-                      ⭐ {svc.badge}
-                    </span>
-                  </div>
-                )}
-
-                <h4 className="font-serif text-base font-bold text-stone-900 mb-1.5 leading-snug">
-                  {svc.title}
-                </h4>
-                <p className="text-xs text-stone-600 leading-relaxed mb-3">
-                  {svc.desc}
-                </p>
-
-                {svc.schedules && (
-                  <div className="bg-[#FAF9F6] rounded-xl p-3 border border-stone-200 text-xs space-y-1 mb-3">
-                    <div className="font-bold text-[#800020] text-[11px] uppercase">Horarios:</div>
-                    {svc.schedules.morning && (
-                      <div className="text-[11px] text-stone-800">
-                        <strong>Mañanas:</strong> {svc.schedules.morning}
-                      </div>
-                    )}
-                    {svc.schedules.afternoon && (
-                      <div className="text-[11px] text-stone-800">
-                        <strong>Tardes:</strong> {svc.schedules.afternoon}
-                      </div>
-                    )}
-                    {svc.schedules.note && (
-                      <div className="text-[10px] text-stone-500 italic pt-1 border-t border-stone-200">
-                        {svc.schedules.note}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="pt-2 border-t border-stone-100 space-y-2">
-                <button
-                  onClick={() => handleServiceSelect(svc)}
-                  className="w-full py-2 px-3 bg-[#800020] hover:bg-[#800020]/90 text-white rounded-lg text-xs font-bold uppercase tracking-wider transition flex items-center justify-center gap-1"
-                >
-                  <Calendar className="w-3.5 h-3.5" /> Reservar Plaza
-                </button>
-                <div className="flex items-center justify-between text-[11px] text-stone-500">
-                  <span>{svc.duration}</span>
-                  <button
-                    onClick={() => {
-                      setSelectedService(svc.serviceName);
-                      setWaModalOpen(true);
-                    }}
-                    className="text-emerald-700 font-bold hover:underline"
-                  >
-                    WhatsApp
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ─── SECCIÓN 3: TALLERES, EVENTOS Y RETIROS ESPECIALES ─── */}
-      <section className="max-w-6xl mx-auto px-4 py-8">
-        <div className="mb-6 pb-3 border-b-2 border-purple-300">
-          <span className="text-[11px] font-extrabold uppercase tracking-widest text-purple-900">
-            ENCUENTROS, SONIDO Y RETIROS
-          </span>
-          <h3 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900 mt-1">
-            Baños de Gong, Constelaciones, Ayuno y Pujas
-          </h3>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {eventServices.map((ev) => (
-            <div
-              key={ev.id}
-              className="bg-white rounded-3xl border border-purple-200/80 p-5 shadow-xs hover:shadow-lg transition flex flex-col justify-between hover:border-purple-600"
-            >
-              <div>
-                <div className="flex items-center justify-between gap-1 mb-2.5">
-                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-900 border border-purple-200 flex items-center gap-1">
-                    <span>{ev.categoryIcon}</span> {ev.category}
-                  </span>
-                  <span className="text-xs font-extrabold text-stone-900 bg-amber-100 px-2.5 py-0.5 rounded-md">
-                    {ev.priceTag}
-                  </span>
-                </div>
-
-                {ev.badge && (
-                  <div className="inline-block bg-purple-100 text-purple-950 font-bold text-[11px] px-2.5 py-0.5 rounded-md mb-2">
-                    🗓️ {ev.badge}
-                  </div>
-                )}
-
-                <h4 className="font-serif text-lg font-bold text-stone-900 mb-1.5 leading-snug">
-                  {ev.title}
-                </h4>
-                <p className="text-xs text-stone-600 leading-relaxed mb-3">
-                  {ev.desc}
-                </p>
-
-                {ev.schedules?.note && (
-                  <div className="bg-stone-50 rounded-xl p-2.5 border border-stone-200 text-[11px] text-stone-600 mb-3 italic">
-                    ℹ️ {ev.schedules.note}
-                  </div>
-                )}
-              </div>
-
-              <div className="pt-2 border-t border-stone-100 space-y-2">
-                <button
-                  onClick={() => handleServiceSelect(ev)}
-                  className="w-full py-2.5 px-4 bg-purple-900 hover:bg-purple-800 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition flex items-center justify-center gap-1.5"
-                >
-                  <Calendar className="w-3.5 h-3.5" /> Solicitar Reserva
-                </button>
-                <div className="flex items-center justify-between text-[11px] text-stone-500">
-                  <span>Duración: {ev.duration}</span>
-                  <button
-                    onClick={() => {
-                      setSelectedService(ev.serviceName);
-                      setWaModalOpen(true);
-                    }}
-                    className="text-emerald-700 font-bold hover:underline"
-                  >
-                    WhatsApp
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+          </section>
+        ))
+      )}
 
       {/* Footer */}
       <footer className="bg-stone-900 text-stone-400 text-xs py-10 border-t border-stone-800 space-y-5">
@@ -1184,14 +1007,14 @@ export default function DemoLandingPage() {
 
           {/* Quick Selection Chips Carousel */}
           <div className="bg-[#FAF9F6] border-b border-stone-200 px-3 py-2 flex gap-1.5 overflow-x-auto scrollbar-none">
-            {allServices.slice(0, 6).map((svc) => (
+            {filteredServices.slice(0, 8).map((svc) => (
               <button
                 key={svc.id}
                 onClick={() => handleServiceSelect(svc)}
                 className="bg-white border border-stone-300 hover:bg-[#800020] hover:text-white hover:border-[#800020] rounded-full px-2.5 py-1 text-[10px] font-semibold text-stone-700 whitespace-nowrap transition shadow-2xs flex items-center gap-1"
               >
-                <span>{svc.categoryIcon}</span>
-                <span>{svc.title.split("(")[0]}</span>
+                <span>📁</span>
+                <span>{svc.name.split("(")[0]}</span>
               </button>
             ))}
           </div>

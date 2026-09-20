@@ -157,6 +157,7 @@ export class WidgetController {
   async getPublicServices(
     @Query('category') categoryFilter?: string,
     @Query('type') typeFilter?: string,
+    @Query('allDates') allDatesFilter?: string,
   ) {
     const dbServices = await this.servicesService.findAll(true, categoryFilter, typeFilter).catch(() => []);
     const dbCategories = await this.categoriesService.findAll(true).catch(() => []);
@@ -164,6 +165,17 @@ export class WidgetController {
     const branding = await this.settingsService.getBranding().catch(() => null);
     const whatsappPhone = agentConfig?.whatsappNumber || '34695172625';
     const cleanWaPhone = whatsappPhone.replace(/[^0-9]/g, '');
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const isAllDates = allDatesFilter === 'true' || allDatesFilter === '1';
+
+    const visibleServices = isAllDates
+      ? dbServices
+      : dbServices.filter((s) => {
+          const from = s.fechaDesde || '2000-01-01';
+          const until = s.fechaHasta || '2099-12-31';
+          return todayStr >= from && todayStr <= until;
+        });
 
     return {
       success: true,
@@ -179,7 +191,7 @@ export class WidgetController {
         description: c.description,
         displayOrder: c.displayOrder,
       })),
-      services: dbServices.map((s) => {
+      services: visibleServices.map((s) => {
         const isYoga = /yoga/i.test(s.name);
         const isIaido = /iaido|iaidō/i.test(s.name);
         const isMeditacion = /meditaci/i.test(s.name);
@@ -206,6 +218,12 @@ export class WidgetController {
           displayOrder: s.displayOrder ?? 0,
           flyerPath: s.flyerPath,
           flyerUrl: s.flyerUrl,
+          flyerParticularPath: s.flyerParticularPath || null,
+          flyerParticularUrl: s.flyerParticularUrl || null,
+          videoParticularPath: s.videoParticularPath || null,
+          videoParticularUrl: s.videoParticularUrl || null,
+          fechaDesde: s.fechaDesde || '2000-01-01',
+          fechaHasta: s.fechaHasta || '2099-12-31',
           firstClassFree: isYoga || isIaido,
           freeForYogaStudents: isMeditacion,
           whatsappBookingUrl: `https://wa.me/${cleanWaPhone}?text=${encodeURIComponent(

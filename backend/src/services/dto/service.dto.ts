@@ -49,6 +49,30 @@ export class CreateServiceDto {
   @IsOptional()
   flyerPath?: string;
 
+  @IsString()
+  @IsOptional()
+  flyerParticularUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  flyerParticularPath?: string;
+
+  @IsString()
+  @IsOptional()
+  videoParticularUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  videoParticularPath?: string;
+
+  @IsString()
+  @IsOptional()
+  fechaDesde?: string;
+
+  @IsString()
+  @IsOptional()
+  fechaHasta?: string;
+
   @IsUUID()
   @IsOptional()
   categoryId?: string;
@@ -184,6 +208,30 @@ export class UpdateServiceDto {
   @IsString()
   @IsOptional()
   flyerPath?: string;
+
+  @IsString()
+  @IsOptional()
+  flyerParticularUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  flyerParticularPath?: string;
+
+  @IsString()
+  @IsOptional()
+  videoParticularUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  videoParticularPath?: string;
+
+  @IsString()
+  @IsOptional()
+  fechaDesde?: string;
+
+  @IsString()
+  @IsOptional()
+  fechaHasta?: string;
 
   @IsUUID()
   @IsOptional()

@@ -41,6 +41,13 @@ export class ServicesController {
     return this.servicesService.findOne(id);
   }
 
+  @Post(':id/duplicate')
+  @Roles(UserRole.ADMIN, UserRole.SERVICE_MANAGER)
+  async duplicate(@Param('id') id: string, @Req() req: any) {
+    const actor = req.user ? { id: req.user.id, email: req.user.email } : undefined;
+    return this.servicesService.duplicate(id, actor);
+  }
+
   @Post()
   @Roles(UserRole.ADMIN, UserRole.SERVICE_MANAGER)
   async create(@Body() dto: CreateServiceDto) {
