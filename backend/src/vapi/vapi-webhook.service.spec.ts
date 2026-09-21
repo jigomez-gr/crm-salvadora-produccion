@@ -1,4 +1,4 @@
-import { VapiWebhookService } from './vapi-webhook.service';
+import { VapiWebhookService, normalizeSpokenEmail } from './vapi-webhook.service';
 
 describe('VapiWebhookService', () => {
   let service: VapiWebhookService;
@@ -328,6 +328,139 @@ describe('VapiWebhookService', () => {
       );
       expect(response.results![0].result).toContain('jgomezjub@gmail.com');
       expect(response.results![0].result).toContain('se ha enviado la confirmación de la cita');
+    });
+
+    it('normalizeSpokenEmail normalizes spelled-out emails correctly', () => {
+      expect(normalizeSpokenEmail('jota i g o m e z @ gmail . com')).toBe('jigomez@gmail.com');
+      expect(normalizeSpokenEmail('j-i-g-o-m-e-z@gmail.com')).toBe('jigomez@gmail.com');
+      expect(normalizeSpokenEmail('jota o ese e arroba hotmail punto com')).toBe('jose@hotmail.com');
+      expect(normalizeSpokenEmail('jgomezjub@gmail.com')).toBe('jgomezjub@gmail.com');
+      expect(normalizeSpokenEmail('  ana . martin @ yahoo . es  ')).toBe('ana.martin@yahoo.es');
+    });
+
+    it('reprogramar_cita rejects invalid non-official slots for Hatha Yoga', async () => {
+      contactsRepo.findOne.mockResolvedValue({
+        id: 'contact-test-1',
+        name: 'Jose Ignacio',
+        phone: '+34699000999',
+      });
+
+      appointmentsRepo.findOne.mockResolvedValue({
+        id: 'appt-yoga-1',
+        contactId: 'contact-test-1',
+        service: 'Hatha Yoga Terapéutico',
+        startsAt: new Date('2026-09-22T07:45:00.000Z'), // Martes 09:45
+        endsAt: new Date('2026-09-22T09:15:00.000Z'),
+        status: 'scheduled',
+      });
+
+      // Lunes 21 de Septiembre (día no oficial)
+      const payload: any = {
+        message: {
+          type: 'tool-calls',
+          call: { id: 'vapi-reprog-fail', customer: { number: '+34699000999' } },
+          toolCallList: [
+            {
+              id: 'tc-reprog-1',
+              name: 'reprogramar_cita',
+              arguments: {
+                nuevoInicioIso: '2026-09-21T07:45:00.000Z',
+              },
+            },
+          ],
+        },
+      };
+
+      const response = await service.handleWebhook(payload);
+      expect(response.results![0].result).toContain('Ese horario no corresponde al calendario oficial');
+    });
+
+    it('reprogramar_cita successfully moves Yoga appointment to a valid official slot', async () => {
+      contactsRepo.findOne.mockResolvedValue({
+        id: 'contact-test-1',
+        name: 'Jose Ignacio',
+        phone: '+34699000999',
+      });
+
+      appointmentsRepo.findOne.mockResolvedValue({
+        id: 'appt-yoga-1',
+        contactId: 'contact-test-1',
+        service: 'Hatha Yoga Terapéutico',
+        startsAt: new Date('2026-09-22T07:45:00.000Z'), // Martes 09:45
+        endsAt: new Date('2026-09-22T09:15:00.000Z'),
+        status: 'scheduled',
+      });
+
+      appointmentsRepo.find.mockResolvedValue([]);
+
+      // Jueves 24 de Septiembre a las 19:00 Madrid (17:00 UTC)
+      const payload: any = {
+        message: {
+          type: 'tool-calls',
+          call: { id: 'vapi-reprog-ok', customer: { number: '+34699000999' } },
+          toolCallList: [
+            {
+              id: 'tc-reprog-2',
+              name: 'reprogramar_cita',
+              arguments: {
+                nuevoInicioIso: '2026-09-24T17:00:00.000Z',
+              },
+            },
+          ],
+        },
+      };
+
+      const response = await service.handleWebhook(payload);
+      expect(appointmentsService.update).toHaveBeenCalledWith(
+        'appt-yoga-1',
+        expect.objectContaining({
+          startsAt: expect.any(String),
+        }),
+      );
+      expect(response.results![0].result).toContain('Cita reprogramada con éxito');
+    });
+
+    it('anular_cita cancels yoga appointment and informs student about 3-month recovery window', async () => {
+      contactsRepo.findOne.mockResolvedValue({
+        id: 'contact-test-student',
+        name: 'Ana Martin',
+        phone: '+34699000999',
+        isStudent: true,
+      });
+
+      appointmentsRepo.findOne.mockResolvedValue({
+        id: 'appt-yoga-student',
+        contactId: 'contact-test-student',
+        service: 'Hatha Yoga Terapéutico',
+        startsAt: new Date('2026-09-24T17:00:00.000Z'),
+        endsAt: new Date('2026-09-24T18:30:00.000Z'),
+        status: 'scheduled',
+      });
+
+      const payload: any = {
+        message: {
+          type: 'tool-calls',
+          call: { id: 'vapi-cancel-ok', customer: { number: '+34699000999' } },
+          toolCallList: [
+            {
+              id: 'tc-cancel-1',
+              name: 'anular_cita',
+              arguments: {
+                motivo: 'Viaje de trabajo',
+              },
+            },
+          ],
+        },
+      };
+
+      const response = await service.handleWebhook(payload);
+      expect(appointmentsService.cancel).toHaveBeenCalledWith(
+        'appt-yoga-student',
+        'agent',
+        'Cancelada por teléfono: Viaje de trabajo',
+      );
+      expect(response.results![0].result).toContain('ha sido cancelada correctamente');
+      expect(response.results![0].result).toContain('dispones de 3 meses para recuperar esta clase');
     });
   });
 });

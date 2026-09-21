@@ -1,6 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThan, LessThanOrEqual, In, Between } from 'typeorm';
+import { Repository, MoreThan, LessThanOrEqual, In, Between, ILike } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Contact, ContactStatus } from '../common/entities/contact.entity';
 import { Appointment, AppointmentStatus } from '../common/entities/appointment.entity';
@@ -169,6 +169,73 @@ export function findOfficialService(query?: string): OfficialServiceConfig | nul
   if (!query) return null;
   const q = query.trim();
   return OFFICIAL_SERVICES.find((s) => s.aliases.test(q) || s.name.toLowerCase().includes(q.toLowerCase())) || null;
+}
+
+export function normalizeSpokenEmail(input: string): string {
+  if (!input) return '';
+  let s = input.trim().toLowerCase();
+
+  // Replace common spoken terms for punctuation and symbols
+  s = s
+    .replace(/\s+arroba\s+/gi, '@')
+    .replace(/\barroba\b/gi, '@')
+    .replace(/\s+at\s+/gi, '@')
+    .replace(/\s+punto\s+/gi, '.')
+    .replace(/\bpunto\b/gi, '.')
+    .replace(/\s+dot\s+/gi, '.')
+    .replace(/\s+gui[oó]n\s+medio\s+/gi, '-')
+    .replace(/\s+gui[oó]n\s+bajo\s+/gi, '_')
+    .replace(/\s+gui[oó]n\s+/gi, '-')
+    .replace(/\s+barra\s+baja\s+/gi, '_')
+    .replace(/\s+guion\s+/gi, '-');
+
+  // Map phonetic letter names in Spanish (e.g. "jota" -> "j", "ele" -> "l")
+  const spanishLetterMap: Record<string, string> = {
+    'uve doble': 'w',
+    'doble uve': 'w',
+    'i griega': 'y',
+    'i latina': 'i',
+    'jota': 'j',
+    'ge': 'g',
+    'uve': 'v',
+    'zeta': 'z',
+    'ceta': 'z',
+    'hache': 'h',
+    'equis': 'x',
+    'ka': 'k',
+    'cu': 'q',
+    'ere': 'r',
+    'erre': 'r',
+    'ese': 's',
+    'te': 't',
+    'pe': 'p',
+    'be': 'b',
+    'de': 'd',
+    'efe': 'f',
+    'ele': 'l',
+    'eme': 'm',
+    'ene': 'n',
+    'ce': 'c',
+  };
+
+  for (const [spoken, letter] of Object.entries(spanishLetterMap)) {
+    const regex = new RegExp(`\\b${spoken}\\b`, 'gi');
+    s = s.replace(regex, letter);
+  }
+
+  // Remove spaces and punctuation within the username part before @
+  if (s.includes('@')) {
+    const atIdx = s.indexOf('@');
+    const localPart = s.slice(0, atIdx).replace(/[\s\-_]/g, '');
+    const domainPart = s.slice(atIdx + 1).replace(/\s+/g, '');
+    s = `${localPart}@${domainPart}`;
+  } else {
+    s = s.replace(/\s+/g, '');
+  }
+
+  // Match the actual email address
+  const match = s.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  return match ? match[0].toLowerCase() : s;
 }
 
 @Injectable()
@@ -830,7 +897,7 @@ export class VapiWebhookService {
 
     // 1. Find or create Contact
     let contact = await this.contactsRepo.findOne({ where: { phone: effectivePhone } });
-    const providedEmail = (params?.email || params?.correo || '').trim().toLowerCase();
+    const providedEmail = normalizeSpokenEmail(params?.email || params?.correo || '');
     if (!contact) {
       contact = this.contactsRepo.create({
         name: customerName,
@@ -1002,13 +1069,13 @@ export class VapiWebhookService {
         if (hasEmail) {
           return `¡Solicitud registrada con éxito! Tu cita para ${appt.service} el ${spokenDate} a nombre de ${customerName} ha quedado registrada pendiente de aprobación del terapeuta Jose Ignacio Gomez Raya. Confírmaselo amablemente e infórmale de que, como ya tenemos registrado su correo electrónico (${emailAddress}), le enviaremos allí la confirmación en cuanto se apruebe. NO le pidas su email. Despídete con calidez.`;
         }
-        return `¡Solicitud registrada con éxito! Tu cita para ${appt.service} el ${spokenDate} a nombre de ${customerName} ha quedado registrada pendiente de aprobación del terapeuta Jose Ignacio. Confírmaselo y pregúntale: "Si quieres que te envíe un resumen con los datos de acceso, ¿me dices tu correo electrónico?". Si prefiere no darlo o duda al deletrear, dile "No te preocupes, te lo dejo todo registrado con tu número de teléfono" y despídete.`;
+        return `¡Solicitud registrada con éxito! Tu cita para ${appt.service} el ${spokenDate} a nombre de ${customerName} ha quedado registrada pendiente de aprobación del terapeuta Jose Ignacio. Confírmaselo y pregúntale: "Si quieres que te envíe un resumen con los datos de acceso, ¿me dices tu correo electrónico? Por favor, dímelo letra por letra, por ejemplo: jota, i, g, o, m, e, z, arroba gmail punto com". Si prefiere no darlo o duda al deletrear, dile "No te preocupes, te lo dejo todo registrado con tu número de teléfono" y despídete.`;
       }
 
       if (hasEmail) {
         return `¡Cita confirmada con éxito! Queda agendada para ${appt.service} el ${spokenDate} a nombre de ${customerName}. Confírmaselo amablemente al cliente e indícale que recibirá todos los detalles y datos de acceso en su correo registrado (${emailAddress}). NO le pidas su email. Despídete con calidez.`;
       }
-      return `¡Cita confirmada con éxito! Queda agendada para ${appt.service} el ${spokenDate} a nombre de ${customerName}. Confírmaselo amablemente al cliente y dile exactamente: "Tu plaza ya está reservada. Si quieres que te envíe un resumen con la ubicación y datos de acceso, ¿me dices tu correo electrónico?". Si el cliente no desea darlo o duda al deletrear, dile con amabilidad "No te preocupes, te lo dejo todo registrado con tu número de teléfono" y despídete con calidez.`;
+      return `¡Cita confirmada con éxito! Queda agendada para ${appt.service} el ${spokenDate} a nombre de ${customerName}. Confírmaselo amablemente al cliente y dile exactamente: "Tu plaza ya está reservada. Si quieres que te envíe un resumen con la ubicación y datos de acceso, ¿me dices tu correo electrónico? Por favor, dímelo letra por letra, por ejemplo: jota, i, g, o, m, e, z, arroba gmail punto com". Si el cliente no desea darlo o duda al deletrear, dile con amabilidad "No te preocupes, te lo dejo todo registrado con tu número de teléfono" y despídete con calidez.`;
     } catch (err: any) {
       if (err?.message?.includes('ya tiene una reserva') || err?.status === 409 || err?.name === 'ConflictException') {
         return `Ya consta una reserva activa a nombre de ${customerName} en ese mismo horario. No es necesario volver a reservarla. Si deseas modificarla o cambiar de horario, dímelo y te la reprogramo.`;
@@ -1028,15 +1095,44 @@ export class VapiWebhookService {
       return 'No encuentro ningún cliente registrado con este número. ¿Deseas agendar una nueva cita?';
     }
 
-    // Find next upcoming appointment
-    const appt = await this.appointmentsRepo.findOne({
-      where: {
-        contactId: contact.id,
-        status: AppointmentStatus.SCHEDULED,
-        startsAt: MoreThan(new Date()),
-      },
-      order: { startsAt: 'ASC' },
-    });
+    // Buscar la cita a reprogramar (priorizando citaId o filtrado por servicio)
+    let appt: Appointment | null = null;
+    if (params?.citaId) {
+      appt = await this.appointmentsRepo.findOne({
+        where: { id: params.citaId, contactId: contact.id },
+      });
+    }
+
+    if (!appt && (params?.servicio || params?.service)) {
+      appt = await this.appointmentsRepo.findOne({
+        where: {
+          contactId: contact.id,
+          status: AppointmentStatus.SCHEDULED,
+          service: ILike(`%${(params.servicio || params.service).trim()}%`),
+        },
+        order: { startsAt: 'ASC' },
+      });
+    }
+
+    if (!appt) {
+      appt = await this.appointmentsRepo.findOne({
+        where: {
+          contactId: contact.id,
+          status: AppointmentStatus.SCHEDULED,
+        },
+        order: { startsAt: 'ASC' },
+      });
+    }
+
+    if (!appt) {
+      appt = await this.appointmentsRepo.findOne({
+        where: {
+          contactId: contact.id,
+          status: AppointmentStatus.PENDING_APPROVAL,
+        },
+        order: { startsAt: 'ASC' },
+      });
+    }
 
     if (!appt) {
       return 'No encuentro ninguna cita próxima activa para este número. ¿Quieres agendar una nueva?';
@@ -1062,17 +1158,83 @@ export class VapiWebhookService {
       }
     }
 
-    const duration = (appt.endsAt.getTime() - appt.startsAt.getTime()) || 45 * 60000;
-    const newEndsAt = new Date(newStartsAt.getTime() + duration);
+    // Validación y corrección de zona horaria para servicios oficiales (ej. Yoga, Meditación)
+    const officialSvc = findOfficialService(appt.service);
+    if (officialSvc?.category === 'recurring_schedule' && officialSvc.timetable) {
+      let zoned = new TZDate(newStartsAt.getTime(), ctx.timezone);
+      let dayOfWeek = zoned.getDay();
+      let timeStr = format(zoned, 'HH:mm');
+      let allowed = officialSvc.timetable[dayOfWeek] || [];
+      if (!allowed.includes(timeStr)) {
+        const rawTimeMatch = rawNewIso.match(/[T ](\d{1,2}:\d{2})/);
+        if (rawTimeMatch) {
+          const rawHm = rawTimeMatch[1].padStart(5, '0');
+          if (allowed.includes(rawHm)) {
+            const [rh, rm] = rawHm.split(':').map(Number);
+            const correctedZoned = new TZDate(
+              zoned.getFullYear(),
+              zoned.getMonth(),
+              zoned.getDate(),
+              rh,
+              rm,
+              ctx.timezone,
+            );
+            newStartsAt = new Date(correctedZoned.getTime());
+            zoned = correctedZoned;
+            dayOfWeek = zoned.getDay();
+            timeStr = format(zoned, 'HH:mm');
+            allowed = officialSvc.timetable[dayOfWeek] || [];
+          }
+        }
+      }
+      if (!allowed.includes(timeStr)) {
+        return `Ese horario no corresponde al calendario oficial de «${officialSvc.name}». Los turnos oficiales son: ${officialSvc.scheduleSummary}. Indícale amablemente estos turnos oficiales al cliente para que elija uno.`;
+      }
+    }
+
+    if (officialSvc?.category === 'fixed_event' && officialSvc.eventDate) {
+      return `«${officialSvc.name}» es un evento que se celebra exclusivamente el ${officialSvc.eventSpokenDate}. No se puede reprogramar a otra fecha.`;
+    }
+
+    // Control de cupo si se reprograma para otra semana (para modalidad de 1 clase vs 2 clases semanales)
+    const isYoga = /yoga/i.test(appt.service);
+    if (isYoga && contact.id) {
+      const isTwoClasses = /2\s*clases|dos\s*clases/i.test(appt.service || contact.studentModality || '');
+      const maxAllowedPerWeek = isTwoClasses ? 2 : 1;
+
+      const destWeekStart = startOfWeek(newStartsAt, { weekStartsOn: 1 });
+      const destWeekEnd = endOfWeek(newStartsAt, { weekStartsOn: 1 });
+
+      const existingInDestWeek = await this.appointmentsRepo.find({
+        where: {
+          contactId: contact.id,
+          status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.PENDING_APPROVAL]),
+          startsAt: Between(destWeekStart, destWeekEnd),
+        },
+      });
+
+      const otherYogaInDestWeek = existingInDestWeek.filter(
+        (a) => a.id !== appt!.id && /yoga/i.test(a.service),
+      );
+
+      if (otherYogaInDestWeek.length >= maxAllowedPerWeek) {
+        return `En esa semana ya tienes ${otherYogaInDestWeek.length} clase(s) agendada(s). En tu modalidad no puedes tener más de ${maxAllowedPerWeek} clase(s) por semana.`;
+      }
+    }
+
+    const durationMinutes = officialSvc?.durationMinutes || (appt.endsAt && appt.startsAt ? Math.round((appt.endsAt.getTime() - appt.startsAt.getTime()) / 60000) : 90) || 90;
+    const newEndsAt = new Date(newStartsAt.getTime() + durationMinutes * 60000);
+
+    const oldDateSpoken = this.formatSpokenDate(appt.startsAt, ctx.timezone);
+    const spokenNew = this.formatSpokenDate(newStartsAt, ctx.timezone);
 
     await this.appointmentsService.update(appt.id, {
       startsAt: newStartsAt.toISOString(),
       endsAt: newEndsAt.toISOString(),
-      notes: appt.notes ? `${appt.notes}\nReprogramada por voz.` : 'Reprogramada por voz.',
+      notes: appt.notes ? `${appt.notes}\nReprogramada por voz de ${oldDateSpoken} a ${spokenNew}.` : `Reprogramada por voz de ${oldDateSpoken} a ${spokenNew}.`,
     });
 
-    const spokenNew = this.formatSpokenDate(newStartsAt, ctx.timezone);
-    return `Cita cambiada: tu cita de ${appt.service} ha sido movida al ${spokenNew}. Confírmaselo al cliente.`;
+    return `Cita cambiada: tu cita de ${appt.service} ha sido movida al ${spokenNew}. Cita reprogramada con éxito. El hueco anterior ha quedado liberado y el nuevo confirmado. Confírmaselo amablemente al cliente e infórmale de que le hemos enviado la confirmación actualizada a su correo.`;
   }
 
   // ─── 5. ANULAR CITA ───
@@ -1086,14 +1248,43 @@ export class VapiWebhookService {
       return 'No consta ningún cliente con este número de teléfono.';
     }
 
-    const appt = await this.appointmentsRepo.findOne({
-      where: {
-        contactId: contact.id,
-        status: AppointmentStatus.SCHEDULED,
-        startsAt: MoreThan(new Date()),
-      },
-      order: { startsAt: 'ASC' },
-    });
+    let appt: Appointment | null = null;
+    if (params?.citaId) {
+      appt = await this.appointmentsRepo.findOne({
+        where: { id: params.citaId, contactId: contact.id },
+      });
+    }
+
+    if (!appt && (params?.servicio || params?.service)) {
+      appt = await this.appointmentsRepo.findOne({
+        where: {
+          contactId: contact.id,
+          status: AppointmentStatus.SCHEDULED,
+          service: ILike(`%${(params.servicio || params.service).trim()}%`),
+        },
+        order: { startsAt: 'ASC' },
+      });
+    }
+
+    if (!appt) {
+      appt = await this.appointmentsRepo.findOne({
+        where: {
+          contactId: contact.id,
+          status: AppointmentStatus.SCHEDULED,
+        },
+        order: { startsAt: 'ASC' },
+      });
+    }
+
+    if (!appt) {
+      appt = await this.appointmentsRepo.findOne({
+        where: {
+          contactId: contact.id,
+          status: AppointmentStatus.PENDING_APPROVAL,
+        },
+        order: { startsAt: 'ASC' },
+      });
+    }
 
     if (!appt) {
       return 'No tienes ninguna cita próxima pendiente de realizar.';
@@ -1104,7 +1295,14 @@ export class VapiWebhookService {
     await this.appointmentsService.cancel(appt.id, 'agent', motivo);
 
     const spokenDate = this.formatSpokenDate(appt.startsAt, ctx.timezone);
-    return `Tu cita de ${appt.service} del ${spokenDate} ha sido cancelada correctamente. El hueco queda liberado.`;
+    const isYoga = /yoga/i.test(appt.service);
+    const recoveryNotice = isYoga && contact.isStudent
+      ? ' Como eres alumno del centro, recuerda que dispones de 3 meses para recuperar esta clase a partir de la próxima semana avisándonos con antelación.'
+      : isYoga
+      ? ' Si deseas reprogramarla para otro día u horario oficial, dímelo y te la agendo ahora mismo.'
+      : '';
+
+    return `Tu cita de ${appt.service} del ${spokenDate} ha sido cancelada correctamente. El hueco queda liberado.${recoveryNotice} Confírmaselo amablemente al cliente y despídete con calidez.`;
   }
 
   // ─── 6. DATOS DEL NEGOCIO ───
@@ -1156,7 +1354,7 @@ export class VapiWebhookService {
 
   // ─── 8. GUARDAR DATOS CONTACTO (EMAIL) ───
   private async toolGuardarDatosContacto(params: any, ctx: ToolExecutionContext): Promise<string> {
-    const rawEmail = (params?.email || params?.correo || '').trim();
+    const rawEmail = normalizeSpokenEmail(params?.email || params?.correo || '');
     if (!rawEmail) {
       return 'No se ha indicado ningún correo electrónico.';
     }

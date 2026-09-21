@@ -52,6 +52,17 @@ import {
 // resource). Arbitrary constant; when multi-resource lands, key it per resource.
 const BOOKING_LOCK_KEY = 528_491;
 
+export const HATHA_YOGA_TIMETABLE: Record<number, string[]> = {
+  2: ['09:45', '11:15', '17:00', '18:30', '20:00'],
+  3: ['20:15'],
+  4: ['09:45', '11:15', '16:00', '17:30', '19:00'],
+};
+
+export const MEDITACION_TIMETABLE: Record<number, string[]> = {
+  2: ['09:15'],
+  4: ['09:15'],
+};
+
 @Injectable()
 export class AppointmentsService implements OnModuleInit {
   private readonly logger = new Logger(AppointmentsService.name);
@@ -598,11 +609,83 @@ export class AppointmentsService implements OnModuleInit {
   async update(id: string, dto: UpdateAppointmentDto): Promise<Appointment> {
     const appt = await this.findOne(id);
 
-    const newStart = dto.startsAt ? new Date(parseFlexibleStartsAt(dto.startsAt)) : appt.startsAt;
-    const newEnd = dto.endsAt ? new Date(parseFlexibleStartsAt(dto.endsAt)) : appt.endsAt;
+    let newStart = dto.startsAt ? new Date(parseFlexibleStartsAt(dto.startsAt)) : appt.startsAt;
+    let newEnd = dto.endsAt ? new Date(parseFlexibleStartsAt(dto.endsAt)) : appt.endsAt;
     const timeChanged = Boolean(dto.startsAt || dto.endsAt);
 
     if (timeChanged) {
+      const targetServiceName = dto.service || appt.service || '';
+      const isYoga = /hatha.*yoga|yoga.*terap/i.test(targetServiceName);
+      const isMeditacion = /meditaci/i.test(targetServiceName);
+
+      if (isYoga) {
+        let zoned = new TZDate(newStart.getTime(), 'Europe/Madrid');
+        let dayOfWeek = zoned.getDay();
+        let timeStr = format(zoned, 'HH:mm');
+        let allowed = HATHA_YOGA_TIMETABLE[dayOfWeek] || [];
+        if (!allowed.includes(timeStr) && dto.startsAt) {
+          const rawTimeMatch = dto.startsAt.match(/[T ](\d{1,2}:\d{2})/);
+          if (rawTimeMatch) {
+            const rawHm = rawTimeMatch[1].padStart(5, '0');
+            if (allowed.includes(rawHm)) {
+              const [rh, rm] = rawHm.split(':').map(Number);
+              const correctedZoned = new TZDate(
+                zoned.getFullYear(),
+                zoned.getMonth(),
+                zoned.getDate(),
+                rh,
+                rm,
+                'Europe/Madrid',
+              );
+              newStart = new Date(correctedZoned.getTime());
+              newEnd = new Date(newStart.getTime() + 90 * 60000);
+              zoned = correctedZoned;
+              dayOfWeek = zoned.getDay();
+              timeStr = format(zoned, 'HH:mm');
+              allowed = HATHA_YOGA_TIMETABLE[dayOfWeek] || [];
+            }
+          }
+        }
+        if (!allowed.includes(timeStr)) {
+          throw new BadRequestException(
+            'Ese horario no corresponde a los turnos oficiales de Hatha Yoga Terapéutico (Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15) y Jueves (9:45, 11:15, 16:00, 17:30, 19:00)).',
+          );
+        }
+      } else if (isMeditacion) {
+        let zoned = new TZDate(newStart.getTime(), 'Europe/Madrid');
+        let dayOfWeek = zoned.getDay();
+        let timeStr = format(zoned, 'HH:mm');
+        let allowed = MEDITACION_TIMETABLE[dayOfWeek] || [];
+        if (!allowed.includes(timeStr) && dto.startsAt) {
+          const rawTimeMatch = dto.startsAt.match(/[T ](\d{1,2}:\d{2})/);
+          if (rawTimeMatch) {
+            const rawHm = rawTimeMatch[1].padStart(5, '0');
+            if (allowed.includes(rawHm)) {
+              const [rh, rm] = rawHm.split(':').map(Number);
+              const correctedZoned = new TZDate(
+                zoned.getFullYear(),
+                zoned.getMonth(),
+                zoned.getDate(),
+                rh,
+                rm,
+                'Europe/Madrid',
+              );
+              newStart = new Date(correctedZoned.getTime());
+              newEnd = new Date(newStart.getTime() + 30 * 60000);
+              zoned = correctedZoned;
+              dayOfWeek = zoned.getDay();
+              timeStr = format(zoned, 'HH:mm');
+              allowed = MEDITACION_TIMETABLE[dayOfWeek] || [];
+            }
+          }
+        }
+        if (!allowed.includes(timeStr)) {
+          throw new BadRequestException(
+            'Ese horario no corresponde al horario oficial de Meditación (Martes y Jueves de 09:15 a 09:45).',
+          );
+        }
+      }
+
       this.assertValidWindow(newStart, newEnd, { mustBeFuture: false });
       appt.startsAt = newStart;
       appt.endsAt = newEnd;
