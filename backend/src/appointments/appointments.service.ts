@@ -594,11 +594,11 @@ export class AppointmentsService implements OnModuleInit {
     // Notify student via Email and WhatsApp
     const managerName = serviceEntity?.manager?.name || 'Centro de Yoga Salvadora Conesa';
     if (saved.status === AppointmentStatus.SCHEDULED) {
-      this.notifyStudentDecision(withContact, 'accepted', managerName).catch((err) => {
+      await this.notifyStudentDecision(withContact, 'accepted', managerName).catch((err) => {
         this.logger.error(`Error notifying student on accepted appointment: ${err}`);
       });
     } else if (saved.status === AppointmentStatus.PENDING_APPROVAL) {
-      this.notifyStudentDecision(withContact, 'pending_approval', managerName).catch((err) => {
+      await this.notifyStudentDecision(withContact, 'pending_approval', managerName).catch((err) => {
         this.logger.error(`Error notifying student on pending_approval appointment: ${err}`);
       });
     }
@@ -1435,9 +1435,14 @@ export class AppointmentsService implements OnModuleInit {
       }
 
       // Notification channel preferences configured per Service (defaults: Email=true, WhatsApp=true, SMS=false)
+      const isMeditacionSvc =
+        /meditaci/i.test(appt.service || '') ||
+        Boolean(serviceEntity && /meditaci/i.test(serviceEntity.name));
       const shouldEmail =
         channelOverrides?.email !== undefined
           ? channelOverrides.email
+          : isMeditacionSvc
+          ? true
           : serviceEntity
           ? serviceEntity.notifyByEmail !== false
           : true;

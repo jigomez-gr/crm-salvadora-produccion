@@ -1073,7 +1073,16 @@ export class VapiWebhookService {
       }
 
       if (hasEmail) {
-        return `¡Cita confirmada con éxito! Queda agendada para ${appt.service} el ${spokenDate} a nombre de ${customerName}. Confírmaselo amablemente al cliente e indícale que recibirá todos los detalles y datos de acceso en su correo registrado (${emailAddress}). NO le pidas su email. Despídete con calidez.`;
+        try {
+          await this.appointmentsService.sendAppointmentConfirmationNotification(
+            appt.id,
+            { email: true, whatsapp: false, sms: true },
+            false,
+          );
+        } catch (mailErr: any) {
+          this.logger.error(`[VAPI] Error enviando email de reserva: ${mailErr?.message || mailErr}`);
+        }
+        return `¡Cita confirmada con éxito! Queda agendada para ${appt.service} el ${spokenDate} a nombre de ${customerName}. Confírmaselo amablemente al cliente e indícale que le hemos enviado todos los detalles y datos de acceso a su correo registrado (${emailAddress}). NO le pidas su email. Despídete con calidez.`;
       }
       return `¡Cita confirmada con éxito! Queda agendada para ${appt.service} el ${spokenDate} a nombre de ${customerName}. Confírmaselo amablemente al cliente y dile exactamente: "Tu plaza ya está reservada. Si quieres que te envíe un resumen con la ubicación y datos de acceso, ¿me dices tu correo electrónico? Por favor, dímelo letra por letra, por ejemplo: jota, i, g, o, m, e, z, arroba gmail punto com". Si el cliente no desea darlo o duda al deletrear, dile con amabilidad "No te preocupes, te lo dejo todo registrado con tu número de teléfono" y despídete con calidez.`;
     } catch (err: any) {

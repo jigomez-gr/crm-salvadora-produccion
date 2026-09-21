@@ -104,6 +104,8 @@ export class ServicesService implements OnModuleInit {
             "createdAt" timestamptz DEFAULT now(),
             "updatedAt" timestamptz DEFAULT now()
           );
+
+          UPDATE services SET "notifyByEmail" = true WHERE "notifyByEmail" IS NULL OR "notifyByEmail" = false;
         `);
       } catch (colErr) {
         console.warn('Auto-migration warning in services table:', colErr);
@@ -439,6 +441,14 @@ export class ServicesService implements OnModuleInit {
         } else if (/meditaci/i.test(s.name) && !/baño.*gong/i.test(s.name)) {
           if (!s.maxCapacity || s.maxCapacity < 28) {
             s.maxCapacity = 28;
+            updated = true;
+          }
+          if (s.notifyByEmail !== true) {
+            s.notifyByEmail = true;
+            updated = true;
+          }
+          if (s.notifyByWhatsapp !== true) {
+            s.notifyByWhatsapp = true;
             updated = true;
           }
           if (!s.weeklySchedule || Object.keys(s.weeklySchedule).length === 0) {
