@@ -1476,20 +1476,20 @@ export class AppointmentsService implements OnModuleInit {
       if (shouldWhatsapp) {
         if (contact.phone) {
           const config = await this.agentsConfigService
-            .findByKey('booking')
+            ?.findByKey('booking')
             .catch(() => null);
           const fromNumber =
             config?.whatsappPhoneNumber ||
             process.env.YCLOUD_FROM_PHONE ||
             '+34600000000';
           await this.ycloudClient
-            .sendTextMessage(
+            ?.sendTextMessage(
               fromNumber,
               contact.phone,
               chatMessageText,
               config?.ycloudApiKey,
             )
-            .catch((err) => {
+            ?.catch((err) => {
               this.logger.warn(`[WhatsApp] Error sending WhatsApp to ${contact.phone} for appt ${appt.id}: ${err}`);
             });
         } else {
@@ -1501,7 +1501,7 @@ export class AppointmentsService implements OnModuleInit {
 
       // Sincronizar y registrar el mensaje en la conversación del CRM / Inbox
       try {
-        const conv = await this.conversationsRepo.findOne({
+        const conv = await this.conversationsRepo?.findOne({
           where: [{ contactId: contact.id }],
           order: { updatedAt: 'DESC' },
         });
@@ -1514,7 +1514,7 @@ export class AppointmentsService implements OnModuleInit {
             ? MessageChannel.WHATSAPP
             : MessageChannel.WIDGET;
 
-        if (chatMessageText) {
+        if (chatMessageText && this.messagesService) {
           const savedMsg = await this.messagesService.saveMessage({
             contactId: contact.id,
             threadId,
@@ -2107,8 +2107,8 @@ export class AppointmentsService implements OnModuleInit {
   }
 
   /** Cancellation requested by the AI agent (on the customer's behalf). */
-  async cancelAppointment(id: string): Promise<Appointment> {
-    return this.cancel(id, 'agent');
+  async cancelAppointment(id: string, reason?: string): Promise<Appointment> {
+    return this.cancel(id, 'agent', reason);
   }
 
   /**
@@ -2135,7 +2135,36 @@ export class AppointmentsService implements OnModuleInit {
     const durationMs =
       oldAppt.endsAt.getTime() - oldAppt.startsAt.getTime() || 90 * 60_000;
     const timezone = 'Europe/Madrid';
-    const startDate = new Date(parseFlexibleStartsAt(newStartsAtIso, timezone));
+    let startDate = new Date(parseFlexibleStartsAt(newStartsAtIso, timezone));
+
+    const isYoga = /hatha.*yoga|yoga.*terap/i.test(oldAppt.service || '');
+    const isMeditacion = /meditaci/i.test(oldAppt.service || '');
+    if (isYoga || isMeditacion) {
+      const timetable = isYoga ? HATHA_YOGA_TIMETABLE : MEDITACION_TIMETABLE;
+      let zoned = new TZDate(startDate.getTime(), timezone);
+      let dayOfWeek = zoned.getDay();
+      let timeStr = format(zoned, 'HH:mm');
+      let allowed = timetable[dayOfWeek] || [];
+      if (!allowed.includes(timeStr)) {
+        const rawTimeMatch = newStartsAtIso.match(/[T ](\d{1,2}:\d{2})/);
+        if (rawTimeMatch) {
+          const rawHm = rawTimeMatch[1].padStart(5, '0');
+          if (allowed.includes(rawHm)) {
+            const [rh, rm] = rawHm.split(':').map(Number);
+            const correctedZoned = new TZDate(
+              zoned.getFullYear(),
+              zoned.getMonth(),
+              zoned.getDate(),
+              rh,
+              rm,
+              timezone,
+            );
+            startDate = new Date(correctedZoned.getTime());
+          }
+        }
+      }
+    }
+
     const endDate = new Date(startDate.getTime() + durationMs);
 
     // 1. Cancel the previous appointment first (as requested)
@@ -2165,7 +2194,7 @@ export class AppointmentsService implements OnModuleInit {
         modality: oldAppt.modality || undefined,
         isFirstClass: oldAppt.isFirstClass,
         reason: reason || (oldAppt.reason ? `${oldAppt.reason} (Reprogramada)` : 'Cita reprogramada'),
-        notes: oldAppt.notes || undefined,
+        notes: oldAppt.notes ? `${oldAppt.notes} (Cita reprogramada)` : 'Cita reprogramada',
         agentKey: oldAppt.agentKey || undefined,
       });
 

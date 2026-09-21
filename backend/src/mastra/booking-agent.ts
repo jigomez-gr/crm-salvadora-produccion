@@ -843,22 +843,118 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     id: 'cancelAppointment',
     description: 'Cancel an existing appointment and record the cancellation reason',
     inputSchema: z.object({
-      appointmentId: z.string().describe('ID of the appointment to cancel'),
+      appointmentId: z
+        .string()
+        .optional()
+        .describe(
+          'ID of the appointment to cancel. If not provided, the active appointment for the customer is resolved automatically.',
+        ),
+      customerPhone: z
+        .string()
+        .optional()
+        .describe(
+          'Customer phone or mobile number to identify their contact and existing appointment',
+        ),
+      customerEmail: z
+        .string()
+        .optional()
+        .describe(
+          'Customer email address to identify their contact and existing appointment',
+        ),
+      serviceName: z
+        .string()
+        .optional()
+        .describe(
+          'Service name of the appointment to cancel (e.g. "Hatha Yoga Terapéutico")',
+        ),
       reason: z
         .string()
         .optional()
         .describe('Reason or motive for the cancellation provided by the customer'),
     }),
-    execute: async (inputData) => {
-      const appointment = await deps.cancelAppointment(
-        inputData.appointmentId,
-        inputData.reason,
-      );
-      return {
-        appointment,
-        message:
-          'Cita cancelada correctamente. Se ha notificado al alumno por correo y/o WhatsApp con el motivo registrado.',
-      };
+    execute: async (inputData, context) => {
+      const customer = getCustomer(context);
+      let contactId = customer?.contactId;
+      const threadId = (context as any)?.requestContext?.get?.('threadId');
+
+      if (!contactId && (inputData.customerPhone || inputData.customerEmail)) {
+        const found = deps.findContact
+          ? await deps.findContact(inputData.customerPhone, inputData.customerEmail)
+          : inputData.customerPhone
+          ? await deps.findContactByPhone(normalizePhoneLoose(inputData.customerPhone))
+          : null;
+        if (found?.id) {
+          contactId = found.id;
+          if (threadId && deps.linkThreadContact) {
+            await deps.linkThreadContact(threadId, found.id).catch(() => null);
+          }
+          try {
+            (context as any)?.requestContext?.set?.('customer', {
+              contactId: found.id,
+              phone: found.phone,
+              name: found.name,
+              email: found.email,
+              nameKnown: true,
+            });
+          } catch {}
+        }
+      }
+
+      if (!contactId && threadId && deps.getThreadContact) {
+        const threadContact = await deps.getThreadContact(threadId).catch(() => null);
+        if (threadContact?.id) contactId = threadContact.id;
+      }
+
+      let apptId = inputData.appointmentId;
+      if (!apptId && contactId && deps.listContactAppointments) {
+        const existing = await deps.listContactAppointments(contactId).catch(() => []);
+        const activeList = existing.filter(
+          (a: any) =>
+            a.status === 'scheduled' || a.status === 'pending_approval',
+        );
+        let matching = activeList;
+        if (inputData.serviceName) {
+          const sName = inputData.serviceName.toLowerCase();
+          matching = activeList.filter((a: any) =>
+            (a.service || '').toLowerCase().includes(sName) ||
+            sName.includes((a.service || '').toLowerCase()),
+          );
+        }
+        const active = matching.length > 0 ? matching[0] : activeList[0];
+        if (active?.id) {
+          apptId = active.id;
+        }
+      }
+
+      if (!contactId && !apptId) {
+        return {
+          error:
+            'Para poder cancelar tu cita necesito saber cuál es tu reserva. Por favor indícame tu correo electrónico o tu número de teléfono para localizarla en el sistema.',
+        };
+      }
+
+      if (!apptId) {
+        return {
+          error:
+            'No se ha encontrado ninguna cita activa previa (confirmada o pendiente de aprobación) para cancelar con esos datos.',
+        };
+      }
+
+      try {
+        const appointment = await deps.cancelAppointment(
+          apptId,
+          inputData.reason,
+        );
+        return {
+          appointment,
+          message:
+            'Cita cancelada correctamente. La plaza ha quedado liberada y se ha notificado por correo y/o WhatsApp.',
+        };
+      } catch (err: any) {
+        return {
+          error: err?.message || 'Error al cancelar la cita en el sistema.',
+        };
+      }
     },
   });
 
@@ -872,6 +968,24 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         .optional()
         .describe(
           'ID of the appointment to reschedule. If not provided, the active appointment for the customer is resolved automatically.',
+        ),
+      customerPhone: z
+        .string()
+        .optional()
+        .describe(
+          'Customer phone or mobile number to identify their contact and existing appointments',
+        ),
+      customerEmail: z
+        .string()
+        .optional()
+        .describe(
+          'Customer email address to identify their contact and existing appointments',
+        ),
+      serviceName: z
+        .string()
+        .optional()
+        .describe(
+          'Name of the service of the appointment to reschedule (e.g. "Hatha Yoga Terapéutico")',
         ),
       newStartsAt: z
         .string()
@@ -888,6 +1002,29 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       let contactId = customer?.contactId;
       const threadId = (context as any)?.requestContext?.get?.('threadId');
 
+      if (!contactId && (inputData.customerPhone || inputData.customerEmail)) {
+        const found = deps.findContact
+          ? await deps.findContact(inputData.customerPhone, inputData.customerEmail)
+          : inputData.customerPhone
+          ? await deps.findContactByPhone(normalizePhoneLoose(inputData.customerPhone))
+          : null;
+        if (found?.id) {
+          contactId = found.id;
+          if (threadId && deps.linkThreadContact) {
+            await deps.linkThreadContact(threadId, found.id).catch(() => null);
+          }
+          try {
+            (context as any)?.requestContext?.set?.('customer', {
+              contactId: found.id,
+              phone: found.phone,
+              name: found.name,
+              email: found.email,
+              nameKnown: true,
+            });
+          } catch {}
+        }
+      }
+
       if (!contactId && threadId && deps.getThreadContact) {
         const threadContact = await deps.getThreadContact(threadId).catch(() => null);
         if (threadContact?.id) contactId = threadContact.id;
@@ -896,19 +1033,35 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       let apptId = inputData.appointmentId;
       if (!apptId && contactId && deps.listContactAppointments) {
         const existing = await deps.listContactAppointments(contactId).catch(() => []);
-        const active = existing.find(
+        const activeList = existing.filter(
           (a: any) =>
             a.status === 'scheduled' || a.status === 'pending_approval',
         );
+        let matching = activeList;
+        if (inputData.serviceName) {
+          const sName = inputData.serviceName.toLowerCase();
+          matching = activeList.filter((a: any) =>
+            (a.service || '').toLowerCase().includes(sName) ||
+            sName.includes((a.service || '').toLowerCase()),
+          );
+        }
+        const active = matching.length > 0 ? matching[0] : activeList[0];
         if (active?.id) {
           apptId = active.id;
         }
       }
 
+      if (!contactId && !apptId) {
+        return {
+          error:
+            'Para poder reprogramar tu cita necesito saber cuál es tu reserva. Por favor indícame tu correo electrónico o tu número de teléfono con el que te diste de alta para localizarla.',
+        };
+      }
+
       if (!apptId) {
         return {
           error:
-            'No se ha encontrado ninguna cita activa previa para reprogramar. Por favor consulta primero sus citas con listContactAppointments o pídele su teléfono/correo.',
+            'No se ha encontrado ninguna cita activa previa (confirmada o pendiente de aprobación) para reprogramar. Si deseas solicitar una nueva reserva, indícame el servicio, fecha y hora.',
         };
       }
 
@@ -928,7 +1081,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           await deps.cancelAppointment(apptId, inputData.reason || 'Reprogramada');
           newAppt = await deps.bookAppointment(
             contactId!,
-            'Hatha Yoga Terapéutico',
+            inputData.serviceName || 'Hatha Yoga Terapéutico',
             effectiveStartsAt,
             90,
           );
@@ -1091,20 +1244,21 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Si un usuario o cliente pregunta específicamente por Iaidō o cualquier actividad no disponible, aclárale con total amabilidad: "Actualmente esa actividad no se imparte en el centro. Nuestro catálogo oficial está centrado en Hatha Yoga Terapéutico, Meditaciones, Terapia Gestalt, Bienestar Experience, Baños y Pujas de Gong, Constelaciones y Retiros." y ofrécele consultar las fechas de las actividades activas.
 - CANCELACIÓN DE CITAS Y RESERVAS:
   1. Si un alumno o cliente solicita cancelar una cita (sea de Yoga, Gong, Constelaciones, Terapias, etc.):
-  2. Llama OBLIGATORIAMENTE a 'listContactAppointments' (pasando su teléfono o email) para obtener el listado de sus citas activas o pendientes.
-  3. Muestra al cliente sus citas de forma clara (nombre de la actividad, día y hora) para que identifique con total precisión cuál de ellas desea cancelar.
+  2. Si estás en la web/widget y todavía no se conoce el teléfono o correo del cliente, pídeselo cordialmente para localizar su reserva (o pásalos en 'customerPhone' / 'customerEmail' a 'cancelAppointment' si ya te los ha facilitado).
+  3. Llama a 'listContactAppointments' (pasando su teléfono o email) si necesitas mostrarle sus citas previas.
   4. Solicita amablemente el MOTIVO de la cancelación (por ejemplo: "¿Podrías indicarme brevemente el motivo de la cancelación?").
-  5. En cuanto el cliente confirme qué cita anula y aporte el motivo (o lo exprese), ejecuta 'cancelAppointment' pasando el 'appointmentId' y el 'reason'.
+  5. Ejecuta 'cancelAppointment' pasando 'appointmentId' (o 'serviceName' y 'customerEmail'/'customerPhone') y el 'reason'.
   6. Confírmale al cliente que su cita ha quedado cancelada con éxito y que el sistema le envía la confirmación oficial por correo electrónico y/o WhatsApp.
 - REPROGRAMACIÓN O CAMBIO DE FECHA/HORA DE CITAS (OBLIGATORIO):
   1. Si el alumno o cliente solicita cambiar de día, cambiar de hora o reprogramar una cita (por ejemplo: "quiero reprogramarla para el jueves a la misma hora", "cámbiamela al jueves", "mover mi cita"):
-  2. Consulta SIEMPRE primero los huecos disponibles con 'checkAvailability' para confirmar que el nuevo horario es válido y tiene aforo disponible.
-  3. Llama DIRECTAMENTE a la herramienta 'rescheduleAppointment' pasando 'newStartsAt' (con la nueva fecha/hora solicitada) y el motivo si lo hay.
-  4. 'rescheduleAppointment' se encarga AUTOMÁTICAMENTE de cancelar la cita previa y dar de alta de inmediato la nueva cita en el sistema en una sola operación atómica.
-  5. NUNCA intentes llamar a 'cancelAppointment' y 'bookAppointment' por separado cuando se trate de un cambio o reprogramación: usa SIEMPRE 'rescheduleAppointment'.
-  6. Si el cliente ya te ha pedido cambiar o reprogramar la cita para un día u hora concreto, NO le vuelvas a preguntar "¿Quieres que cancele la del martes para poner la del jueves?"; EJECÚTALO DIRECTAMENTE con 'rescheduleAppointment' y confírmale que ha quedado reprogramada con éxito.
-  7. Si la cita es para una clase de prueba gratuita (regalo del centro) o modalidad de alumno, 'rescheduleAppointment' mantiene automáticamente la gratuidad y las condiciones originales.
-  8. Para servicios que requieren aprobación previa del instructor/terapeuta (como Bienestar Experience o Terapia Gestalt), al reprogramar la cita entra de nuevo en estado de revisión y avísale al cliente con amabilidad.
+  2. Si estás en la web/widget y todavía no se conoce el teléfono o correo del cliente, pídeselo cordialmente para localizar su reserva (o pásalos en 'customerPhone' / 'customerEmail' a 'rescheduleAppointment' si ya te los ha facilitado).
+  3. Consulta SIEMPRE primero los huecos disponibles con 'checkAvailability' para confirmar que el nuevo horario es válido y tiene aforo disponible.
+  4. Llama DIRECTAMENTE a la herramienta 'rescheduleAppointment' pasando 'newStartsAt' (con la nueva fecha/hora solicitada), 'serviceName' si aplica, 'customerEmail' / 'customerPhone' si se conocen, y el motivo si lo hay.
+  5. 'rescheduleAppointment' se encarga AUTOMÁTICAMENTE de cancelar la cita previa y dar de alta de inmediato la nueva cita en el sistema en una sola operación atómica.
+  6. NUNCA intentes llamar a 'cancelAppointment' y 'bookAppointment' por separado cuando se trate de un cambio o reprogramación: usa SIEMPRE 'rescheduleAppointment'.
+  7. Si el cliente ya te ha pedido cambiar o reprogramar la cita para un día u hora concreto, NO le vuelvas a preguntar "¿Quieres que cancele la del martes para poner la del jueves?"; EJECÚTALO DIRECTAMENTE con 'rescheduleAppointment' y confírmale que ha quedado reprogramada con éxito.
+  8. Si la cita es para una clase de prueba gratuita (regalo del centro) o modalidad de alumno, 'rescheduleAppointment' mantiene automáticamente la gratuidad y las condiciones originales.
+  9. Para servicios que requieren aprobación previa del instructor/terapeuta (como Bienestar Experience o Terapia Gestalt), al reprogramar la cita entra de nuevo en estado de revisión y avísale al cliente con amabilidad.
 - PREVENCIÓN DE DUPLICADOS Y RESERVAS SIMULTÁNEAS PARA LA MISMA PERSONA:
   * Un mismo alumno/contacto NO puede tener dos citas o plazas reservadas simultáneas en el mismo horario.
   * Por ejemplo: no puede inscribirse a la vez en 1 clase semanal y 2 clases semanales a la misma hora, ni como 'Constelar' y como 'Participante' en el mismo taller de Constelaciones Familiares, ni en dos servicios distintos en el mismo intervalo de tiempo.

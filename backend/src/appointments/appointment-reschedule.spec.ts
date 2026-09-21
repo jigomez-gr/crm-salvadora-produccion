@@ -145,8 +145,8 @@ describe('AppointmentsService - rescheduleAppointment', () => {
   });
 
   it('cancels Tuesday appointment and creates Thursday appointment retaining free trial', async () => {
-    // Thursday 17 Sep at 09:45 (07:45 UTC)
-    const thursdayIso = '2026-09-17T07:45:00.000Z';
+    // Thursday 24 Sep at 19:00 (17:00 UTC)
+    const thursdayIso = '2026-09-24T17:00:00.000Z';
 
     const newAppt = await service.rescheduleAppointment(
       'appt-tuesday-1',
@@ -171,8 +171,8 @@ describe('AppointmentsService - rescheduleAppointment', () => {
       contact: contactMock as Contact,
       service: 'Meditaciones Guiadas',
       calendarId: 'cal-meditacion',
-      startsAt: new Date('2026-09-15T07:15:00.000Z'), // Tuesday 09:15 local (UTC+2)
-      endsAt: new Date('2026-09-15T07:45:00.000Z'),
+      startsAt: new Date('2026-09-22T07:15:00.000Z'), // Tuesday 09:15 local (UTC+2)
+      endsAt: new Date('2026-09-22T07:45:00.000Z'),
       status: AppointmentStatus.SCHEDULED,
       isFirstClass: false,
       price: '3.00',
@@ -180,8 +180,8 @@ describe('AppointmentsService - rescheduleAppointment', () => {
     };
     apptsInDb.push(tuesdayMed);
 
-    // Thursday 17 Sep at 09:15 local (07:15 UTC)
-    const thursdayIso = '2026-09-17T07:15:00.000Z';
+    // Thursday 24 Sep at 09:15 local (07:15 UTC)
+    const thursdayIso = '2026-09-24T07:15:00.000Z';
 
     const newAppt = await service.rescheduleAppointment(
       'appt-med-tuesday',

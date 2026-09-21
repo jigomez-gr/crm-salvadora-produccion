@@ -1228,11 +1228,16 @@ export class VapiWebhookService {
     const oldDateSpoken = this.formatSpokenDate(appt.startsAt, ctx.timezone);
     const spokenNew = this.formatSpokenDate(newStartsAt, ctx.timezone);
 
-    await this.appointmentsService.update(appt.id, {
-      startsAt: newStartsAt.toISOString(),
-      endsAt: newEndsAt.toISOString(),
-      notes: appt.notes ? `${appt.notes}\nReprogramada por voz de ${oldDateSpoken} a ${spokenNew}.` : `Reprogramada por voz de ${oldDateSpoken} a ${spokenNew}.`,
-    });
+    try {
+      await this.appointmentsService.update(appt.id, {
+        startsAt: newStartsAt.toISOString(),
+        endsAt: newEndsAt.toISOString(),
+        notes: appt.notes ? `${appt.notes}\nReprogramada por voz de ${oldDateSpoken} a ${spokenNew}.` : `Reprogramada por voz de ${oldDateSpoken} a ${spokenNew}.`,
+      });
+    } catch (err: any) {
+      const msg = err?.message || 'Error al reprogramar la cita en el sistema.';
+      return `No se pudo completar la reprogramación: ${msg}`;
+    }
 
     return `Cita cambiada: tu cita de ${appt.service} ha sido movida al ${spokenNew}. Cita reprogramada con éxito. El hueco anterior ha quedado liberado y el nuevo confirmado. Confírmaselo amablemente al cliente e infórmale de que le hemos enviado la confirmación actualizada a su correo.`;
   }
