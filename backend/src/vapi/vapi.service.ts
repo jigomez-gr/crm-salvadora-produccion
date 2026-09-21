@@ -5,6 +5,7 @@ import {
   BadRequestException,
   OnModuleInit,
 } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { VapiAccount } from '../common/entities/vapi-account.entity';
@@ -58,6 +59,17 @@ export class VapiService implements OnModuleInit {
         this.logger.warn(`No se pudo auto-sincronizar VAPI al iniciar: ${err.message}`);
       }
     }, 6000);
+  }
+
+  @OnEvent('service.changed', { async: true })
+  async handleServiceChanged() {
+    try {
+      this.logger.log('Servicio modificado en CRM, auto-sincronizando asistente con VAPI...');
+      await this.publishAssistant();
+      this.logger.log('Asistente de VAPI actualizado automáticamente tras cambio de servicio.');
+    } catch (err: any) {
+      this.logger.warn(`No se pudo auto-sincronizar VAPI tras cambio de servicio: ${err?.message || err}`);
+    }
   }
 
   private async ensureSchema(): Promise<void> {

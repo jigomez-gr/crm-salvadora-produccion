@@ -1133,8 +1133,23 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         timeStyle: 'short',
       });
 
-      const bienestarSvc = config?.services?.find((s: any) => /bienestar/i.test(s.name));
-      const bienestarPrice = bienestarSvc?.price ? `${bienestarSvc.price}€` : '19.99€';
+      const getServicePrice = (regex: RegExp, fallback: string) => {
+        const found = config?.services?.find((s: any) => regex.test(s.name || ''));
+        return found?.price ? `${found.price}€` : fallback;
+      };
+
+      const yoga1Price = getServicePrice(/1\s*clase/i, '25€');
+      const yoga2Price = getServicePrice(/2\s*clase/i, '42€');
+      const yogaSinglePrice = getServicePrice(/espor[aá]dica|suelta/i, '10€');
+      const meditacionPrice = getServicePrice(/meditaci/i, '15€');
+      const gestaltPrice = getServicePrice(/gestalt/i, '35€');
+      const bienestarPrice = getServicePrice(/bienestar/i, '19.99€');
+      const gongPrice = getServicePrice(/baño.*gong|meditación sonora/i, '16€');
+      const pujaPrice = getServicePrice(/puja/i, '95€');
+      const constelarPrice = getServicePrice(/constel.*(constelar|propio)/i, '60€');
+      const participarPrice = getServicePrice(/constel.*(particip|represen)/i, '20€');
+      const mujeresPrice = getServicePrice(/mujeres|femenino/i, '45€');
+      const ayunoPrice = getServicePrice(/ayuno/i, '250€');
 
       // Shared behaviour rules — applied with or without a stored config. These
       // are the guardrails that keep the agent on-task and stop it leaking the
@@ -1169,12 +1184,12 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Horarios oficiales:
     Consulta y ofrece SIEMPRE los turnos y horarios oficiales especificados en la sección de Servicios de arriba (configurados dinámicamente en la base de datos para cada servicio). NUNCA inventes horarios ni utilices horas que no figuren en la sección de Servicios.
   * Las modalidades de funcionamiento son:
-    1. **1 clase semanal**: cuota mensual de 25€/mes.
-    2. **2 clases semanales**: cuota mensual de 42€/mes.
+    1. **1 clase semanal**: cuota mensual de ${yoga1Price}/mes.
+    2. **2 clases semanales**: cuota mensual de ${yoga2Price}/mes.
   * REGLA OFICIAL DE LA PRIMERA CLASE Y CLASES SUELTAS:
     - Un usuario puede solicitar una primera clase de prueba en cualquiera de las modalidades.
     - **La primera clase de prueba NO SE COBRA, SE LA REGALAMOS** (100% gratuita para probar la actividad con total libertad, sin ningún compromiso ni pago).
-    - Si el asistente no se convierte en alumno tras probar, puede seguir asistiendo a **clases esporádicas a 10€ la sesión suelta** (a todos los efectos).
+    - Si el asistente no se convierte en alumno tras probar, puede seguir asistiendo a **clases esporádicas a ${yogaSinglePrice} la sesión suelta** (a todos los efectos).
     - Cualquier persona puede **convertirse en alumno con cuota mensual cuando quiera**, o **dejar de ser alumno bajo petición** cuando lo desee.
     - Comunica siempre con calidez y cercanía que su primera clase es un regalo de bienvenida del centro.
   * CONDICIÓN DE ALUMNO, HORARIO FIJO Y GESTIÓN DE CITAS:
@@ -1191,13 +1206,13 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Modalidad: Actividad grupal presencial (aforo de hasta 28 personas).
   * Precios:
     - ¡Alumnos del centro de Yoga: GRATIS! (incluido en su condición de alumno).
-    - No alumnos: 15€ al mes (cuota mensual) o 3€ por meditación suelta.
+    - No alumnos: ${meditacionPrice}/mes (cuota mensual) o 3€ por meditación suelta.
   * Movilidad de horarios: Los asistentes se pueden mover por los horarios libremente (martes o jueves), siempre teniendo en cuenta evitar horarios que estén completos para no colapsar el aforo (aforo máximo 28 plazas).
   Cuando un cliente solicite meditación o pregunte por ella, ofrécele los martes o jueves a las 9:15 y formaliza su plaza con 'bookAppointment'.
 - TERAPIA GESTALT (SESIÓN INDIVIDUAL):
   * Modalidad: Puede ser Presencial u Online (videollamada). Pregúntale al alumno/cliente qué modalidad prefiere. Si el alumno te facilita sus datos sin especificar modalidad, tramita la reserva y confírmale amablemente que su solicitud queda registrada y pendiente de aprobación por el terapeuta responsable (**Jose Ignacio Gomez Raya**).
   * Duración: 60 minutos (1 hora).
-  * Precio: 35€ por sesión (pago en el centro o previa confirmación).
+  * Precio: ${gestaltPrice} por sesión (pago en el centro o previa confirmación).
   * Aforo: Es una sesión individual (solo 1 persona por horario).
   * Horario: Se acuerda individualmente entre alumno y profesor. Consulta disponibilidad con 'checkAvailability'.
   * APROBACIÓN OBLIGATORIA: Las citas de Terapia Gestalt requieren la aprobación previa del terapeuta/profesor responsable (**Jose Ignacio Gomez Raya**).
@@ -1215,31 +1230,31 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Modalidad: Actividad grupal presencial (aforo máximo: 30 personas).
   * Estructura: 2 horas de preparación corporal, inmersión en baño de sonido con gongs afinados y meditación integradora.
   * Próxima fecha oficial: Sábado 26 de Septiembre de 2026 (de 18:00 a 20:00).
-  * Precio: 16€ por asistente (pago en el centro).
+  * Precio: ${gongPrice} por asistente (pago en el centro).
   * Cuando un cliente pregunte o solicite plaza, informa de la fecha y formaliza con 'bookAppointment'.
 - PUJA DE GONGS (NOCHE SAGRADA DE SONIDO - 11 HORAS):
   * Modalidad: Evento vivencial anual ininterrumpido durante toda la noche (aforo máximo: 30 personas).
   * Fecha oficial: Sábado 28 de Noviembre de 2026 (de 21:00 a 08:00 del domingo).
-  * Precio: 95€ por asistente (pago en el centro).
+  * Precio: ${pujaPrice} por asistente (pago en el centro).
   * Cuando un cliente pregunte o solicite plaza, formaliza su reserva con 'bookAppointment'.
 - CONSTELACIONES FAMILIARES (TALLER MENSUAL VIVENCIAL):
   * Modalidad: Taller vivencial presencial mensual de fin de mes (aforo: 25 personas).
   * Próxima fecha oficial: Domingo 27 de Septiembre de 2026 (de 10:00 a 14:00).
   * Dos opciones de participación (pregunta al cliente o asigna la que pida):
-    1. **Constelar (Trabajar tema personal propio)**: 60€
-    2. **Participar (Representante / Observador en el campo)**: 20€
+    1. **Constelar (Trabajar tema personal propio)**: ${constelarPrice}
+    2. **Participar (Representante / Observador en el campo)**: ${participarPrice}
   * Formaliza la plaza deseada con 'bookAppointment'.
 - ENCUENTRO DE MUJERES (PRIMAVERA - JORNADA VIVENCIAL):
   * Modalidad: Actividad grupal presencial (aforo máximo: 25 personas).
   * Propósito y temática: Jornada sagrada femenina de empoderamiento, arquetipos, sanación de memorias, meditación, danza y autocuidado.
   * Fecha oficial: Sábado 15 de Mayo de 2027 (de 10:00 a 16:00).
-  * Precio: 45€ por asistente (pago en el centro).
+  * Precio: ${mujeresPrice} por asistente (pago en el centro).
   * Cuando una persona pregunte o pida plaza, informa de la fecha y formaliza con 'bookAppointment'.
 - RETIRO DE AYUNO TERAPÉUTICO Y SENDERISMO CONSCIENTE:
   * Modalidad: Retiro presencial de fin de semana / puente en la naturaleza (aforo máximo: 20 personas).
   * Propósito y actividades: Depuración celular profunda, caldos y tisanas biológicas, caminatas conscientes en la naturaleza, descanso digestivo, charlas de nutrición y reconexión holística.
   * Próxima edición: Puente de Octubre (Del 9 al 12 de Octubre de 2026, 4 días / 3 noches).
-  * Precio: 180€ (o según tipo de hospedaje y habitación elegida).
+  * Precio: ${ayunoPrice} (o según tipo de hospedaje y habitación elegida).
   * Cuando un cliente pregunte o pida inscribirse, informa de las fechas del puente de octubre y formaliza su plaza con 'bookAppointment'.
 - REGLA ESTRICTA DE SERVICIOS ACTIVOS Y SERVICIOS NO DISPONIBLES:
   * Ofrece e informa ÚNICAMENTE sobre las actividades activas del catálogo oficial del centro.

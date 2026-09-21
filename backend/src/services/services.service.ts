@@ -144,11 +144,13 @@ export class ServicesService implements OnModuleInit {
         gestaltSvc.requiresApproval = true;
         gestaltSvc.maxCapacity = 1;
         gestaltSvc.durationMinutes = 60;
-        gestaltSvc.price = '35.00';
+        gestaltSvc.price = gestaltSvc.price || '35.00';
         gestaltSvc.allowedModalities = ['in_person', 'virtual'];
         gestaltSvc.isActive = true;
-        gestaltSvc.description =
-          'Sesión individual de psicoterapia Gestalt presencial u online. Enfoque humanista y toma de conciencia. Horario convenido individualmente entre terapeuta y alumno/paciente. Requiere aprobación previa por parte del terapeuta responsable (Jose Ignacio Gomez Raya). Precio: 35€ por sesión de 1 hora. Pago en el centro.';
+        if (!gestaltSvc.description) {
+          gestaltSvc.description =
+            'Sesión individual de psicoterapia Gestalt presencial u online. Enfoque humanista y toma de conciencia. Horario convenido individualmente entre terapeuta y alumno/paciente. Requiere aprobación previa por parte del terapeuta responsable (Jose Ignacio Gomez Raya). Precio: 35€ por sesión de 1 hora. Pago en el centro.';
+        }
         await this.serviceRepo.save(gestaltSvc);
       }
 
@@ -268,10 +270,12 @@ export class ServicesService implements OnModuleInit {
           ayunoSvc.flyerUrl = '/flyers/ayuno.jpeg';
           ayunoSvc.flyerPath = 'public/flyers/ayuno.jpeg';
         }
-        ayunoSvc.price = '250.00';
-        ayunoSvc.eventDatesText = 'Del viernes 9 al lunes 12 de Octubre de 2026';
-        ayunoSvc.description =
-          'Retiro de depuración y ayuno consciente después del verano para subir tu energía vital. Del viernes 9 al lunes 12 de octubre. Lugar paradisíaco y aislado a hora y media de Madrid donde bañarnos y hacer paseos por el monte. Actividades diarias: activación y gimnasia al amanecer, yoga al mediodía, meditación al atardecer y baño de gong en la noche. Dirigido por Salvadora Conesa (40 años como profesora de yoga, 26 como terapeuta Gestalt, 30 años dirigiendo grupos de ayuno). Inversión: 250 € (230 € reservando antes del 12 de septiembre, descuento con acompañante o en grupo). Aforo: 20 plazas.';
+        ayunoSvc.price = ayunoSvc.price || '250.00';
+        ayunoSvc.eventDatesText = ayunoSvc.eventDatesText || 'Del viernes 9 al lunes 12 de Octubre de 2026';
+        if (!ayunoSvc.description) {
+          ayunoSvc.description =
+            'Retiro de depuración y ayuno consciente después del verano para subir tu energía vital. Del viernes 9 al lunes 12 de octubre. Lugar paradisíaco y aislado a hora y media de Madrid donde bañarnos y hacer paseos por el monte. Actividades diarias: activación y gimnasia al amanecer, yoga al mediodía, meditación al atardecer y baño de gong en la noche. Dirigido por Salvadora Conesa (40 años como profesora de yoga, 26 como terapeuta Gestalt, 30 años dirigiendo grupos de ayuno). Inversión: 250 € (230 € reservando antes del 12 de septiembre, descuento con acompañante o en grupo). Aforo: 20 plazas.';
+        }
         ayunoSvc.reminderNotes =
           ayunoSvc.reminderNotes ||
           'Llevar ropa cómoda de abrigo para la naturaleza, calzado de senderismo/montaña, botella de agua reutilizable, libreta de notas, bañador y toalla grande para saunas/baños termales si aplica.';
@@ -529,7 +533,7 @@ export class ServicesService implements OnModuleInit {
               requiresApproval: true,
               maxCapacity: 1,
               durationMinutes: 60,
-              price: '35.00',
+              price: gestaltSvc?.price || s.price || '35.00',
               allowedModalities: ['in_person', 'virtual'],
             };
           }
@@ -967,6 +971,34 @@ export class ServicesService implements OnModuleInit {
     return this.enrichService(service);
   }
 
+  private async syncAgentConfigServices(): Promise<void> {
+    try {
+      const allServices = await this.serviceRepo.find({ where: { isActive: true } });
+      const agentConfigs = await this.agentConfigRepo.find();
+      for (const agent of agentConfigs) {
+        agent.services = allServices.map((s) => ({
+          name: s.name,
+          durationMinutes: s.durationMinutes,
+          price: s.price,
+          serviceType: s.serviceType,
+          eventDatesText: s.eventDatesText,
+          scheduleText: s.scheduleText,
+          description: s.description,
+          weeklySchedule: s.weeklySchedule,
+          maxCapacity: s.maxCapacity,
+          minQuorum: s.minQuorum,
+          paymentType: s.paymentType,
+          externalPaymentUrl: s.externalPaymentUrl,
+          allowedModalities: s.allowedModalities,
+          requiresReason: s.requiresReason,
+        }));
+        await this.agentConfigRepo.save(agent);
+      }
+    } catch (err) {
+      console.warn('Notice updating agent_configs services:', err);
+    }
+  }
+
   async create(dto: CreateServiceDto): Promise<Service> {
     const existing = await this.findByName(dto.name);
     if (existing) {
@@ -978,29 +1010,33 @@ export class ServicesService implements OnModuleInit {
     if (!weeklySchedule && dto.scheduleText) {
       weeklySchedule = parseWeeklyScheduleFromText(dto.scheduleText) || undefined;
     }
-    if (!weeklySchedule && dto.description) {
-      weeklySchedule = parseWeeklyScheduleFromText(dto.description) || undefined;
-    }
-
     const service = this.serviceRepo.create({
-      ...dto,
-      weeklySchedule: weeklySchedule || null,
-      serviceType: dto.serviceType || ServiceType.RECURRING,
-      eventDatesText: dto.eventDatesText || null,
+      name: dto.name,
+      description: dto.description,
+      serviceType: dto.serviceType,
+      eventDatesText: dto.eventDatesText,
+      scheduleText: dto.scheduleText,
+      weeklySchedule: dto.weeklySchedule,
       eventStartDate: dto.eventStartDate ? new Date(dto.eventStartDate) : null,
       eventEndDate: dto.eventEndDate ? new Date(dto.eventEndDate) : null,
-      maxCapacity: dto.maxCapacity !== undefined ? dto.maxCapacity : null,
-      minQuorum: dto.minQuorum !== undefined ? dto.minQuorum : null,
+      maxCapacity: dto.maxCapacity,
+      minQuorum: dto.minQuorum,
       quorumDeadline: dto.quorumDeadline ? new Date(dto.quorumDeadline) : null,
-      calendarId: dto.calendarId || generatedCalendarId,
+      durationMinutes: dto.durationMinutes,
+      price: dto.price === '' ? null : dto.price,
+      paymentType: dto.paymentType,
+      externalPaymentUrl: dto.externalPaymentUrl,
+      calendarId: dto.calendarId,
+      managerId: dto.managerId || null,
+      requiresApproval: dto.requiresApproval !== undefined ? dto.requiresApproval : false,
       allowedModalities: dto.allowedModalities || ['in_person'],
-      requiresReason: dto.requiresReason ?? false,
-      calEventTypeId: dto.calEventTypeId !== undefined ? dto.calEventTypeId : null,
-      reminderNotes: dto.reminderNotes !== undefined ? dto.reminderNotes : null,
-      price: dto.price !== undefined ? (dto.price === '' ? null : dto.price) : null,
+      requiresReason: dto.requiresReason !== undefined ? dto.requiresReason : false,
+      calEventTypeId: dto.calEventTypeId,
+      reminderNotes: dto.reminderNotes || null,
+      isActive: dto.isActive !== undefined ? dto.isActive : true,
       notifyByEmail: dto.notifyByEmail !== undefined ? dto.notifyByEmail : true,
       notifyByWhatsapp: dto.notifyByWhatsapp !== undefined ? dto.notifyByWhatsapp : true,
-      notifyBySms: dto.notifyBySms !== undefined ? dto.notifyBySms : false,
+      notifyBySms: dto.notifyBySms !== undefined ? dto.notifyBySms : true,
       reminderWhatsapp: dto.reminderWhatsapp !== undefined ? dto.reminderWhatsapp : true,
       reminderEmail: dto.reminderEmail !== undefined ? dto.reminderEmail : true,
       reminderVoice: dto.reminderVoice !== undefined ? dto.reminderVoice : false,
@@ -1022,6 +1058,8 @@ export class ServicesService implements OnModuleInit {
     });
 
     const saved = await this.serviceRepo.save(service);
+    await this.syncAgentConfigServices();
+    this.eventEmitter.emit('service.changed', saved);
     return this.enrichService(saved);
   }
 
@@ -1096,6 +1134,8 @@ export class ServicesService implements OnModuleInit {
     if (dto.fechaHasta !== undefined) service.fechaHasta = dto.fechaHasta || '2099-12-31';
 
     const saved = await this.serviceRepo.save(service);
+    await this.syncAgentConfigServices();
+    this.eventEmitter.emit('service.changed', saved);
     return this.enrichService(saved);
   }
 
@@ -1163,6 +1203,8 @@ export class ServicesService implements OnModuleInit {
     });
 
     const saved = await this.serviceRepo.save(newService);
+    await this.syncAgentConfigServices();
+    this.eventEmitter.emit('service.changed', saved);
 
     this.eventEmitter.emit(AUDIT_EVENT, {
       actor: actor || { id: null, email: 'system' },
@@ -1234,6 +1276,8 @@ export class ServicesService implements OnModuleInit {
 
     // 4. Delete the service record itself
     await this.serviceRepo.delete(service.id);
+    await this.syncAgentConfigServices();
+    this.eventEmitter.emit('service.changed', { id: service.id, name: serviceName });
 
     // 5. Emit audit event
     this.eventEmitter.emit(AUDIT_EVENT, {

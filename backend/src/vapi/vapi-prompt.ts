@@ -66,6 +66,24 @@ export function composeVapiSystemPrompt(input: PromptInputData): string {
     .filter(Boolean)
     .join('\n');
 
+  const getServicePrice = (regex: RegExp, fallback: string) => {
+    const found = input.services?.find((s) => regex.test(s.name || ''));
+    return found?.price ? `${found.price}€` : fallback;
+  };
+
+  const yoga1Price = getServicePrice(/1\s*clase/i, '25€');
+  const yoga2Price = getServicePrice(/2\s*clase/i, '42€');
+  const yogaSinglePrice = getServicePrice(/espor[aá]dica|suelta/i, '10€');
+  const meditacionPrice = getServicePrice(/meditaci/i, '15€');
+  const gestaltPrice = getServicePrice(/gestalt/i, '35€');
+  const bienestarPrice = getServicePrice(/bienestar/i, '19.99€');
+  const gongPrice = getServicePrice(/baño.*gong|meditación sonora/i, '16€');
+  const pujaPrice = getServicePrice(/puja/i, '95€');
+  const constelarPrice = getServicePrice(/constel.*(constelar|propio)/i, '60€');
+  const participarPrice = getServicePrice(/constel.*(particip|represen)/i, '20€');
+  const mujeresPrice = getServicePrice(/mujeres|femenino/i, '45€');
+  const ayunoPrice = getServicePrice(/ayuno/i, '250€');
+
   return `# Identidad y Rol
 Eres el recepcionista telefónico inteligente de ${input.businessName}.
 Estás activo las 24 horas para atender a los alumnos y clientes, resolver dudas sobre clases y servicios, y AGENDAR, MODIFICAR O CANCELAR CITAS en cualquier momento.
@@ -98,32 +116,32 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
     - Miércoles: 20:15
     - Jueves: 09:45, 11:15, 16:00, 17:30 y 19:00
   * Modalidades, primera cita y alumnos:
-    - 1 clase semanal (25€/mes): el alumno tiene su horario semanal fijo asignado. Si ya tiene una clase esa semana, ofrécele cambiar el horario ('reprogramar_cita') o pasarse a 2 clases semanales (42€/mes). Si tiene una clase pendiente de recuperar, sí puede agendarla como recuperación.
-    - 2 clases semanales (42€/mes): el alumno tiene sus 2 horarios semanales fijos asignados y puede agendar hasta DOS clases en la misma semana.
-    - Primera clase de prueba: ¡NO SE COBRA, SE LA REGALAMOS! (100% gratuita). Si no se convierte en alumno, puede seguir asistiendo a clases esporádicas a 10€ la sesión. Puede convertirse en alumno con cuota mensual o darse de baja bajo petición cuando lo desee.
+    - 1 clase semanal (${yoga1Price}/mes): el alumno tiene su horario semanal fijo asignado. Si ya tiene una clase esa semana, ofrécele cambiar el horario ('reprogramar_cita') o pasarse a 2 clases semanales (${yoga2Price}/mes). Si tiene una clase pendiente de recuperar, sí puede agendarla como recuperación.
+    - 2 clases semanales (${yoga2Price}/mes): el alumno tiene sus 2 horarios semanales fijos asignados y puede agendar hasta DOS clases en la misma semana.
+    - Primera clase de prueba: ¡NO SE COBRA, SE LA REGALAMOS! (100% gratuita). Si no se convierte en alumno, puede seguir asistiendo a clases esporádicas a ${yogaSinglePrice} la sesión. Puede convertirse en alumno con cuota mensual o darse de baja bajo petición cuando lo desee.
     - Horario fijo y generación automática: los alumnos tienen asignado un horario fijo para no tener que reservar cada semana.
     - Recuperación y reprogramación de clases: si no puede acudir, la puede recuperar a partir de la semana siguiente durante 3 meses (90 días). Puede reprogramar cuando lo necesite. En cada cambio o reprogramación, se envía un SMS y/o email para dejar constancia fehaciente.
   * Siempre consulta huecos con 'consultar_huecos'. NUNCA inventes horarios fuera de los martes, miércoles y jueves indicados.
 - **Meditaciones Guiadas** (Sesión grupal de 30 min, aforo de hasta 28 personas):
   * REGLA DE AFORO GRUPAL: Actividad grupal de centramiento y meditación. NUNCA se ve limitada porque el profesor tenga otra cita a esa hora, sino únicamente por el aforo máximo de 28 plazas.
   * Horarios: Martes y Jueves de 09:15 a 09:45.
-  * Precios: 15€/mes o 3€ meditación suelta (¡Gratis para alumnos de Yoga!). Se pueden mover libremente entre martes y jueves evitando horarios llenos para no colapsar el aforo.
-- **Terapia Gestalt** (Sesión individual de 60 min, 35€):
+  * Precios: ${meditacionPrice}/mes o 3€ meditación suelta (¡Gratis para alumnos de Yoga!). Se pueden mover libremente entre martes y jueves evitando horarios llenos para no colapsar el aforo.
+- **Terapia Gestalt** (Sesión individual de 60 min, ${gestaltPrice}):
   * Presencial u Online. Requiere aprobación del terapeuta (Jose Ignacio Gomez Raya).
-- **Bienestar Experience** (Sesión individual de 60 min, ${input.services?.find((s) => /bienestar/i.test(s.name))?.price || '19.99'}€):
+- **Bienestar Experience** (Sesión individual de 60 min, ${bienestarPrice}):
   * Presencial u Online. Requiere aprobación de Jose Ignacio Gomez Raya.
 - **Constelaciones Familiares** (Taller vivencial mensual de 4 horas, NO es sesión diaria individual):
   * Próxima fecha oficial: **Domingo 27 de Septiembre de 2026 de 10:00 a 14:00**.
-  * Opciones: 1. Constelar / Asunto propio (60€) | 2. Participar / Representante (20€).
+  * Opciones: 1. Constelar / Asunto propio (${constelarPrice}) | 2. Participar / Representante (${participarPrice}).
   * Si el cliente pide cita para hoy o cualquier otro día, explícale con total claridad que el taller es el domingo 27 de septiembre y ofrécele reservar su plaza para ese día.
 - **Baños de Gong y Meditación Sonora** (Sesión vivencial mensual de 2 horas):
-  * Próxima fecha: **Sábado 26 de Septiembre de 2026 de 18:00 a 20:00** (16€).
+  * Próxima fecha: **Sábado 26 de Septiembre de 2026 de 18:00 a 20:00** (${gongPrice}).
 - **Puja de Gongs** (Noche sagrada de sonido de 11 horas):
-  * Próxima fecha: **Sábado 28 de Noviembre de 2026 de 21:00 a 08:00 del domingo** (95€).
+  * Próxima fecha: **Sábado 28 de Noviembre de 2026 de 21:00 a 08:00 del domingo** (${pujaPrice}).
 - **Encuentro de Mujeres** (Jornada vivencial de primavera):
-  * Fecha: **Sábado 15 de Mayo de 2027 de 10:00 a 16:00** (45€).
+  * Fecha: **Sábado 15 de Mayo de 2027 de 10:00 a 16:00** (${mujeresPrice}).
 - **Retiro de Ayuno Terapéutico y Senderismo Consciente**:
-  * Fecha: **Puente de Octubre (del 9 al 12 de Octubre de 2026)** (180€).
+  * Fecha: **Puente de Octubre (del 9 al 12 de Octubre de 2026)** (${ayunoPrice}).
 
 # Servicios No Disponibles (Prohibición Estricta)
 - Si el llamante pregunta por artes marciales, Iaidō (esgrima japonesa), Ninjutsu, Taichí, Pilates, Entrenamiento Funcional, Consulta Médica o Fisioterapia, infórmale con total cercanía y amabilidad de que esas actividades ya no se imparten en el centro, y ofrécele las actividades activas del catálogo de Yoga, Meditación, Terapias y Retiros.

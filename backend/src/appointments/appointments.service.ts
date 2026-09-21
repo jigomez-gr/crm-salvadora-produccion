@@ -340,9 +340,10 @@ export class AppointmentsService implements OnModuleInit {
             additionalNotes = 'Primera clase de prueba (gratuita / regalo del centro).';
           } else {
             isFirstClass = false;
-            computedPrice = dto.price !== undefined ? dto.price : '10.00';
+            const singlePrice = serviceEntity?.price || '10.00';
+            computedPrice = dto.price !== undefined ? dto.price : singlePrice;
             computedPaymentStatus = PaymentStatus.UNPAID;
-            additionalNotes = 'Clase suelta esporádica (10,00 €).';
+            additionalNotes = `Clase suelta esporádica (${singlePrice} €).`;
           }
         }
 
@@ -445,9 +446,10 @@ export class AppointmentsService implements OnModuleInit {
           computedPaymentStatus = PaymentStatus.EXEMPT;
           additionalNotes = 'Meditación guiada (gratuita para alumnos del centro de yoga).';
         } else {
-          computedPrice = dto.price !== undefined ? dto.price : '3.00';
+          const medPrice = serviceEntity?.price || '3.00';
+          computedPrice = dto.price !== undefined ? dto.price : medPrice;
           computedPaymentStatus = PaymentStatus.UNPAID;
-          additionalNotes = 'Meditación guiada sesión suelta (3,00 €) o abono mensual (15,00 €/mes).';
+          additionalNotes = `Meditación guiada sesión suelta (${medPrice} €) o abono mensual.`;
         }
       }
     }
