@@ -1118,7 +1118,7 @@ export class AppointmentsService implements OnModuleInit {
    */
   async sendAppointmentConfirmationNotification(
     appointmentId: string,
-    channelOverrides?: { email?: boolean; whatsapp?: boolean },
+    channelOverrides?: { email?: boolean; whatsapp?: boolean; sms?: boolean },
     isRescheduled: boolean = false,
   ): Promise<boolean> {
     const appt = await this.findOne(appointmentId);
@@ -1183,7 +1183,7 @@ export class AppointmentsService implements OnModuleInit {
     rejectionReason?: string,
     proposedTimes?: string,
     isRescheduled: boolean = false,
-    channelOverrides?: { email?: boolean; whatsapp?: boolean },
+    channelOverrides?: { email?: boolean; whatsapp?: boolean; sms?: boolean },
   ): Promise<void> {
     try {
       const contact =
@@ -1447,7 +1447,12 @@ export class AppointmentsService implements OnModuleInit {
           : serviceEntity
           ? serviceEntity.notifyByWhatsapp !== false
           : true;
-      const shouldSms = serviceEntity ? Boolean(serviceEntity.notifyBySms) : false;
+      const shouldSms =
+        channelOverrides?.sms !== undefined
+          ? channelOverrides.sms
+          : serviceEntity
+          ? Boolean(serviceEntity.notifyBySms)
+          : false;
 
       // 1. Dispatch Email notification if enabled for this service
       if (shouldEmail) {

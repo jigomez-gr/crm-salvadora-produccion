@@ -1247,11 +1247,41 @@ export class VapiWebhookService {
     }
 
     const targetEmail = providedEmail || latestContact?.email || contact.email;
+
+    // Trigger Zadarma SMS confirmation for reschedule
+    const customerPhone = contact.phone || ctx.callerNumber;
+    if (customerPhone && this.zadarmaSms) {
+      const reschedSmsMsg = `Centro Salvadora: Confirmamos el cambio de tu cita de ${appt.service}. Tu nuevo horario es el ${spokenNew}. ¡Te esperamos!`;
+      this.vapiAccountRepo.findOne({ where: {} }).then((vapiAcc) => {
+        if (vapiAcc?.zadarmaSmsEnabled === false) return;
+        const callLookup = ctx.vapiCallId
+          ? this.callsRepo.findOne({ where: { vapiCallId: ctx.vapiCallId } })
+          : Promise.resolve(null);
+
+        callLookup.then((callRow) => {
+          this.zadarmaSms?.sendSms({
+            number: customerPhone,
+            message: reschedSmsMsg,
+            sender: vapiAcc?.zadarmaSenderId || undefined,
+            contactId: contact.id,
+            callId: callRow?.id,
+            appointmentId: appt.id,
+          }).catch((smsErr) => {
+            this.logger.error(`Error sending Zadarma SMS post-reschedule: ${smsErr?.message || smsErr}`);
+          });
+        }).catch((err) => {
+          this.logger.debug(`Could not resolve call for SMS log: ${err?.message || err}`);
+        });
+      }).catch((err) => {
+        this.logger.debug(`Could not read Zadarma SMS settings: ${err?.message || err}`);
+      });
+    }
+
     if (targetEmail) {
       try {
         await this.appointmentsService.sendAppointmentConfirmationNotification(
           appt.id,
-          { email: true, whatsapp: false },
+          { email: true, whatsapp: false, sms: true },
           true,
         );
         this.logger.log(`[VAPI] Enviado email de reprogramación a ${targetEmail} para la cita ${appt.id}`);
@@ -1259,10 +1289,10 @@ export class VapiWebhookService {
         this.logger.error(`[VAPI] Error enviando email de reprogramación: ${notifyErr?.message || notifyErr}`);
       }
 
-      return `Cita cambiada: tu cita de ${appt.service} ha sido movida al ${spokenNew}. Cita reprogramada con éxito. El hueco anterior ha quedado liberado y el nuevo confirmado. Confírmaselo amablemente al cliente e indícale que le hemos enviado la confirmación actualizada a su correo (${targetEmail}). Despídete con calidez.`;
+      return `Cita cambiada: tu cita de ${appt.service} ha sido movida al ${spokenNew}. Cita reprogramada con éxito. El hueco anterior ha quedado liberado y el nuevo confirmado. Confírmaselo amablemente al cliente e indícale que le hemos enviado la confirmación actualizada a su correo (${targetEmail}) y por SMS. Despídete con calidez.`;
     }
 
-    return `Cita cambiada: tu cita de ${appt.service} ha sido movida al ${spokenNew}. Cita reprogramada con éxito. El hueco anterior ha quedado liberado y el nuevo confirmado. Como aún no tenemos registrado tu correo electrónico para enviarte la confirmación, pregúntale amablemente al cliente: "¿Me dices tu correo electrónico para enviarte la confirmación? Por favor, dímelo letra por letra, por ejemplo: jota, i, g, o, m, e, z, arroba gmail punto com".`;
+    return `Cita cambiada: tu cita de ${appt.service} ha sido movida al ${spokenNew}. Cita reprogramada con éxito. El hueco anterior ha quedado liberado y el nuevo confirmado. Te hemos enviado un SMS de confirmación. Como aún no tenemos registrado tu correo electrónico para enviarte también la confirmación por email, pregúntale amablemente al cliente: "¿Me dices tu correo electrónico para enviarte la confirmación? Por favor, dímelo letra por letra, por ejemplo: jota, i, g, o, m, e, z, arroba gmail punto com".`;
   }
 
   // ─── 5. ANULAR CITA ───
@@ -1329,6 +1359,35 @@ export class VapiWebhookService {
       : isYoga
       ? ' Si deseas reprogramarla para otro día u horario oficial, dímelo y te la agendo ahora mismo.'
       : '';
+
+    // Trigger Zadarma SMS confirmation for cancellation
+    const customerPhone = contact.phone || ctx.callerNumber;
+    if (customerPhone && this.zadarmaSms) {
+      const cancelSmsMsg = `Centro Salvadora: Confirmamos la cancelación de tu cita de ${appt.service} del ${spokenDate}.${recoveryNotice ? ' Recuerda que dispones de 3 meses para recuperar tu clase avisándonos con antelación.' : ''}`;
+      this.vapiAccountRepo.findOne({ where: {} }).then((vapiAcc) => {
+        if (vapiAcc?.zadarmaSmsEnabled === false) return;
+        const callLookup = ctx.vapiCallId
+          ? this.callsRepo.findOne({ where: { vapiCallId: ctx.vapiCallId } })
+          : Promise.resolve(null);
+
+        callLookup.then((callRow) => {
+          this.zadarmaSms?.sendSms({
+            number: customerPhone,
+            message: cancelSmsMsg,
+            sender: vapiAcc?.zadarmaSenderId || undefined,
+            contactId: contact.id,
+            callId: callRow?.id,
+            appointmentId: appt.id,
+          }).catch((smsErr) => {
+            this.logger.error(`Error sending Zadarma SMS post-cancellation: ${smsErr?.message || smsErr}`);
+          });
+        }).catch((err) => {
+          this.logger.debug(`Could not resolve call for SMS log: ${err?.message || err}`);
+        });
+      }).catch((err) => {
+        this.logger.debug(`Could not read Zadarma SMS settings: ${err?.message || err}`);
+      });
+    }
 
     return `Tu cita de ${appt.service} del ${spokenDate} ha sido cancelada correctamente. El hueco queda liberado.${recoveryNotice} Confírmaselo amablemente al cliente y despídete con calidez.`;
   }
