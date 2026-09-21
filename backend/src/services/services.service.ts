@@ -722,6 +722,14 @@ export class ServicesService implements OnModuleInit {
            OR name ILIKE '%diagnóstico clínico%';
       `).catch(() => null);
 
+      // Ensure Bienestar Experience points to itinerario-9.mp4
+      await this.serviceRepo.query(`
+        UPDATE services 
+        SET "videoParticularUrl" = '/videos/itinerario-9.mp4',
+            "videoParticularPath" = 'media_base/videos/itinerario-9.mp4'
+        WHERE name ILIKE '%bienestar%' AND ("videoParticularUrl" IS NULL OR "videoParticularUrl" = '' OR "videoParticularUrl" LIKE '%itinerario-8%' OR "videoParticularUrl" LIKE '%itinerario8%');
+      `).catch(() => null);
+
       // 7. Ensure default categories exist and link existing services
       try {
         const defaultCategories = [
