@@ -1239,7 +1239,30 @@ export class VapiWebhookService {
       return `No se pudo completar la reprogramación: ${msg}`;
     }
 
-    return `Cita cambiada: tu cita de ${appt.service} ha sido movida al ${spokenNew}. Cita reprogramada con éxito. El hueco anterior ha quedado liberado y el nuevo confirmado. Confírmaselo amablemente al cliente e infórmale de que le hemos enviado la confirmación actualizada a su correo.`;
+    const providedEmail = normalizeSpokenEmail(params?.email || params?.correo || '');
+    const latestContact = await this.contactsRepo.findOne({ where: { id: appt.contactId } });
+    if (providedEmail && latestContact && !latestContact.email) {
+      latestContact.email = providedEmail;
+      await this.contactsRepo.save(latestContact);
+    }
+
+    const targetEmail = providedEmail || latestContact?.email || contact.email;
+    if (targetEmail) {
+      try {
+        await this.appointmentsService.sendAppointmentConfirmationNotification(
+          appt.id,
+          { email: true, whatsapp: false },
+          true,
+        );
+        this.logger.log(`[VAPI] Enviado email de reprogramación a ${targetEmail} para la cita ${appt.id}`);
+      } catch (notifyErr: any) {
+        this.logger.error(`[VAPI] Error enviando email de reprogramación: ${notifyErr?.message || notifyErr}`);
+      }
+
+      return `Cita cambiada: tu cita de ${appt.service} ha sido movida al ${spokenNew}. Cita reprogramada con éxito. El hueco anterior ha quedado liberado y el nuevo confirmado. Confírmaselo amablemente al cliente e indícale que le hemos enviado la confirmación actualizada a su correo (${targetEmail}). Despídete con calidez.`;
+    }
+
+    return `Cita cambiada: tu cita de ${appt.service} ha sido movida al ${spokenNew}. Cita reprogramada con éxito. El hueco anterior ha quedado liberado y el nuevo confirmado. Como aún no tenemos registrado tu correo electrónico para enviarte la confirmación, pregúntale amablemente al cliente: "¿Me dices tu correo electrónico para enviarte la confirmación? Por favor, dímelo letra por letra, por ejemplo: jota, i, g, o, m, e, z, arroba gmail punto com".`;
   }
 
   // ─── 5. ANULAR CITA ───

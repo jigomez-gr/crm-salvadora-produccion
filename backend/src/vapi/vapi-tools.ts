@@ -93,6 +93,7 @@ export function buildVapiToolDefinitions(webhookUrl: string, credentialId?: stri
           properties: {
             nuevoInicioIso: { type: 'string', description: 'Código ISO del nuevo hueco elegido' },
             citaId: { type: 'string', description: 'ID de la cita si se conoce' },
+            email: { type: 'string', description: 'Correo electrónico del cliente si lo facilita al solicitar el cambio' },
           },
           required: ['nuevoInicioIso'],
         },

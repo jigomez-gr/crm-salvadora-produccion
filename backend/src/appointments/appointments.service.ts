@@ -740,7 +740,9 @@ export class AppointmentsService implements OnModuleInit {
       const withContact = await this.findOne(saved.id);
       this.eventEmitter.emit('appointment.created', withContact);
       // Enviar confirmación por email y SMS con el nuevo horario reprogramado
-      this.notifyStudentDecision(withContact, 'accepted', 'Centro de Yoga Salvadora Conesa', undefined, undefined, true).catch(() => null);
+      await this.notifyStudentDecision(withContact, 'accepted', 'Centro de Yoga Salvadora Conesa', undefined, undefined, true).catch((err) => {
+        this.logger.error(`Error notifying student on update reschedule: ${err}`);
+      });
       return withContact;
     }
 
@@ -1117,6 +1119,7 @@ export class AppointmentsService implements OnModuleInit {
   async sendAppointmentConfirmationNotification(
     appointmentId: string,
     channelOverrides?: { email?: boolean; whatsapp?: boolean },
+    isRescheduled: boolean = false,
   ): Promise<boolean> {
     const appt = await this.findOne(appointmentId);
     if (!appt) return false;
@@ -1167,7 +1170,7 @@ export class AppointmentsService implements OnModuleInit {
       managerName,
       undefined,
       undefined,
-      false,
+      isRescheduled,
       channelOverrides,
     );
     return true;
@@ -1691,12 +1694,14 @@ export class AppointmentsService implements OnModuleInit {
           })
           .catch(() => null);
       }
-      this.notifyStudentDecision(
+      await this.notifyStudentDecision(
         appt,
         'cancelled',
         serviceEntity?.manager?.name || cancelledBy || 'Jose Ignacio Gomez Raya',
         reason,
-      ).catch(() => null);
+      ).catch((err) => {
+        this.logger.error(`Error notifying student on cancel: ${err}`);
+      });
     }
     return appt;
   }
