@@ -1027,6 +1027,69 @@ export class AppointmentsService implements OnModuleInit {
     return appt;
   }
 
+  /**
+   * Dispatches the confirmation notification (Email, WhatsApp) for a specific appointment,
+   * typically called when a customer's contact details (email/phone) become available after booking.
+   */
+  async sendAppointmentConfirmationNotification(
+    appointmentId: string,
+    channelOverrides?: { email?: boolean; whatsapp?: boolean },
+  ): Promise<boolean> {
+    const appt = await this.findOne(appointmentId);
+    if (!appt) return false;
+
+    // Reload latest contact data to ensure we have the freshly saved email/phone
+    const contact = await this.contactsRepo.findOne({ where: { id: appt.contactId } });
+    if (!contact || !contact.email) {
+      this.logger.warn(
+        `Cannot send confirmation notification for appt ${appointmentId}: contact has no email`,
+      );
+      return false;
+    }
+    appt.contact = contact;
+
+    let serviceEntity: Service | null = null;
+    if (appt.serviceId) {
+      serviceEntity = await this.servicesRepo
+        .findOne({
+          where: { id: appt.serviceId },
+          relations: ['manager'],
+        })
+        .catch(() => null);
+    }
+    if (!serviceEntity && appt.service) {
+      serviceEntity = await this.servicesRepo
+        .findOne({
+          where: { name: appt.service },
+          relations: ['manager'],
+        })
+        .catch(() => null);
+      if (!serviceEntity) {
+        serviceEntity = await this.servicesRepo
+          .findOne({
+            where: { name: ILike(`%${appt.service}%`) },
+            relations: ['manager'],
+          })
+          .catch(() => null);
+      }
+    }
+
+    const managerName = serviceEntity?.manager?.name || 'Centro de Yoga Salvadora Conesa';
+    const decision =
+      appt.status === AppointmentStatus.PENDING_APPROVAL ? 'pending_approval' : 'accepted';
+
+    await this.notifyStudentDecision(
+      appt,
+      decision,
+      managerName,
+      undefined,
+      undefined,
+      false,
+      channelOverrides,
+    );
+    return true;
+  }
+
   private async notifyStudentDecision(
     appt: Appointment,
     decision: 'accepted' | 'rejected' | 'reschedule_requested' | 'cancelled' | 'pending_approval',
@@ -1034,6 +1097,7 @@ export class AppointmentsService implements OnModuleInit {
     rejectionReason?: string,
     proposedTimes?: string,
     isRescheduled: boolean = false,
+    channelOverrides?: { email?: boolean; whatsapp?: boolean },
   ): Promise<void> {
     try {
       const contact =
@@ -1285,8 +1349,18 @@ export class AppointmentsService implements OnModuleInit {
       }
 
       // Notification channel preferences configured per Service (defaults: Email=true, WhatsApp=true, SMS=false)
-      const shouldEmail = serviceEntity ? serviceEntity.notifyByEmail !== false : true;
-      const shouldWhatsapp = serviceEntity ? serviceEntity.notifyByWhatsapp !== false : true;
+      const shouldEmail =
+        channelOverrides?.email !== undefined
+          ? channelOverrides.email
+          : serviceEntity
+          ? serviceEntity.notifyByEmail !== false
+          : true;
+      const shouldWhatsapp =
+        channelOverrides?.whatsapp !== undefined
+          ? channelOverrides.whatsapp
+          : serviceEntity
+          ? serviceEntity.notifyByWhatsapp !== false
+          : true;
       const shouldSms = serviceEntity ? Boolean(serviceEntity.notifyBySms) : false;
 
       // 1. Dispatch Email notification if enabled for this service

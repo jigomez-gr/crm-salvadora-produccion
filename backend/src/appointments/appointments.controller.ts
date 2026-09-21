@@ -141,6 +141,12 @@ export class AppointmentsController {
     return this.appointmentsService.accept(id, user.name || user.email || user.id);
   }
 
+  @Post(':id/resend-confirmation')
+  async resendConfirmation(@Param('id') id: string) {
+    const sent = await this.appointmentsService.sendAppointmentConfirmationNotification(id);
+    return { ok: sent };
+  }
+
   @Post(':id/reject')
   async reject(
     @Param('id') id: string,

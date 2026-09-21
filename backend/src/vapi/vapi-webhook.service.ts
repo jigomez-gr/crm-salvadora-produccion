@@ -830,23 +830,29 @@ export class VapiWebhookService {
 
     // 1. Find or create Contact
     let contact = await this.contactsRepo.findOne({ where: { phone: effectivePhone } });
+    const providedEmail = (params?.email || params?.correo || '').trim().toLowerCase();
     if (!contact) {
       contact = this.contactsRepo.create({
         name: customerName,
         phone: effectivePhone,
-        email: params?.email || params?.correo || undefined,
+        email: providedEmail || undefined,
         source: 'agente_voz',
         status: ContactStatus.ACTIVE,
       });
       contact = await this.contactsRepo.save(contact);
     } else {
+      let contactNeedsSave = false;
       if (customerName && customerName !== 'Alumno' && (!contact.name || contact.name === 'Cliente Telefónico')) {
         contact.name = customerName;
+        contactNeedsSave = true;
       }
-      if ((params?.email || params?.correo) && !contact.email) {
-        contact.email = params?.email || params?.correo;
+      if (providedEmail && contact.email !== providedEmail) {
+        contact.email = providedEmail;
+        contactNeedsSave = true;
       }
-      await this.contactsRepo.save(contact);
+      if (contactNeedsSave) {
+        await this.contactsRepo.save(contact);
+      }
     }
 
     // 2. Find service entity
@@ -1188,7 +1194,34 @@ export class VapiWebhookService {
     }
 
     this.logger.log(`Saved email «${rawEmail}» for contact ${contact.id} (${contact.name}) via toolGuardarDatosContacto`);
-    return `El correo «${rawEmail}» ha quedado registrado con éxito en la ficha del cliente. Confírmaselo con amabilidad y despídete con calidez.`;
+
+    // Disparar inmediatamente el correo de confirmación para la cita recién creada o próxima
+    let apptFoundForEmail: Appointment | null = null;
+    try {
+      apptFoundForEmail = await this.appointmentsRepo.findOne({
+        where: [
+          { contactId: contact.id, status: AppointmentStatus.SCHEDULED },
+          { contactId: contact.id, status: AppointmentStatus.PENDING_APPROVAL },
+        ],
+        order: { createdAt: 'DESC' },
+      });
+
+      if (apptFoundForEmail) {
+        await this.appointmentsService.sendAppointmentConfirmationNotification(apptFoundForEmail.id, {
+          email: true,
+          whatsapp: false,
+        });
+        this.logger.log(`[VAPI] Enviado email de confirmación a ${rawEmail} para la cita ${apptFoundForEmail.id} (${apptFoundForEmail.service}) tras guardar_datos_contacto`);
+      }
+    } catch (notifyErr: any) {
+      this.logger.error(`[VAPI] Error enviando email de confirmación tras guardar datos contacto: ${notifyErr?.message || notifyErr}`);
+    }
+
+    const confirmationNotice = apptFoundForEmail
+      ? ` y se ha enviado la confirmación de la cita con los datos de acceso y la ubicación a su correo.`
+      : '.';
+
+    return `El correo «${rawEmail}» ha quedado registrado con éxito${confirmationNotice} Confírmaselo con amabilidad al cliente ("Te acabo de enviar un correo a tu dirección con todos los datos y la ubicación del centro") y despídete con calidez.`;
   }
 
   // ─── EVENT: END OF CALL REPORT ───
@@ -1323,6 +1356,29 @@ export class VapiWebhookService {
             contact.email = emailMatch[0].toLowerCase();
             await this.contactsRepo.save(contact);
             this.logger.log(`Auto-saved email ${contact.email} from transcript for contact ${contact.id}`);
+
+            // Disparar confirmación si hay cita reciente (últimos 30 minutos)
+            const recentAppt = await this.appointmentsRepo.findOne({
+              where: [
+                { contactId: contact.id, status: AppointmentStatus.SCHEDULED },
+                { contactId: contact.id, status: AppointmentStatus.PENDING_APPROVAL },
+              ],
+              order: { createdAt: 'DESC' },
+            });
+            if (
+              recentAppt &&
+              recentAppt.createdAt &&
+              Date.now() - new Date(recentAppt.createdAt).getTime() < 30 * 60 * 1000
+            ) {
+              await this.appointmentsService
+                .sendAppointmentConfirmationNotification(recentAppt.id, {
+                  email: true,
+                  whatsapp: false,
+                })
+                .catch((err: any) => {
+                  this.logger.error(`Error sending email confirmation from end-of-call report: ${err}`);
+                });
+            }
           }
         }
       } catch (err: any) {

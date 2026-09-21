@@ -92,6 +92,7 @@ describe('VapiWebhookService', () => {
       })),
       update: jest.fn().mockResolvedValue({ id: 'appt-1' }),
       cancel: jest.fn().mockResolvedValue({ id: 'appt-1' }),
+      sendAppointmentConfirmationNotification: jest.fn().mockResolvedValue(true),
     };
 
     contactsService = {};
@@ -277,6 +278,56 @@ describe('VapiWebhookService', () => {
       const response = await service.handleWebhook(payload);
       expect(response.results![0].result).toContain('no hay sesiones de «Constelaciones Familiares» para esa fecha');
       expect(response.results![0].result).toContain('domingo 27 de septiembre');
+    });
+
+    it('handles guardar_datos_contacto, saves email, and dispatches appointment confirmation email', async () => {
+      contactsRepo.findOne.mockResolvedValue({
+        id: 'contact-test-1',
+        name: 'Jose Ignacio',
+        phone: '+34699000999',
+        email: null,
+      });
+
+      appointmentsRepo.findOne.mockResolvedValue({
+        id: 'appt-recent-123',
+        contactId: 'contact-test-1',
+        service: 'Hatha Yoga Terapéutico',
+        status: 'scheduled',
+      });
+
+      const payload: any = {
+        message: {
+          type: 'tool-calls',
+          call: {
+            id: 'vapi-call-save-email',
+            customer: { number: '+34699000999' },
+          },
+          toolCallList: [
+            {
+              id: 'tc-save-email',
+              name: 'guardar_datos_contacto',
+              arguments: {
+                email: 'jgomezjub@gmail.com',
+              },
+            },
+          ],
+        },
+      };
+
+      const response = await service.handleWebhook(payload);
+
+      expect(contactsRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'contact-test-1',
+          email: 'jgomezjub@gmail.com',
+        }),
+      );
+      expect(appointmentsService.sendAppointmentConfirmationNotification).toHaveBeenCalledWith(
+        'appt-recent-123',
+        { email: true, whatsapp: false },
+      );
+      expect(response.results![0].result).toContain('jgomezjub@gmail.com');
+      expect(response.results![0].result).toContain('se ha enviado la confirmación de la cita');
     });
   });
 });
