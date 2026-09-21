@@ -88,7 +88,6 @@ export class SeedService implements OnModuleInit {
       this.logger.log(
         `Demo data seed skipped — database already has ${contactsCount} contact(s) and ${servicesCount} service(s)`,
       );
-      await this.ensureDoctorDemo();
       await this.ensureVapiDemo();
       return;
     }
@@ -613,6 +612,7 @@ export class SeedService implements OnModuleInit {
   }
 
   private async ensureDoctorDemo() {
+    return; // Obsolete demo doctors and services disabled
     const defaultPasswordHash = await bcrypt.hash('Admin1234!', 10);
     let doctor = await this.usersRepo.findOne({ where: { email: 'doctor@demo.com' } });
     if (!doctor) {
