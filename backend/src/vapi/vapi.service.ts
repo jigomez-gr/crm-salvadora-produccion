@@ -340,7 +340,13 @@ export class VapiService implements OnModuleInit {
 
   async buildPromptData(): Promise<PromptInputData> {
     const [settings] = await this.settingsRepo.find({ take: 1 });
-    const services = await this.servicesRepo.find({ where: { isActive: true } });
+    const today = new Date().toISOString().slice(0, 10);
+    const allServices = await this.servicesRepo.find({ where: { isActive: true } });
+    const services = allServices.filter((s) => {
+      if (s.fechaDesde && s.fechaDesde > today) return false;
+      if (s.fechaHasta && s.fechaHasta < today) return false;
+      return true;
+    });
     const [agent] = await this.agentConfigRepo.find({ take: 1 });
     const acc = await this.getAccount();
 

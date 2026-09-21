@@ -655,10 +655,6 @@ export class ServicesService implements OnModuleInit {
             s.reminderNotes =
               'Llevar ropa deportiva, toalla de entrenamiento y botella de agua.';
             changed = true;
-          } else if (/iaido|tai chi|ninjutsu|orientales/i.test(s.name)) {
-            s.reminderNotes =
-              'Llevar ropa deportiva holgada o uniforme de práctica. Calzado limpio de sala o práctica descalzo.';
-            changed = true;
           } else {
             s.reminderNotes =
               'Llevar ropa cómoda y acudir con 5-10 minutos de antelación al inicio de la sesión.';
@@ -712,6 +708,18 @@ export class ServicesService implements OnModuleInit {
             UPDATE messages SET body = replace(body, '16:30', '16:00') WHERE body LIKE '%16:30%';
           END IF;
         END $$;
+      `).catch(() => null);
+
+      // Safety sweep: ensure any legacy deleted services are marked inactive in DB
+      await this.serviceRepo.query(`
+        UPDATE services 
+        SET "isActive" = false 
+        WHERE name ILIKE '%iaid%' 
+           OR name ILIKE '%ninjutsu%' 
+           OR name ILIKE '%taich%' 
+           OR name ILIKE '%entrenamiento funcional%'
+           OR name ILIKE '%fisioterapia%'
+           OR name ILIKE '%diagnóstico clínico%';
       `).catch(() => null);
 
       // 7. Ensure default categories exist and link existing services
@@ -769,27 +777,12 @@ export class ServicesService implements OnModuleInit {
           let targetCatId: string | null = null;
           if (
             lower.includes('bienestar') ||
-            lower.includes('iaido') ||
-            lower.includes('iaidō') ||
-            lower.includes('orientales') ||
-            lower.includes('daruma') ||
-            lower.includes('kaisai') ||
-            lower.includes('kobudo') ||
-            lower.includes('bujinkan') ||
-            lower.includes('ninjutsu') ||
-            lower.includes('funcional') ||
-            lower.includes('pilates') ||
-            lower.includes('taichi') ||
-            lower.includes('tai chi')
+            lower.includes('longevidad') ||
+            lower.includes('especial')
           ) {
             targetCatId = catLongevidad?.id || null;
           } else if (
-            lower.includes('gestalt') ||
-            lower.includes('médica') ||
-            lower.includes('medica') ||
-            lower.includes('fisioterapia') ||
-            lower.includes('clínico') ||
-            lower.includes('clinico')
+            lower.includes('gestalt')
           ) {
             targetCatId = catSalud?.id || null;
           } else if (
@@ -887,6 +880,9 @@ export class ServicesService implements OnModuleInit {
 
     if (activeOnly) {
       qb.where('s.isActive = :active', { active: true });
+      const today = new Date().toISOString().slice(0, 10);
+      qb.andWhere('(s.fechaDesde IS NULL OR s.fechaDesde <= :today)', { today });
+      qb.andWhere('(s.fechaHasta IS NULL OR s.fechaHasta >= :today)', { today });
     }
 
     if (categoryId && categoryId !== 'all') {

@@ -1079,15 +1079,10 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Próxima edición: Puente de Octubre (Del 9 al 12 de Octubre de 2026, 4 días / 3 noches).
   * Precio: 180€ (o según tipo de hospedaje y habitación elegida).
   * Cuando un cliente pregunte o pida inscribirse, informa de las fechas del puente de octubre y formaliza su plaza con 'bookAppointment'.
-- IAIDŌ (ESGRIMA JAPONESA TRADICIONAL):
-  * Modalidad: Arte marcial presencial tradicional de desenvainado y manejo de la katana.
-  * Horarios oficiales de clases:
-    - Lunes: 20:00 a 21:00 (1 hora).
-    - Jueves: 20:30 a 22:00 (1 hora y media).
-  * Lugar: Club Social Parque Granada (Calle Holanda 1, Fuenlabrada).
-  * Condición especial: ¡Primera clase de prueba GRATIS!
-  * Información y reservas por WhatsApp: 695 172 625.
-  * Cuando una persona pregunte o pida probar, ofrécele los horarios de Lunes (20:00) o Jueves (20:30), explícale que su primera clase es gratuita y formaliza su cita de prueba con 'bookAppointment'.
+- REGLA ESTRICTA DE SERVICIOS ACTIVOS Y SERVICIOS NO DISPONIBLES:
+  * Ofrece e informa ÚNICAMENTE sobre las actividades activas del catálogo oficial del centro.
+  * ESTÁ TOTALMENTE PROHIBIDO ofrecer, sugerir o inventar disciplinas o actividades eliminadas (como Iaidō / esgrima japonesa, Ninjutsu, Taichí, Artes Marciales, Pilates, Entrenamiento Funcional, Consulta Médica o Fisioterapia).
+  * Si un usuario o cliente pregunta específicamente por Iaidō o cualquier actividad no disponible, aclárale con total amabilidad: "Actualmente esa actividad no se imparte en el centro. Nuestro catálogo oficial está centrado en Hatha Yoga Terapéutico, Meditaciones, Terapia Gestalt, Bienestar Experience, Baños y Pujas de Gong, Constelaciones y Retiros." y ofrécele consultar las fechas de las actividades activas.
 - CANCELACIÓN DE CITAS Y RESERVAS:
   1. Si un alumno o cliente solicita cancelar una cita (sea de Yoga, Gong, Constelaciones, Terapias, etc.):
   2. Llama OBLIGATORIAMENTE a 'listContactAppointments' (pasando su teléfono o email) para obtener el listado de sus citas activas o pendientes.

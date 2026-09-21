@@ -205,8 +205,23 @@ export class AppointmentsService implements OnModuleInit {
       }
     }
 
-    if (serviceEntity && (!dto.endsAt || endsAt <= startsAt)) {
-      endsAt = new Date(startsAt.getTime() + serviceEntity.durationMinutes * 60000);
+    if (serviceEntity) {
+      if (!serviceEntity.isActive) {
+        throw new BadRequestException(
+          `El servicio "${serviceEntity.name}" no está activo actualmente y no admite reservas.`,
+        );
+      }
+      const targetDateYmd = format(new TZDate(startsAt.getTime(), 'Europe/Madrid'), 'yyyy-MM-dd');
+      const from = serviceEntity.fechaDesde || '2000-01-01';
+      const until = serviceEntity.fechaHasta || '2099-12-31';
+      if (targetDateYmd < from || targetDateYmd > until) {
+        throw new BadRequestException(
+          `El servicio "${serviceEntity.name}" solo está disponible entre ${from} y ${until}. No es posible reservar para el día ${targetDateYmd}.`,
+        );
+      }
+      if (!dto.endsAt || endsAt <= startsAt) {
+        endsAt = new Date(startsAt.getTime() + serviceEntity.durationMinutes * 60000);
+      }
     }
 
     this.assertValidWindow(startsAt, endsAt, { mustBeFuture: true });
@@ -1730,6 +1745,18 @@ export class AppointmentsService implements OnModuleInit {
       }
     }
 
+    if (targetService) {
+      if (!targetService.isActive) {
+        return [];
+      }
+      const dayYmd = format(zoned, 'yyyy-MM-dd');
+      const from = targetService.fechaDesde || '2000-01-01';
+      const until = targetService.fechaHasta || '2099-12-31';
+      if (dayYmd < from || dayYmd > until) {
+        return [];
+      }
+    }
+
     const effectiveSvcName = serviceName || targetService?.name || '';
     const isYoga = /yoga/i.test(effectiveSvcName);
     const isMeditacion = /meditaci/i.test(effectiveSvcName);
@@ -1779,44 +1806,25 @@ export class AppointmentsService implements OnModuleInit {
         end: dayEnd,
       })
       .andWhere('a.status NOT IN (:...nonBlocking)', {
-        nonBlocking: [
-          AppointmentStatus.CANCELLED,
-          AppointmentStatus.PENDING_APPROVAL,
-        ],
+        nonBlocking: [AppointmentStatus.CANCELLED],
       });
 
-    if (isYoga) {
-      // Clases de Yoga: NUNCA se ven limitadas porque el profesor tenga otra cita a esa hora
-      // sino por el aforo máximo de alumnos por grupo (20 plazas).
-      // Se contabilizan conjuntamente todas las modalidades de Yoga (1 clase, 2 clases, suelta, prueba, recuperación).
-      qb.andWhere('(a.service ILIKE :yogaPattern OR a.calendarId = :yogaCal)', {
-        yogaPattern: '%yoga%',
-        yogaCal: targetService?.calendarId || 'cal-hatha-yoga',
-      });
-    } else if (isMeditacion) {
-      // Clases de Meditación: NUNCA se ven limitadas porque el profesor tenga otra cita a esa hora
-      // sino por el aforo máximo de alumnos por grupo (28 plazas).
-      // Se contabilizan conjuntamente todas las modalidades de Meditación.
-      qb.andWhere('(a.service ILIKE :medPattern OR a.calendarId = :medCal)', {
-        medPattern: '%meditaci%',
-        medCal: targetService?.calendarId || 'cal-meditacion',
-      });
-    } else if (isYogaOrGroup || maxCapacity > 1) {
-      // Para otros eventos o talleres grupales (Gongs, talleres, etc.)
-      if (targetService?.id) {
-        qb.andWhere('(a.serviceId = :svcId OR a.service ILIKE :svcName)', {
-          svcId: targetService.id,
-          svcName: `%${serviceName || targetService.name}%`,
-        });
-      } else if (serviceName) {
-        qb.andWhere('a.service ILIKE :svcName', {
-          svcName: `%${serviceName}%`,
-        });
-      }
+    if (isYogaOrGroup) {
+      qb.andWhere(
+        '(a.calendarId = :calendarId OR a.serviceId = :serviceId OR a.service ILIKE :serviceName)',
+        {
+          calendarId,
+          serviceId: targetService?.id || 'none',
+          serviceName: `%${effectiveSvcName}%`,
+        },
+      );
     } else if (managerServiceIds.length > 0) {
       qb.andWhere(
         '(a.calendarId = :calendarId OR a.serviceId IN (:...managerServiceIds))',
-        { calendarId, managerServiceIds },
+        {
+          calendarId,
+          managerServiceIds,
+        },
       );
     } else {
       qb.andWhere('a.calendarId = :calendarId', { calendarId });
@@ -1826,7 +1834,6 @@ export class AppointmentsService implements OnModuleInit {
 
     // Enforce official service timetables strictly across all channels (VAPI, WhatsApp, Landing)
     const isHathaYoga = isYoga;
-    const isIaido = /iaido|iaidō|esgrima/i.test(serviceName || targetService?.name || '');
 
     const HATHA_YOGA_TIMETABLE: Record<number, string[]> = {
       2: ['09:45', '11:15', '17:00', '18:30', '20:00'], // Martes
@@ -1839,11 +1846,6 @@ export class AppointmentsService implements OnModuleInit {
       4: ['09:15'],
     };
 
-    const IAIDO_TIMETABLE: Record<number, string[]> = {
-      1: ['20:00'],
-      4: ['20:30'],
-    };
-
     const effectiveTimetable =
       targetService?.weeklySchedule && Object.keys(targetService.weeklySchedule).length > 0
         ? targetService.weeklySchedule
@@ -1851,8 +1853,6 @@ export class AppointmentsService implements OnModuleInit {
         ? HATHA_YOGA_TIMETABLE
         : isMeditacion
         ? MEDITACION_TIMETABLE
-        : isIaido
-        ? IAIDO_TIMETABLE
         : null;
 
     if (effectiveTimetable) {

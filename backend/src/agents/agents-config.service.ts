@@ -52,49 +52,49 @@ export class AgentsConfigService implements OnModuleInit {
   private async seedDefaultIfMissing() {
     const existing = await this.configRepo.findOne({ where: { agentKey: 'booking' } });
     if (!existing) {
-      this.logger.log('Seeding default booking agent config (centro de yoga y actividades parque granada)');
+      this.logger.log('Seeding default booking agent config (centro de yoga y bienestar salvadora)');
       const config = this.configRepo.create({
         agentKey: 'booking',
-        businessName: 'Centro de Yoga Salvadora Conesa & Club Social Parque Granada',
+        businessName: 'Centro de Yoga y Bienestar Salvadora Conesa',
         businessDescription:
-          'Centro de actividades, desarrollo personal, artes marciales y yoga en Fuenlabrada. Ofrecemos clases regulares de Hatha Yoga Terapéutico, Pilates, Ninjutsu, Entrenamiento Funcional, Tai Chi Chuan, Iaido (esgrima japonesa), Actividades Orientales (Daruma, Kaisai, Kobudo) y Sesiones Mensuales de Fin de Semana (Baño de Gong, Constelaciones, Chi Kung, Yoga Nidra). Todas las clases regulares cuentan con primera clase de prueba gratuita.',
+          'Centro de Yoga, Meditación, Terapias Individuales, Sonoterapia y Retiros en Fuenlabrada. Ofrecemos clases regulares de Hatha Yoga Terapéutico, Meditaciones Guiadas, Terapia Gestalt, Bienestar Experience, Baños y Pujas de Gong, Constelaciones Familiares, Encuentro de Mujeres y Retiro de Ayuno.',
         channel: 'whatsapp',
         services: [
           { name: 'Hatha Yoga Terapéutico', durationMinutes: 90 },
-          { name: 'Pilates', durationMinutes: 60 },
-          { name: 'Bujinkan Budo Taijutsu / Ninjutsu', durationMinutes: 90 },
-          { name: 'Entrenamiento Funcional', durationMinutes: 60 },
-          { name: 'Actividades Orientales (Daruma, Kaisai, Kobudo)', durationMinutes: 55 },
-          { name: 'Tai Chi Chuan', durationMinutes: 90 },
-          { name: 'Iaido (Esgrima Japonesa)', durationMinutes: 60 },
+          { name: 'Meditaciones Guiadas', durationMinutes: 30 },
+          { name: 'Terapia Gestalt (Sesión Individual)', durationMinutes: 60 },
+          { name: 'Bienestar Experience (Longevidad y Bienestar Integral)', durationMinutes: 60 },
+          { name: 'Baño de Gong y Meditación Sonora', durationMinutes: 120 },
+          { name: 'Puja de Gongs (Noche Sagrada de Sonido - 11h)', durationMinutes: 660 },
+          { name: 'Constelaciones Familiares (Constelar / Asunto Propio)', durationMinutes: 240 },
+          { name: 'Constelaciones Familiares (Participante / Representante)', durationMinutes: 240 },
+          { name: 'Encuentro de Mujeres (Primavera)', durationMinutes: 360 },
+          { name: 'Retiro de Ayuno Terapéutico', durationMinutes: 1440 },
           { name: 'Sesión Mensual de Fin de Semana (Baño de Gong / Talleres)', durationMinutes: 120 },
         ],
         workingHours: [
-          { day: 1, open: '07:00', close: '22:30' }, // Lunes
-          { day: 2, open: '07:00', close: '22:30' }, // Martes
-          { day: 3, open: '07:00', close: '22:30' }, // Miércoles (Yoga 20:15 hasta 21:45)
-          { day: 4, open: '07:00', close: '22:30' }, // Jueves (Iaido 20:30 hasta 22:00)
-          { day: 5, open: '07:00', close: '22:30' }, // Viernes
+          { day: 1, open: '09:00', close: '21:00' }, // Lunes
+          { day: 2, open: '09:00', close: '21:30' }, // Martes (Yoga hasta 21:30)
+          { day: 3, open: '09:00', close: '22:00' }, // Miércoles (Yoga 20:15 hasta 21:45)
+          { day: 4, open: '09:00', close: '21:00' }, // Jueves (Yoga hasta 20:30)
+          { day: 5, open: '09:00', close: '20:00' }, // Viernes
           { day: 6, open: '09:00', close: '20:00' }, // Sábado
           { day: 0, open: '10:00', close: '14:00' }, // Domingo
         ],
-        tone: 'cálido, motivador, atento y profesional',
+        tone: 'cálido, consciente, atento y profesional',
         customInstructions:
-          'Directrices y Horarios Oficiales del Centro (Club Social Parque Granada / Escuela Salvadora Conesa):\n\n' +
-          '1. Promoción General: ¡PRUEBA GRATIS EN TODAS LAS CLASES! Siempre invita y anima al usuario a reservar su primera clase de prueba sin compromiso.\n\n' +
+          'Directrices y Horarios Oficiales del Centro (Escuela Salvadora Conesa):\n\n' +
+          '1. Promoción General: ¡PRUEBA GRATIS EN YOGA! La primera clase de prueba de Hatha Yoga es 100% gratuita como regalo del centro.\n\n' +
           '2. Horarios por Actividad:\n' +
           '   - Hatha Yoga Terapéutico: Mañanas: Martes y Jueves (9:45 y 11:15). Tardes: Martes (17:00, 18:30, 20:00), Miércoles (20:15), Jueves (16:00, 17:30, 19:00). Clases de 90 min.\n' +
-          '   - Pilates: Lunes y Miércoles de 12:00 a 13:00.\n' +
-          '   - Bujinkan Budo Taijutsu / Ninjutsu: Mañanas: Lunes y Viernes de 10:00 a 11:30 | Tardes: Lunes y Miércoles de 20:00 a 21:30.\n' +
-          '   - Entrenamiento Funcional: Mañanas: Lunes, Miércoles y Viernes de 7:15 a 8:15 | Tardes: Lunes y Miércoles de 19:00 a 20:00.\n' +
-          '   - Actividades Orientales: Martes y Jueves -> Daruma (19:00 a 19:55), Kaisai (20:00 a 20:55), Kobudo (21:00 a 21:45).\n' +
-          '   - Tai Chi Chuan: Miércoles de 17:30 a 19:00 | Viernes de 10:00 a 11:30.\n' +
-          '   - Iaido (Esgrima japonesa): Lunes de 20:00 a 21:00 | Jueves de 20:30 a 22:00.\n' +
-          '   - Sesiones Mensuales en Fin de Semana: Baño de Gong, Constelaciones Familiares, Taller de Chi Kung, Masajes, Meditación y Yoga Nidra.\n\n' +
-          '3. Ubicación y Contacto:\n' +
-          '   - Dirección: Club Social Parque Granada (Cafetería Bar • Entrada libre), Calle Holanda 1, Fuenlabrada.\n' +
-          '   - WhatsApp Reservas: 695 172 625 | Cafetería: 624 26 73 45.\n\n' +
-          '4. Proceso de Reserva: Pide al usuario su nombre y teléfono (o confírmalo), pregúntale qué día y turno (mañana/tarde) le va mejor y confirma su plaza para la clase de prueba gratuita.',
+          '   - Meditaciones Guiadas: Martes y Jueves de 9:15 a 9:45 (30 min).\n' +
+          '   - Terapia Gestalt y Bienestar Experience: Sesiones individuales de 1h con cita previa acordada.\n' +
+          '   - Baño de Gong: Sesión mensual en fin de semana de 2 horas (18:00 a 20:00).\n' +
+          '   - Puja de Gongs: Noche de sonido de 11 horas continuas (21:00 a 08:00).\n' +
+          '   - Constelaciones Familiares: Taller mensual en domingo (10:00 a 14:00).\n' +
+          '   - Retiro de Ayuno Terapéutico: Puente de Octubre.\n\n' +
+          '3. Contacto: WhatsApp Reservas: 695 172 625.\n\n' +
+          '4. Proceso de Reserva: Confirma nombre y teléfono, consulta disponibilidad y formaliza la plaza.',
         model: DEFAULT_MODEL,
         whatsappNumber: process.env.YCLOUD_WHATSAPP_NUMBER || undefined,
         enabled: true,

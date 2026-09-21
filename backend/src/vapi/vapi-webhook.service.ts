@@ -77,20 +77,6 @@ export const OFFICIAL_SERVICES: OfficialServiceConfig[] = [
     priceInfo: '15€/mes o 3€ meditación suelta (Gratuito para alumnos de Yoga)',
   },
   {
-    id: 'iaido',
-    name: 'Iaidō (Esgrima Japonesa Tradicional)',
-    aliases: /iaido|iaidō|esgrima/i,
-    category: 'recurring_schedule',
-    scheduleSummary: 'lunes de 20:00 a 21:00 y jueves de 20:30 a 22:00',
-    timetable: {
-      1: ['20:00'],
-      4: ['20:30'],
-    },
-    durationMinutes: 60,
-    maxCapacity: 15,
-    priceInfo: 'Primera clase de prueba GRATIS',
-  },
-  {
     id: 'gestalt',
     name: 'Terapia Gestalt (Sesión Individual)',
     aliases: /gestalt/i,
@@ -650,7 +636,7 @@ export class VapiWebhookService {
       return `${weekendNotice}${hourMissedNotice}Para «${officialSvc.name}» (lunes a viernes de 09:00 a 20:00, ${officialSvc.priceInfo}), los próximos huecos disponibles son: ${optionsFormatted}. Al solicitarla queda registrada pendiente de aprobación de Jose Ignacio Gomez Raya. Ofrece estas opciones y usa el código ISO entre corchetes para reservar cuando elija. Nunca leas el código entre corchetes en voz alta.`;
     }
 
-    // 3. CLASES RECURRENTES CON HORARIOS OFICIALES ESTRICTOS (Hatha Yoga, Meditaciones, Iaido)
+    // 3. CLASES RECURRENTES CON HORARIOS OFICIALES ESTRICTOS (Hatha Yoga, Meditaciones)
     const timetable = officialSvc?.timetable || {
       2: ['09:45', '11:15', '17:00', '18:30', '20:00'],
       3: ['20:15'],
@@ -1119,7 +1105,13 @@ export class VapiWebhookService {
   private async toolDatosDelNegocio(params: any, ctx: ToolExecutionContext): Promise<string> {
     const [settings] = await this.settingsRepo.find({ take: 1 });
     const [agent] = await this.agentConfigRepo.find({ take: 1 });
-    const services = await this.servicesRepo.find({ where: { isActive: true } });
+    const today = new Date().toISOString().slice(0, 10);
+    const allServices = await this.servicesRepo.find({ where: { isActive: true } });
+    const services = allServices.filter((s) => {
+      if (s.fechaDesde && s.fechaDesde > today) return false;
+      if (s.fechaHasta && s.fechaHasta < today) return false;
+      return true;
+    });
 
     const tema = (params.tema || '').toLowerCase();
 

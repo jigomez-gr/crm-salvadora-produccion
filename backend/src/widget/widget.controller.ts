@@ -193,7 +193,6 @@ export class WidgetController {
       })),
       services: visibleServices.map((s) => {
         const isYoga = /yoga/i.test(s.name);
-        const isIaido = /iaido|iaidō/i.test(s.name);
         const isMeditacion = /meditaci/i.test(s.name);
         return {
           id: s.id,
@@ -205,12 +204,12 @@ export class WidgetController {
           eventDatesText: s.eventDatesText,
           durationMinutes: s.durationMinutes,
           price: s.price,
-          currency: 'EUR',
+          currency: s.currency || 'EUR',
           maxCapacity: s.maxCapacity,
           paymentType: s.paymentType,
           externalPaymentUrl: s.externalPaymentUrl,
           allowedModalities: s.allowedModalities || ['in_person'],
-          requiresApproval: Boolean(s.requiresApproval),
+          requiresApproval: s.requiresApproval,
           categoryId: s.categoryId,
           categoryCode: s.category?.code || null,
           categoryName: s.category?.name || null,
@@ -225,15 +224,15 @@ export class WidgetController {
               }
             : null,
           displayOrder: s.displayOrder ?? 0,
-          flyerPath: s.flyerPath,
-          flyerUrl: s.flyerUrl,
+          flyerPath: s.flyerPath || null,
+          flyerUrl: s.flyerUrl || null,
           flyerParticularPath: s.flyerParticularPath || null,
           flyerParticularUrl: s.flyerParticularUrl || null,
           videoParticularPath: s.videoParticularPath || null,
           videoParticularUrl: s.videoParticularUrl || null,
           fechaDesde: s.fechaDesde || '2000-01-01',
           fechaHasta: s.fechaHasta || '2099-12-31',
-          firstClassFree: isYoga || isIaido || /orientales|daruma|ninjutsu|bujinkan/i.test(s.name),
+          firstClassFree: isYoga,
           freeForYogaStudents: isMeditacion,
           whatsappBookingUrl: `https://wa.me/${cleanWaPhone}?text=${encodeURIComponent(
             `Hola, me gustaría información y disponibilidad para ${s.name}.`,

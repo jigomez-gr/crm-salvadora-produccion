@@ -64,8 +64,23 @@ export default function ServicesPage() {
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [syncingVapi, setSyncingVapi] = useState(false);
   const toast = useToast();
   const { user } = useAuth();
+
+  async function handleSyncVapi() {
+    setSyncingVapi(true);
+    try {
+      await apiFetch<{ assistantId: string }>("/api/vapi/publish", {
+        method: "POST",
+      });
+      toast.success("Asistente VAPI y catálogo telefónico sincronizados correctamente.");
+    } catch (err: any) {
+      toast.error(err?.message || "Error al sincronizar el asistente con VAPI.");
+    } finally {
+      setSyncingVapi(false);
+    }
+  }
 
   const [form, setForm] = useState<ServiceFormData>({
     name: "",
@@ -373,6 +388,7 @@ export default function ServicesPage() {
     setDeletingService(true);
     try {
       await apiFetch(`/api/services/${serviceToDelete.id}`, { method: "DELETE" });
+      apiFetch("/api/vapi/publish", { method: "POST" }).catch(() => null);
       toast.success(`Servicio "${serviceToDelete.name}" eliminado correctamente.`);
       setDeleteModalOpen(false);
       setServiceToDelete(null);
@@ -393,6 +409,7 @@ export default function ServicesPage() {
         method: "POST",
         body: JSON.stringify({ ids: selectedIds }),
       });
+      apiFetch("/api/vapi/publish", { method: "POST" }).catch(() => null);
       toast.success(`Se han eliminado ${res.deletedCount || selectedIds.length} servicios correctamente.`);
       setSelectedIds([]);
       setBulkDeleteModalOpen(false);
@@ -563,12 +580,14 @@ export default function ServicesPage() {
           method: "PATCH",
           body: JSON.stringify(payload),
         });
+        apiFetch("/api/vapi/publish", { method: "POST" }).catch(() => null);
         toast.success("Servicio actualizado correctamente");
       } else {
         await apiFetch("/api/services", {
           method: "POST",
           body: JSON.stringify(payload),
         });
+        apiFetch("/api/vapi/publish", { method: "POST" }).catch(() => null);
         toast.success("Servicio creado correctamente");
       }
       setModalOpen(false);
@@ -598,6 +617,16 @@ export default function ServicesPage() {
 
         {(user?.role === "admin" || user?.role === "service_manager") && (
           <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={handleSyncVapi}
+              disabled={syncingVapi}
+              className="flex items-center gap-1.5 border-purple-200 text-purple-700 hover:bg-purple-50"
+              title="Sincroniza el catálogo de servicios en vivo con el asistente de voz telefónico VAPI"
+            >
+              <Sparkles className={cn("h-4 w-4 text-purple-600", syncingVapi && "animate-spin")} />
+              {syncingVapi ? "Sincronizando..." : "Sincronizar VAPI"}
+            </Button>
             <Button
               variant="secondary"
               onClick={openCategoriesManager}
