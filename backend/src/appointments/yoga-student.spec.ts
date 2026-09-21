@@ -11,6 +11,15 @@ describe('Yoga Appointments & Student Lifecycle', () => {
   let inMemoryContacts: any[] = [];
   let inMemoryAppointments: any[] = [];
 
+  beforeAll(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-01T08:00:00.000Z'));
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   const contactsRepoMock: any = {
     findOne: jest.fn().mockImplementation(({ where }) => {
       const found = inMemoryContacts.find((c) => c.id === where?.id || c.phone === where?.phone);
@@ -329,5 +338,22 @@ describe('Yoga Appointments & Student Lifecycle', () => {
     // Si se vuelve a ejecutar en el mismo rango, es idempotente y no crea duplicados
     const rerun = await appointmentsService.generateWeeklyStudentAppointments(sundayDate);
     expect(rerun.createdCount).toBe(0);
+  });
+
+  it('corrige automáticamente timestamps pseudo-UTC (ej. 19:00:00.000Z enviado por LLMs) al horario de Madrid', async () => {
+    // Jueves 24 de Septiembre de 2026 - LLM envía 19:00 con Z
+    const startsAt = '2026-09-24T19:00:00.000Z';
+    const endsAt = '2026-09-24T20:30:00.000Z';
+
+    const appt = await appointmentsService.create({
+      contactId: 'contact-ana-1',
+      service: 'Hatha Yoga Terapéutico (1 clase semanal)',
+      startsAt,
+      endsAt,
+    });
+
+    expect(appt).toBeDefined();
+    // En Europe/Madrid (UTC+2 en septiembre), las 19:00 locales equivalen a las 17:00 UTC
+    expect(new Date(appt.startsAt).toISOString()).toBe('2026-09-24T17:00:00.000Z');
   });
 });

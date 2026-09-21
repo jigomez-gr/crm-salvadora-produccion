@@ -176,7 +176,7 @@ export class AppointmentsService implements OnModuleInit {
       }
     }
 
-    const startsAt = new Date(parseFlexibleStartsAt(dto.startsAt));
+    let startsAt = new Date(parseFlexibleStartsAt(dto.startsAt));
     let endsAt = dto.endsAt ? new Date(parseFlexibleStartsAt(dto.endsAt)) : startsAt;
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     let serviceEntity: Service | null = null;
@@ -206,7 +206,7 @@ export class AppointmentsService implements OnModuleInit {
     }
 
     if (serviceEntity) {
-      if (!serviceEntity.isActive) {
+      if ((serviceEntity as any).isActive === false) {
         throw new BadRequestException(
           `El servicio "${serviceEntity.name}" no está activo actualmente y no admite reservas.`,
         );
@@ -261,10 +261,34 @@ export class AppointmentsService implements OnModuleInit {
         serviceEntity?.weeklySchedule && Object.keys(serviceEntity.weeklySchedule).length > 0
           ? serviceEntity.weeklySchedule
           : HATHA_YOGA_TIMETABLE;
-      const zoned = new TZDate(startsAt.getTime(), 'Europe/Madrid');
-      const dayOfWeek = zoned.getDay();
-      const timeStr = format(zoned, 'HH:mm');
-      const allowed = effectiveTimetable[dayOfWeek] || [];
+      let zoned = new TZDate(startsAt.getTime(), 'Europe/Madrid');
+      let dayOfWeek = zoned.getDay();
+      let timeStr = format(zoned, 'HH:mm');
+      let allowed = effectiveTimetable[dayOfWeek] || [];
+      if (!allowed.includes(timeStr)) {
+        // Fallback: the agent/client passed local time with a 'Z' suffix (e.g. 19:00:00.000Z when 19:00 local was meant)
+        const rawTimeMatch = dto.startsAt?.match(/[T ](\d{1,2}:\d{2})/);
+        if (rawTimeMatch) {
+          const rawHm = rawTimeMatch[1].padStart(5, '0');
+          if (allowed.includes(rawHm)) {
+            const [rh, rm] = rawHm.split(':').map(Number);
+            const correctedZoned = new TZDate(
+              zoned.getFullYear(),
+              zoned.getMonth(),
+              zoned.getDate(),
+              rh,
+              rm,
+              'Europe/Madrid',
+            );
+            startsAt = new Date(correctedZoned.getTime());
+            endsAt = new Date(startsAt.getTime() + (serviceEntity?.durationMinutes || 90) * 60000);
+            zoned = correctedZoned;
+            dayOfWeek = zoned.getDay();
+            timeStr = format(zoned, 'HH:mm');
+            allowed = effectiveTimetable[dayOfWeek] || [];
+          }
+        }
+      }
       if (!allowed.includes(timeStr)) {
         const scheduleDisplay =
           serviceEntity?.scheduleText ||
@@ -368,10 +392,33 @@ export class AppointmentsService implements OnModuleInit {
         serviceEntity?.weeklySchedule && Object.keys(serviceEntity.weeklySchedule).length > 0
           ? serviceEntity.weeklySchedule
           : MEDITACION_TIMETABLE;
-      const zoned = new TZDate(startsAt.getTime(), 'Europe/Madrid');
-      const dayOfWeek = zoned.getDay();
-      const timeStr = format(zoned, 'HH:mm');
-      const allowed = effectiveTimetable[dayOfWeek] || [];
+      let zoned = new TZDate(startsAt.getTime(), 'Europe/Madrid');
+      let dayOfWeek = zoned.getDay();
+      let timeStr = format(zoned, 'HH:mm');
+      let allowed = effectiveTimetable[dayOfWeek] || [];
+      if (!allowed.includes(timeStr)) {
+        const rawTimeMatch = dto.startsAt?.match(/[T ](\d{1,2}:\d{2})/);
+        if (rawTimeMatch) {
+          const rawHm = rawTimeMatch[1].padStart(5, '0');
+          if (allowed.includes(rawHm)) {
+            const [rh, rm] = rawHm.split(':').map(Number);
+            const correctedZoned = new TZDate(
+              zoned.getFullYear(),
+              zoned.getMonth(),
+              zoned.getDate(),
+              rh,
+              rm,
+              'Europe/Madrid',
+            );
+            startsAt = new Date(correctedZoned.getTime());
+            endsAt = new Date(startsAt.getTime() + (serviceEntity?.durationMinutes || 30) * 60000);
+            zoned = correctedZoned;
+            dayOfWeek = zoned.getDay();
+            timeStr = format(zoned, 'HH:mm');
+            allowed = effectiveTimetable[dayOfWeek] || [];
+          }
+        }
+      }
       if (!allowed.includes(timeStr)) {
         const scheduleDisplay =
           serviceEntity?.scheduleText || 'Martes y Jueves de 09:15 a 09:45';
@@ -1746,7 +1793,7 @@ export class AppointmentsService implements OnModuleInit {
     }
 
     if (targetService) {
-      if (!targetService.isActive) {
+      if ((targetService as any).isActive === false) {
         return [];
       }
       const dayYmd = format(zoned, 'yyyy-MM-dd');

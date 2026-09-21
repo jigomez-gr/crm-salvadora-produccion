@@ -435,6 +435,8 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           endsAt: s.endsAt,
           localTime: `${fmt(s.startsAt)} - ${fmt(s.endsAt)}`,
         })),
+        instruction:
+          'Para formalizar la reserva con bookAppointment, pasa preferiblemente la fecha y hora local (p. ej. "2026-09-24 19:00") o el startsAt exacto del slot.',
       };
     },
   });
@@ -447,7 +449,9 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       service: z.string().describe('Name of the service or event to book'),
       startsAt: z
         .string()
-        .describe('Start time of the appointment in ISO format (or event date)'),
+        .describe(
+          'Start time of the appointment in local format (e.g. "2026-09-24 19:00") or exact ISO from checkAvailability. Do not shift hours manually; if the client asks for 19:00, use 19:00 in Europe/Madrid timezone.',
+        ),
       customerName: z
         .string()
         .optional()
@@ -613,7 +617,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
 
         const appointment = await deps.bookAppointment(
           contactId,
-          inputData.service,
+          svc.name || inputData.service,
           effectiveStartsAt,
           svc.durationMinutes,
           svc.price,
@@ -998,7 +1002,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     - "20 y 00", "a las 20", "8 de la tarde" equivalen EXACTAMENTE a las 20:00.
     - "20 y 15", "a las 20 y 15", "8 y cuarto de la tarde" equivalen EXACTAMENTE a las 20:15.
   * Cuando el cliente responda con una hora como "a las 16", "a las 4 de la tarde", "17 y 30", "17 y 15", "9 y 45", acéptala y entiéndela inmediatamente como la hora correspondiente (16:00, 17:30, 09:45). NUNCA digas que no entiendes la hora, no rechaces la petición ni digas que la hora no existe si coincide con un horario disponible.
-  * Al invocar las herramientas ('checkAvailability', 'bookAppointment'), pasa siempre la fecha y hora en formato estándar (ej. "16:00" o formato ISO).
+  * Al invocar las herramientas ('checkAvailability', 'bookAppointment'), pasa siempre la fecha y hora en formato local como "YYYY-MM-DD HH:mm" (ej. "2026-09-24 19:00") o el código startsAt exacto devuelto por 'checkAvailability'. NUNCA intentes restar horas ni aplicar diferencias horarias manualmente.
 - ACTIVIDADES Y CLASES GRUPALES (AFORO MÚLTIPLE):
   Las clases regulares de Yoga, Baños de Gong, Meditaciones y Talleres son actividades grupales que admiten múltiples asistentes simultáneos (aforo de hasta 20 a 30 personas por sesión según el servicio).
   * Que ya exista una persona apuntada o una cita previa a esa misma hora NO significa que el horario esté ocupado: se pueden reservar plazas hasta completar el aforo total.
@@ -1022,6 +1026,8 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     - **Citas automáticas semanales**: A los alumnos se les generan automáticamente sus citas semanales antes de comenzar la nueva semana basándose en sus horarios fijos habituales.
     - **Cambio de horario y recuperación**: Cualquier alumno puede cambiar de horario (reprogramar) o recuperar clases a las que haya faltado (dispone de un plazo de 3 meses / 90 días a partir de la semana siguiente).
     - **Constancia de cambios**: En cada cambio de horario o recuperación se enviará una notificación por correo electrónico o un SMS si la gestión es por voz (o ambos) para dejar constancia formal del cambio.
+  * RESERVA DE PLAZA Y MODALIDADES DE YOGA:
+    - Las modalidades "1 clase semanal", "2 clases semanales" o "Hatha Yoga Terapéutico" corresponden a la misma clase regular en sus turnos oficiales. Puedes reservar indistintamente bajo cualquiera de esos nombres de servicio. NUNCA le digas al cliente que una modalidad no permite reservar ni discutas sobre el nombre de la modalidad: formaliza directamente la plaza en el turno oficial elegido con 'bookAppointment'.
   * Cuando el cliente elija o solicite un horario, consulta disponibilidad y formaliza su plaza con 'bookAppointment'.
 - MEDITACIONES GUIADAS (ACTIVIDAD GRUPAL):
   Para las Meditaciones Guiadas (30 min de duración):
