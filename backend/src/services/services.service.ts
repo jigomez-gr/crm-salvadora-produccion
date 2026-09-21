@@ -718,15 +718,15 @@ export class ServicesService implements OnModuleInit {
       try {
         const defaultCategories = [
           {
-            code: 'longevidad_artes',
-            name: 'Longevidad & Bienestar Integral',
-            description: 'ACTIVIDADES DESTACADAS · BIENESTAR EXPERIENCE',
-            displayOrder: 1,
-          },
-          {
             code: 'yoga_meditacion',
             name: 'Clases Regulares de Yoga y Meditación',
             description: 'ESCUELA SALVADORA CONESA · CLASES REGULARES\nHatha Yoga Terapéutico, Meditaciones y Terapias',
+            displayOrder: 1,
+          },
+          {
+            code: 'salud_terapeutica',
+            name: 'Salud Terapéutica y Sesiones Individuales',
+            description: 'CONSULTAS PERSONALIZADAS Y ACOMPAÑAMIENTO INDIVIDUAL',
             displayOrder: 2,
           },
           {
@@ -736,9 +736,9 @@ export class ServicesService implements OnModuleInit {
             displayOrder: 3,
           },
           {
-            code: 'salud_terapeutica',
-            name: 'Salud Terapéutica y Sesiones Individuales',
-            description: 'CONSULTAS PERSONALIZADAS Y ACOMPAÑAMIENTO INDIVIDUAL',
+            code: 'longevidad_artes',
+            name: 'Actividades Especiales',
+            description: 'BIENESTAR EXPERIENCE, LONGEVIDAD ACTIVA Y ACTIVIDADES COMPLEMENTARIAS',
             displayOrder: 4,
           },
         ];
@@ -747,6 +747,11 @@ export class ServicesService implements OnModuleInit {
           let cat = await this.categoryRepo.findOne({ where: { code: catData.code } });
           if (!cat) {
             await this.categoryRepo.save(this.categoryRepo.create(catData));
+          } else {
+            cat.displayOrder = catData.displayOrder;
+            cat.name = catData.name;
+            cat.description = catData.description;
+            await this.categoryRepo.save(cat);
           }
         }
 
