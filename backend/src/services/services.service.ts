@@ -719,8 +719,8 @@ export class ServicesService implements OnModuleInit {
         const defaultCategories = [
           {
             code: 'longevidad_artes',
-            name: 'Longevidad (Bienestar Experience) & Iaidō',
-            description: 'ACTIVIDADES DESTACADAS · CLUB SOCIAL PARQUE GRANADA & CENTRO',
+            name: 'Longevidad & Bienestar Integral',
+            description: 'ACTIVIDADES DESTACADAS · BIENESTAR EXPERIENCE',
             displayOrder: 1,
           },
           {
