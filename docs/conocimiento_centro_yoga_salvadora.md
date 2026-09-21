@@ -85,7 +85,7 @@ Documento maestro de referencia sobre la filosofía, historia, servicios, clases
 * **Descripción**: Programa y sesiones de asesoramiento holístico y personalizado para elevar la vitalidad, retrasar el envejecimiento celular, mejorar el descanso y armonizar cuerpo y mente.
 * **Modalidad**: Presencial u Online (videollamada).
 * **Duración**: **60 minutos**.
-* **Tarifa**: `25.00 € / sesión`.
+* **Tarifa**: `19.99 € / sesión`.
 * **Áreas y Disciplinas de Especialización (Emblema Oficial)**:
   * Biohacking y Longevidad Saludable.
   * Rejuvenecimiento y Biología Celular.

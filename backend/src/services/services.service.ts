@@ -765,14 +765,71 @@ export class ServicesService implements OnModuleInit {
       `).catch(() => null);
 
       await this.serviceRepo.query(`
+        UPDATE agent_configs
+        SET "customInstructions" = replace(
+          replace(
+            replace(
+              replace(
+                replace(
+                  replace("customInstructions", '25.00 € / sesión', '19.99 € / sesión'),
+                  '25,00 € / sesión', '19.99 € / sesión'
+                ),
+                '25€ / sesión', '19.99€ / sesión'
+              ),
+              '25.00 €', '19.99 €'
+            ),
+            '25,00 €', '19.99 €'
+          ),
+          '25€', '19.99€'
+        )
+        WHERE "customInstructions" ILIKE '%bienestar%' AND "customInstructions" LIKE '%25%';
+      `).catch(() => null);
+
+      await this.serviceRepo.query(`
         UPDATE knowledge_documents
-        SET content = replace(replace(replace(content, '25€ / sesión 1h', '19.99€ / sesión 1h'), '25,00 €', '19.99 €'), 'Precio: 25€', 'Precio: 19.99€')
+        SET content = replace(
+          replace(
+            replace(
+              replace(
+                replace(
+                  replace(
+                    replace(content, '25.00 € / sesión', '19.99 € / sesión'),
+                    '25,00 € / sesión', '19.99 € / sesión'
+                  ),
+                  '25€ / sesión 1h', '19.99€ / sesión 1h'
+                ),
+                '25€ / sesión', '19.99€ / sesión'
+              ),
+              '25.00 €', '19.99 €'
+            ),
+            '25,00 €', '19.99 €'
+          ),
+          'Precio: 25€', 'Precio: 19.99€'
+        )
         WHERE content ILIKE '%bienestar%';
       `).catch(() => null);
 
       await this.serviceRepo.query(`
         UPDATE knowledge_chunks
-        SET content = replace(replace(replace(content, '25€ / sesión 1h', '19.99€ / sesión 1h'), '25,00 €', '19.99 €'), 'Precio: 25€', 'Precio: 19.99€')
+        SET content = replace(
+          replace(
+            replace(
+              replace(
+                replace(
+                  replace(
+                    replace(content, '25.00 € / sesión', '19.99 € / sesión'),
+                    '25,00 € / sesión', '19.99 € / sesión'
+                  ),
+                  '25€ / sesión 1h', '19.99€ / sesión 1h'
+                ),
+                '25€ / sesión', '19.99€ / sesión'
+              ),
+              '25.00 €', '19.99 €'
+            ),
+            '25,00 €', '19.99 €'
+          ),
+          'Precio: 25€', 'Precio: 19.99€'
+        )
         WHERE content ILIKE '%bienestar%';
       `).catch(() => null);
 

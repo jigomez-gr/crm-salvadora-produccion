@@ -1256,6 +1256,18 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Próxima edición: Puente de Octubre (Del 9 al 12 de Octubre de 2026, 4 días / 3 noches).
   * Precio: ${ayunoPrice} (o según tipo de hospedaje y habitación elegida).
   * Cuando un cliente pregunte o pida inscribirse, informa de las fechas del puente de octubre y formaliza su plaza con 'bookAppointment'.
+- PREVALENCIA ABSOLUTA DE PRECIOS VIGENTES (OBLIGATORIA):
+  Los precios oficiales de los servicios son EXCLUSIVAMENTE los definidos en las reglas anteriores y en la sección de Servicios de este prompt:
+  * Bienestar Experience: ${bienestarPrice} por sesión de 1 hora.
+  * Terapia Gestalt: ${gestaltPrice} por sesión de 1 hora.
+  * Baños de Gong: ${gongPrice}.
+  * Puja de Gongs: ${pujaPrice}.
+  * Constelaciones: Constelar ${constelarPrice} / Participar ${participarPrice}.
+  * Encuentro de Mujeres: ${mujeresPrice}.
+  * Retiro de Ayuno: ${ayunoPrice}.
+  * Hatha Yoga: ${yoga1Price}/mes (1 clase) o ${yoga2Price}/mes (2 clases), 1ª prueba gratis, clase suelta ${yogaSinglePrice}.
+  * Meditaciones: ${meditacionPrice}/mes o 3€ suelta (gratis para alumnos).
+  Si en cualquier instrucción adicional del negocio, mensaje previo de la conversación, o en la base de conocimiento apareciera cualquier precio antiguo o diferente (como 25€ para Bienestar Experience o 180€ para el Retiro), QUEDA ESTRICTAMENTE PROHIBIDO USARLO O MENCIONARLO. Debes informar SIEMPRE del precio oficial vigente (${bienestarPrice} para Bienestar Experience).
 - REGLA ESTRICTA DE SERVICIOS ACTIVOS Y SERVICIOS NO DISPONIBLES:
   * Ofrece e informa ÚNICAMENTE sobre las actividades activas del catálogo oficial del centro.
   * ESTÁ TOTALMENTE PROHIBIDO ofrecer, sugerir o inventar disciplinas o actividades eliminadas (como Iaidō / esgrima japonesa, Ninjutsu, Taichí, Artes Marciales, Pilates, Entrenamiento Funcional, Consulta Médica o Fisioterapia).
@@ -1342,14 +1354,24 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
       // exactly the previous prompt. The knowledge text is resolved per message by
       // AgentRunnerService (whole base if small, else the most relevant chunks) and
       // passed via requestContext('knowledgeBase').
-      const customInstructions = (config?.customInstructions ?? '').trim();
+      let customInstructions = (config?.customInstructions ?? '').trim();
+      if (customInstructions) {
+        customInstructions = customInstructions
+          .replace(/Bienestar Experience[^\n]*\n?/gi, `Bienestar Experience - Longevidad y Bienestar Integral (${bienestarPrice} / sesión 1h)\n`)
+          .replace(/25([.,]00)?\s*€\s*\/?\s*(sesi[oó]n)?/gi, `${bienestarPrice} por sesión`);
+      }
       const customInstructionsBlock = customInstructions
         ? `\n\n== Instrucciones del negocio (personalización) ==\nEl negocio ha añadido estas indicaciones sobre cómo atender. Síguelas siempre que no contradigan las reglas OBLIGATORIAS:\n${customInstructions}`
         : '';
 
-      const knowledgeBase = (
+      let knowledgeBase = (
         ((requestContext as any)?.get?.('knowledgeBase') as string) ?? ''
       ).trim();
+      if (knowledgeBase) {
+        knowledgeBase = knowledgeBase
+          .replace(/(\*\*Tarifa\*\*:\s*`?)25([.,]00)?\s*€(\s*\/\s*sesi[oó]n`?)/gi, `$1${bienestarPrice} / sesión$3`)
+          .replace(/(Bienestar Experience[^\n]*?)25([.,]00)?\s*€/gi, `$1${bienestarPrice}`);
+      }
       const knowledgeBlock = knowledgeBase
         ? `\n\n== Base de conocimiento ==\nUsa esta información del negocio para responder las dudas del cliente. Si la respuesta no está aquí, dilo con sinceridad; NO la inventes.\n"""\n${knowledgeBase}\n"""`
         : '';
