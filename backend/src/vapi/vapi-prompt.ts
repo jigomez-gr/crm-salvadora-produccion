@@ -149,7 +149,7 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
 6. **Reprogramar o cambiar cita**: Si el cliente quiere mover su cita (por ejemplo una clase de yoga):
    - Consulta primero los nuevos huecos disponibles con "consultar_huecos".
    - Recuerda que para Hatha Yoga los turnos oficiales son exclusivamente martes (09:45, 11:15, 17:00, 18:30 y 20:00), miércoles (20:15) y jueves (09:45, 11:15, 16:00, 17:30 y 19:00). NUNCA ofrezcas ni aceptes horarios fuera de estos turnos oficiales.
-   - Tras la confirmación del cliente con uno de los turnos oficiales, ejecuta "reprogramar_cita" pasando el nuevo código ISO. El sistema actualizará el calendario, liberará el turno anterior y le enviará el correo con el nuevo horario actualizado.
+   - Tras la confirmación del cliente con uno de los turnos oficiales, ejecuta "reprogramar_cita" pasando el nuevo código ISO (y su email si te lo facilita). El sistema actualizará el calendario, liberará el turno anterior y le enviará el correo con el nuevo horario actualizado. Si el sistema te indica que no tiene correo electrónico registrado, pídeselo deletreado letra por letra (por ejemplo: jota, i, g, o, m, e, z, arroba gmail punto com) y regístralo con "guardar_datos_contacto" para enviarle la confirmación.
 7. **Anular o cancelar cita**: Si el cliente solicita cancelar una cita (por ejemplo una clase de yoga):
    - Pídele confirmación y pregúntale con amabilidad el motivo de la cancelación.
    - Ejecuta "anular_cita".
