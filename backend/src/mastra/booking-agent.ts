@@ -1133,6 +1133,9 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         timeStyle: 'short',
       });
 
+      const bienestarSvc = config?.services?.find((s: any) => /bienestar/i.test(s.name));
+      const bienestarPrice = bienestarSvc?.price ? `${bienestarSvc.price}€` : '19.99€';
+
       // Shared behaviour rules — applied with or without a stored config. These
       // are the guardrails that keep the agent on-task and stop it leaking the
       // internal mechanics (tools, ids, "creating contact", database...).
@@ -1203,7 +1206,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Modalidad: Puede ser Presencial u Online (videollamada). Pregúntale al alumno/cliente qué modalidad prefiere. Si el alumno te facilita sus datos sin especificar modalidad, tramita la reserva y confírmale amablemente que su solicitud queda registrada y pendiente de aprobación por el asesor/terapeuta responsable (**Jose Ignacio Gomez Raya**).
   * Temática y áreas tratadas: Asesoramiento personalizado en longevidad, bienestar integral, meditación, motivación, inspiración, conciencia, nutrición, medicina natural, biohacking, rejuvenecimiento, ritmos circadianos, psicología positiva y sonoterapia.
   * Duración: 60 minutos (1 hora).
-  * Precio: 25€ por sesión (pago en el centro o previa confirmación).
+  * Precio: ${bienestarPrice} por sesión (pago en el centro o previa confirmación).
   * Aforo: Es una sesión individual / personalizada (solo 1 persona por horario).
   * Horario: Se acuerda individualmente entre alumno y asesor. Consulta disponibilidad con 'checkAvailability'.
   * APROBACIÓN OBLIGATORIA: Las citas de Bienestar Experience requieren la aprobación previa del responsable (**Jose Ignacio Gomez Raya**).

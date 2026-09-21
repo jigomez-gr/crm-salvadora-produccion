@@ -162,21 +162,27 @@ export class ServicesService implements OnModuleInit {
         bienestarSvc.requiresApproval = true;
         bienestarSvc.maxCapacity = 1;
         bienestarSvc.durationMinutes = 60;
-        bienestarSvc.price = bienestarSvc.price || '25.00';
+        if (!bienestarSvc.price || bienestarSvc.price === '25.00' || bienestarSvc.price === '25') {
+          bienestarSvc.price = '19.99';
+        }
         bienestarSvc.allowedModalities = ['in_person', 'virtual'];
         bienestarSvc.isActive = true;
-        bienestarSvc.description =
-          'Programa y sesiones de asesoramiento personalizado presencial y online en longevidad, bienestar integral, nutrición, biohacking, meditación y psicología positiva. Horario convenido individualmente. Requiere aprobación previa del responsable (Jose Ignacio Gomez Raya). Precio: 25€ por sesión de 1 hora. Pago en el centro.';
+        if (bienestarSvc.description && bienestarSvc.description.includes('25€')) {
+          bienestarSvc.description = bienestarSvc.description.replace(/25€/g, '19.99€');
+        } else if (!bienestarSvc.description) {
+          bienestarSvc.description =
+            'Programa y sesiones de asesoramiento personalizado presencial y online en longevidad, bienestar integral, nutrición, biohacking, meditación y psicología positiva. Horario convenido individualmente. Requiere aprobación previa del responsable (Jose Ignacio Gomez Raya). Precio: 19.99€ por sesión de 1 hora. Pago en el centro.';
+        }
         await this.serviceRepo.save(bienestarSvc);
       } else {
         bienestarSvc = await this.serviceRepo.save(
           this.serviceRepo.create({
             name: 'Bienestar Experience (Longevidad y Bienestar Integral)',
             description:
-              'Programa y sesiones de asesoramiento personalizado presencial y online en longevidad, bienestar integral, nutrición, biohacking, meditación y psicología positiva. Horario convenido individualmente. Requiere aprobación previa del responsable (Jose Ignacio Gomez Raya). Precio: 25€ por sesión de 1 hora. Pago en el centro.',
+              'Programa y sesiones de asesoramiento personalizado presencial y online en longevidad, bienestar integral, nutrición, biohacking, meditación y psicología positiva. Horario convenido individualmente. Requiere aprobación previa del responsable (Jose Ignacio Gomez Raya). Precio: 19.99€ por sesión de 1 hora. Pago en el centro.',
             serviceType: ServiceType.RECURRING,
             durationMinutes: 60,
-            price: '25.00',
+            price: '19.99',
             maxCapacity: 1,
             calendarId: 'cal-bienestar-experience',
             managerId: manager.id,
@@ -536,7 +542,7 @@ export class ServicesService implements OnModuleInit {
               requiresApproval: true,
               maxCapacity: 1,
               durationMinutes: 60,
-              price: s.price || '25.00',
+              price: bienestarSvc?.price || s.price || '19.99',
               allowedModalities: ['in_person', 'virtual'],
             };
           }
@@ -738,6 +744,32 @@ export class ServicesService implements OnModuleInit {
         SET "videoParticularUrl" = '/videos/itinerario-9.mp4',
             "videoParticularPath" = 'media_base/videos/itinerario-9.mp4'
         WHERE name ILIKE '%bienestar%' AND ("videoParticularUrl" IS NULL OR "videoParticularUrl" = '' OR "videoParticularUrl" LIKE '%itinerario-8%' OR "videoParticularUrl" LIKE '%itinerario8%');
+      `).catch(() => null);
+
+      // Ensure Bienestar Experience price is 19.99 and description matches across all database tables
+      await this.serviceRepo.query(`
+        UPDATE services 
+        SET price = '19.99',
+            description = replace(replace(description, 'Precio: 25€', 'Precio: 19.99€'), '25€', '19.99€')
+        WHERE name ILIKE '%bienestar%' AND (price = '25.00' OR price = '25' OR price IS NULL OR description LIKE '%25€%');
+      `).catch(() => null);
+
+      await this.serviceRepo.query(`
+        UPDATE agent_configs
+        SET services = replace(replace(services::text, '"price":"25.00"', '"price":"19.99"'), '25€', '19.99€')::jsonb
+        WHERE services::text LIKE '%bienestar%' AND (services::text LIKE '%"price":"25.00"%' OR services::text LIKE '%25€%');
+      `).catch(() => null);
+
+      await this.serviceRepo.query(`
+        UPDATE knowledge_documents
+        SET content = replace(replace(replace(content, '25€ / sesión 1h', '19.99€ / sesión 1h'), '25,00 €', '19.99 €'), 'Precio: 25€', 'Precio: 19.99€')
+        WHERE content ILIKE '%bienestar%';
+      `).catch(() => null);
+
+      await this.serviceRepo.query(`
+        UPDATE knowledge_chunks
+        SET content = replace(replace(replace(content, '25€ / sesión 1h', '19.99€ / sesión 1h'), '25,00 €', '19.99 €'), 'Precio: 25€', 'Precio: 19.99€')
+        WHERE content ILIKE '%bienestar%';
       `).catch(() => null);
 
       // 7. Ensure default categories exist and link existing services

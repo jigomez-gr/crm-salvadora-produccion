@@ -44,6 +44,20 @@ export class VapiService implements OnModuleInit {
 
   async onModuleInit() {
     await this.ensureSchema();
+    // Auto-sync assistant prompt and tools with VAPI cloud on startup
+    setTimeout(async () => {
+      try {
+        const acc = await this.getAccount();
+        const apiKey = this.getEffectiveApiKey(acc);
+        if (apiKey && acc.assistantId) {
+          this.logger.log('Sincronizando automáticamente asistente y herramientas en VAPI al iniciar...');
+          await this.publishAssistant();
+          this.logger.log('Asistente de VAPI sincronizado con éxito al iniciar.');
+        }
+      } catch (err: any) {
+        this.logger.warn(`No se pudo auto-sincronizar VAPI al iniciar: ${err.message}`);
+      }
+    }, 6000);
   }
 
   private async ensureSchema(): Promise<void> {

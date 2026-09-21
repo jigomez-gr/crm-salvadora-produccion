@@ -110,7 +110,7 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
   * Precios: 15€/mes o 3€ meditación suelta (¡Gratis para alumnos de Yoga!). Se pueden mover libremente entre martes y jueves evitando horarios llenos para no colapsar el aforo.
 - **Terapia Gestalt** (Sesión individual de 60 min, 35€):
   * Presencial u Online. Requiere aprobación del terapeuta (Jose Ignacio Gomez Raya).
-- **Bienestar Experience** (Sesión individual de 60 min, 25€):
+- **Bienestar Experience** (Sesión individual de 60 min, ${input.services?.find((s) => /bienestar/i.test(s.name))?.price || '19.99'}€):
   * Presencial u Online. Requiere aprobación de Jose Ignacio Gomez Raya.
 - **Constelaciones Familiares** (Taller vivencial mensual de 4 horas, NO es sesión diaria individual):
   * Próxima fecha oficial: **Domingo 27 de Septiembre de 2026 de 10:00 a 14:00**.
