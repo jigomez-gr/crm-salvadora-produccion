@@ -90,13 +90,13 @@ export const OFFICIAL_SERVICES: OfficialServiceConfig[] = [
   {
     id: 'bienestar-experience',
     name: 'Bienestar Experience (Sesión Individual)',
-    aliases: /bienestar.*exp/i,
+    aliases: /bienestar|longevidad/i,
     category: 'individual_flexible',
     scheduleSummary: 'lunes a viernes de 09:00 a 20:00 según disponibilidad',
     durationMinutes: 60,
     maxCapacity: 1,
     requiresApproval: true,
-    priceInfo: '25€ por sesión de 1 hora. Requiere aprobación de Jose Ignacio Gomez Raya',
+    priceInfo: '19.99€ por sesión de 1 hora. Requiere aprobación de Jose Ignacio Gomez Raya',
   },
   {
     id: 'constelaciones',
@@ -148,7 +148,7 @@ export const OFFICIAL_SERVICES: OfficialServiceConfig[] = [
     eventSpokenDate: 'puente de octubre, del 9 al 12 de octubre de 2026',
     durationMinutes: 4320,
     maxCapacity: 15,
-    priceInfo: '180€',
+    priceInfo: '250€ (230€ reservando con antelación o descuento con acompañante)',
   },
   {
     id: 'encuentro-mujeres',
@@ -1067,7 +1067,16 @@ export class VapiWebhookService {
 
       if (requiresApproval) {
         if (hasEmail) {
-          return `¡Solicitud registrada con éxito! Tu cita para ${appt.service} el ${spokenDate} a nombre de ${customerName} ha quedado registrada pendiente de aprobación del terapeuta Jose Ignacio Gomez Raya. Confírmaselo amablemente e infórmale de que, como ya tenemos registrado su correo electrónico (${emailAddress}), le enviaremos allí la confirmación en cuanto se apruebe. NO le pidas su email. Despídete con calidez.`;
+          try {
+            await this.appointmentsService.sendAppointmentConfirmationNotification(
+              appt.id,
+              { email: true, whatsapp: false, sms: true },
+              false,
+            );
+          } catch (mailErr: any) {
+            this.logger.error(`[VAPI] Error enviando email de solicitud de cita: ${mailErr?.message || mailErr}`);
+          }
+          return `¡Solicitud registrada con éxito! Tu cita para ${appt.service} el ${spokenDate} a nombre de ${customerName} ha quedado registrada pendiente de aprobación del terapeuta Jose Ignacio Gomez Raya. Confírmaselo amablemente e infórmale de que le hemos enviado un correo a su dirección registrada (${emailAddress}) con el resumen de la solicitud, y que le avisaremos en cuanto se confirme. NO le pidas su email. Despídete con calidez.`;
         }
         return `¡Solicitud registrada con éxito! Tu cita para ${appt.service} el ${spokenDate} a nombre de ${customerName} ha quedado registrada pendiente de aprobación del terapeuta Jose Ignacio. Confírmaselo y pregúntale: "Si quieres que te envíe un resumen con los datos de acceso, ¿me dices tu correo electrónico? Por favor, dímelo letra por letra, por ejemplo: jota, i, g, o, m, e, z, arroba gmail punto com". Si prefiere no darlo o duda al deletrear, dile "No te preocupes, te lo dejo todo registrado con tu número de teléfono" y despídete.`;
       }

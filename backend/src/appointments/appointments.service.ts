@@ -340,10 +340,10 @@ export class AppointmentsService implements OnModuleInit {
             additionalNotes = 'Primera clase de prueba (gratuita / regalo del centro).';
           } else {
             isFirstClass = false;
-            const singlePrice = serviceEntity?.price || '10.00';
-            computedPrice = dto.price !== undefined ? dto.price : singlePrice;
+            const singlePrice = dto.price !== undefined ? String(dto.price) : '10.00';
+            computedPrice = singlePrice;
             computedPaymentStatus = PaymentStatus.UNPAID;
-            additionalNotes = `Clase suelta esporádica (${singlePrice} €).`;
+            additionalNotes = 'Clase suelta esporádica (10,00 €).';
           }
         }
 
@@ -719,6 +719,9 @@ export class AppointmentsService implements OnModuleInit {
       appt.price = dto.price === '' ? null : dto.price;
     }
 
+    const statusChangedToCancelled =
+      dto.status === AppointmentStatus.CANCELLED && appt.status !== AppointmentStatus.CANCELLED;
+
     if (dto.status && dto.status !== appt.status) {
       appt.status = dto.status;
       if (dto.status === AppointmentStatus.CANCELLED) {
@@ -741,8 +744,28 @@ export class AppointmentsService implements OnModuleInit {
       });
       const withContact = await this.findOne(saved.id);
       this.eventEmitter.emit('appointment.created', withContact);
+
+      // Load service manager info for notifications
+      let serviceEntity: Service | null = null;
+      if (withContact.serviceId) {
+        serviceEntity = await this.servicesRepo.findOne({
+          where: { id: withContact.serviceId },
+          relations: ['manager'],
+        }).catch(() => null);
+      }
+      if (!serviceEntity && withContact.service) {
+        serviceEntity = await this.servicesRepo.findOne({
+          where: { name: withContact.service },
+          relations: ['manager'],
+        }).catch(() => null);
+      }
+
+      const decision =
+        withContact.status === AppointmentStatus.PENDING_APPROVAL ? 'pending_approval' : 'accepted';
+      const managerName = serviceEntity?.manager?.name || 'Centro de Yoga Salvadora Conesa';
+
       // Enviar confirmación por email y SMS con el nuevo horario reprogramado
-      await this.notifyStudentDecision(withContact, 'accepted', 'Centro de Yoga Salvadora Conesa', undefined, undefined, true).catch((err) => {
+      await this.notifyStudentDecision(withContact, decision, managerName, undefined, undefined, true).catch((err) => {
         this.logger.error(`Error notifying student on update reschedule: ${err}`);
       });
       return withContact;
@@ -750,6 +773,32 @@ export class AppointmentsService implements OnModuleInit {
 
     const updated = await this.appointmentsRepo.save(appt);
     this.eventEmitter.emit('appointment.created', updated);
+
+    if (statusChangedToCancelled) {
+      let serviceEntity: Service | null = null;
+      if (updated.serviceId) {
+        serviceEntity = await this.servicesRepo.findOne({
+          where: { id: updated.serviceId },
+          relations: ['manager'],
+        }).catch(() => null);
+      }
+      if (!serviceEntity && updated.service) {
+        serviceEntity = await this.servicesRepo.findOne({
+          where: { name: updated.service },
+          relations: ['manager'],
+        }).catch(() => null);
+      }
+      const managerName = serviceEntity?.manager?.name || updated.cancelledBy || 'Centro de Yoga Salvadora Conesa';
+      await this.notifyStudentDecision(
+        updated,
+        'cancelled',
+        managerName,
+        dto.reason || updated.cancellationReason || 'Cancelación registrada en el CRM',
+      ).catch((err) => {
+        this.logger.error(`Error notifying student on update cancel: ${err}`);
+      });
+    }
+
     return updated;
   }
 
@@ -1261,16 +1310,26 @@ export class AppointmentsService implements OnModuleInit {
       let chatMessageText = '';
 
       if (decision === 'pending_approval') {
-        subject = `📋 Solicitud de cita recibida: ${appt.service} - ${formattedDate}`;
+        const isResched = isRescheduled || Boolean(appt.notes && /reprogramad/i.test(appt.notes));
+        subject = isResched
+          ? `🔄 Solicitud de cambio de cita recibida: ${appt.service} - ${formattedDate}`
+          : `📋 Solicitud de cita recibida: ${appt.service} - ${formattedDate}`;
+        const headerTitle = isResched
+          ? 'Solicitud de Cambio de Cita Recibida'
+          : 'Solicitud de Cita Recibida';
+        const headerSubtitle = isResched
+          ? `Hemos recibido correctamente tu solicitud de cambio de horario para <strong>${appt.service}</strong>.`
+          : `Hemos recibido correctamente tu solicitud de cita para <strong>${appt.service}</strong>.`;
+
         emailHtml = `
           <div style="font-family: Arial, sans-serif; color: #1f2937; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 10px; padding: 24px; background-color: #ffffff;">
             <div style="text-align: center; margin-bottom: 20px; border-bottom: 1px solid #f3f4f6; padding-bottom: 16px;">
-              <h2 style="color: #2563eb; margin: 0; font-size: 22px;">Solicitud de Cita Recibida</h2>
+              <h2 style="color: #2563eb; margin: 0; font-size: 22px;">${headerTitle}</h2>
               <p style="margin: 6px 0 0 0; color: #6b7280; font-size: 14px;">Centro de Yoga Salvadora Conesa & Club Social Parque Granada</p>
             </div>
             
             <p style="font-size: 15px;">Hola <strong>${contact.name || 'Alumno'}</strong>,</p>
-            <p style="font-size: 14px; color: #374151;">Hemos recibido correctamente tu solicitud de cita para <strong>${appt.service}</strong>.</p>
+            <p style="font-size: 14px; color: #374151;">${headerSubtitle}</p>
             
             <div style="background-color: #eff6ff; border: 1px solid #dbeafe; padding: 16px; border-radius: 8px; margin: 16px 0;">
               <p style="margin: 6px 0; color: #1e40af;">📌 <strong>Servicio / Actividad:</strong> ${appt.service}</p>
@@ -1287,7 +1346,9 @@ export class AppointmentsService implements OnModuleInit {
           </div>
         `;
 
-        chatMessageText = `¡Hola ${contact.name || ''}! Hemos recibido tu solicitud para *${appt.service}* el *${formattedDate}* a las *${formattedTime}*. Se encuentra pendiente de confirmación por el profesor (${effectiveManager}). En cuanto se confirme recibirás los detalles.`;
+        chatMessageText = isResched
+          ? `¡Hola ${contact.name || ''}! Hemos recibido tu solicitud de cambio de horario para *${appt.service}* el *${formattedDate}* a las *${formattedTime}*. Se encuentra pendiente de confirmación por el profesor (${effectiveManager}). En cuanto se confirme recibirás los detalles.`
+          : `¡Hola ${contact.name || ''}! Hemos recibido tu solicitud para *${appt.service}* el *${formattedDate}* a las *${formattedTime}*. Se encuentra pendiente de confirmación por el profesor (${effectiveManager}). En cuanto se confirme recibirás los detalles.`;
       } else if (decision === 'accepted') {
         const isResched = isRescheduled || Boolean(appt.notes && /reprogramad/i.test(appt.notes));
         subject = isResched
