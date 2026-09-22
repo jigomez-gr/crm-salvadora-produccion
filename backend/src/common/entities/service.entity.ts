@@ -106,6 +106,20 @@ export class Service {
   @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
   price: string | null;
 
+  // Indefinite date indicator ('S' | 'N') and descriptive text
+  @Column({ type: 'varchar', length: 1, default: 'N' })
+  sinfechadefinitiva: string;
+
+  @Column({ type: 'text', nullable: true })
+  textosinfechadefinitiva: string | null;
+
+  // Indefinite price indicator ('S' | 'N') and descriptive text
+  @Column({ type: 'varchar', length: 1, default: 'N' })
+  sinpreciodefinitivo: string;
+
+  @Column({ type: 'text', nullable: true })
+  textosinpreciodefinitivo: string | null;
+
   // Payment method: 'stripe' | 'external_url' | 'in_person' | 'free'
   @Column({
     type: 'varchar',

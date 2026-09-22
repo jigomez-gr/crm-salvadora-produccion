@@ -20,6 +20,22 @@ export class CreateServiceDto {
 
   @IsString()
   @IsOptional()
+  sinfechadefinitiva?: string;
+
+  @IsString()
+  @IsOptional()
+  textosinfechadefinitiva?: string;
+
+  @IsString()
+  @IsOptional()
+  sinpreciodefinitivo?: string;
+
+  @IsString()
+  @IsOptional()
+  textosinpreciodefinitivo?: string;
+
+  @IsString()
+  @IsOptional()
   calendarId?: string;
 
   @IsUUID()
@@ -269,6 +285,22 @@ export class UpdateServiceDto {
   @IsString()
   @IsOptional()
   price?: string;
+
+  @IsString()
+  @IsOptional()
+  sinfechadefinitiva?: string;
+
+  @IsString()
+  @IsOptional()
+  textosinfechadefinitiva?: string;
+
+  @IsString()
+  @IsOptional()
+  sinpreciodefinitivo?: string;
+
+  @IsString()
+  @IsOptional()
+  textosinpreciodefinitivo?: string;
 
   @IsString()
   @IsOptional()

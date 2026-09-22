@@ -459,7 +459,14 @@ export class AppointmentsService implements OnModuleInit {
     const serviceName = dto.service || serviceEntity?.name || 'General';
     const serviceId =
       serviceEntity?.id ?? (dto.serviceId && UUID_REGEX.test(dto.serviceId) ? dto.serviceId : null);
-    const price = dto.price !== undefined ? dto.price : (isYoga || isMeditacion ? computedPrice : (serviceEntity?.price ?? null));
+    const price =
+      serviceEntity?.sinpreciodefinitivo === 'S'
+        ? '0.00'
+        : dto.price !== undefined
+        ? dto.price
+        : isYoga || isMeditacion
+        ? computedPrice
+        : serviceEntity?.price ?? null;
     const defaultStatus = serviceEntity?.requiresApproval
       ? AppointmentStatus.PENDING_APPROVAL
       : AppointmentStatus.SCHEDULED;
@@ -1277,15 +1284,22 @@ export class AppointmentsService implements OnModuleInit {
       const effectiveManager =
         serviceEntity?.manager?.name || managerName || 'Jose Ignacio Gomez Raya';
 
+      const isSinFecha = serviceEntity?.sinfechadefinitiva === 'S';
+      const isSinPrecio = serviceEntity?.sinpreciodefinitivo === 'S';
+
       const startsAtDate = new Date(appt.startsAt);
       const endsAtDate = appt.endsAt ? new Date(appt.endsAt) : null;
-      const formattedDate = startsAtDate.toLocaleDateString('es-ES', {
+      const rawFormattedDate = startsAtDate.toLocaleDateString('es-ES', {
         timeZone: 'Europe/Madrid',
         weekday: 'long',
         day: 'numeric',
         month: 'long',
         year: 'numeric',
       });
+      const formattedDate = isSinFecha
+        ? (serviceEntity?.textosinfechadefinitiva || 'Fecha por confirmar')
+        : rawFormattedDate;
+
       const formattedStartTime = startsAtDate.toLocaleTimeString('es-ES', {
         timeZone: 'Europe/Madrid',
         hour: '2-digit',
@@ -1298,9 +1312,9 @@ export class AppointmentsService implements OnModuleInit {
             minute: '2-digit',
           })
         : '';
-      const formattedTime = formattedEndTime
-        ? `${formattedStartTime} a ${formattedEndTime}`
-        : formattedStartTime;
+      const formattedTime = isSinFecha
+        ? (serviceEntity?.textosinfechadefinitiva || 'Por determinar')
+        : (formattedEndTime ? `${formattedStartTime} a ${formattedEndTime}` : formattedStartTime);
 
       const isVirtual = appt.modality === 'virtual';
       const modalityText = isVirtual
@@ -1336,7 +1350,7 @@ export class AppointmentsService implements OnModuleInit {
             <div style="background-color: #eff6ff; border: 1px solid #dbeafe; padding: 16px; border-radius: 8px; margin: 16px 0;">
               <p style="margin: 6px 0; color: #1e40af;">📌 <strong>Servicio / Actividad:</strong> ${appt.service}</p>
               <p style="margin: 6px 0; color: #1e40af;">📅 <strong>Fecha solicitada:</strong> ${formattedDate}</p>
-              <p style="margin: 6px 0; color: #1e40af;">⏰ <strong>Horario:</strong> ${formattedTime}</p>
+              ${isSinFecha ? '' : `<p style="margin: 6px 0; color: #1e40af;">⏰ <strong>Horario:</strong> ${formattedTime}</p>`}
               <p style="margin: 6px 0; color: #1e40af;">👤 <strong>Terapeuta / Profesor:</strong> ${effectiveManager}</p>
               <p style="margin: 6px 0; color: #1e40af;">⏳ <strong>Estado:</strong> Pendiente de confirmación del profesor</p>
             </div>
@@ -1348,9 +1362,11 @@ export class AppointmentsService implements OnModuleInit {
           </div>
         `;
 
-        chatMessageText = isResched
-          ? `¡Hola ${contact.name || ''}! Hemos recibido tu solicitud de cambio de horario para *${appt.service}* el *${formattedDate}* a las *${formattedTime}*. Se encuentra pendiente de confirmación por el profesor (${effectiveManager}). En cuanto se confirme recibirás los detalles.`
-          : `¡Hola ${contact.name || ''}! Hemos recibido tu solicitud para *${appt.service}* el *${formattedDate}* a las *${formattedTime}*. Se encuentra pendiente de confirmación por el profesor (${effectiveManager}). En cuanto se confirme recibirás los detalles.`;
+        chatMessageText = isSinFecha
+          ? `¡Hola ${contact.name || ''}! Hemos recibido tu solicitud para *${appt.service}* (${formattedDate}). Se encuentra pendiente de confirmación por el responsable (${effectiveManager}). En cuanto se confirme recibirás los detalles.`
+          : (isResched
+            ? `¡Hola ${contact.name || ''}! Hemos recibido tu solicitud de cambio de horario para *${appt.service}* el *${formattedDate}* a las *${formattedTime}*. Se encuentra pendiente de confirmación por el profesor (${effectiveManager}). En cuanto se confirme recibirás los detalles.`
+            : `¡Hola ${contact.name || ''}! Hemos recibido tu solicitud para *${appt.service}* el *${formattedDate}* a las *${formattedTime}*. Se encuentra pendiente de confirmación por el profesor (${effectiveManager}). En cuanto se confirme recibirás los detalles.`);
       } else if (decision === 'accepted') {
         const isResched = isRescheduled || Boolean(appt.notes && /reprogramad/i.test(appt.notes));
         subject = isResched
@@ -1406,13 +1422,15 @@ export class AppointmentsService implements OnModuleInit {
               <p style="margin: 6px 0;">📌 <strong>Servicio / Actividad:</strong> ${appt.service}</p>
               ${serviceDescHtml}
               <p style="margin: 6px 0;">📅 <strong>Fecha:</strong> ${formattedDate}</p>
-              <p style="margin: 6px 0;">⏰ <strong>Horario:</strong> ${formattedTime}</p>
+              ${isSinFecha ? '' : `<p style="margin: 6px 0;">⏰ <strong>Horario:</strong> ${formattedTime}</p>`}
               ${locationHtml}
               <p style="margin: 6px 0;">👤 <strong>Responsable / Terapeuta:</strong> ${effectiveManager}</p>
               ${
-                appt.price
-                  ? `<p style="margin: 6px 0;">💶 <strong>Importe:</strong> ${appt.price} €</p>`
-                  : ''
+                isSinPrecio
+                  ? `<p style="margin: 6px 0;">💶 <strong>Importe:</strong> ${serviceEntity?.textosinpreciodefinitivo || 'Por determinar'}</p>`
+                  : appt.price
+                    ? `<p style="margin: 6px 0;">💶 <strong>Importe:</strong> ${appt.price} €</p>`
+                    : ''
               }
             </div>
 
@@ -1430,7 +1448,15 @@ export class AppointmentsService implements OnModuleInit {
           ? `Online por Videollamada${appt.calMeetingUrl ? `\n🔗 *Enlace directo:* ${appt.calMeetingUrl}` : ''}`
           : 'Presencial en Club Social Parque Granada (C/ Holanda 1, Fuenlabrada)';
 
-        chatMessageText = `¡Hola ${contact.name || ''}! Te confirmamos que tu cita para *${appt.service}* ha quedado formalizada.\n\n📅 *Fecha:* ${formattedDate}\n⏰ *Hora:* ${formattedTime}\n📍 *Modalidad:* ${locationWhatsApp}\n👤 *Responsable:* ${effectiveManager}${reminderWhatsApp}\n\n¡Muchas gracias y nos vemos pronto!`;
+        const priceWhatsApp = isSinPrecio
+          ? `\n💶 *Importe:* ${serviceEntity?.textosinpreciodefinitivo || 'Por determinar'}`
+          : appt.price
+            ? `\n💶 *Importe:* ${appt.price} €`
+            : '';
+
+        chatMessageText = isSinFecha
+          ? `¡Hola ${contact.name || ''}! Te confirmamos que tu cita para *${appt.service}* ha quedado formalizada.\n\n📅 *Fecha:* ${formattedDate}\n📍 *Modalidad:* ${locationWhatsApp}\n👤 *Responsable:* ${effectiveManager}${priceWhatsApp}${reminderWhatsApp}\n\n¡Muchas gracias y nos vemos pronto!`
+          : `¡Hola ${contact.name || ''}! Te confirmamos que tu cita para *${appt.service}* ha quedado formalizada.\n\n📅 *Fecha:* ${formattedDate}\n⏰ *Hora:* ${formattedTime}\n📍 *Modalidad:* ${locationWhatsApp}\n👤 *Responsable:* ${effectiveManager}${priceWhatsApp}${reminderWhatsApp}\n\n¡Muchas gracias y nos vemos pronto!`;
       } else if (decision === 'reschedule_requested') {
         const reasonText =
           rejectionReason ||
@@ -1470,7 +1496,7 @@ export class AppointmentsService implements OnModuleInit {
             <div style="background-color: #fef2f2; border: 1px solid #fee2e2; padding: 16px; border-radius: 8px; margin: 16px 0;">
               <p style="margin: 6px 0; color: #991b1b;">📌 <strong>Servicio / Actividad:</strong> ${appt.service}</p>
               <p style="margin: 6px 0; color: #991b1b;">📅 <strong>Fecha anulada:</strong> ${formattedDate}</p>
-              <p style="margin: 6px 0; color: #991b1b;">⏰ <strong>Horario:</strong> ${formattedTime}</p>
+              ${isSinFecha ? '' : `<p style="margin: 6px 0; color: #991b1b;">⏰ <strong>Horario:</strong> ${formattedTime}</p>`}
               <p style="margin: 6px 0; color: #991b1b;">📝 <strong>Motivo de cancelación:</strong> ${reasonText}</p>
             </div>
 
@@ -1479,7 +1505,9 @@ export class AppointmentsService implements OnModuleInit {
           </div>
         `;
 
-        chatMessageText = `Hola ${contact.name || ''}. Te confirmamos que tu cita para *${appt.service}* del *${formattedDate}* a las *${formattedTime}* ha sido cancelada.\n\n📝 *Motivo:* ${reasonText}\n\nSi deseas reprogramar o reservar en otro horario, indícanoslo y te ayudamos encantados.`;
+        chatMessageText = isSinFecha
+          ? `Hola ${contact.name || ''}. Te confirmamos que tu reserva para *${appt.service}* (${formattedDate}) ha sido cancelada.\n\n📝 *Motivo:* ${reasonText}\n\nSi deseas reprogramar o consultar en el futuro, indícanoslo y te ayudamos encantados.`
+          : `Hola ${contact.name || ''}. Te confirmamos que tu cita para *${appt.service}* del *${formattedDate}* a las *${formattedTime}* ha sido cancelada.\n\n📝 *Motivo:* ${reasonText}\n\nSi deseas reprogramar o reservar en otro horario, indícanoslo y te ayudamos encantados.`;
       } else {
         const reasonText =
           rejectionReason ||

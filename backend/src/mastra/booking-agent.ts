@@ -1402,19 +1402,33 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
             externalPaymentUrl?: string;
             allowedModalities?: string[];
             requiresReason?: boolean;
+            sinfechadefinitiva?: string;
+            textosinfechadefinitiva?: string;
+            sinpreciodefinitivo?: string;
+            textosinpreciodefinitivo?: string;
           }) => {
+            const hasNoFixedDate = s.sinfechadefinitiva === 'S';
+            const hasNoFixedPrice = s.sinpreciodefinitivo === 'S';
+            const dateStr = hasNoFixedDate
+              ? (s.textosinfechadefinitiva || 'fecha por confirmar')
+              : s.eventDatesText;
+            const priceStr = hasNoFixedPrice
+              ? (s.textosinpreciodefinitivo || 'precio por confirmar')
+              : (s.price ? `${s.price} €` : undefined);
+
             let details = `- ${s.name}`;
             if (s.serviceType === 'event') {
               details += ` (Evento / Actividad puntual`;
-              if (s.eventDatesText) details += `, Fechas: ${s.eventDatesText}`;
-              if (s.price) details += `, precio: ${s.price} €`;
+              if (dateStr) details += `, Fechas: ${dateStr}`;
+              if (priceStr) details += `, precio: ${priceStr}`;
               if (s.maxCapacity) details += `, Plazas máximas: ${s.maxCapacity}`;
               if (s.minQuorum) details += `, Quórum mínimo requerido: ${s.minQuorum} personas`;
             } else {
               details += ` (${s.durationMinutes} minutos`;
-              if (s.price) details += `, precio: ${s.price} €`;
+              if (priceStr) details += `, precio: ${priceStr}`;
               if (s.maxCapacity && s.maxCapacity > 1) details += `, aforo máximo: ${s.maxCapacity} personas por turno`;
-              if (s.scheduleText) details += `, Horarios oficiales: ${s.scheduleText}`;
+              if (dateStr) details += `, Horarios oficiales: ${dateStr}`;
+              else if (s.scheduleText) details += `, Horarios oficiales: ${s.scheduleText}`;
             }
             if (s.description) {
               details += ` | Descripción y condiciones: ${s.description}`;

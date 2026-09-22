@@ -53,6 +53,10 @@ interface ServiceFormData {
   reminderHours: number | string;
   reminderMinutesEnabled: boolean;
   reminderMinutes: number | string;
+  sinfechadefinitiva: string;
+  textosinfechadefinitiva: string;
+  sinpreciodefinitivo: string;
+  textosinpreciodefinitivo: string;
 }
 
 export default function ServicesPage() {
@@ -123,6 +127,10 @@ export default function ServicesPage() {
     reminderHours: 24,
     reminderMinutesEnabled: true,
     reminderMinutes: 120,
+    sinfechadefinitiva: "N",
+    textosinfechadefinitiva: "",
+    sinpreciodefinitivo: "N",
+    textosinpreciodefinitivo: "",
   });
 
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
@@ -236,6 +244,10 @@ export default function ServicesPage() {
       reminderHours: 24,
       reminderMinutesEnabled: true,
       reminderMinutes: 120,
+      sinfechadefinitiva: "N",
+      textosinfechadefinitiva: "",
+      sinpreciodefinitivo: "N",
+      textosinpreciodefinitivo: "",
     });
     setError("");
     setModalOpen(true);
@@ -284,6 +296,10 @@ export default function ServicesPage() {
       reminderHours: svc.reminderHours ?? 24,
       reminderMinutesEnabled: svc.reminderMinutesEnabled !== false,
       reminderMinutes: svc.reminderMinutes ?? 120,
+      sinfechadefinitiva: svc.sinfechadefinitiva ?? "N",
+      textosinfechadefinitiva: svc.textosinfechadefinitiva ?? "",
+      sinpreciodefinitivo: svc.sinpreciodefinitivo ?? "N",
+      textosinpreciodefinitivo: svc.textosinpreciodefinitivo ?? "",
     });
     setError("");
     setModalOpen(true);
@@ -572,6 +588,10 @@ export default function ServicesPage() {
       reminderHours: Number(form.reminderHours) || 24,
       reminderMinutesEnabled: form.reminderMinutesEnabled,
       reminderMinutes: Number(form.reminderMinutes) || 120,
+      sinfechadefinitiva: form.sinfechadefinitiva,
+      textosinfechadefinitiva: form.textosinfechadefinitiva.trim() || undefined,
+      sinpreciodefinitivo: form.sinpreciodefinitivo,
+      textosinpreciodefinitivo: form.textosinpreciodefinitivo.trim() || undefined,
     };
 
     try {
@@ -878,20 +898,24 @@ export default function ServicesPage() {
                 )}
 
                 <div className="mt-4 space-y-2 border-t border-neutral-100 pt-3 text-xs">
-                  {s.serviceType === "event" && s.eventDatesText && (
+                  {s.serviceType === "event" && (s.eventDatesText || s.sinfechadefinitiva === "S") && (
                     <div className="flex items-center justify-between text-neutral-600">
                       <span className="flex items-center gap-1.5">
                         <Compass className="h-3.5 w-3.5 text-purple-600" />
                         Fechas:
                       </span>
-                      <span className="font-semibold text-purple-900">{s.eventDatesText}</span>
+                      <span className="font-semibold text-purple-900">
+                        {s.sinfechadefinitiva === "S"
+                          ? s.textosinfechadefinitiva || "Fecha por confirmar"
+                          : s.eventDatesText}
+                      </span>
                     </div>
                   )}
 
                   {s.serviceType === "recurring" && s.scheduleText && (
                     <div className="rounded-md bg-sky-50 p-2 text-sky-950 border border-sky-100 flex items-start gap-1.5 text-[11px] leading-tight">
                       <Clock className="h-3.5 w-3.5 text-sky-600 mt-0.5 shrink-0" />
-                      <span><strong>Horarios oficiales:</strong> {s.scheduleText}</span>
+                      <span><strong>Horarios oficiales:</strong> {s.sinfechadefinitiva === "S" ? (s.textosinfechadefinitiva || "Horario por confirmar") : s.scheduleText}</span>
                     </div>
                   )}
 
@@ -925,7 +949,11 @@ export default function ServicesPage() {
                       Precio:
                     </span>
                     <span className="font-semibold text-neutral-800">
-                      {s.price ? `${s.price} €` : "No especificado"}
+                      {s.sinpreciodefinitivo === "S"
+                        ? s.textosinpreciodefinitivo || "Precio por confirmar"
+                        : s.price
+                        ? `${s.price} €`
+                        : "No especificado"}
                     </span>
                   </div>
 
@@ -1214,6 +1242,37 @@ export default function ServicesPage() {
                 <p className="mt-1 text-[11px] text-purple-700">
                   El agente informará de estas fechas a los clientes que pregunten por el viaje.
                 </p>
+              </div>
+
+              {/* Opción Sin Fecha Definitiva */}
+              <div className="rounded-md border border-purple-300 bg-white/90 p-2.5 space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-purple-950">
+                  <input
+                    type="checkbox"
+                    checked={form.sinfechadefinitiva === "S"}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        sinfechadefinitiva: e.target.checked ? "S" : "N",
+                      }))
+                    }
+                    className="rounded border-neutral-300 text-purple-600 focus:ring-purple-500 h-4 w-4"
+                  />
+                  <span>Sin fecha definitiva / Fecha por confirmar</span>
+                </label>
+                {form.sinfechadefinitiva === "S" && (
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-purple-900">
+                      Texto descriptivo de la fecha (sustituye a la fecha en web, WhatsApp y VAPI)
+                    </label>
+                    <Input
+                      value={form.textosinfechadefinitiva}
+                      onChange={(e) => setForm((f) => ({ ...f, textosinfechadefinitiva: e.target.value }))}
+                      placeholder="ej. fecha por confirmar ó dos encuentros  la primera puja es proximamente y la segunda en marzo 2027"
+                      className="text-xs"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1643,6 +1702,37 @@ export default function ServicesPage() {
               </div>
             </div>
           )}
+
+          {/* Opción Sin Precio Definitivo */}
+          <div className="rounded-md border border-neutral-200 bg-neutral-50/60 p-2.5 space-y-2">
+            <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-neutral-800">
+              <input
+                type="checkbox"
+                checked={form.sinpreciodefinitivo === "S"}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    sinpreciodefinitivo: e.target.checked ? "S" : "N",
+                  }))
+                }
+                className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+              />
+              <span>Sin precio definitivo / Precio por confirmar o según características</span>
+            </label>
+            {form.sinpreciodefinitivo === "S" && (
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                  Texto descriptivo del precio (sustituye al importe en web, confirmaciones y VAPI)
+                </label>
+                <Input
+                  value={form.textosinpreciodefinitivo}
+                  onChange={(e) => setForm((f) => ({ ...f, textosinpreciodefinitivo: e.target.value }))}
+                  placeholder="ej. el precio se determinara en funcion de las caracteristicas del viaje y alojamiento"
+                  className="text-xs"
+                />
+              </div>
+            )}
+          </div>
 
           <div>
             <label className="mb-1 block text-xs font-medium text-neutral-700">

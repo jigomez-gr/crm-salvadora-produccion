@@ -108,6 +108,25 @@ export class ServicesService implements OnModuleInit {
           UPDATE services SET "notifyByEmail" = true WHERE "notifyByEmail" IS NULL OR "notifyByEmail" = false;
           UPDATE services SET "reminderNotes" = 'Llevar ropa cómoda de abrigo, calcetines cálidos y, si lo deseas, tu propia manta o cojín para disfrutar de la experiencia sonora con el máximo confort.'
           WHERE ("name" ILIKE '%gong%' OR "name" ILIKE '%sonora%') AND "reminderNotes" ILIKE '%9:15%';
+
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "sinfechadefinitiva" character varying(1) DEFAULT 'N';
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "textosinfechadefinitiva" text;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "sinpreciodefinitivo" character varying(1) DEFAULT 'N';
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "textosinpreciodefinitivo" text;
+
+          UPDATE services SET 
+            "sinfechadefinitiva" = 'S', 
+            "textosinfechadefinitiva" = 'fecha por confirmar',
+            "sinpreciodefinitivo" = 'S',
+            "textosinpreciodefinitivo" = 'fecha por confirmar'
+          WHERE "name" ILIKE '%mujeres%' OR "name" ILIKE '%femenino%';
+
+          UPDATE services SET 
+            "sinfechadefinitiva" = 'S', 
+            "textosinfechadefinitiva" = 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
+            "sinpreciodefinitivo" = 'S',
+            "textosinpreciodefinitivo" = 'el precio se determinara en funcion de las caracteristicas del viaje y alojamiento'
+          WHERE "name" ILIKE '%puja%';
         `);
       } catch (colErr) {
         console.warn('Auto-migration warning in services table:', colErr);
@@ -492,6 +511,18 @@ export class ServicesService implements OnModuleInit {
             s.requiresApproval = true;
             updated = true;
           }
+        } else if (/mujeres|femenino/i.test(s.name)) {
+          s.sinfechadefinitiva = 'S';
+          s.textosinfechadefinitiva = 'fecha por confirmar';
+          s.sinpreciodefinitivo = 'S';
+          s.textosinpreciodefinitivo = 'fecha por confirmar';
+          updated = true;
+        } else if (/puja/i.test(s.name)) {
+          s.sinfechadefinitiva = 'S';
+          s.textosinfechadefinitiva = 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027';
+          s.sinpreciodefinitivo = 'S';
+          s.textosinpreciodefinitivo = 'el precio se determinara en funcion de las caracteristicas del viaje y alojamiento';
+          updated = true;
         }
         if (updated) {
           await this.serviceRepo.save(s);
@@ -554,15 +585,31 @@ export class ServicesService implements OnModuleInit {
           }
           if (/mujeres|femenino/i.test(s.name || '')) {
             hasMujeres = true;
+            changed = true;
+            return {
+              ...s,
+              sinfechadefinitiva: 'S',
+              textosinfechadefinitiva: 'fecha por confirmar',
+              sinpreciodefinitivo: 'S',
+              textosinpreciodefinitivo: 'fecha por confirmar',
+            };
+          }
+          if (/puja/i.test(s.name || '')) {
+            hasPuja = true;
+            changed = true;
+            return {
+              ...s,
+              sinfechadefinitiva: 'S',
+              textosinfechadefinitiva: 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
+              sinpreciodefinitivo: 'S',
+              textosinpreciodefinitivo: 'el precio se determinara en funcion de las caracteristicas del viaje y alojamiento',
+            };
           }
           if (/ayuno/i.test(s.name || '')) {
             hasAyuno = true;
           }
           if (/baño de gong|sonora/i.test(s.name || '')) {
             hasGong = true;
-          }
-          if (/puja/i.test(s.name || '')) {
-            hasPuja = true;
           }
           if (/constelar|asunto propio/i.test(s.name || '')) {
             hasConstelar = true;
@@ -1050,6 +1097,10 @@ export class ServicesService implements OnModuleInit {
           externalPaymentUrl: s.externalPaymentUrl,
           allowedModalities: s.allowedModalities,
           requiresReason: s.requiresReason,
+          sinfechadefinitiva: s.sinfechadefinitiva,
+          textosinfechadefinitiva: s.textosinfechadefinitiva,
+          sinpreciodefinitivo: s.sinpreciodefinitivo,
+          textosinpreciodefinitivo: s.textosinpreciodefinitivo,
         }));
         await this.agentConfigRepo.save(agent);
       }
@@ -1114,6 +1165,10 @@ export class ServicesService implements OnModuleInit {
       videoParticularUrl: dto.videoParticularUrl || null,
       fechaDesde: dto.fechaDesde || '2000-01-01',
       fechaHasta: dto.fechaHasta || '2099-12-31',
+      sinfechadefinitiva: dto.sinfechadefinitiva || 'N',
+      textosinfechadefinitiva: dto.textosinfechadefinitiva || null,
+      sinpreciodefinitivo: dto.sinpreciodefinitivo || 'N',
+      textosinpreciodefinitivo: dto.textosinpreciodefinitivo || null,
     });
 
     const saved = await this.serviceRepo.save(service);
@@ -1191,6 +1246,10 @@ export class ServicesService implements OnModuleInit {
     if (dto.videoParticularUrl !== undefined) service.videoParticularUrl = dto.videoParticularUrl || null;
     if (dto.fechaDesde !== undefined) service.fechaDesde = dto.fechaDesde || '2000-01-01';
     if (dto.fechaHasta !== undefined) service.fechaHasta = dto.fechaHasta || '2099-12-31';
+    if (dto.sinfechadefinitiva !== undefined) service.sinfechadefinitiva = dto.sinfechadefinitiva;
+    if (dto.textosinfechadefinitiva !== undefined) service.textosinfechadefinitiva = dto.textosinfechadefinitiva || null;
+    if (dto.sinpreciodefinitivo !== undefined) service.sinpreciodefinitivo = dto.sinpreciodefinitivo;
+    if (dto.textosinpreciodefinitivo !== undefined) service.textosinpreciodefinitivo = dto.textosinpreciodefinitivo || null;
 
     const saved = await this.serviceRepo.save(service);
     await this.syncAgentConfigServices();
@@ -1259,6 +1318,10 @@ export class ServicesService implements OnModuleInit {
       reminderHours: source.reminderHours,
       reminderMinutesEnabled: source.reminderMinutesEnabled,
       reminderMinutes: source.reminderMinutes,
+      sinfechadefinitiva: source.sinfechadefinitiva,
+      textosinfechadefinitiva: source.textosinfechadefinitiva,
+      sinpreciodefinitivo: source.sinpreciodefinitivo,
+      textosinpreciodefinitivo: source.textosinpreciodefinitivo,
     });
 
     const saved = await this.serviceRepo.save(newService);

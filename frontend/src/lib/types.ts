@@ -57,6 +57,10 @@ export interface Service {
   videoParticularPath?: string | null;
   fechaDesde?: string | null;
   fechaHasta?: string | null;
+  sinfechadefinitiva?: string;
+  textosinfechadefinitiva?: string | null;
+  sinpreciodefinitivo?: string;
+  textosinpreciodefinitivo?: string | null;
   categoryId?: string | null;
   category?: ServiceCategory | null;
   displayOrder?: number;

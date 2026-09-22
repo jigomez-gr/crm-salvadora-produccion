@@ -78,10 +78,10 @@ export function composeVapiSystemPrompt(input: PromptInputData): string {
   const gestaltPrice = getServicePrice(/gestalt/i, '35€');
   const bienestarPrice = getServicePrice(/bienestar/i, '19.99€');
   const gongPrice = getServicePrice(/baño.*gong|meditación sonora/i, '16€');
-  const pujaPrice = getServicePrice(/puja/i, '95€');
+  const pujaPrice = 'el precio se determinará en función de las características del viaje y alojamiento';
   const constelarPrice = getServicePrice(/constel.*(constelar|propio)/i, '60€');
   const participarPrice = getServicePrice(/constel.*(particip|represen)/i, '20€');
-  const mujeresPrice = getServicePrice(/mujeres|femenino/i, '45€');
+  const mujeresPrice = 'fecha por confirmar';
   const ayunoPrice = getServicePrice(/ayuno/i, '250€');
 
   return `# Identidad y Rol
@@ -137,9 +137,11 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
 - **Baños de Gong y Meditación Sonora** (Sesión vivencial mensual de 2 horas):
   * Próxima fecha: **Sábado 26 de Septiembre de 2026 de 18:00 a 20:00** (${gongPrice}).
 - **Puja de Gongs** (Noche sagrada de sonido de 11 horas):
-  * Próxima fecha: **Sábado 28 de Noviembre de 2026 de 21:00 a 08:00 del domingo** (${pujaPrice}).
-- **Encuentro de Mujeres** (Jornada vivencial de primavera):
-  * Fecha: **Sábado 15 de Mayo de 2027 de 10:00 a 16:00** (${mujeresPrice}).
+  * Fecha: **dos encuentros  la primera puja es proximamente y la segunda en marzo 2027**.
+  * Precio: **el precio se determinara en funcion de las caracteristicas del viaje y alojamiento**.
+- **Encuentro de Mujeres** (Círculo y taller femenino):
+  * Fecha: **fecha por confirmar**.
+  * Precio: **fecha por confirmar**.
 - **Retiro de Ayuno Terapéutico y Senderismo Consciente**:
   * Fecha: **Puente de Octubre (del 9 al 12 de Octubre de 2026)** (${ayunoPrice}).
 
@@ -179,7 +181,8 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
    - Meditaciones Guiadas: martes y jueves de 09:15 a 09:45.
    - Constelaciones Familiares: exclusivamente el domingo 27 de septiembre de 2026 de 10:00 a 14:00.
    - Baño de Gong: sábado 26 de septiembre de 2026 de 18:00 a 20:00.
-   - Puja de Gongs: sábado 28 de noviembre de 2026 de 21:00 a 08:00 del domingo.
+   - Puja de Gongs: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027 (el precio se determinara en funcion de las caracteristicas del viaje y alojamiento).
+   - Encuentro de Mujeres: fecha por confirmar (precio por confirmar).
    - Terapia Gestalt y Bienestar Experience: lunes a viernes entre las 09:00 y las 20:00 según disponibilidad, con confirmación previa de Jose Ignacio.
 2. **COMPRUEBA SIEMPRE CONTRA EL CALENDARIO OFICIAL (NUNCA EN CITAS NI INVENTAR)**:
    - Si el cliente solicita o propone un día o una hora concreta (por ejemplo, "¿puedo ir este lunes?" o "¿a las 10 de la mañana?"), comprueba si ese turno está en el CALENDARIO OFICIAL del servicio:

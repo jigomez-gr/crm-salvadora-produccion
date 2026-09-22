@@ -44,6 +44,10 @@ export interface OfficialServiceConfig {
   maxCapacity: number;
   requiresApproval?: boolean;
   priceInfo: string;
+  sinfechadefinitiva?: string;
+  textosinfechadefinitiva?: string;
+  sinpreciodefinitivo?: string;
+  textosinpreciodefinitivo?: string;
 }
 
 export const OFFICIAL_SERVICES: OfficialServiceConfig[] = [
@@ -129,13 +133,17 @@ export const OFFICIAL_SERVICES: OfficialServiceConfig[] = [
     name: 'Puja de Gongs (Noche Sagrada de Sonido - 11h)',
     aliases: /puja/i,
     category: 'fixed_event',
-    scheduleSummary: 'sábado 28 de noviembre de 2026 de 21:00 a 08:00 del domingo',
-    eventDate: new Date('2026-11-28T20:00:00.000Z'),
-    eventDateIso: '2026-11-28T20:00:00.000Z',
-    eventSpokenDate: 'sábado 28 de noviembre de 2026 de 21:00 a 08:00 del domingo',
+    scheduleSummary: 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
+    eventDate: new Date('2099-12-31T20:00:00.000Z'),
+    eventDateIso: '2099-12-31T20:00:00.000Z',
+    eventSpokenDate: 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
     durationMinutes: 660,
     maxCapacity: 30,
-    priceInfo: '95€ (90€-100€ según asistentes)',
+    sinfechadefinitiva: 'S',
+    textosinfechadefinitiva: 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
+    sinpreciodefinitivo: 'S',
+    textosinpreciodefinitivo: 'el precio se determinara en funcion de las caracteristicas del viaje y alojamiento',
+    priceInfo: 'el precio se determinara en funcion de las caracteristicas del viaje y alojamiento',
   },
   {
     id: 'retiro',
@@ -155,13 +163,17 @@ export const OFFICIAL_SERVICES: OfficialServiceConfig[] = [
     name: 'Encuentro de Mujeres (Primavera)',
     aliases: /encuentro.*mujer/i,
     category: 'fixed_event',
-    scheduleSummary: 'sábado 15 de mayo de 2027 de 10:00 a 16:00',
-    eventDate: new Date('2027-05-15T08:00:00.000Z'),
-    eventDateIso: '2027-05-15T08:00:00.000Z',
-    eventSpokenDate: 'sábado 15 de mayo de 2027 de 10:00 a 16:00',
+    scheduleSummary: 'fecha por confirmar',
+    eventDate: new Date('2099-12-31T08:00:00.000Z'),
+    eventDateIso: '2099-12-31T08:00:00.000Z',
+    eventSpokenDate: 'fecha por confirmar',
     durationMinutes: 360,
     maxCapacity: 25,
-    priceInfo: '45€',
+    sinfechadefinitiva: 'S',
+    textosinfechadefinitiva: 'fecha por confirmar',
+    sinpreciodefinitivo: 'S',
+    textosinpreciodefinitivo: 'fecha por confirmar',
+    priceInfo: 'fecha por confirmar',
   },
 ];
 
@@ -511,6 +523,11 @@ export class VapiWebhookService {
 
     // 1. TALLERES Y EVENTOS CON FECHA FIJA (Constelaciones, Gong, Puja, Retiro, Encuentro)
     if (officialSvc?.category === 'fixed_event') {
+      if (officialSvc.sinfechadefinitiva === 'S') {
+        const spoken = officialSvc.textosinfechadefinitiva || officialSvc.scheduleSummary;
+        return `Para «${officialSvc.name}», la fecha actual es: ${spoken} [${officialSvc.eventDateIso}]. Precio: ${officialSvc.priceInfo}. Hay plazas disponibles y lista de reserva abierta. Ofréceselo al cliente para registrar sus datos y plaza.`;
+      }
+
       const isDifferentDate =
         rawFecha &&
         !rawFecha.includes('27') &&
@@ -941,7 +958,12 @@ export class VapiWebhookService {
     // 2b. Strict validation against official service calendars
     const officialSvc = findOfficialService(cleanServiceName || serviceEntity?.name);
     if (officialSvc) {
-      if (officialSvc.category === 'fixed_event' && officialSvc.eventDate) {
+      if (
+        officialSvc.category === 'fixed_event' &&
+        officialSvc.eventDate &&
+        officialSvc.sinfechadefinitiva !== 'S' &&
+        serviceEntity?.sinfechadefinitiva !== 'S'
+      ) {
         const zoned = new TZDate(startsAt.getTime(), ctx.timezone);
         const targetEventDate = new TZDate(officialSvc.eventDate.getTime(), ctx.timezone);
         const isSameDay =
@@ -1029,7 +1051,10 @@ export class VapiWebhookService {
         await this.callsRepo.update({ vapiCallId: ctx.vapiCallId }, { contactId: contact.id });
       }
 
-      const spokenDate = this.formatSpokenDate(startsAt, ctx.timezone);
+      const isSinFecha = serviceEntity?.sinfechadefinitiva === 'S' || officialSvc?.sinfechadefinitiva === 'S';
+      const spokenDate = isSinFecha
+        ? (serviceEntity?.textosinfechadefinitiva || officialSvc?.textosinfechadefinitiva || 'fecha por confirmar')
+        : this.formatSpokenDate(startsAt, ctx.timezone);
 
       // 5. Trigger Zadarma SMS confirmation asynchronously
       const customerPhone = contact.phone || effectivePhone;

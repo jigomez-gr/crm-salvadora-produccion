@@ -119,6 +119,10 @@ export class WidgetController {
           paymentType: s.paymentType,
           allowedModalities: s.allowedModalities,
           requiresReason: s.requiresReason,
+          sinfechadefinitiva: s.sinfechadefinitiva,
+          textosinfechadefinitiva: s.textosinfechadefinitiva,
+          sinpreciodefinitivo: s.sinpreciodefinitivo,
+          textosinpreciodefinitivo: s.textosinpreciodefinitivo,
         }))
       : (config.services || []).map((s: any) => ({
           id: s.name,
@@ -134,6 +138,10 @@ export class WidgetController {
           paymentType: s.paymentType || 'in_person',
           allowedModalities: s.allowedModalities || ['in_person'],
           requiresReason: false,
+          sinfechadefinitiva: s.sinfechadefinitiva || 'N',
+          textosinfechadefinitiva: s.textosinfechadefinitiva || null,
+          sinpreciodefinitivo: s.sinpreciodefinitivo || 'N',
+          textosinpreciodefinitivo: s.textosinpreciodefinitivo || null,
         }));
 
     return {
@@ -232,6 +240,10 @@ export class WidgetController {
           videoParticularUrl: s.videoParticularUrl || null,
           fechaDesde: s.fechaDesde || '2000-01-01',
           fechaHasta: s.fechaHasta || '2099-12-31',
+          sinfechadefinitiva: s.sinfechadefinitiva || 'N',
+          textosinfechadefinitiva: s.textosinfechadefinitiva || null,
+          sinpreciodefinitivo: s.sinpreciodefinitivo || 'N',
+          textosinpreciodefinitivo: s.textosinpreciodefinitivo || null,
           firstClassFree: isYoga,
           freeForYogaStudents: isMeditacion,
           whatsappBookingUrl: `https://wa.me/${cleanWaPhone}?text=${encodeURIComponent(
