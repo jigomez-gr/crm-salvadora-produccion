@@ -1491,7 +1491,12 @@ export default function DemoLandingPage() {
                 ref={textareaRef}
                 rows={1}
                 value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
+                onChange={(e) => {
+                  setInputValue(e.target.value);
+                  const target = e.target;
+                  target.style.height = "auto";
+                  target.style.height = `${Math.min(Math.max(target.scrollHeight, 38), 140)}px`;
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     const isTouchMobile =
@@ -1505,8 +1510,7 @@ export default function DemoLandingPage() {
                   }
                 }}
                 placeholder="Escribe tu consulta o reserva..."
-                className="flex-1 resize-none rounded-xl border border-stone-300 bg-stone-50 px-3.5 py-2 text-xs text-stone-800 outline-none transition-[background-color,border-color] placeholder:text-stone-400 focus:border-[#800020] focus:bg-white min-h-[38px] max-h-[120px] leading-snug overflow-y-auto"
-                style={{ height: "38px" }}
+                className="flex-1 resize-none rounded-xl border border-stone-300 bg-stone-50 px-3.5 py-2 text-xs text-stone-800 outline-none transition-[background-color,border-color] placeholder:text-stone-400 focus:border-[#800020] focus:bg-white min-h-[38px] max-h-[140px] leading-snug overflow-y-auto"
               />
               <button
                 type="submit"

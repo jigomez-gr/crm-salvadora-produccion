@@ -528,28 +528,34 @@ export class VapiWebhookService {
         return `Para «${officialSvc.name}», la fecha actual es: ${spoken} [${officialSvc.eventDateIso}]. Precio: ${officialSvc.priceInfo}. Hay plazas disponibles y lista de reserva abierta. Ofréceselo al cliente para registrar sus datos y plaza.`;
       }
 
-      const isDifferentDate =
-        rawFecha &&
-        !rawFecha.includes('27') &&
-        !rawFecha.includes('26') &&
-        !rawFecha.includes('28') &&
-        !rawFecha.includes('septiembre') &&
-        !rawFecha.includes('noviembre') &&
-        !rawFecha.includes('octubre') &&
-        !rawFecha.includes('mayo') &&
-        (rawFecha.includes('hoy') ||
-          rawFecha.includes('tarde') ||
-          rawFecha.includes('mañana') ||
-          rawFecha.includes('manana') ||
-          rawFecha.includes('lunes') ||
-          rawFecha.includes('martes') ||
-          rawFecha.includes('miercoles') ||
-          rawFecha.includes('miércoles') ||
-          rawFecha.includes('jueves') ||
-          rawFecha.includes('viernes') ||
-          rawFecha.includes('sabado') ||
-          rawFecha.includes('sábado') ||
-          rawFecha.includes('domingo'));
+      // Check if user is asking for a day that genuinely conflicts with the event
+      let isDifferentDate = false;
+      if (rawFecha && officialSvc.eventDate) {
+        const eventZoned = new TZDate(officialSvc.eventDate.getTime(), ctx.timezone);
+        const eventDayOfWeek = eventZoned.getDay(); // 6 for Sat, 0 for Sun
+        const dayNames: Record<number, string[]> = {
+          0: ['domingo'],
+          1: ['lunes'],
+          2: ['martes'],
+          3: ['miercoles', 'miércoles'],
+          4: ['jueves'],
+          5: ['viernes'],
+          6: ['sabado', 'sábado'],
+        };
+        const eventDayNames = dayNames[eventDayOfWeek] || [];
+        const matchesEventWeekday = eventDayNames.some((d) => rawFecha.includes(d));
+        const matchesEventDayNumber = rawFecha.includes(eventZoned.getDate().toString());
+
+        if (!matchesEventWeekday && !matchesEventDayNumber) {
+          const conflictsWithWeekday = Object.entries(dayNames).some(
+            ([dStr, names]) => Number(dStr) !== eventDayOfWeek && names.some((n) => rawFecha.includes(n))
+          );
+          const conflictsWithRelative = rawFecha.includes('hoy') || rawFecha.includes('mañana') || rawFecha.includes('manana');
+          if (conflictsWithWeekday || conflictsWithRelative) {
+            isDifferentDate = true;
+          }
+        }
+      }
 
       if (isDifferentDate) {
         return `En el calendario oficial no hay sesiones de «${officialSvc.name}» para esa fecha. Es un evento exclusivo con fecha fijada en el calendario: se celebra el ${officialSvc.eventSpokenDate} [${officialSvc.eventDateIso}]. ${officialSvc.priceInfo}. Explícaselo al cliente y ofrécele reservar su plaza para ese día.`;
@@ -897,19 +903,36 @@ export class VapiWebhookService {
       params?.fecha ||
       params?.slot;
 
-    if (!rawIso) {
-      return 'Falta la fecha de inicio. Consulta primero los huecos disponibles con consultar_huecos.';
-    }
+    const serviceName = params?.servicio || params?.service || params?.clase || 'Hatha Yoga Terapéutico';
+    const cleanServiceName = serviceName.toString().toLowerCase().trim();
+    const services = await this.servicesRepo.find({ where: { isActive: true } });
+    const serviceEntity =
+      services.find((s) => s.name.toLowerCase().includes(cleanServiceName) || cleanServiceName.includes(s.name.toLowerCase())) ||
+      null;
+    const officialSvc = findOfficialService(cleanServiceName || serviceEntity?.name);
 
-    let startsAt = parseISO(rawIso);
-    if (!isValid(startsAt)) {
-      startsAt = new Date(rawIso);
+    let startsAt: Date;
+    if (officialSvc?.category === 'fixed_event') {
+      if (officialSvc.sinfechadefinitiva === 'S' || serviceEntity?.sinfechadefinitiva === 'S') {
+        startsAt = new Date('2099-12-31T20:00:00.000Z');
+      } else if (officialSvc.eventDate) {
+        startsAt = officialSvc.eventDate;
+      } else {
+        startsAt = rawIso ? new Date(rawIso) : new Date();
+      }
+    } else {
+      if (!rawIso) {
+        return 'Falta la fecha de inicio. Consulta primero los huecos disponibles con consultar_huecos.';
+      }
+      startsAt = parseISO(rawIso);
       if (!isValid(startsAt)) {
-        return 'La fecha y hora facilitadas no son válidas. Por favor, consulta de nuevo la agenda con consultar_huecos.';
+        startsAt = new Date(rawIso);
+        if (!isValid(startsAt)) {
+          return 'La fecha y hora facilitadas no son válidas. Por favor, consulta de nuevo la agenda con consultar_huecos.';
+        }
       }
     }
 
-    const serviceName = params?.servicio || params?.service || params?.clase || 'Hatha Yoga Terapéutico';
     const customerName = params?.nombre || params?.name || params?.cliente || 'Alumno';
 
     const effectivePhone =
@@ -945,18 +968,11 @@ export class VapiWebhookService {
       }
     }
 
-    // 2. Find service entity
-    const cleanServiceName = serviceName.toLowerCase().trim();
-    const services = await this.servicesRepo.find({ where: { isActive: true } });
-    const serviceEntity =
-      services.find((s) => s.name.toLowerCase().includes(cleanServiceName) || cleanServiceName.includes(s.name.toLowerCase())) ||
-      null;
-
-    const durationMinutes = serviceEntity?.durationMinutes || 45;
+    // 2. Duration and endsAt
+    const durationMinutes = officialSvc?.durationMinutes || serviceEntity?.durationMinutes || 45;
     const endsAt = new Date(startsAt.getTime() + durationMinutes * 60000);
 
     // 2b. Strict validation against official service calendars
-    const officialSvc = findOfficialService(cleanServiceName || serviceEntity?.name);
     if (officialSvc) {
       if (
         officialSvc.category === 'fixed_event' &&

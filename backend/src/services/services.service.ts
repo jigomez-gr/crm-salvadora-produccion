@@ -316,8 +316,8 @@ export class ServicesService implements OnModuleInit {
               'Sesión mensual de 2 horas (a finales de mes). Preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima fecha: Sábado 26 de Septiembre de 2026 (18:00 a 20:00). Aforo: 30 personas. Precio: 16€. Pago en el centro.',
             serviceType: ServiceType.EVENT,
             eventDatesText: 'Sábado 26 de Septiembre de 2026 (18:00 a 20:00)',
-            eventStartDate: new Date('2026-09-26T18:00:00.000Z'),
-            eventEndDate: new Date('2026-09-26T20:00:00.000Z'),
+            eventStartDate: new Date('2026-09-26T16:00:00.000Z'),
+            eventEndDate: new Date('2026-09-26T18:00:00.000Z'),
             durationMinutes: 120,
             price: '16.00',
             maxCapacity: 30,
@@ -332,6 +332,8 @@ export class ServicesService implements OnModuleInit {
         );
       } else {
         gongSvc.managerId = manager.id;
+        gongSvc.eventStartDate = new Date('2026-09-26T16:00:00.000Z');
+        gongSvc.eventEndDate = new Date('2026-09-26T18:00:00.000Z');
         gongSvc.reminderNotes =
           gongSvc.reminderNotes ||
           'Llevar ropa cómoda de abrigo, calcetines cálidos y, si lo deseas, tu propia manta o cojín para disfrutar de la experiencia sonora con el máximo confort.';
