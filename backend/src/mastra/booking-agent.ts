@@ -1205,14 +1205,15 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
 - NUNCA inventes horarios, días u horas disponibles. ANTES de sugerir cualquier horario, debes llamar OBLIGATORIAMENTE a la herramienta 'checkAvailability' para la fecha y servicio solicitados.
 - Si el día pedido está cerrado (como fines de semana) o 'checkAvailability' no devuelve huecos, indícaselo con total claridad al cliente (p. ej. "Los sábados y domingos estamos cerrados") y ofrece consultar el siguiente día laborable en que haya disponibilidad.
 - Ofrece únicamente los horarios reales que te devuelva 'checkAvailability', en la zona horaria ${timezone} y en lenguaje natural (p. ej. "el lunes a las 10:00").
-- RESERVAS DE EVENTOS O RETIROS CON FECHA POR CONFIRMAR O PROVISIONAL (PUJA DE GONGS, ENCUENTRO DE MUJERES):
-  * Aunque la fecha exacta esté por confirmar o sea provisional (por ejemplo: "dos encuentros, la primera puja es próximamente y la segunda en marzo 2027" o "fecha por confirmar"), ¡SÍ SE PERMITE Y SE DEBE FORMALIZAR LA RESERVA DE PLAZA DE INMEDIATO! Es una reserva de plaza prioritaria (pre-reserva garantizada para el asistente).
+- RESERVAS DE EVENTOS, RETIROS, VIAJES O ACTIVIDADES CON FECHA POR CONFIRMAR O PROVISIONAL (APLICA A CUALQUIER SERVICIO CON 'SIN FECHA DEFINITIVA'):
+  * Aplica de forma general a CUALQUIER servicio, viaje, retiro, taller o evento del catálogo que tenga fecha por confirmar, provisional o el atributo de sin fecha definitiva establecida (por ejemplo: Puja de Gongs, Encuentro de Mujeres, o cualquier otro servicio futuro que se cree o edite en el CRM con fecha por confirmar).
+  * Aunque la fecha exacta esté por confirmar o sea provisional, ¡SÍ SE PERMITE Y SE DEBE FORMALIZAR LA RESERVA DE PLAZA DE INMEDIATO! Es una reserva de plaza prioritaria (pre-reserva garantizada para el asistente).
   * ESTÁ ESTRICTAMENTE PROHIBIDO:
     1. Decirle al cliente que no se puede reservar o que la fecha no está definida.
     2. Decir que la fecha es pasada o que no es posible reservar para una fecha pasada.
     3. Preguntarle al cliente si prefiere esperar a que se confirme la fecha antes de reservar.
   * ¡DEBES FORMALIZAR LA RESERVA EN EL ACTO llamando a 'bookAppointment'!
-  * Llama a 'bookAppointment' con el servicio ('Puja de Gongs' o 'Encuentro de Mujeres') y startsAt="2099-12-31 20:00".
+  * Llama a 'bookAppointment' con el servicio solicitado y startsAt="2099-12-31 20:00" (o sin startsAt).
   * Confírmale con total calidez que su plaza prioritaria queda registrada y confirmada para el próximo encuentro, y que en cuanto se fije el día exacto se le notificará personalmente por correo o WhatsApp.
 - INTERPRETACIÓN Y EQUIVALENCIA DE HORAS Y EXPRESIONES HORARIAS (OBLIGATORIO):
   * Debes interpretar y aceptar SIEMPRE las expresiones horarias coloquiales y en lenguaje natural español como horas exactas:
@@ -1509,6 +1510,9 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
                   .replace(/45\s*€/gi, s.textosinpreciodefinitivo || 'precio por confirmar');
               }
               details += ` | Descripción y condiciones: ${desc}`;
+            }
+            if (hasNoFixedDate) {
+              details += `, [SIN FECHA DEFINITIVA: se debe formalizar inmediatamente la reserva de plaza prioritaria con bookAppointment]`;
             }
             if (s.allowedModalities && s.allowedModalities.length > 0) {
               const modNames = s.allowedModalities
