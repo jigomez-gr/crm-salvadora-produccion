@@ -96,13 +96,11 @@ async function resetServices() {
       },
       {
         name: 'Puja de Gongs (Noche Sagrada de Sonido - 11h)',
-        description: 'Evento anual de inmersión y transformación sonora durante toda la noche (11 horas continuas de sonido). Fecha prevista: Finales de noviembre (Sábado 28 de Noviembre de 2026, 21:00 a 08:00). Aforo: 30 personas por sesión. Precio: 95€ (90-100€ según asistentes). Reserva anticipada. Pago en el centro.',
+        description: 'Evento vivencial de inmersión y transformación sonora durante toda la noche (11 horas continuas de sonido). Fechas: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027. Precio: el precio se determinara en funcion de las caracteristicas del viaje y alojamiento. Aforo: 30 personas por sesión. Pago en el centro.',
         serviceType: 'event',
-        eventDatesText: 'Sábado 28 de Noviembre de 2026 (Noche de 21:00 a 08:00)',
-        eventStartDate: new Date('2026-11-28T21:00:00.000Z'),
-        eventEndDate: new Date('2026-11-29T08:00:00.000Z'),
+        eventDatesText: 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
         durationMinutes: 660,
-        price: '95.00',
+        price: '0.00',
         maxCapacity: 30,
         calendarId: 'cal-puja-gongs',
         paymentType: 'in_person',
@@ -110,6 +108,10 @@ async function resetServices() {
         requiresApproval: false,
         requiresReason: false,
         isActive: true,
+        sinfechadefinitiva: 'S',
+        textosinfechadefinitiva: 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
+        sinpreciodefinitivo: 'S',
+        textosinpreciodefinitivo: 'el precio se determinara en funcion de las caracteristicas del viaje y alojamiento',
       },
       {
         name: 'Constelaciones Familiares',
@@ -130,13 +132,11 @@ async function resetServices() {
       },
       {
         name: 'Encuentro de Mujeres (Primavera)',
-        description: 'Jornada anual de empoderamiento, círculo femenino, arquetipos y meditación en primavera. Fecha prevista: Sábado 15 de Mayo de 2027. Aforo máximo: 25 personas. Precio según programa. Pago en el centro.',
+        description: 'Jornada anual de empoderamiento, círculo femenino, arquetipos y meditación en primavera. Fechas por confirmar. Aforo máximo: 25 personas. Precio por confirmar. Pago en el centro.',
         serviceType: 'event',
-        eventDatesText: 'Sábado 15 de Mayo de 2027 (Primavera)',
-        eventStartDate: new Date('2027-05-15T10:00:00.000Z'),
-        eventEndDate: new Date('2027-05-15T16:00:00.000Z'),
+        eventDatesText: 'fecha por confirmar',
         durationMinutes: 360,
-        price: '45.00',
+        price: '0.00',
         maxCapacity: 25,
         calendarId: 'cal-encuentro-mujeres',
         paymentType: 'in_person',
@@ -144,6 +144,10 @@ async function resetServices() {
         requiresApproval: false,
         requiresReason: false,
         isActive: true,
+        sinfechadefinitiva: 'S',
+        textosinfechadefinitiva: 'fecha por confirmar',
+        sinpreciodefinitivo: 'S',
+        textosinpreciodefinitivo: 'fecha por confirmar',
       },
       {
         name: 'Retiro de Ayuno Terapéutico',
@@ -268,14 +272,14 @@ Servicios y Actividades principales del centro:
 4. Baños de Gong y Meditación Sonora (16€ / 2 horas):
    - Un sábado al mes a finales de mes (próximo: Sábado 26 de Septiembre de 2026, 18:00 a 20:00). Aforo: 30 personas.
 
-5. Puja de Gongs (95€ / 11 horas de sonido durante toda la noche):
-   - Evento anual. Próxima edición: Sábado 28 de Noviembre de 2026 (21:00 a 08:00). Aforo: 30 personas.
+5. Puja de Gongs (el precio se determinara en funcion de las caracteristicas del viaje y alojamiento / 11 horas de sonido durante toda la noche):
+   - dos encuentros  la primera puja es proximamente y la segunda en marzo 2027. Aforo: 30 personas.
 
 6. Constelaciones Familiares (Constelar 60€ / Participar 20€):
    - Taller vivencial de fin de mes. Próxima fecha: Domingo 27 de Septiembre de 2026 (10:00 a 14:00).
 
-7. Encuentro de Mujeres en Primavera (45€):
-   - Sábado 15 de Mayo de 2027.
+7. Encuentro de Mujeres en Primavera (precio por confirmar):
+   - Fecha por confirmar.
 
 8. Retiro de Ayuno Terapéutico:
    - Semestral en otoño y primavera. Próxima edición en el Puente de Octubre (9 al 12 de Octubre de 2026).

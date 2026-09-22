@@ -108,6 +108,10 @@ function findMatchingService(
     requiresApproval?: boolean;
     allowedModalities?: string[];
     requiresReason?: boolean;
+    sinfechadefinitiva?: string | null;
+    textosinfechadefinitiva?: string | null;
+    sinpreciodefinitivo?: string | null;
+    textosinpreciodefinitivo?: string | null;
   }[],
   query?: string,
 ) {
@@ -568,6 +572,10 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         requiresApproval?: boolean;
         allowedModalities?: string[];
         requiresReason?: boolean;
+        sinfechadefinitiva?: string | null;
+        textosinfechadefinitiva?: string | null;
+        sinpreciodefinitivo?: string | null;
+        textosinpreciodefinitivo?: string | null;
       }[] = config?.services || [];
       const svc = findMatchingService(services, inputData.service);
       if (!svc) {
@@ -656,11 +664,13 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           }
         }
 
+        const effectiveDates =
+          svc.sinfechadefinitiva === 'S'
+            ? (svc.textosinfechadefinitiva || 'fechas por confirmar')
+            : (svc.eventDatesText || 'fechas programadas');
         let message =
           svc.serviceType === 'event'
-            ? `Tu plaza para ${svc.name} (${
-                svc.eventDatesText || 'fechas programadas'
-              }) ha sido registrada.`
+            ? `Tu plaza para ${svc.name} (${effectiveDates}) ha sido registrada.`
             : status === 'pending_approval'
             ? `Solicitud de cita para ${svc.name} registrada correctamente (Modalidad: ${
                 effectiveModality === 'virtual' ? 'Online por videollamada' : 'Presencial en el centro'
@@ -1135,7 +1145,18 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
 
       const getServicePrice = (regex: RegExp, fallback: string) => {
         const found = config?.services?.find((s: any) => regex.test(s.name || ''));
+        if (found?.sinpreciodefinitivo === 'S' && found.textosinpreciodefinitivo) {
+          return found.textosinpreciodefinitivo;
+        }
         return found?.price ? `${found.price}€` : fallback;
+      };
+
+      const getServiceDate = (regex: RegExp, fallback: string) => {
+        const found = config?.services?.find((s: any) => regex.test(s.name || ''));
+        if (found?.sinfechadefinitiva === 'S' && found.textosinfechadefinitiva) {
+          return found.textosinfechadefinitiva;
+        }
+        return found?.eventDatesText || fallback;
       };
 
       const yoga1Price = getServicePrice(/1\s*clase/i, '25€');
@@ -1145,11 +1166,14 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       const gestaltPrice = getServicePrice(/gestalt/i, '35€');
       const bienestarPrice = getServicePrice(/bienestar/i, '19.99€');
       const gongPrice = getServicePrice(/baño.*gong|meditación sonora/i, '16€');
-      const pujaPrice = getServicePrice(/puja/i, '95€');
+      const pujaPrice = getServicePrice(/puja/i, 'el precio se determinara en funcion de las caracteristicas del viaje y alojamiento');
       const constelarPrice = getServicePrice(/constel.*(constelar|propio)/i, '60€');
       const participarPrice = getServicePrice(/constel.*(particip|represen)/i, '20€');
-      const mujeresPrice = getServicePrice(/mujeres|femenino/i, '45€');
+      const mujeresPrice = getServicePrice(/mujeres|femenino/i, 'fecha por confirmar');
       const ayunoPrice = getServicePrice(/ayuno/i, '250€');
+
+      const pujaDate = getServiceDate(/puja/i, 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027');
+      const mujeresDate = getServiceDate(/mujeres|femenino/i, 'fecha por confirmar');
 
       // Shared behaviour rules — applied with or without a stored config. These
       // are the guardrails that keep the agent on-task and stop it leaking the
@@ -1234,9 +1258,10 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Cuando un cliente pregunte o solicite plaza, informa de la fecha y formaliza con 'bookAppointment'.
 - PUJA DE GONGS (NOCHE SAGRADA DE SONIDO - 11 HORAS):
   * Modalidad: Evento vivencial anual ininterrumpido durante toda la noche (aforo máximo: 30 personas).
-  * Fecha oficial: Sábado 28 de Noviembre de 2026 (de 21:00 a 08:00 del domingo).
-  * Precio: ${pujaPrice} por asistente (pago en el centro).
-  * Cuando un cliente pregunte o solicite plaza, formaliza su reserva con 'bookAppointment'.
+  * Fecha oficial: ${pujaDate}.
+  * Precio: ${pujaPrice}.
+  * REGLA ESTRICTA DE FECHA Y PRECIO: Este evento NO se celebra el 28 de noviembre ni tiene precio de 95€. Comunica SIEMPRE exactamente que: "${pujaDate}" y que el precio es "${pujaPrice}". NUNCA digas que la fecha es el sábado 28 de noviembre de 2026 ni menciones 95€.
+  * Cuando un cliente pregunte o solicite plaza, informa de que la fecha es "${pujaDate}" y el precio "${pujaPrice}", y formaliza su reserva con 'bookAppointment'.
 - CONSTELACIONES FAMILIARES (TALLER MENSUAL VIVENCIAL):
   * Modalidad: Taller vivencial presencial mensual de fin de mes (aforo: 25 personas).
   * Próxima fecha oficial: Domingo 27 de Septiembre de 2026 (de 10:00 a 14:00).
@@ -1247,8 +1272,9 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
 - ENCUENTRO DE MUJERES (PRIMAVERA - JORNADA VIVENCIAL):
   * Modalidad: Actividad grupal presencial (aforo máximo: 25 personas).
   * Propósito y temática: Jornada sagrada femenina de empoderamiento, arquetipos, sanación de memorias, meditación, danza y autocuidado.
-  * Fecha oficial: Sábado 15 de Mayo de 2027 (de 10:00 a 16:00).
-  * Precio: ${mujeresPrice} por asistente (pago en el centro).
+  * Fecha oficial: ${mujeresDate}.
+  * Precio: ${mujeresPrice}.
+  * REGLA ESTRICTA DE FECHA Y PRECIO: Comunica SIEMPRE que la fecha es "${mujeresDate}" y el precio es "${mujeresPrice}". NUNCA digas que es el 15 de mayo de 2027 ni 45€.
   * Cuando una persona pregunte o pida plaza, informa de la fecha y formaliza con 'bookAppointment'.
 - RETIRO DE AYUNO TERAPÉUTICO Y SENDERISMO CONSCIENTE:
   * Modalidad: Retiro presencial de fin de semana / puente en la naturaleza (aforo máximo: 20 personas).
@@ -1358,7 +1384,11 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
       if (customInstructions) {
         customInstructions = customInstructions
           .replace(/Bienestar Experience[^\n]*\n?/gi, `Bienestar Experience - Longevidad y Bienestar Integral (${bienestarPrice} / sesión 1h)\n`)
-          .replace(/25([.,]00)?\s*€\s*\/?\s*(sesi[oó]n)?/gi, `${bienestarPrice} por sesión`);
+          .replace(/25([.,]00)?\s*€\s*\/?\s*(sesi[oó]n)?/gi, `${bienestarPrice} por sesión`)
+          .replace(/S[áa]bado\s*28\s*de\s*Noviembre\s*de\s*2026[^\.\n]*/gi, pujaDate)
+          .replace(/95\s*€/gi, pujaPrice)
+          .replace(/S[áa]bado\s*15\s*de\s*Mayo\s*de\s*2027[^\.\n]*/gi, mujeresDate)
+          .replace(/45\s*€/gi, mujeresPrice);
       }
       const customInstructionsBlock = customInstructions
         ? `\n\n== Instrucciones del negocio (personalización) ==\nEl negocio ha añadido estas indicaciones sobre cómo atender. Síguelas siempre que no contradigan las reglas OBLIGATORIAS:\n${customInstructions}`
@@ -1370,7 +1400,11 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
       if (knowledgeBase) {
         knowledgeBase = knowledgeBase
           .replace(/(\*\*Tarifa\*\*:\s*`?)25([.,]00)?\s*€(\s*\/\s*sesi[oó]n`?)/gi, `$1${bienestarPrice} / sesión$3`)
-          .replace(/(Bienestar Experience[^\n]*?)25([.,]00)?\s*€/gi, `$1${bienestarPrice}`);
+          .replace(/(Bienestar Experience[^\n]*?)25([.,]00)?\s*€/gi, `$1${bienestarPrice}`)
+          .replace(/S[áa]bado\s*28\s*de\s*Noviembre\s*de\s*2026[^\.\n]*/gi, pujaDate)
+          .replace(/95\s*€/gi, pujaPrice)
+          .replace(/S[áa]bado\s*15\s*de\s*Mayo\s*de\s*2027[^\.\n]*/gi, mujeresDate)
+          .replace(/45\s*€/gi, mujeresPrice);
       }
       const knowledgeBlock = knowledgeBase
         ? `\n\n== Base de conocimiento ==\nUsa esta información del negocio para responder las dudas del cliente. Si la respuesta no está aquí, dilo con sinceridad; NO la inventes.\n"""\n${knowledgeBase}\n"""`
@@ -1431,7 +1465,18 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
               else if (s.scheduleText) details += `, Horarios oficiales: ${s.scheduleText}`;
             }
             if (s.description) {
-              details += ` | Descripción y condiciones: ${s.description}`;
+              let desc = s.description;
+              if (hasNoFixedDate) {
+                desc = desc
+                  .replace(/S[áa]bado\s*28\s*de\s*Noviembre\s*de\s*2026[^\.]*/gi, s.textosinfechadefinitiva || 'fechas por confirmar')
+                  .replace(/S[áa]bado\s*15\s*de\s*Mayo\s*de\s*2027[^\.]*/gi, s.textosinfechadefinitiva || 'fechas por confirmar');
+              }
+              if (hasNoFixedPrice) {
+                desc = desc
+                  .replace(/95\s*€/gi, s.textosinpreciodefinitivo || 'precio por confirmar')
+                  .replace(/45\s*€/gi, s.textosinpreciodefinitivo || 'precio por confirmar');
+              }
+              details += ` | Descripción y condiciones: ${desc}`;
             }
             if (s.allowedModalities && s.allowedModalities.length > 0) {
               const modNames = s.allowedModalities

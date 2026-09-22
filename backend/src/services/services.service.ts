@@ -118,14 +118,18 @@ export class ServicesService implements OnModuleInit {
             "sinfechadefinitiva" = 'S', 
             "textosinfechadefinitiva" = 'fecha por confirmar',
             "sinpreciodefinitivo" = 'S',
-            "textosinpreciodefinitivo" = 'fecha por confirmar'
+            "textosinpreciodefinitivo" = 'fecha por confirmar',
+            "eventDatesText" = 'fecha por confirmar',
+            "description" = 'Jornada sagrada femenina de empoderamiento, arquetipos, sanación de memorias, meditación, danza y autocuidado. Fecha por confirmar. Precio por confirmar.'
           WHERE "name" ILIKE '%mujeres%' OR "name" ILIKE '%femenino%';
 
           UPDATE services SET 
             "sinfechadefinitiva" = 'S', 
             "textosinfechadefinitiva" = 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
             "sinpreciodefinitivo" = 'S',
-            "textosinpreciodefinitivo" = 'el precio se determinara en funcion de las caracteristicas del viaje y alojamiento'
+            "textosinpreciodefinitivo" = 'el precio se determinara en funcion de las caracteristicas del viaje y alojamiento',
+            "eventDatesText" = 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
+            "description" = 'Evento vivencial de inmersión y transformación sonora durante toda la noche (11 horas continuas de sonido). Fechas: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027. Precio: el precio se determinara en funcion de las caracteristicas del viaje y alojamiento.'
           WHERE "name" ILIKE '%puja%';
         `);
       } catch (colErr) {
@@ -225,24 +229,33 @@ export class ServicesService implements OnModuleInit {
           this.serviceRepo.create({
             name: 'Encuentro de Mujeres (Primavera)',
             description:
-              'Jornada y círculo femenino de empoderamiento, arquetipos, sanación de memorias, meditación y autocuidado. Fecha prevista: Sábado 15 de Mayo de 2027 (10:00 a 16:00). Aforo: 25 personas. Precio: 45€. Pago en el centro.',
+              'Jornada sagrada femenina de empoderamiento, arquetipos, sanación de memorias, meditación, danza y autocuidado. Fecha por confirmar. Precio por confirmar.',
             serviceType: ServiceType.EVENT,
-            eventDatesText: 'Sábado 15 de Mayo de 2027 (10:00 a 16:00)',
-            eventStartDate: new Date('2027-05-15T10:00:00.000Z'),
-            eventEndDate: new Date('2027-05-15T16:00:00.000Z'),
+            eventDatesText: 'fecha por confirmar',
             durationMinutes: 360,
-            price: '45.00',
+            price: '0.00',
             maxCapacity: 25,
             calendarId: 'cal-encuentro-mujeres',
             managerId: manager.id,
             requiresApproval: false,
             allowedModalities: ['in_person'],
+            sinfechadefinitiva: 'S',
+            textosinfechadefinitiva: 'fecha por confirmar',
+            sinpreciodefinitivo: 'S',
+            textosinpreciodefinitivo: 'fecha por confirmar',
             reminderNotes:
               'Llevar ropa cómoda y holgada, cojín de meditación o esterilla si lo deseas, cuaderno/diario personal para notas y comida ligera para compartir en el descanso.',
             isActive: true,
           }),
         );
       } else {
+        mujeresSvc.sinfechadefinitiva = 'S';
+        mujeresSvc.textosinfechadefinitiva = 'fecha por confirmar';
+        mujeresSvc.sinpreciodefinitivo = 'S';
+        mujeresSvc.textosinpreciodefinitivo = 'fecha por confirmar';
+        mujeresSvc.eventDatesText = 'fecha por confirmar';
+        mujeresSvc.description =
+          'Jornada sagrada femenina de empoderamiento, arquetipos, sanación de memorias, meditación, danza y autocuidado. Fecha por confirmar. Precio por confirmar.';
         mujeresSvc.reminderNotes =
           mujeresSvc.reminderNotes ||
           'Llevar ropa cómoda y holgada, cojín de meditación o esterilla si lo deseas, cuaderno/diario personal para notas y comida ligera para compartir en el descanso.';
@@ -350,24 +363,33 @@ export class ServicesService implements OnModuleInit {
           this.serviceRepo.create({
             name: 'Puja de Gongs (Noche Sagrada de Sonido - 11h)',
             description:
-              'Evento anual de inmersión y transformación sonora durante toda la noche (11 horas continuas de sonido). Fecha prevista: Sábado 28 de Noviembre de 2026 (21:00 a 08:00). Aforo: 30 personas. Precio: 95€. Pago en el centro.',
+              'Evento vivencial de inmersión y transformación sonora durante toda la noche (11 horas continuas de sonido). Fechas: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027. Precio: el precio se determinara en funcion de las caracteristicas del viaje y alojamiento.',
             serviceType: ServiceType.EVENT,
-            eventDatesText: 'Sábado 28 de Noviembre de 2026 (21:00 a 08:00)',
-            eventStartDate: new Date('2026-11-28T21:00:00.000Z'),
-            eventEndDate: new Date('2026-11-29T08:00:00.000Z'),
+            eventDatesText: 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
             durationMinutes: 660,
-            price: '95.00',
+            price: '0.00',
             maxCapacity: 30,
             calendarId: 'cal-puja-gongs',
             managerId: manager.id,
             requiresApproval: false,
             allowedModalities: ['in_person'],
+            sinfechadefinitiva: 'S',
+            textosinfechadefinitiva: 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
+            sinpreciodefinitivo: 'S',
+            textosinpreciodefinitivo: 'el precio se determinara en funcion de las caracteristicas del viaje y alojamiento',
             reminderNotes:
               'Traer esterilla cómoda o colchoneta fina, saco de dormir o mantas, almohada/cojín, botella de agua y ropa cómoda para toda la noche.',
             isActive: true,
           }),
         );
       } else {
+        pujaSvc.sinfechadefinitiva = 'S';
+        pujaSvc.textosinfechadefinitiva = 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027';
+        pujaSvc.sinpreciodefinitivo = 'S';
+        pujaSvc.textosinpreciodefinitivo = 'el precio se determinara en funcion de las caracteristicas del viaje y alojamiento';
+        pujaSvc.eventDatesText = 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027';
+        pujaSvc.description =
+          'Evento vivencial de inmersión y transformación sonora durante toda la noche (11 horas continuas de sonido). Fechas: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027. Precio: el precio se determinara en funcion de las caracteristicas del viaje y alojamiento.';
         pujaSvc.managerId = manager.id;
         pujaSvc.reminderNotes =
           pujaSvc.reminderNotes ||
@@ -518,12 +540,18 @@ export class ServicesService implements OnModuleInit {
           s.textosinfechadefinitiva = 'fecha por confirmar';
           s.sinpreciodefinitivo = 'S';
           s.textosinpreciodefinitivo = 'fecha por confirmar';
+          s.eventDatesText = 'fecha por confirmar';
+          s.description =
+            'Jornada sagrada femenina de empoderamiento, arquetipos, sanación de memorias, meditación, danza y autocuidado. Fecha por confirmar. Precio por confirmar.';
           updated = true;
         } else if (/puja/i.test(s.name)) {
           s.sinfechadefinitiva = 'S';
           s.textosinfechadefinitiva = 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027';
           s.sinpreciodefinitivo = 'S';
           s.textosinpreciodefinitivo = 'el precio se determinara en funcion de las caracteristicas del viaje y alojamiento';
+          s.eventDatesText = 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027';
+          s.description =
+            'Evento vivencial de inmersión y transformación sonora durante toda la noche (11 horas continuas de sonido). Fechas: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027. Precio: el precio se determinara en funcion de las caracteristicas del viaje y alojamiento.';
           updated = true;
         }
         if (updated) {
@@ -594,6 +622,9 @@ export class ServicesService implements OnModuleInit {
               textosinfechadefinitiva: 'fecha por confirmar',
               sinpreciodefinitivo: 'S',
               textosinpreciodefinitivo: 'fecha por confirmar',
+              eventDatesText: 'fecha por confirmar',
+              description:
+                'Jornada sagrada femenina de empoderamiento, arquetipos, sanación de memorias, meditación, danza y autocuidado. Fecha por confirmar. Precio por confirmar.',
             };
           }
           if (/puja/i.test(s.name || '')) {
@@ -605,6 +636,9 @@ export class ServicesService implements OnModuleInit {
               textosinfechadefinitiva: 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
               sinpreciodefinitivo: 'S',
               textosinpreciodefinitivo: 'el precio se determinara en funcion de las caracteristicas del viaje y alojamiento',
+              eventDatesText: 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
+              description:
+                'Evento vivencial de inmersión y transformación sonora durante toda la noche (11 horas continuas de sonido). Fechas: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027. Precio: el precio se determinara en funcion de las caracteristicas del viaje y alojamiento.',
             };
           }
           if (/ayuno/i.test(s.name || '')) {
@@ -680,6 +714,20 @@ export class ServicesService implements OnModuleInit {
 
         if (agentConfig.customInstructions && agentConfig.customInstructions.includes('16:30')) {
           agentConfig.customInstructions = agentConfig.customInstructions.replace(/16:30/g, '16:00');
+          changed = true;
+        }
+        if (agentConfig.customInstructions && /28 de Noviembre/i.test(agentConfig.customInstructions)) {
+          agentConfig.customInstructions = agentConfig.customInstructions.replace(
+            /S[áa]bado\s*28\s*de\s*Noviembre\s*de\s*2026[^\.\n]*/gi,
+            'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
+          );
+          changed = true;
+        }
+        if (agentConfig.customInstructions && /15 de Mayo/i.test(agentConfig.customInstructions)) {
+          agentConfig.customInstructions = agentConfig.customInstructions.replace(
+            /S[áa]bado\s*15\s*de\s*Mayo\s*de\s*2027[^\.\n]*/gi,
+            'fecha por confirmar',
+          );
           changed = true;
         }
         const jsonStr = JSON.stringify(agentConfig.services);
