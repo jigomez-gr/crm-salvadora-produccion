@@ -30,6 +30,19 @@ export function ChatBubbleWidget({
   const [isTyping, setIsTyping] = useState(false);
   const [sessionId, setSessionId] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    if (!inputValue) {
+      textarea.style.height = "38px";
+      return;
+    }
+    textarea.style.height = "auto";
+    const nextHeight = Math.min(Math.max(textarea.scrollHeight, 38), 120);
+    textarea.style.height = `${nextHeight}px`;
+  }, [inputValue, isOpen]);
 
   useEffect(() => {
     let sid = "";
@@ -71,6 +84,9 @@ export function ChatBubbleWidget({
     const userMsgId = "user-" + Date.now();
     setMessages((prev) => [...prev, { id: userMsgId, direction: "outbound", body: text }]);
     setInputValue("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "38px";
+    }
     setIsTyping(true);
 
     try {
@@ -203,19 +219,33 @@ export function ChatBubbleWidget({
           {/* Input Formulario */}
           <form
             onSubmit={handleSendMessage}
-            className="flex items-center gap-2 border-t border-neutral-200 bg-white p-3"
+            className="flex items-end gap-2 border-t border-neutral-200 bg-white p-3"
           >
-            <input
-              type="text"
+            <textarea
+              ref={textareaRef}
+              rows={1}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  const isTouchMobile =
+                    typeof window !== "undefined" &&
+                    ("ontouchstart" in window || navigator.maxTouchPoints > 0) &&
+                    window.innerWidth < 768;
+                  if (!isTouchMobile) {
+                    e.preventDefault();
+                    handleSendMessage(e);
+                  }
+                }
+              }}
               placeholder="Escribe tu mensaje..."
-              className="flex-1 rounded-xl border border-neutral-200 bg-neutral-50 px-3.5 py-2 text-sm text-neutral-900 outline-none transition-all placeholder:text-neutral-400 focus:border-indigo-500 focus:bg-white"
+              className="flex-1 resize-none rounded-xl border border-neutral-200 bg-neutral-50 px-3.5 py-2 text-sm text-neutral-900 outline-none transition-[background-color,border-color] placeholder:text-neutral-400 focus:border-indigo-500 focus:bg-white min-h-[38px] max-h-[120px] leading-snug overflow-y-auto"
+              style={{ height: "38px" }}
             />
             <button
               type="submit"
               disabled={!inputValue.trim() || isTyping}
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-white transition-opacity disabled:opacity-40"
+              className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-xl text-white transition-opacity disabled:opacity-40 cursor-pointer"
               style={{ backgroundColor: brandColor }}
             >
               <Send className="h-4 w-4" />
