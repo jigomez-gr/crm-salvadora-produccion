@@ -10,6 +10,8 @@ import { KnowledgeChunk } from '../common/entities/knowledge-chunk.entity';
 import { ServicesService } from './services.service';
 import { ServicesController } from './services.controller';
 import { AuthModule } from '../auth/auth.module';
+import { EmailModule } from '../email/email.module';
+import { YCloudModule } from '../whatsapp/ycloud.module';
 
 @Module({
   imports: [
@@ -23,6 +25,8 @@ import { AuthModule } from '../auth/auth.module';
       KnowledgeChunk,
     ]),
     AuthModule,
+    EmailModule,
+    YCloudModule,
   ],
   controllers: [ServicesController],
   providers: [ServicesService],

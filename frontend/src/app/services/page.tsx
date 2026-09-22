@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useMemo } from "react";
-import { Plus, Edit2, Sparkles, Calendar, UserCheck, Clock, Tag, AlertCircle, ExternalLink, CreditCard, Compass, Users, CheckCircle2, Trash2, FolderTree, Image as ImageIcon, Layers, AlertTriangle, Copy, Video } from "lucide-react";
+import { Plus, Edit2, Sparkles, Calendar, UserCheck, Clock, Tag, AlertCircle, ExternalLink, CreditCard, Compass, Users, CheckCircle2, Trash2, FolderTree, Image as ImageIcon, Layers, AlertTriangle, Copy, Video, BellRing, Send, CheckCircle, Mail, MessageSquare } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { Service, ServiceCategory, User } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
@@ -159,6 +159,33 @@ export default function ServicesPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [serviceToDelete, setServiceToDelete] = useState<Service | null>(null);
   const [deletingService, setDeletingService] = useState(false);
+
+  // Notify prebooked state
+  const [notifyModalOpen, setNotifyModalOpen] = useState(false);
+  const [serviceToNotify, setServiceToNotify] = useState<Service | null>(null);
+  const [prebookedLoading, setPrebookedLoading] = useState(false);
+  const [prebookedData, setPrebookedData] = useState<{
+    count: number;
+    appointments: Array<{
+      id: string;
+      contactName: string;
+      contactEmail: string | null;
+      contactPhone: string | null;
+      startsAt: string;
+      status: string;
+      price?: string;
+      createdAt: string;
+    }>;
+  } | null>(null);
+  const [notifyForm, setNotifyForm] = useState({
+    newDate: "",
+    newPrice: "",
+    customNote: "",
+    sendEmail: true,
+    sendWhatsapp: true,
+    updateStartsAt: true,
+  });
+  const [sendingNotification, setSendingNotification] = useState(false);
 
   const refreshData = useCallback(async () => {
     try {
@@ -450,6 +477,64 @@ export default function ServicesPage() {
       toast.error(err instanceof ApiError ? err.message : "Error al duplicar el servicio");
     } finally {
       setDuplicatingId(null);
+    }
+  }
+
+  async function handleOpenNotify(s: Service) {
+    setServiceToNotify(s);
+    setNotifyModalOpen(true);
+    setPrebookedLoading(true);
+    setPrebookedData(null);
+
+    const initialDate =
+      s.eventDatesText ||
+      (s.eventStartDate
+        ? new Date(s.eventStartDate).toLocaleString("es-ES", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "");
+
+    const initialPrice = s.price && parseFloat(s.price) > 0 ? `${s.price} €` : "";
+
+    setNotifyForm({
+      newDate: initialDate,
+      newPrice: initialPrice,
+      customNote: "",
+      sendEmail: s.notifyByEmail !== false,
+      sendWhatsapp: s.notifyByWhatsapp !== false,
+      updateStartsAt: true,
+    });
+
+    try {
+      const data = await apiFetch<any>(`/api/services/${s.id}/prebooked`);
+      setPrebookedData(data);
+    } catch (err: any) {
+      toast.error(err instanceof ApiError ? err.message : "Error al consultar los pre-inscritos");
+    } finally {
+      setPrebookedLoading(false);
+    }
+  }
+
+  async function handleSendPrebookedNotifications() {
+    if (!serviceToNotify) return;
+    setSendingNotification(true);
+    try {
+      const res = await apiFetch<any>(`/api/services/${serviceToNotify.id}/notify-prebooked`, {
+        method: "POST",
+        body: JSON.stringify(notifyForm),
+      });
+      toast.success(res.message || "Notificaciones enviadas a los pre-inscritos con éxito.");
+      setNotifyModalOpen(false);
+      await refreshData();
+    } catch (err: any) {
+      toast.error(err instanceof ApiError ? err.message : "Error al enviar las notificaciones");
+    } finally {
+      setSendingNotification(false);
     }
   }
 
@@ -1119,7 +1204,18 @@ export default function ServicesPage() {
                   <span />
                 )}
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleOpenNotify(s)}
+                    className="flex items-center gap-1 text-xs text-amber-800 bg-amber-50 hover:bg-amber-100 hover:text-amber-900 border border-amber-200"
+                    title="Avisar a clientes que reservaron plaza con fecha o precio provisional"
+                  >
+                    <BellRing className="h-3 w-3 text-amber-600" />
+                    Avisar pre-inscritos
+                  </Button>
+
                   <Button
                     variant="secondary"
                     size="sm"
@@ -2382,6 +2478,187 @@ export default function ServicesPage() {
               {deletingBulk ? "Eliminando en lote…" : `Sí, Eliminar ${selectedIds.length} Servicios`}
             </Button>
           </div>
+        </div>
+      </Modal>
+
+      {/* Modal de Notificar Fecha Definitiva a Pre-inscritos */}
+      <Modal
+        open={notifyModalOpen}
+        onClose={() => {
+          if (!sendingNotification) {
+            setNotifyModalOpen(false);
+            setServiceToNotify(null);
+            setPrebookedData(null);
+          }
+        }}
+        title="Notificar Fecha Definitiva a Pre-inscritos"
+      >
+        <div className="space-y-4">
+          {serviceToNotify && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-sm text-amber-950 flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-amber-600" />
+                  {serviceToNotify.name}
+                </span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-white font-medium text-amber-800 border border-amber-200">
+                  {serviceToNotify.serviceType === "event" ? "Evento / Actividad" : "Servicio regular"}
+                </span>
+              </div>
+              <p className="text-xs text-amber-900 leading-relaxed">
+                Avisa de forma directa a los clientes que reservaron plaza mientras el evento tenía la fecha o el precio provisionales.
+              </p>
+            </div>
+          )}
+
+          {prebookedLoading ? (
+            <div className="p-8 text-center space-y-2 text-neutral-500 text-sm">
+              <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-amber-600 border-t-transparent" />
+              <p>Consultando clientes con reserva provisional...</p>
+            </div>
+          ) : !prebookedData || prebookedData.count === 0 ? (
+            <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-6 text-center space-y-2">
+              <CheckCircle className="h-8 w-8 text-neutral-400 mx-auto" />
+              <p className="font-semibold text-sm text-neutral-800">No hay reservas provisionales pendientes</p>
+              <p className="text-xs text-neutral-500 max-w-sm mx-auto">
+                No se han encontrado citas con fecha de referencia provisional (año 2099 o estado pendiente de fecha) para este servicio.
+              </p>
+              <div className="pt-2">
+                <Button variant="secondary" onClick={() => setNotifyModalOpen(false)}>
+                  Cerrar
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-900">
+                <span className="font-medium flex items-center gap-1.5">
+                  <Users className="h-4 w-4 text-emerald-600" />
+                  Clientes con reserva provisional:
+                </span>
+                <Badge variant="success" className="font-bold text-xs bg-emerald-600 text-white">
+                  {prebookedData.count} {prebookedData.count === 1 ? "persona" : "personas"}
+                </Badge>
+              </div>
+
+              {/* Lista scrollable de asistentes pre-inscritos */}
+              <div className="max-h-40 overflow-y-auto rounded-lg border border-neutral-200 p-2 space-y-1.5 bg-neutral-50/50 text-xs">
+                {prebookedData.appointments.map((a) => (
+                  <div key={a.id} className="bg-white p-2 rounded border border-neutral-100 flex items-center justify-between">
+                    <div>
+                      <span className="font-semibold text-neutral-900">{a.contactName}</span>
+                      <div className="flex items-center gap-2 text-[11px] text-neutral-500 mt-0.5">
+                        {a.contactEmail && <span>✉️ {a.contactEmail}</span>}
+                        {a.contactPhone && <span>📱 {a.contactPhone}</span>}
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-neutral-400">
+                      {new Date(a.createdAt).toLocaleDateString("es-ES")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Formulario de parámetros del aviso */}
+              <div className="space-y-3 pt-2 border-t border-neutral-100 text-xs">
+                <div>
+                  <label className="block font-semibold text-neutral-700 mb-1">
+                    📅 Fecha y hora que se comunicará:
+                  </label>
+                  <Input
+                    value={notifyForm.newDate}
+                    onChange={(e) => setNotifyForm({ ...notifyForm, newDate: e.target.value })}
+                    placeholder="Ej. Sábado 28 de Noviembre de 2026 de 21:00 a 08:00"
+                    required
+                  />
+                  <p className="text-[11px] text-neutral-500 mt-0.5">
+                    Se indicará esta fecha en el correo y WhatsApp enviados a los asistentes.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-neutral-700 mb-1">
+                    💶 Precio oficial que se comunicará:
+                  </label>
+                  <Input
+                    value={notifyForm.newPrice}
+                    onChange={(e) => setNotifyForm({ ...notifyForm, newPrice: e.target.value })}
+                    placeholder="Ej. 95 € o según alojamiento"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-neutral-700 mb-1">
+                    📝 Nota o indicaciones adicionales (opcional):
+                  </label>
+                  <textarea
+                    value={notifyForm.customNote}
+                    onChange={(e) => setNotifyForm({ ...notifyForm, customNote: e.target.value })}
+                    placeholder="Ej. Rogamos traer esterilla, saco de dormir y confirmar antes del viernes..."
+                    rows={2}
+                    className="w-full rounded-lg border border-neutral-200 p-2 text-xs focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-2 pt-2 border-t border-neutral-100">
+                  <span className="font-semibold text-neutral-700 block">Canales y opciones:</span>
+
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={notifyForm.sendEmail}
+                      onChange={(e) => setNotifyForm({ ...notifyForm, sendEmail: e.target.checked })}
+                      className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                    />
+                    <span>Enviar <strong>Email</strong> con plantilla corporativa de Salvadora Conesa</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={notifyForm.sendWhatsapp}
+                      onChange={(e) => setNotifyForm({ ...notifyForm, sendWhatsapp: e.target.checked })}
+                      className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                    />
+                    <span>Enviar <strong>WhatsApp</strong> (a los contactos con teléfono móvil)</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={notifyForm.updateStartsAt}
+                      onChange={(e) => setNotifyForm({ ...notifyForm, updateStartsAt: e.target.checked })}
+                      className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                    />
+                    <span>Actualizar la fecha de las citas en el CRM a la fecha oficial</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Botones de acción */}
+              <div className="flex justify-end gap-2 pt-3 border-t border-neutral-200">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={sendingNotification}
+                  onClick={() => setNotifyModalOpen(false)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  disabled={sendingNotification || !notifyForm.newDate.trim()}
+                  onClick={handleSendPrebookedNotifications}
+                  className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1.5"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  {sendingNotification
+                    ? "Enviando notificaciones..."
+                    : `Notificar a ${prebookedData.count} ${prebookedData.count === 1 ? "persona" : "personas"}`}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </Modal>
     </div>

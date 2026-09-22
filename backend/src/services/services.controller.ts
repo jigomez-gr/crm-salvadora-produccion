@@ -41,6 +41,31 @@ export class ServicesController {
     return this.servicesService.findOne(id);
   }
 
+  @Get(':id/prebooked')
+  @Roles(UserRole.ADMIN, UserRole.SERVICE_MANAGER)
+  async getPrebooked(@Param('id') id: string) {
+    return this.servicesService.getPrebookedAppointments(id);
+  }
+
+  @Post(':id/notify-prebooked')
+  @Roles(UserRole.ADMIN, UserRole.SERVICE_MANAGER)
+  async notifyPrebooked(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      newDate?: string;
+      newPrice?: string;
+      customNote?: string;
+      sendEmail?: boolean;
+      sendWhatsapp?: boolean;
+      updateStartsAt?: boolean;
+    },
+    @Req() req: any,
+  ) {
+    const actor = req.user ? { id: req.user.id, email: req.user.email } : undefined;
+    return this.servicesService.notifyPrebooked(id, body, actor);
+  }
+
   @Post(':id/duplicate')
   @Roles(UserRole.ADMIN, UserRole.SERVICE_MANAGER)
   async duplicate(@Param('id') id: string, @Req() req: any) {

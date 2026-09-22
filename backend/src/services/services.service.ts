@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, OnModuleInit } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, OnModuleInit, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository, ILike } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
@@ -13,6 +13,8 @@ import { KnowledgeChunk } from '../common/entities/knowledge-chunk.entity';
 import { AUDIT_EVENT } from '../audit/audit.types';
 import { CreateServiceDto, UpdateServiceDto } from './dto/service.dto';
 import { parseWeeklyScheduleFromText } from './schedule-parser';
+import { EmailService } from '../email/email.service';
+import { YCloudClient } from '../whatsapp/ycloud-client.service';
 
 @Injectable()
 export class ServicesService implements OnModuleInit {
@@ -32,6 +34,9 @@ export class ServicesService implements OnModuleInit {
     @InjectRepository(KnowledgeChunk)
     private readonly knowledgeChunkRepo: Repository<KnowledgeChunk>,
     private readonly eventEmitter: EventEmitter2,
+    private readonly emailService: EmailService,
+    @Optional()
+    private readonly ycloudClient?: YCloudClient,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -1476,5 +1481,250 @@ export class ServicesService implements OnModuleInit {
       }
     }
     return { deleted };
+  }
+
+  async getPrebookedAppointments(serviceId: string) {
+    const service = await this.serviceRepo.findOne({ where: { id: serviceId } });
+    if (!service) {
+      throw new NotFoundException(`Servicio con ID ${serviceId} no encontrado`);
+    }
+
+    const qb = this.appointmentRepo
+      .createQueryBuilder('a')
+      .leftJoinAndSelect('a.contact', 'contact')
+      .where('(a.serviceId = :serviceId OR a.service ILIKE :serviceName)', {
+        serviceId: service.id,
+        serviceName: `%${service.name}%`,
+      })
+      .andWhere('a.status != :cancelledStatus', {
+        cancelledStatus: AppointmentStatus.CANCELLED,
+      })
+      .andWhere('(a.startsAt >= :year2090 OR a.notes ILIKE :sinFechaPattern)', {
+        year2090: new Date('2090-01-01T00:00:00.000Z'),
+        sinFechaPattern: '%fecha por confirmar%',
+      })
+      .orderBy('a.createdAt', 'ASC');
+
+    const appointments = await qb.getMany();
+
+    return {
+      service: {
+        id: service.id,
+        name: service.name,
+        eventStartDate: service.eventStartDate,
+        eventEndDate: service.eventEndDate,
+        eventDatesText: service.eventDatesText,
+        price: service.price,
+        sinfechadefinitiva: service.sinfechadefinitiva,
+        textosinfechadefinitiva: service.textosinfechadefinitiva,
+        sinpreciodefinitivo: service.sinpreciodefinitivo,
+        textosinpreciodefinitivo: service.textosinpreciodefinitivo,
+      },
+      count: appointments.length,
+      appointments: appointments.map((a) => ({
+        id: a.id,
+        contactId: a.contactId,
+        contactName: a.contact?.name || 'Cliente sin nombre',
+        contactEmail: a.contact?.email || null,
+        contactPhone: a.contact?.phone || null,
+        startsAt: a.startsAt,
+        status: a.status,
+        price: a.price,
+        notes: a.notes,
+        createdAt: a.createdAt,
+      })),
+    };
+  }
+
+  async notifyPrebooked(
+    serviceId: string,
+    options: {
+      newDate?: string;
+      newPrice?: string;
+      customNote?: string;
+      sendEmail?: boolean;
+      sendWhatsapp?: boolean;
+      updateStartsAt?: boolean;
+    } = {},
+    actor?: { id?: string | null; email?: string | null },
+  ) {
+    const service = await this.serviceRepo.findOne({ where: { id: serviceId } });
+    if (!service) {
+      throw new NotFoundException(`Servicio con ID ${serviceId} no encontrado`);
+    }
+
+    const { appointments } = await this.getPrebookedAppointments(serviceId);
+    if (!appointments || appointments.length === 0) {
+      return {
+        success: true,
+        message: 'No hay citas pre-inscritas pendientes para este servicio.',
+        count: 0,
+        notifiedEmails: 0,
+        notifiedWhatsapp: 0,
+        updatedAppointments: 0,
+      };
+    }
+
+    // Determine target date display & Date object
+    let targetDateObj: Date | null = null;
+    let targetDateStr = '';
+
+    if (options.newDate && options.newDate.trim()) {
+      targetDateStr = options.newDate.trim();
+      const parsed = new Date(options.newDate);
+      if (!isNaN(parsed.getTime())) {
+        targetDateObj = parsed;
+      }
+    } else if (service.eventStartDate) {
+      targetDateObj = new Date(service.eventStartDate);
+      targetDateStr =
+        service.eventDatesText ||
+        targetDateObj.toLocaleDateString('es-ES', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'Europe/Madrid',
+        });
+    } else if (service.eventDatesText) {
+      targetDateStr = service.eventDatesText;
+    } else {
+      targetDateStr = 'Próximamente (consultar centro)';
+    }
+
+    // Determine target price display & string
+    let targetPriceStr = '';
+    if (options.newPrice !== undefined && options.newPrice !== '') {
+      targetPriceStr = options.newPrice.includes('€')
+        ? options.newPrice.trim()
+        : `${options.newPrice.trim()} €`;
+    } else if (service.price && parseFloat(service.price) > 0) {
+      targetPriceStr = `${service.price} €`;
+    } else if (service.textosinpreciodefinitivo) {
+      targetPriceStr = service.textosinpreciodefinitivo;
+    } else {
+      targetPriceStr = 'A consultar en el centro';
+    }
+
+    const customNote = options.customNote?.trim() || '';
+    const shouldSendEmail = options.sendEmail !== false;
+    const shouldSendWhatsapp = options.sendWhatsapp !== false;
+    const shouldUpdateStartsAt = options.updateStartsAt !== false;
+
+    let updatedAppointments = 0;
+    let notifiedEmails = 0;
+    let notifiedWhatsapp = 0;
+
+    // Load YCloud / agent config for WhatsApp sender if needed
+    const config = await this.agentConfigRepo.findOne({ where: { agentKey: 'booking' } }).catch(() => null);
+    const fromWhatsappNumber =
+      config?.whatsappPhoneNumber || process.env.YCLOUD_FROM_PHONE || '+34600000000';
+
+    for (const apptItem of appointments) {
+      const appt = await this.appointmentRepo.findOne({
+        where: { id: apptItem.id },
+        relations: ['contact'],
+      });
+      if (!appt || !appt.contact) continue;
+
+      // 1. Update appointment date & price if requested
+      if (shouldUpdateStartsAt && targetDateObj) {
+        appt.startsAt = targetDateObj;
+      }
+      if (service.price && (!appt.price || appt.price === '0' || appt.price === '0.00')) {
+        appt.price = service.price;
+      }
+      const auditNote = `[Fecha definitiva notificada el ${new Date().toLocaleDateString('es-ES')}: ${targetDateStr}]`;
+      appt.notes = appt.notes ? `${appt.notes}\n${auditNote}` : auditNote;
+      await this.appointmentRepo.save(appt);
+      updatedAppointments++;
+
+      const contact = appt.contact;
+      const contactName = contact.name || 'Alumno/a';
+
+      // 2. Prepare message texts
+      const emailSubject = `¡Confirmada fecha definitiva para ${service.name}!`;
+      const emailHtml = `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
+          <div style="background-color: #800020; padding: 24px; text-align: center; color: #ffffff;">
+            <h1 style="margin: 0; font-size: 22px; font-weight: bold; letter-spacing: 0.5px;">Centro de Yoga Salvadora Conesa</h1>
+            <p style="margin: 6px 0 0 0; font-size: 14px; opacity: 0.9;">¡Buenas noticias sobre tu reserva!</p>
+          </div>
+          <div style="padding: 28px 24px; color: #374151; font-size: 15px; line-height: 1.6;">
+            <p style="margin-top: 0;">Hola <strong>${contactName}</strong>,</p>
+            <p>Te escribimos con prioridad porque tenías reservada plaza para <strong>${service.name}</strong> mientras la fecha estaba pendiente de confirmación.</p>
+            <div style="background-color: #f9fafb; border-left: 4px solid #800020; border-radius: 6px; padding: 18px; margin: 20px 0;">
+              <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: bold; color: #800020;">📅 Fecha y Horario Confirmados:</p>
+              <p style="margin: 0 0 12px 0; font-size: 15px; color: #111827;"><strong>${targetDateStr}</strong></p>
+              <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: bold; color: #800020;">💶 Importe / Tarifa:</p>
+              <p style="margin: 0 0 12px 0; font-size: 15px; color: #111827;"><strong>${targetPriceStr}</strong></p>
+              <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: bold; color: #800020;">📍 Lugar:</p>
+              <p style="margin: 0; font-size: 14px; color: #4b5563;">Centro de Yoga Salvadora Conesa (C/ Honda 35, Fuenlabrada)</p>
+            </div>
+            ${customNote ? `<div style="background-color: #fffbeb; border: 1px solid #fef3c7; border-radius: 6px; padding: 14px; margin: 16px 0; color: #92400e;"><strong>Indicaciones del centro:</strong> ${customNote}</div>` : ''}
+            <p><strong>Tu plaza está pre-reservada con prioridad para ti.</strong></p>
+            <p style="font-size: 14px; color: #4b5563;">Por favor, confírmanos que la fecha te viene bien respondiendo directamente a este correo o escribiéndonos por WhatsApp al <strong>695 172 625</strong>. Si por el contrario prefieres liberar la plaza, indícanoslo también con total confianza.</p>
+            <p style="margin-top: 24px; font-weight: bold; color: #800020;">¡Muchas gracias y nos vemos muy pronto!</p>
+          </div>
+          <div style="background-color: #f3f4f6; padding: 14px; text-align: center; font-size: 12px; color: #6b7280;">
+            Centro de Yoga Salvadora Conesa · WhatsApp Reservas: 695 172 625
+          </div>
+        </div>
+      `;
+
+      const chatMessageText = `¡Hola ${contactName}! Te escribimos con prioridad desde el Centro de Yoga Salvadora Conesa 🌸.\n\nYa tenemos la fecha definitiva confirmada para *${service.name}*:\n\n📅 *Fecha:* ${targetDateStr}\n💶 *Precio:* ${targetPriceStr}\n📍 *Lugar:* Centro de Yoga Salvadora Conesa (C/ Honda 35)\n${customNote ? `\n💡 *Nota:* ${customNote}\n` : ''}\nTu plaza está pre-reservada con prioridad. Por favor, confírmanos si asistes respondiendo a este mensaje o si necesitas cancelarla para disponer de ella.\n\n¡Muchas gracias!`;
+
+      // 3. Dispatch Email
+      if (shouldSendEmail && contact.email) {
+        try {
+          const mailRes = await this.emailService.sendNotification(
+            contact.email,
+            contact.name,
+            emailSubject,
+            emailHtml,
+            chatMessageText,
+            undefined,
+            contact.id,
+          );
+          if (mailRes.ok) notifiedEmails++;
+        } catch (mailErr) {
+          console.error(`Error sending prebooked notification email to ${contact.email}:`, mailErr);
+        }
+      }
+
+      // 4. Dispatch WhatsApp
+      if (shouldSendWhatsapp && contact.phone) {
+        try {
+          await this.ycloudClient?.sendTextMessage(
+            fromWhatsappNumber,
+            contact.phone,
+            chatMessageText,
+            config?.ycloudApiKey,
+          );
+          notifiedWhatsapp++;
+        } catch (waErr) {
+          console.warn(`Error sending prebooked WhatsApp to ${contact.phone}:`, waErr);
+        }
+      }
+    }
+
+    this.eventEmitter.emit(AUDIT_EVENT, {
+      actor: actor || { id: null, email: 'admin' },
+      action: 'service.notify_prebooked',
+      summary: `Notificados ${appointments.length} pre-inscritos para "${service.name}" (${notifiedEmails} emails, ${notifiedWhatsapp} WhatsApp)`,
+      targetId: service.id,
+      targetType: 'service',
+    });
+
+    return {
+      success: true,
+      message: `Se han procesado ${appointments.length} pre-inscritos (${notifiedEmails} emails enviados, ${notifiedWhatsapp} WhatsApp enviados).`,
+      count: appointments.length,
+      updatedAppointments,
+      notifiedEmails,
+      notifiedWhatsapp,
+    };
   }
 }
