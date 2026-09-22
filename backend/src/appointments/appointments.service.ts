@@ -225,7 +225,7 @@ export class AppointmentsService implements OnModuleInit {
       const targetDateYmd = format(new TZDate(startsAt.getTime(), 'Europe/Madrid'), 'yyyy-MM-dd');
       const from = serviceEntity.fechaDesde || '2000-01-01';
       const until = serviceEntity.fechaHasta || '2099-12-31';
-      if (targetDateYmd < from || targetDateYmd > until) {
+      if (serviceEntity.sinfechadefinitiva !== 'S' && (targetDateYmd < from || targetDateYmd > until)) {
         throw new BadRequestException(
           `El servicio "${serviceEntity.name}" solo está disponible entre ${from} y ${until}. No es posible reservar para el día ${targetDateYmd}.`,
         );

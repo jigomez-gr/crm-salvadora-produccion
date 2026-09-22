@@ -344,7 +344,8 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     inputSchema: z.object({
       date: z
         .string()
-        .describe('Date to check in ISO format (e.g. 2025-01-15T00:00:00.000Z)'),
+        .optional()
+        .describe('Date to check in ISO format (e.g. 2025-01-15T00:00:00.000Z). Opcional para eventos o actividades con fecha por confirmar.'),
       durationMinutes: z
         .number()
         .optional()
@@ -373,35 +374,50 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         availableSeats?: number | null;
         quorumReached?: boolean;
         calendarId?: string;
+        sinfechadefinitiva?: string | null;
+        textosinfechadefinitiva?: string | null;
+        sinpreciodefinitivo?: string | null;
+        textosinpreciodefinitivo?: string | null;
       }[] = config?.services || [];
       const svc = findMatchingService(services, inputData.service);
 
-      if (svc?.serviceType === 'event') {
+      if (svc?.serviceType === 'event' || svc?.sinfechadefinitiva === 'S') {
         const remaining =
           svc.availableSeats !== undefined && svc.availableSeats !== null
             ? svc.availableSeats
             : svc.maxCapacity;
+        const isSinFecha = svc.sinfechadefinitiva === 'S';
+        const displayDates = isSinFecha && svc.textosinfechadefinitiva
+          ? svc.textosinfechadefinitiva
+          : svc.eventDatesText ||
+            (svc.eventStartDate
+              ? new Date(svc.eventStartDate).toLocaleDateString('es-ES')
+              : 'Fechas por confirmar');
+        const effectiveStartsAt = isSinFecha
+          ? '2099-12-31T20:00:00.000Z'
+          : (svc.eventStartDate ? new Date(svc.eventStartDate).toISOString() : '2099-12-31T20:00:00.000Z');
+
         return {
           isEvent: true,
           service: svc.name,
-          datesText:
-            svc.eventDatesText ||
-            (svc.eventStartDate
-              ? new Date(svc.eventStartDate).toLocaleDateString('es-ES')
-              : 'Fechas fijas'),
-          startsAt: svc.eventStartDate,
-          endsAt: svc.eventEndDate,
+          sinfechadefinitiva: isSinFecha,
+          datesText: displayDates,
+          startsAt: effectiveStartsAt,
+          endsAt: svc.eventEndDate || effectiveStartsAt,
           maxCapacity: svc.maxCapacity,
           minQuorum: svc.minQuorum,
           quorumReached: svc.quorumReached,
           availableSeats: remaining,
           isSoldOut: remaining !== null && remaining !== undefined && remaining <= 0,
+          canBookNow: remaining === null || remaining === undefined || remaining > 0,
           message:
             remaining !== null && remaining !== undefined && remaining <= 0
               ? `Las plazas para ${svc.name} están agotadas.`
-              : `El evento ${svc.name} tiene lugar en las fechas: ${
-                  svc.eventDatesText || 'indicadas'
-                }. Quedan ${
+              : isSinFecha
+              ? `El evento ${svc.name} tiene fechas: "${displayDates}". ¡SÍ se puede y se debe reservar plaza prioritaria de inmediato llamando a 'bookAppointment' con startsAt: "${effectiveStartsAt}"! Quedan ${
+                  remaining !== null && remaining !== undefined ? remaining : 'plazas'
+                } disponibles.`
+              : `El evento ${svc.name} tiene lugar en las fechas: ${displayDates}. Quedan ${
                   remaining !== null && remaining !== undefined
                     ? remaining
                     : 'plazas'
@@ -417,7 +433,8 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         inputData.durationMinutes || svc?.durationMinutes || 30;
       const calendarId = svc?.calendarId || 'default';
 
-      const dateStr = parseFlexibleStartsAt(inputData.date, timezone, new Date());
+      const dateToParse = inputData.date || new Date().toISOString();
+      const dateStr = parseFlexibleStartsAt(dateToParse, timezone, new Date());
       const slots = await deps.getAvailableSlots(
         dateStr,
         durationMinutes,
@@ -453,8 +470,9 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       service: z.string().describe('Name of the service or event to book'),
       startsAt: z
         .string()
+        .optional()
         .describe(
-          'Start time of the appointment in local format (e.g. "2026-09-24 19:00") or exact ISO from checkAvailability. Do not shift hours manually; if the client asks for 19:00, use 19:00 in Europe/Madrid timezone.',
+          'Start time of the appointment in local format (e.g. "2026-09-24 19:00") or exact ISO from checkAvailability. Opcional para eventos sin fecha definitiva (se asigna automáticamente "2099-12-31 20:00").',
         ),
       customerName: z
         .string()
@@ -602,10 +620,12 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         const timezone = config?.timezone || 'Europe/Madrid';
         const status =
           svc.requiresApproval === true ? 'pending_approval' : 'scheduled';
-        const rawStartsAt =
-          svc.serviceType === 'event' && svc.eventStartDate
-            ? new Date(svc.eventStartDate).toISOString()
-            : inputData.startsAt;
+        const isSinFecha = svc.sinfechadefinitiva === 'S';
+        const rawStartsAt = isSinFecha
+          ? '2099-12-31T20:00:00.000Z'
+          : svc.serviceType === 'event' && svc.eventStartDate
+          ? new Date(svc.eventStartDate).toISOString()
+          : inputData.startsAt || '2099-12-31T20:00:00.000Z';
 
         let targetDate = new Date();
         if (contactId && deps.listContactAppointments) {
@@ -669,8 +689,8 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
             ? (svc.textosinfechadefinitiva || 'fechas por confirmar')
             : (svc.eventDatesText || 'fechas programadas');
         let message =
-          svc.serviceType === 'event'
-            ? `Tu plaza para ${svc.name} (${effectiveDates}) ha sido registrada.`
+          svc.serviceType === 'event' || isSinFecha
+            ? `Tu plaza para ${svc.name} (${effectiveDates}) ha sido registrada con prioridad.`
             : status === 'pending_approval'
             ? `Solicitud de cita para ${svc.name} registrada correctamente (Modalidad: ${
                 effectiveModality === 'virtual' ? 'Online por videollamada' : 'Presencial en el centro'
@@ -1185,6 +1205,15 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
 - NUNCA inventes horarios, días u horas disponibles. ANTES de sugerir cualquier horario, debes llamar OBLIGATORIAMENTE a la herramienta 'checkAvailability' para la fecha y servicio solicitados.
 - Si el día pedido está cerrado (como fines de semana) o 'checkAvailability' no devuelve huecos, indícaselo con total claridad al cliente (p. ej. "Los sábados y domingos estamos cerrados") y ofrece consultar el siguiente día laborable en que haya disponibilidad.
 - Ofrece únicamente los horarios reales que te devuelva 'checkAvailability', en la zona horaria ${timezone} y en lenguaje natural (p. ej. "el lunes a las 10:00").
+- RESERVAS DE EVENTOS O RETIROS CON FECHA POR CONFIRMAR O PROVISIONAL (PUJA DE GONGS, ENCUENTRO DE MUJERES):
+  * Aunque la fecha exacta esté por confirmar o sea provisional (por ejemplo: "dos encuentros, la primera puja es próximamente y la segunda en marzo 2027" o "fecha por confirmar"), ¡SÍ SE PERMITE Y SE DEBE FORMALIZAR LA RESERVA DE PLAZA DE INMEDIATO! Es una reserva de plaza prioritaria (pre-reserva garantizada para el asistente).
+  * ESTÁ ESTRICTAMENTE PROHIBIDO:
+    1. Decirle al cliente que no se puede reservar o que la fecha no está definida.
+    2. Decir que la fecha es pasada o que no es posible reservar para una fecha pasada.
+    3. Preguntarle al cliente si prefiere esperar a que se confirme la fecha antes de reservar.
+  * ¡DEBES FORMALIZAR LA RESERVA EN EL ACTO llamando a 'bookAppointment'!
+  * Llama a 'bookAppointment' con el servicio ('Puja de Gongs' o 'Encuentro de Mujeres') y startsAt="2099-12-31 20:00".
+  * Confírmale con total calidez que su plaza prioritaria queda registrada y confirmada para el próximo encuentro, y que en cuanto se fije el día exacto se le notificará personalmente por correo o WhatsApp.
 - INTERPRETACIÓN Y EQUIVALENCIA DE HORAS Y EXPRESIONES HORARIAS (OBLIGATORIO):
   * Debes interpretar y aceptar SIEMPRE las expresiones horarias coloquiales y en lenguaje natural español como horas exactas:
     - "16 y 00", "a las 16", "a las 4 de la tarde", "4 de la tarde", "16:00" equivalen EXACTAMENTE a las 16:00.
@@ -1257,11 +1286,13 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Precio: ${gongPrice} por asistente (pago en el centro).
   * Cuando un cliente pregunte o solicite plaza, informa de la fecha y formaliza con 'bookAppointment'.
 - PUJA DE GONGS (NOCHE SAGRADA DE SONIDO - 11 HORAS):
-  * Modalidad: Evento vivencial anual ininterrumpido durante toda la noche (aforo máximo: 30 personas).
+  * Modalidad: Evento vivencial de inmersión y transformación sonora durante toda la noche (11 horas continuas de sonido, aforo máximo: 30 personas).
   * Fecha oficial: ${pujaDate}.
   * Precio: ${pujaPrice}.
-  * REGLA ESTRICTA DE FECHA Y PRECIO: Este evento NO se celebra el 28 de noviembre ni tiene precio de 95€. Comunica SIEMPRE exactamente que: "${pujaDate}" y que el precio es "${pujaPrice}". NUNCA digas que la fecha es el sábado 28 de noviembre de 2026 ni menciones 95€.
-  * Cuando un cliente pregunte o solicite plaza, informa de que la fecha es "${pujaDate}" y el precio "${pujaPrice}", y formaliza su reserva con 'bookAppointment'.
+  * REGLA ESTRICTA DE FECHA, PRECIO Y RESERVA:
+    - Comunica SIEMPRE exactamente que las fechas son: "${pujaDate}" y que el precio es "${pujaPrice}". NUNCA digas que la fecha es el sábado 28 de noviembre de 2026 ni menciones 95€.
+    - Cuando un cliente solicite plaza o pregunte por reservar la Puja de Gongs, FORMALIZA INMEDIATAMENTE la reserva con 'bookAppointment' (pasando startsAt="2099-12-31 20:00" y los datos del cliente).
+    - NUNCA digas que no se puede reservar, ni que la fecha es pasada o no está confirmada, ni le preguntes si quiere esperar a que se confirme: tramita la reserva en el acto como plaza prioritaria y confírmale que se le avisará de la fecha definitiva.
 - CONSTELACIONES FAMILIARES (TALLER MENSUAL VIVENCIAL):
   * Modalidad: Taller vivencial presencial mensual de fin de mes (aforo: 25 personas).
   * Próxima fecha oficial: Domingo 27 de Septiembre de 2026 (de 10:00 a 14:00).
@@ -1274,8 +1305,9 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Propósito y temática: Jornada sagrada femenina de empoderamiento, arquetipos, sanación de memorias, meditación, danza y autocuidado.
   * Fecha oficial: ${mujeresDate}.
   * Precio: ${mujeresPrice}.
-  * REGLA ESTRICTA DE FECHA Y PRECIO: Comunica SIEMPRE que la fecha es "${mujeresDate}" y el precio es "${mujeresPrice}". NUNCA digas que es el 15 de mayo de 2027 ni 45€.
-  * Cuando una persona pregunte o pida plaza, informa de la fecha y formaliza con 'bookAppointment'.
+  * REGLA ESTRICTA DE FECHA, PRECIO Y RESERVA:
+    - Comunica SIEMPRE que la fecha es "${mujeresDate}" y el precio es "${mujeresPrice}". NUNCA digas que es el 15 de mayo de 2027 ni 45€.
+    - Cuando una persona pregunte o pida plaza, FORMALIZA INMEDIATAMENTE su reserva con 'bookAppointment' (usando startsAt="2099-12-31 20:00" y sus datos de contacto). Confírmale que su plaza prioritaria queda registrada y que se le notificará la fecha definitiva en cuanto quede establecida.
 - RETIRO DE AYUNO TERAPÉUTICO Y SENDERISMO CONSCIENTE:
   * Modalidad: Retiro presencial de fin de semana / puente en la naturaleza (aforo máximo: 20 personas).
   * Propósito y actividades: Depuración celular profunda, caldos y tisanas biológicas, caminatas conscientes en la naturaleza, descanso digestivo, charlas de nutrición y reconexión holística.
