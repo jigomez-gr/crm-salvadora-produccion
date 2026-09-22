@@ -113,6 +113,16 @@ describe('Yoga Appointments & Student Lifecycle', () => {
 
   const servicesRepoMock: any = {
     findOne: jest.fn().mockImplementation(({ where }) => {
+      if (where?.name && /gong|sonor/i.test(where.name)) {
+        return Promise.resolve({
+          id: 'svc-gong',
+          name: 'Baño de Gong y Meditación Sonora',
+          durationMinutes: 120,
+          price: '16.00',
+          calendarId: 'cal-gong',
+          maxCapacity: 30,
+        });
+      }
       return Promise.resolve({
         id: 'svc-yoga-1',
         name: 'Hatha Yoga Terapéutico (1 clase semanal)',
@@ -355,5 +365,23 @@ describe('Yoga Appointments & Student Lifecycle', () => {
     expect(appt).toBeDefined();
     // En Europe/Madrid (UTC+2 en septiembre), las 19:00 locales equivalen a las 17:00 UTC
     expect(new Date(appt.startsAt).toISOString()).toBe('2026-09-24T17:00:00.000Z');
+  });
+
+  it('permite reservar Baño de Gong y Meditación Sonora un sábado de 18:00 a 20:00 sin colisionar con Meditaciones Guiadas', async () => {
+    // Sábado 26 de Septiembre de 2026 de 18:00 a 20:00 (16:00 a 18:00 UTC)
+    const startsAt = '2026-09-26T16:00:00.000Z';
+    const endsAt = '2026-09-26T18:00:00.000Z';
+
+    const appt = await appointmentsService.create({
+      contactId: 'contact-ana-1',
+      service: 'Baño de Gong y Meditación Sonora',
+      startsAt,
+      endsAt,
+    });
+
+    expect(appt).toBeDefined();
+    expect(appt.service).toBe('Baño de Gong y Meditación Sonora');
+    expect(new Date(appt.startsAt).toISOString()).toBe('2026-09-26T16:00:00.000Z');
+    expect(appt.price).toBe('16.00');
   });
 });

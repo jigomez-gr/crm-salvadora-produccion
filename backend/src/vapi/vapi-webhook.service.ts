@@ -65,7 +65,7 @@ export const OFFICIAL_SERVICES: OfficialServiceConfig[] = [
   {
     id: 'meditacion',
     name: 'Meditaciones Guiadas',
-    aliases: /meditaci/i,
+    aliases: /guiada|^meditaci[oó]n(es)?$|meditaci.*guiada/i,
     category: 'recurring_schedule',
     scheduleSummary: 'martes y jueves de 09:15 a 09:45',
     timetable: {
@@ -114,7 +114,7 @@ export const OFFICIAL_SERVICES: OfficialServiceConfig[] = [
   {
     id: 'bano-gong',
     name: 'Baño de Gong y Meditación Sonora',
-    aliases: /baño.*gong|gong.*sonora/i,
+    aliases: /baño.*gong|gong|meditaci.*sonor|sonora/i,
     category: 'fixed_event',
     scheduleSummary: 'sábado 26 de septiembre de 2026 de 18:00 a 20:00',
     eventDate: new Date('2026-09-26T16:00:00.000Z'),
@@ -168,6 +168,12 @@ export const OFFICIAL_SERVICES: OfficialServiceConfig[] = [
 export function findOfficialService(query?: string): OfficialServiceConfig | null {
   if (!query) return null;
   const q = query.trim();
+  if (/gong|sonor/i.test(q)) {
+    const puja = OFFICIAL_SERVICES.find((s) => s.id === 'puja-gong');
+    if (puja && /puja/i.test(q)) return puja;
+    const banoGong = OFFICIAL_SERVICES.find((s) => s.id === 'bano-gong');
+    if (banoGong) return banoGong;
+  }
   return OFFICIAL_SERVICES.find((s) => s.aliases.test(q) || s.name.toLowerCase().includes(q.toLowerCase())) || null;
 }
 

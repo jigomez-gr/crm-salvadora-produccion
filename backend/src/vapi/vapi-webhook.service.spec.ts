@@ -1,4 +1,4 @@
-import { VapiWebhookService, normalizeSpokenEmail } from './vapi-webhook.service';
+import { VapiWebhookService, normalizeSpokenEmail, findOfficialService } from './vapi-webhook.service';
 
 describe('VapiWebhookService', () => {
   let service: VapiWebhookService;
@@ -461,6 +461,36 @@ describe('VapiWebhookService', () => {
       );
       expect(response.results![0].result).toContain('ha sido cancelada correctamente');
       expect(response.results![0].result).toContain('dispones de 3 meses para recuperar esta clase');
+    });
+  });
+
+  describe('findOfficialService disambiguation', () => {
+    it('resolves Baño de Gong y Meditación Sonora correctly without confusing with Meditaciones Guiadas', () => {
+      const gong1 = findOfficialService('Baño de Gong y Meditación Sonora');
+      expect(gong1).not.toBeNull();
+      expect(gong1!.id).toBe('bano-gong');
+
+      const gong2 = findOfficialService('Baño de Gong');
+      expect(gong2).not.toBeNull();
+      expect(gong2!.id).toBe('bano-gong');
+
+      const gong3 = findOfficialService('meditación sonora');
+      expect(gong3).not.toBeNull();
+      expect(gong3!.id).toBe('bano-gong');
+    });
+
+    it('resolves Meditaciones Guiadas correctly without confusing with Gong', () => {
+      const med1 = findOfficialService('Meditaciones Guiadas');
+      expect(med1).not.toBeNull();
+      expect(med1!.id).toBe('meditacion');
+
+      const med2 = findOfficialService('meditación guiada');
+      expect(med2).not.toBeNull();
+      expect(med2!.id).toBe('meditacion');
+
+      const med3 = findOfficialService('meditaciones');
+      expect(med3).not.toBeNull();
+      expect(med3!.id).toBe('meditacion');
     });
   });
 });

@@ -106,6 +106,8 @@ export class ServicesService implements OnModuleInit {
           );
 
           UPDATE services SET "notifyByEmail" = true WHERE "notifyByEmail" IS NULL OR "notifyByEmail" = false;
+          UPDATE services SET "reminderNotes" = 'Llevar ropa cómoda de abrigo, calcetines cálidos y, si lo deseas, tu propia manta o cojín para disfrutar de la experiencia sonora con el máximo confort.'
+          WHERE ("name" ILIKE '%gong%' OR "name" ILIKE '%sonora%') AND "reminderNotes" ILIKE '%9:15%';
         `);
       } catch (colErr) {
         console.warn('Auto-migration warning in services table:', colErr);
@@ -651,17 +653,17 @@ export class ServicesService implements OnModuleInit {
             s.reminderNotes =
               'Llevar ropa cómoda deportiva, toalla o esterilla propia (el centro también dispone de material) y llegar 5-10 minutos antes del inicio de la clase.';
             changed = true;
-          } else if (/meditaci/i.test(s.name)) {
-            s.reminderNotes =
-              'Llevar ropa cómoda. Rogamos máxima puntualidad (9:15) para no interrumpir el centramiento y silencio de la sala.';
-            changed = true;
-          } else if (/baño de gong|sonora/i.test(s.name)) {
+          } else if (/baño.*gong|sonora/i.test(s.name)) {
             s.reminderNotes =
               'Llevar ropa cómoda de abrigo, calcetines cálidos y, si lo deseas, tu propia manta o cojín para disfrutar de la experiencia sonora con el máximo confort.';
             changed = true;
-          } else if (/puja de gongs/i.test(s.name)) {
+          } else if (/puja.*gong/i.test(s.name)) {
             s.reminderNotes =
               'Experiencia sonora durante toda la noche (11 horas). Llevar saco de dormir, esterilla aislante gruesa, ropa cómoda y cálida, y botella de agua.';
+            changed = true;
+          } else if (/meditaci/i.test(s.name) && !/gong|sonor/i.test(s.name)) {
+            s.reminderNotes =
+              'Llevar ropa cómoda. Rogamos máxima puntualidad (9:15) para no interrumpir el centramiento y silencio de la sala.';
             changed = true;
           } else if (/constelaci/i.test(s.name)) {
             s.reminderNotes =

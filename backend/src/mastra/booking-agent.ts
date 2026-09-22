@@ -1141,7 +1141,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       const yoga1Price = getServicePrice(/1\s*clase/i, '25€');
       const yoga2Price = getServicePrice(/2\s*clase/i, '42€');
       const yogaSinglePrice = getServicePrice(/espor[aá]dica|suelta/i, '10€');
-      const meditacionPrice = getServicePrice(/meditaci/i, '15€');
+      const meditacionPrice = getServicePrice(/guiada/i, '15€');
       const gestaltPrice = getServicePrice(/gestalt/i, '35€');
       const bienestarPrice = getServicePrice(/bienestar/i, '19.99€');
       const gongPrice = getServicePrice(/baño.*gong|meditación sonora/i, '16€');

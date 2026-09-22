@@ -394,7 +394,8 @@ export class AppointmentsService implements OnModuleInit {
       }
     }
 
-    const isMeditacion = /meditaci/i.test(cleanServiceName);
+    const isMeditacion =
+      /meditaci/i.test(cleanServiceName) && !/gong|sonor/i.test(cleanServiceName);
     if (isMeditacion) {
       const MEDITACION_TIMETABLE: Record<number, string[]> = {
         2: ['09:15'],
@@ -618,7 +619,8 @@ export class AppointmentsService implements OnModuleInit {
     if (timeChanged) {
       const targetServiceName = dto.service || appt.service || '';
       const isYoga = /hatha.*yoga|yoga.*terap/i.test(targetServiceName);
-      const isMeditacion = /meditaci/i.test(targetServiceName);
+      const isMeditacion =
+        /meditaci/i.test(targetServiceName) && !/gong|sonor/i.test(targetServiceName);
 
       if (isYoga) {
         let zoned = new TZDate(newStart.getTime(), 'Europe/Madrid');
@@ -1499,8 +1501,8 @@ export class AppointmentsService implements OnModuleInit {
 
       // Notification channel preferences configured per Service (defaults: Email=true, WhatsApp=true, SMS=false)
       const isMeditacionSvc =
-        /meditaci/i.test(appt.service || '') ||
-        Boolean(serviceEntity && /meditaci/i.test(serviceEntity.name));
+        (/meditaci/i.test(appt.service || '') && !/gong|sonor/i.test(appt.service || '')) ||
+        Boolean(serviceEntity && /meditaci/i.test(serviceEntity.name) && !/gong|sonor/i.test(serviceEntity.name));
       const shouldEmail =
         channelOverrides?.email !== undefined
           ? channelOverrides.email
@@ -1857,7 +1859,7 @@ export class AppointmentsService implements OnModuleInit {
 
     const effectiveSvcName = serviceName || targetService?.name || '';
     const isYoga = /yoga/i.test(effectiveSvcName);
-    const isMeditacion = /meditaci/i.test(effectiveSvcName);
+    const isMeditacion = /meditaci/i.test(effectiveSvcName) && !/gong|sonor/i.test(effectiveSvcName);
     const isGongOrPuja = /gong|puja/i.test(effectiveSvcName);
     const isYogaOrGroup =
       isYoga ||
@@ -2041,7 +2043,7 @@ export class AppointmentsService implements OnModuleInit {
 
     const effectiveSvcName = serviceName || targetService?.name || '';
     const isYoga = /yoga/i.test(effectiveSvcName);
-    const isMeditacion = /meditaci/i.test(effectiveSvcName);
+    const isMeditacion = /meditaci/i.test(effectiveSvcName) && !/gong|sonor/i.test(effectiveSvcName);
     const isGongOrPuja = /gong|puja/i.test(effectiveSvcName);
     const isYogaOrGroup =
       isYoga ||
@@ -2216,7 +2218,7 @@ export class AppointmentsService implements OnModuleInit {
     let startDate = new Date(parseFlexibleStartsAt(newStartsAtIso, timezone));
 
     const isYoga = /hatha.*yoga|yoga.*terap/i.test(oldAppt.service || '');
-    const isMeditacion = /meditaci/i.test(oldAppt.service || '');
+    const isMeditacion = /meditaci/i.test(oldAppt.service || '') && !/gong|sonor/i.test(oldAppt.service || '');
     if (isYoga || isMeditacion) {
       const timetable = isYoga ? HATHA_YOGA_TIMETABLE : MEDITACION_TIMETABLE;
       let zoned = new TZDate(startDate.getTime(), timezone);
