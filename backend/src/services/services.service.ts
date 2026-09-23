@@ -846,12 +846,12 @@ export class ServicesService implements OnModuleInit {
            OR name ILIKE '%diagnóstico clínico%';
       `).catch(() => null);
 
-      // Ensure Bienestar Experience points to itinerario-9.mp4
+      // Ensure Bienestar Experience points to bienestar_madrid.mp4
       await this.serviceRepo.query(`
         UPDATE services 
-        SET "videoParticularUrl" = '/videos/itinerario-9.mp4',
-            "videoParticularPath" = 'media_base/videos/itinerario-9.mp4'
-        WHERE name ILIKE '%bienestar%' AND ("videoParticularUrl" IS NULL OR "videoParticularUrl" = '' OR "videoParticularUrl" LIKE '%itinerario-8%' OR "videoParticularUrl" LIKE '%itinerario8%');
+        SET "videoParticularUrl" = '/videos/bienestar_madrid.mp4',
+            "videoParticularPath" = 'media_base/videos/bienestar_madrid.mp4'
+        WHERE name ILIKE '%bienestar%';
       `).catch(() => null);
 
       // Ensure Bienestar Experience price is 19.99 and description matches across all database tables
