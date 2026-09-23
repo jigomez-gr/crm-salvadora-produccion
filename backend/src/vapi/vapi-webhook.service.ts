@@ -100,8 +100,8 @@ export const OFFICIAL_SERVICES: OfficialServiceConfig[] = [
     scheduleSummary: 'lunes a viernes de 09:00 a 20:00 según disponibilidad',
     durationMinutes: 60,
     maxCapacity: 1,
-    requiresApproval: true,
-    priceInfo: '19.99€ por sesión de 1 hora. Requiere aprobación de Jose Ignacio Gomez Raya',
+    requiresApproval: false,
+    priceInfo: '19.99€ por sesión de 1 hora.',
   },
   {
     id: 'constelaciones',
@@ -582,7 +582,16 @@ export class VapiWebhookService {
           ];
 
     const requestedService = (params?.servicio || params?.service || params?.clase || 'Hatha Yoga Terapéutico').toString().trim();
-    const officialSvc = findOfficialService(requestedService);
+    const cleanRequestedService = requestedService.toLowerCase();
+    const services = await this.servicesRepo.find({ where: { isActive: true } });
+    const serviceEntity =
+      services.find((s) => s.name.toLowerCase().includes(cleanRequestedService) || cleanRequestedService.includes(s.name.toLowerCase())) ||
+      null;
+    const officialSvc = findOfficialService(cleanRequestedService || serviceEntity?.name);
+    const requiresApproval =
+      serviceEntity?.requiresApproval !== undefined && serviceEntity?.requiresApproval !== null
+        ? Boolean(serviceEntity.requiresApproval)
+        : Boolean(officialSvc?.requiresApproval);
 
     const rawFecha = (params?.fechaPreferida || params?.fecha || params?.date || '').toString().toLowerCase().trim();
     const rawHora = (params?.horaPreferida || params?.hora || params?.time || '').toString().toLowerCase().trim();
@@ -761,7 +770,10 @@ export class VapiWebhookService {
             const zonedSlot = new TZDate(slotDate.getTime(), ctx.timezone);
             const iso = slotDate.toISOString();
             const spoken = format(zonedSlot, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
-            return `${weekendNotice}Sí, para «${officialSvc.name}» tenemos disponible el ${spoken} [${iso}]. ${officialSvc.priceInfo}. Esta cita queda registrada pendiente de aprobación del terapeuta Jose Ignacio Gomez Raya. ¿Deseas solicitar esta cita?`;
+            const approvalQuestion = requiresApproval
+              ? ' Esta cita queda registrada pendiente de aprobación del terapeuta Jose Ignacio Gomez Raya. ¿Deseas solicitar esta cita?'
+              : ' Esta cita queda confirmada de inmediato. ¿Deseas reservar esta cita?';
+            return `${weekendNotice}Sí, para «${officialSvc.name}» tenemos disponible el ${spoken} [${iso}]. ${officialSvc.priceInfo}.${approvalQuestion}`;
           }
         }
 
@@ -794,8 +806,11 @@ export class VapiWebhookService {
         .join('; ');
 
       const hourMissedNotice = targetHourNorm ? `A las ${targetHourNorm} no está disponible. ` : '';
+      const approvalNote = requiresApproval
+        ? 'Al solicitarla queda registrada pendiente de aprobación de Jose Ignacio Gomez Raya.'
+        : 'Al solicitarla queda confirmada de inmediato.';
 
-      return `${weekendNotice}${hourMissedNotice}Para «${officialSvc.name}» (lunes a viernes de 09:00 a 20:00, ${officialSvc.priceInfo}), los próximos huecos disponibles son: ${optionsFormatted}. Al solicitarla queda registrada pendiente de aprobación de Jose Ignacio Gomez Raya. Ofrece estas opciones y usa el código ISO entre corchetes para reservar cuando elija. Nunca leas el código entre corchetes en voz alta.`;
+      return `${weekendNotice}${hourMissedNotice}Para «${officialSvc.name}» (lunes a viernes de 09:00 a 20:00, ${officialSvc.priceInfo}), los próximos huecos disponibles son: ${optionsFormatted}. ${approvalNote} Ofrece estas opciones y usa el código ISO entre corchetes para reservar cuando elija. Nunca leas el código entre corchetes en voz alta.`;
     }
 
     // 3. CLASES RECURRENTES CON HORARIOS OFICIALES ESTRICTOS (Hatha Yoga, Meditaciones)
@@ -1120,7 +1135,10 @@ export class VapiWebhookService {
 
     // 3. Create appointment with conflict handling
     try {
-      const requiresApproval = Boolean(officialSvc?.requiresApproval || serviceEntity?.requiresApproval);
+      const requiresApproval =
+        serviceEntity?.requiresApproval !== undefined && serviceEntity?.requiresApproval !== null
+          ? Boolean(serviceEntity.requiresApproval)
+          : Boolean(officialSvc?.requiresApproval);
       const isVirtual =
         params?.modalidad === 'virtual' ||
         params?.modality === 'virtual' ||

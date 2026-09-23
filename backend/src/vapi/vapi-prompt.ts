@@ -15,6 +15,7 @@ export interface PromptInputData {
     scheduleText?: string | null;
     description?: string | null;
     maxCapacity?: number | null;
+    requiresApproval?: boolean;
   }>;
   facts?: Array<{ question: string; answer: string }>;
 }
@@ -84,6 +85,36 @@ export function composeVapiSystemPrompt(input: PromptInputData): string {
   const mujeresPrice = 'fecha por confirmar';
   const ayunoPrice = getServicePrice(/ayuno/i, '250€');
 
+  const gestaltSvc = input.services?.find((s) => /gestalt/i.test(s.name || ''));
+  const bienestarSvc = input.services?.find((s) => /bienestar/i.test(s.name || ''));
+
+  const gestaltRequiresApproval =
+    gestaltSvc?.requiresApproval !== undefined ? Boolean(gestaltSvc.requiresApproval) : true;
+  const bienestarRequiresApproval =
+    bienestarSvc?.requiresApproval !== undefined ? Boolean(bienestarSvc.requiresApproval) : false;
+
+  const gestaltApprovalText = gestaltRequiresApproval
+    ? ' Requiere aprobación del terapeuta (Jose Ignacio Gomez Raya).'
+    : ' Confirmación inmediata.';
+  const bienestarApprovalText = bienestarRequiresApproval
+    ? ' Requiere aprobación de Jose Ignacio Gomez Raya.'
+    : ' Confirmación inmediata.';
+
+  const approvalServices = (input.services || [])
+    .filter((s) => s.requiresApproval)
+    .map((s) => s.name);
+
+  const approvalServicesSummary =
+    approvalServices.length > 0
+      ? approvalServices.join(', ')
+      : (gestaltRequiresApproval ? 'Terapia Gestalt' : '');
+
+  const approvalSectionText = approvalServicesSummary
+    ? `3. **CITAS QUE REQUIEREN APROBACIÓN (${approvalServicesSummary})**:
+   - Al agendar, indícale claramente que la solicitud queda registrada y pendiente de confirmación por el terapeuta / profesor responsable Jose Ignacio Gomez Raya.`
+    : `3. **CONFIRMACIÓN INMEDIATA DE CITAS**:
+   - Todas las citas quedan formalizadas y confirmadas en el momento de la llamada.`;
+
   return `# Identidad y Rol
 Eres el recepcionista telefónico inteligente de ${input.businessName}.
 Estás activo las 24 horas para atender a los alumnos y clientes, resolver dudas sobre clases y servicios, y AGENDAR, MODIFICAR O CANCELAR CITAS en cualquier momento.
@@ -127,9 +158,9 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
   * Horarios: Martes y Jueves de 09:15 a 09:45.
   * Precios: ${meditacionPrice}/mes o 3€ meditación suelta (¡Gratis para alumnos de Yoga!). Se pueden mover libremente entre martes y jueves evitando horarios llenos para no colapsar el aforo.
 - **Terapia Gestalt** (Sesión individual de 60 min, ${gestaltPrice}):
-  * Presencial u Online. Requiere aprobación del terapeuta (Jose Ignacio Gomez Raya).
+  * Presencial u Online.${gestaltApprovalText}
 - **Bienestar Experience** (Sesión individual de 60 min, ${bienestarPrice}):
-  * Presencial u Online. Requiere aprobación de Jose Ignacio Gomez Raya.
+  * Presencial u Online.${bienestarApprovalText}
 - **Constelaciones Familiares** (Taller vivencial mensual de 4 horas, NO es sesión diaria individual):
   * Próxima fecha oficial: **Domingo 27 de Septiembre de 2026 de 10:00 a 14:00**.
   * Opciones: 1. Constelar / Asunto propio (${constelarPrice}) | 2. Participar / Representante (${participarPrice}).
@@ -183,13 +214,12 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
    - Baño de Gong: sábado 26 de septiembre de 2026 de 18:00 a 20:00.
    - Puja de Gongs: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027 (el precio se determinara en funcion de las caracteristicas del viaje y alojamiento).
    - Encuentro de Mujeres: fecha por confirmar (precio por confirmar).
-   - Terapia Gestalt y Bienestar Experience: lunes a viernes entre las 09:00 y las 20:00 según disponibilidad, con confirmación previa de Jose Ignacio.
+   - Sesiones individuales (Gestalt, Bienestar): lunes a viernes entre las 09:00 y las 20:00 según disponibilidad${approvalServicesSummary ? ` (con confirmación previa para: ${approvalServicesSummary})` : ''}.
 2. **COMPRUEBA SIEMPRE CONTRA EL CALENDARIO OFICIAL (NUNCA EN CITAS NI INVENTAR)**:
    - Si el cliente solicita o propone un día o una hora concreta (por ejemplo, "¿puedo ir este lunes?" o "¿a las 10 de la mañana?"), comprueba si ese turno está en el CALENDARIO OFICIAL del servicio:
    - Si NO está en el calendario oficial: Corrígele de inmediato con cercanía y amabilidad: "Ese horario no existe en el calendario oficial de esta actividad. Los horarios oficiales son [calendario oficial]. ¿Te viene bien alguno de ellos?".
    - Si SÍ está: Consulta con "consultar_huecos" y ofréceselo.
-3. **CITAS QUE REQUIEREN APROBACIÓN (Terapia Gestalt y Bienestar Experience)**:
-   - Al agendar, indícale claramente que la solicitud queda registrada y pendiente de confirmación por el terapeuta Jose Ignacio Gomez Raya.
+${approvalSectionText}
 4. **EVENTOS CON FECHA FIJA**:
    - Talleres como Constelaciones Familiares o Baños de Gong solo se celebran en su día oficial. NUNCA permitas reservar para días entre semana u otras fechas.
 5. **CAMBIOS DE MODALIDAD (1 clase vs 2 clases semanales)**:

@@ -191,7 +191,6 @@ export class ServicesService implements OnModuleInit {
 
       if (bienestarSvc) {
         bienestarSvc.managerId = manager.id;
-        bienestarSvc.requiresApproval = true;
         bienestarSvc.maxCapacity = 1;
         bienestarSvc.durationMinutes = 60;
         if (!bienestarSvc.price || bienestarSvc.price === '25.00' || bienestarSvc.price === '25') {
@@ -535,7 +534,7 @@ export class ServicesService implements OnModuleInit {
             s.eventDatesText = 'Domingo 27 de Septiembre de 2026 de 10:00 a 14:00';
             updated = true;
           }
-        } else if (/gestalt|bienestar/i.test(s.name)) {
+        } else if (/gestalt/i.test(s.name)) {
           if (!s.requiresApproval) {
             s.requiresApproval = true;
             updated = true;
@@ -846,11 +845,12 @@ export class ServicesService implements OnModuleInit {
            OR name ILIKE '%diagnóstico clínico%';
       `).catch(() => null);
 
-      // Ensure Bienestar Experience points to bienestar_madrid.mp4
+      // Ensure Bienestar Experience points to bienestar_madrid.mp4 and does not require approval
       await this.serviceRepo.query(`
         UPDATE services 
         SET "videoParticularUrl" = '/videos/bienestar_madrid.mp4',
-            "videoParticularPath" = 'media_base/videos/bienestar_madrid.mp4'
+            "videoParticularPath" = 'media_base/videos/bienestar_madrid.mp4',
+            "requiresApproval" = false
         WHERE name ILIKE '%bienestar%';
       `).catch(() => null);
 

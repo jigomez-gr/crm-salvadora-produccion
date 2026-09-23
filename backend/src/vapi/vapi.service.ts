@@ -401,6 +401,7 @@ export class VapiService implements OnModuleInit {
         scheduleText: s.scheduleText,
         description: s.description,
         maxCapacity: s.maxCapacity,
+        requiresApproval: Boolean(s.requiresApproval),
       })),
       phone: agent?.whatsappNumber || null,
     };
