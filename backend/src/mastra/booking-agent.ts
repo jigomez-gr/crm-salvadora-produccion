@@ -627,8 +627,9 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
 
       try {
         const timezone = config?.timezone || 'Europe/Madrid';
-        const status =
-          svc.requiresApproval === true ? 'pending_approval' : 'scheduled';
+        const requiresApproval =
+          svc.requiresApproval === true || /gestalt|bienestar/i.test(svc.name || '');
+        const status = requiresApproval ? 'pending_approval' : 'scheduled';
         const isSinFecha = svc.sinfechadefinitiva === 'S';
         const rawStartsAt = isSinFecha
           ? '2099-12-31T20:00:00.000Z'
@@ -731,7 +732,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         return {
           appointment,
           paymentUrl,
-          calMeetingUrl: appointment?.calMeetingUrl,
+          calMeetingUrl: status === 'pending_approval' ? undefined : appointment?.calMeetingUrl,
           requiresApproval: status === 'pending_approval',
           message,
         };
@@ -1338,6 +1339,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Horario: Se acuerda individualmente entre alumno y profesor. Consulta disponibilidad con 'checkAvailability'.
   * APROBACIÓN OBLIGATORIA: Las citas de Terapia Gestalt requieren la aprobación previa del terapeuta/profesor responsable (**Jose Ignacio Gomez Raya**).
   * Al formalizar con 'bookAppointment', explícale con amabilidad al cliente que su solicitud de cita ha quedado registrada como **solicitud pendiente de confirmación** y que el terapeuta responsable le confirmará la cita (por email o WhatsApp) en cuanto la revise.
+  * ESTÁ ESTRICTAMENTE PROHIBIDO decir que la cita de Terapia Gestalt está confirmada o pasar enlaces de videollamada. Comunica SIEMPRE que queda como **solicitud pendiente de confirmación/aprobación por Jose Ignacio Gomez Raya** y que él le avisará en cuanto la revise.
 - BIENESTAR EXPERIENCE (LONGEVIDAD Y BIENESTAR INTEGRAL):
   * Modalidad: Puede ser Presencial u Online (videollamada). Pregúntale al alumno/cliente qué modalidad prefiere. Si el alumno te facilita sus datos sin especificar modalidad, tramita la reserva y confírmale amablemente que su solicitud queda registrada y pendiente de aprobación por el asesor/terapeuta responsable (**Jose Ignacio Gomez Raya**).
   * Temática y áreas tratadas: Asesoramiento personalizado en longevidad, bienestar integral, meditación, motivación, inspiración, conciencia, nutrición, medicina natural, biohacking, rejuvenecimiento, ritmos circadianos, psicología positiva y sonoterapia.
@@ -1347,6 +1349,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Horario: Se acuerda individualmente entre alumno y asesor. Consulta disponibilidad con 'checkAvailability'.
   * APROBACIÓN OBLIGATORIA: Las citas de Bienestar Experience requieren la aprobación previa del responsable (**Jose Ignacio Gomez Raya**).
   * Al formalizar con 'bookAppointment', explícale con amabilidad al cliente que su solicitud de cita ha quedado registrada como **solicitud pendiente de confirmación** y que el responsable le confirmará la cita (por email o WhatsApp con el enlace de videollamada si es online) en cuanto la revise.
+  * ESTÁ ESTRICTAMENTE PROHIBIDO decir que la cita de Bienestar Experience está confirmada de inmediato o pasar enlaces de videollamada antes de ser aprobada por el responsable. Comunica siempre que queda como **solicitud pendiente de confirmación**.
 - BAÑOS DE GONG Y MEDITACIÓN SONORA (SESIÓN MENSUAL 2 HORAS):
   * Modalidad: Actividad grupal presencial (aforo máximo: 30 personas).
   * Estructura: 2 horas de preparación corporal, inmersión en baño de sonido con gongs afinados y meditación integradora.
@@ -1482,7 +1485,11 @@ Si es una persona nueva, pídele amablemente su Nombre y Apellidos, Teléfono m�
    - Correo electrónico (email)
    Si te falta alguno de estos datos, pídeselo amablemente (por ejemplo: "Para formalizar tu reserva, ¿me facilitas tu nombre completo, teléfono móvil y correo electrónico?").
    En cuanto el cliente te los proporcione, llama a 'bookAppointment' indicando el servicio, la fecha/hora en formato ISO, customerName, customerPhone y customerEmail.
-8. Informa al cliente de que su cita ha quedado reservada con éxito, indicándole día y hora (y si corresponde, el enlace de la videollamada de Cal.com o el enlace de pago).
+8. RESPUESTA TRAS FORMALIZAR:
+   - Si el servicio requiere aprobación previa (Terapia Gestalt o Bienestar Experience), o el resultado de 'bookAppointment' indica 'requiresApproval: true':
+     Informa al cliente con amabilidad y calidez de que su cita ha quedado registrada como SOLICITUD PENDIENTE DE CONFIRMACIÓN por parte del terapeuta/responsable (Jose Ignacio Gomez Raya), y que él se la confirmará personalmente por correo o WhatsApp tras revisarla. NUNCA digas que está confirmada ni entregues enlaces de reunión virtual antes de su aprobación.
+   - Para servicios estándar o plazas confirmadas:
+     Informa al cliente de que su cita o plaza ha quedado confirmada, indicándole día y hora (y si corresponde, el enlace de la videollamada o pago).
 
 Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pasado. Pasa las fechas a las herramientas en formato ISO.`;
 

@@ -240,20 +240,31 @@ export class AgentRunnerService {
       const liveServices = await this.servicesService.findAll(true).catch(() => []);
       if (liveServices && liveServices.length > 0) {
         agentConfig.services = liveServices.map((s) => ({
+          id: s.id,
           name: s.name,
           durationMinutes: s.durationMinutes,
           price: s.price,
           serviceType: s.serviceType,
           eventDatesText: s.eventDatesText,
+          eventStartDate: s.eventStartDate,
+          eventEndDate: s.eventEndDate,
           scheduleText: s.scheduleText,
           description: s.description,
           weeklySchedule: s.weeklySchedule,
           maxCapacity: s.maxCapacity,
+          availableSeats: s.availableSeats,
           minQuorum: s.minQuorum,
           paymentType: s.paymentType,
+          calendarId: s.calendarId,
+          managerId: s.managerId,
           externalPaymentUrl: s.externalPaymentUrl,
           allowedModalities: s.allowedModalities,
           requiresReason: s.requiresReason,
+          requiresApproval: s.requiresApproval,
+          sinfechadefinitiva: s.sinfechadefinitiva,
+          textosinfechadefinitiva: s.textosinfechadefinitiva,
+          sinpreciodefinitivo: s.sinpreciodefinitivo,
+          textosinpreciodefinitivo: s.textosinpreciodefinitivo,
         }));
       }
 
