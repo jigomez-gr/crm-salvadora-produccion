@@ -18,9 +18,11 @@ import {
   Video,
   Paperclip,
   GraduationCap,
+  Pencil,
 } from "lucide-react";
 import Link from "next/link";
 import { apiFetch, ApiError, apiUrl } from "@/lib/api";
+import { ContactModal, ContactFormData } from "@/components/ContactModal";
 import {
   ContactWithAppointments,
   Appointment,
@@ -102,6 +104,11 @@ export default function ContactDetailPage({
     missedClasses: { id: string; startsAt: string; cancellationReason: string | null; expiresAt: string }[];
     usedRecoveries: { id: string; startsAt: string }[];
   } | null>(null);
+
+  const [editContactOpen, setEditContactOpen] = useState(false);
+  const [editEmailOpen, setEditEmailOpen] = useState(false);
+  const [emailInputVal, setEmailInputVal] = useState("");
+  const [savingEmail, setSavingEmail] = useState(false);
 
   async function handleConvertToStudent() {
     setStudentSaving(true);
@@ -224,6 +231,54 @@ export default function ContactDetailPage({
           .then(setRecoveriesData)
           .catch(() => null);
       }
+    }
+  }
+
+  async function handleSaveContact(data: ContactFormData) {
+    const customFields: Record<string, string> = {};
+    for (const { key, value } of data.customFields) {
+      if (key.trim()) customFields[key.trim()] = value;
+    }
+    const payload = {
+      name: data.name,
+      phone: data.phone,
+      email: data.email,
+      notes: data.notes,
+      status: data.status,
+      source: data.source || undefined,
+      tags: data.tagsText
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean),
+      customFields,
+      isStudent: data.isStudent,
+      studentModality: data.isStudent ? (data.studentModality || "1_clase_semanal") : null,
+    };
+    await apiFetch(`/api/contacts/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    await refresh();
+    toast.success("Contacto actualizado.");
+  }
+
+  async function handleSaveEmail(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingEmail(true);
+    try {
+      await apiFetch(`/api/contacts/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ email: emailInputVal.trim() }),
+      });
+      await refresh();
+      setEditEmailOpen(false);
+      toast.success("Correo electrónico actualizado.");
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Error al actualizar el correo."
+      );
+    } finally {
+      setSavingEmail(false);
     }
   }
 
@@ -365,6 +420,16 @@ export default function ContactDetailPage({
           <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
             <Button
               size="sm"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => setEditContactOpen(true)}
+              title="Editar datos del contacto (nombre, teléfono, correo, etc.)"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Editar contacto
+            </Button>
+            <Button
+              size="sm"
               variant={contact.isStudent ? "secondary" : "primary"}
               disabled={busy}
               onClick={() => {
@@ -449,15 +514,47 @@ export default function ContactDetailPage({
           </div>
           <p className="mt-1 text-sm text-neutral-900">{contact.phone}</p>
         </div>
-        {contact.email && (
-          <div className="rounded-xl border border-neutral-200 bg-white p-4">
-            <div className="flex items-center gap-2 text-xs font-medium text-neutral-500">
-              <Mail className="h-3.5 w-3.5" />
-              Correo electrónico
+        <div className="rounded-xl border border-neutral-200 bg-white p-4 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-medium text-neutral-500">
+                <Mail className="h-3.5 w-3.5" />
+                Correo electrónico
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmailInputVal(contact.email || "");
+                  setEditEmailOpen(true);
+                }}
+                className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800"
+                title={contact.email ? "Editar correo electrónico" : "Añadir correo electrónico"}
+              >
+                <Pencil className="h-3 w-3" />
+                {contact.email ? "Editar" : "Añadir"}
+              </button>
             </div>
-            <p className="mt-1 text-sm text-neutral-900">{contact.email}</p>
+            {contact.email ? (
+              <p className="mt-1 text-sm font-medium text-neutral-900 break-all">{contact.email}</p>
+            ) : (
+              <p className="mt-1 text-xs text-neutral-400 italic">Sin correo registrado</p>
+            )}
           </div>
-        )}
+          {!contact.email && (
+            <div className="mt-2 pt-1 border-t border-neutral-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setEmailInputVal("");
+                  setEditEmailOpen(true);
+                }}
+                className="text-xs font-medium text-indigo-600 hover:underline"
+              >
+                + Añadir correo ahora
+              </button>
+            </div>
+          )}
+        </div>
         {contact.notes && (
           <div className="rounded-xl border border-neutral-200 bg-white p-4 sm:col-span-2">
             <div className="flex items-center gap-2 text-xs font-medium text-neutral-500">
@@ -926,6 +1023,51 @@ export default function ContactDetailPage({
           </div>
         </div>
       </Modal>
+
+      {/* Quick Email Edit Modal */}
+      <Modal
+        open={editEmailOpen}
+        onClose={() => setEditEmailOpen(false)}
+        title={contact.email ? "Modificar correo electrónico" : "Añadir correo electrónico"}
+      >
+        <form onSubmit={handleSaveEmail} className="space-y-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              Correo electrónico de {contact.name}
+            </label>
+            <Input
+              type="email"
+              value={emailInputVal}
+              onChange={(e) => setEmailInputVal(e.target.value)}
+              placeholder="ejemplo@correo.com"
+              autoFocus
+            />
+            <p className="mt-1 text-xs text-neutral-500">
+              Escribe la dirección de correo o déjala vacía si deseas eliminarla.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setEditEmailOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={savingEmail}>
+              {savingEmail ? "Guardando…" : "Guardar correo"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Full Contact Edit Modal */}
+      <ContactModal
+        open={editContactOpen}
+        onClose={() => setEditContactOpen(false)}
+        initial={contact}
+        onSave={handleSaveContact}
+      />
     </div>
   );
 }

@@ -429,7 +429,6 @@ export class ContactsService {
     // blind spread/assign would wipe values not present in a partial update.
     const simpleFields = [
       'name',
-      'email',
       'notes',
       'status',
       'tags',
@@ -446,6 +445,12 @@ export class ContactsService {
       if (dto[key] !== undefined) {
         target[key] = dto[key];
       }
+    }
+
+    if (dto.email !== undefined) {
+      contact.email = dto.email && typeof dto.email === 'string' && dto.email.trim()
+        ? dto.email.trim().toLowerCase()
+        : null;
     }
 
     if (dto.isStudent && !contact.studentEnrolledAt) {
