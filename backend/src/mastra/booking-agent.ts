@@ -1486,7 +1486,7 @@ Si es una persona nueva, pídele amablemente su Nombre y Apellidos, Teléfono m�
    Si te falta alguno de estos datos, pídeselo amablemente (por ejemplo: "Para formalizar tu reserva, ¿me facilitas tu nombre completo, teléfono móvil y correo electrónico?").
    En cuanto el cliente te los proporcione, llama a 'bookAppointment' indicando el servicio, la fecha/hora en formato ISO, customerName, customerPhone y customerEmail.
 8. RESPUESTA TRAS FORMALIZAR:
-   - Si el servicio requiere aprobación previa (Terapia Gestalt o Bienestar Experience), o el resultado de 'bookAppointment' indica 'requiresApproval: true':
+   - Si el servicio requiere aprobación previa (Terapia Gestalt), o el resultado de 'bookAppointment' indica 'requiresApproval: true':
      Informa al cliente con amabilidad y calidez de que su cita ha quedado registrada como SOLICITUD PENDIENTE DE CONFIRMACIÓN por parte del terapeuta/responsable (Jose Ignacio Gomez Raya), y que él se la confirmará personalmente por correo o WhatsApp tras revisarla. NUNCA digas que está confirmada ni entregues enlaces de reunión virtual antes de su aprobación.
    - Para servicios estándar o plazas confirmadas:
      Informa al cliente de que su cita o plaza ha quedado confirmada, indicándole día y hora (y si corresponde, el enlace de la videollamada o pago).

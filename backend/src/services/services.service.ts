@@ -217,7 +217,7 @@ export class ServicesService implements OnModuleInit {
             maxCapacity: 1,
             calendarId: 'cal-bienestar-experience',
             managerId: manager.id,
-            requiresApproval: true,
+            requiresApproval: false,
             allowedModalities: ['in_person', 'virtual'],
             isActive: true,
           }),
@@ -610,7 +610,7 @@ export class ServicesService implements OnModuleInit {
             return {
               ...s,
               managerId: manager.id,
-              requiresApproval: true,
+              requiresApproval: false,
               maxCapacity: 1,
               durationMinutes: 60,
               price: bienestarSvc?.price || s.price || '19.99',
@@ -852,6 +852,19 @@ export class ServicesService implements OnModuleInit {
             "videoParticularPath" = 'media_base/videos/bienestar_madrid.mp4',
             "requiresApproval" = false
         WHERE name ILIKE '%bienestar%';
+      `).catch(() => null);
+
+      // Ensure only Terapia Gestalt requires approval; Baño de Gong, Fin de Semana, Talleres, etc. do NOT require approval
+      await this.serviceRepo.query(`
+        UPDATE services 
+        SET "requiresApproval" = false
+        WHERE name NOT ILIKE '%gestalt%';
+      `).catch(() => null);
+
+      await this.serviceRepo.query(`
+        UPDATE services 
+        SET "requiresApproval" = false
+        WHERE name ILIKE '%fin de semana%' OR name ILIKE '%gong%' OR name ILIKE '%taller%';
       `).catch(() => null);
 
       // Ensure Bienestar Experience price is 19.99 and description matches across all database tables

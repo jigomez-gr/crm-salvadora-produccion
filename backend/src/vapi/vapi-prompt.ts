@@ -101,7 +101,13 @@ export function composeVapiSystemPrompt(input: PromptInputData): string {
     : ' Confirmación inmediata.';
 
   const approvalServices = (input.services || [])
-    .filter((s) => s.requiresApproval)
+    .filter((s) => {
+      if (!s.requiresApproval) return false;
+      if (/gong|fin de semana|taller|bienestar|yoga|meditaci|ayuno|constela|mujer|puja/i.test(s.name || '')) {
+        return false;
+      }
+      return true;
+    })
     .map((s) => s.name);
 
   const approvalServicesSummary =

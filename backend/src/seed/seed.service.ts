@@ -248,7 +248,7 @@ export class SeedService implements OnModuleInit {
         flyerUrl: '/flyer-parque-granada.png',
         calendarId: 'cal-finde',
         managerId: managers['eventos@crmsalvadora.local'].id,
-        requiresApproval: true,
+        requiresApproval: false,
       },
       {
         name: SVC.medica.name,
