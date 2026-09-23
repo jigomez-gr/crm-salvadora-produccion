@@ -153,6 +153,17 @@ export class ZadarmaSmsService implements OnModuleInit {
    * 4. Compute HMAC-SHA1 using secret key, format as hex, then Base64 encode.
    * 5. Header format: Authorization: {apiKey}:{signature}
    */
+  /**
+   * RFC 3986 & PHP http_build_query compatible URL encoding for Zadarma signatures.
+   * Standard JS encodeURIComponent does NOT encode !'()* which causes HMAC signature
+   * mismatches with Zadarma API (returning 'Not authorized').
+   */
+  private zadarmaUrlEncode(str: string): string {
+    return encodeURIComponent(str)
+      .replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
+      .replace(/%20/g, '+');
+  }
+
   public generateAuthHeader(
     apiKey: string,
     apiSecret: string,
@@ -161,7 +172,7 @@ export class ZadarmaSmsService implements OnModuleInit {
   ): { authHeader: string; queryString: string } {
     const sortedKeys = Object.keys(params).sort();
     const queryString = sortedKeys
-      .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(params[k]).replace(/%20/g, '+')}`)
+      .map((k) => `${this.zadarmaUrlEncode(k)}=${this.zadarmaUrlEncode(params[k])}`)
       .join('&');
 
     const md5Hash = crypto.createHash('md5').update(queryString).digest('hex');
