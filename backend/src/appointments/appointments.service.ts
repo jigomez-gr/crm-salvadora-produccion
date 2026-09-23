@@ -473,11 +473,25 @@ export class AppointmentsService implements OnModuleInit {
     const status = dto.status ?? defaultStatus;
 
     // Resolve modality (in_person, phone, virtual)
+    const cleanSvcStr = (cleanServiceName || '').toLowerCase();
+    const notesLower = (dto.notes || '').toLowerCase();
+    const reasonLower = (dto.reason || '').toLowerCase();
+    const isVirtualExplicit =
+      dto.modality === 'virtual' ||
+      dto.modality === 'online' ||
+      Boolean(dto.calMeetingUrl) ||
+      /online|virtual|videollamada/i.test(dto.modality || '') ||
+      /online|virtual|videollamada/i.test(notesLower) ||
+      /online|virtual|videollamada/i.test(reasonLower) ||
+      /online|virtual|videollamada/i.test(cleanSvcStr);
+
     const allowed = serviceEntity?.allowedModalities?.length
       ? serviceEntity.allowedModalities
       : ['in_person'];
-    let modality = dto.modality || allowed[0] || 'in_person';
-    if (dto.modality && !allowed.includes(dto.modality)) {
+    let modality = isVirtualExplicit
+      ? 'virtual'
+      : dto.modality || allowed[0] || 'in_person';
+    if (!isVirtualExplicit && dto.modality && !allowed.includes(dto.modality)) {
       // Fall back or accept if not strictly configured
       modality = dto.modality;
     }
@@ -488,11 +502,11 @@ export class AppointmentsService implements OnModuleInit {
       : (dto.notes || null);
     let calBookingId: string | null = null;
     let calBookingUid: string | null = null;
-    let calMeetingUrl: string | null = null;
+    let calMeetingUrl: string | null = dto.calMeetingUrl || null;
     let calStatus: string | null = null;
 
-    // Sincronización automática con Cal.com para citas virtuales (solo si ya está confirmada / no requiere aprobación)
-    if (modality === 'virtual' && contact && status !== AppointmentStatus.PENDING_APPROVAL) {
+    // Sincronización automática con Cal.com para citas virtuales (tanto confirmadas como pendientes de aprobación)
+    if (modality === 'virtual' && contact && !calMeetingUrl) {
       try {
         const calResult = await this.calcomService.createBooking({
           startsAt,
@@ -1094,29 +1108,40 @@ export class AppointmentsService implements OnModuleInit {
     }
 
     // Cal.com sync upon approval if virtual and not yet generated
-    if (appt.modality === 'virtual' && !appt.calMeetingUrl && appt.contact) {
-      try {
-        const calResult = await this.calcomService.createBooking({
-          startsAt: appt.startsAt,
-          endsAt: appt.endsAt,
-          serviceName: appt.service,
-          contact: {
-            name: appt.contact.name,
-            phone: appt.contact.phone,
-            email: appt.contact.email,
-          },
-          managerEmail: serviceEntity?.manager?.email || null,
-          managerName: serviceEntity?.manager?.name || acceptedBy || null,
-          reason: appt.reason,
-          eventTypeId: serviceEntity?.calEventTypeId,
-        });
+    const isVirtualAppt =
+      appt.modality === 'virtual' ||
+      appt.modality === 'online' ||
+      Boolean(appt.calMeetingUrl) ||
+      /online|virtual|videollamada/i.test(appt.notes || '') ||
+      /online|virtual|videollamada/i.test(appt.reason || '') ||
+      /online|virtual|videollamada/i.test(appt.service || '');
 
-        appt.calBookingId = calResult.bookingId;
-        appt.calBookingUid = calResult.bookingUid;
-        appt.calMeetingUrl = calResult.meetingUrl;
-        appt.calStatus = calResult.status;
-      } catch (err) {
-        this.logger.error(`Error syncing with Cal.com on approval: ${err}`);
+    if (isVirtualAppt) {
+      appt.modality = 'virtual';
+      if (!appt.calMeetingUrl && appt.contact) {
+        try {
+          const calResult = await this.calcomService.createBooking({
+            startsAt: appt.startsAt,
+            endsAt: appt.endsAt,
+            serviceName: appt.service,
+            contact: {
+              name: appt.contact.name,
+              phone: appt.contact.phone,
+              email: appt.contact.email,
+            },
+            managerEmail: serviceEntity?.manager?.email || null,
+            managerName: serviceEntity?.manager?.name || acceptedBy || null,
+            reason: appt.reason,
+            eventTypeId: serviceEntity?.calEventTypeId,
+          });
+
+          appt.calBookingId = calResult.bookingId;
+          appt.calBookingUid = calResult.bookingUid;
+          appt.calMeetingUrl = calResult.meetingUrl;
+          appt.calStatus = calResult.status;
+        } catch (err) {
+          this.logger.error(`Error syncing with Cal.com on approval: ${err}`);
+        }
       }
     }
 
@@ -1373,7 +1398,43 @@ export class AppointmentsService implements OnModuleInit {
         ? (serviceEntity?.textosinfechadefinitiva || 'Por determinar')
         : (formattedEndTime ? `${formattedStartTime} a ${formattedEndTime}` : formattedStartTime);
 
-      const isVirtual = appt.modality === 'virtual';
+      const isVirtual =
+        appt.modality === 'virtual' ||
+        appt.modality === 'online' ||
+        Boolean(appt.calMeetingUrl) ||
+        /online|virtual|videollamada/i.test(appt.notes || '') ||
+        /online|virtual|videollamada/i.test(appt.reason || '') ||
+        /online|virtual|videollamada/i.test(appt.service || '');
+
+      if (isVirtual) {
+        appt.modality = 'virtual';
+        if (!appt.calMeetingUrl) {
+          try {
+            const calResult = await this.calcomService.createBooking({
+              startsAt: appt.startsAt,
+              endsAt: appt.endsAt,
+              serviceName: appt.service,
+              contact: {
+                name: contact?.name || appt.contact?.name,
+                phone: contact?.phone || appt.contact?.phone,
+                email: contact?.email || appt.contact?.email,
+              },
+              managerEmail: serviceEntity?.manager?.email || null,
+              managerName: serviceEntity?.manager?.name || effectiveManager || null,
+              reason: appt.reason,
+              eventTypeId: serviceEntity?.calEventTypeId,
+            });
+            appt.calBookingId = calResult.bookingId;
+            appt.calBookingUid = calResult.bookingUid;
+            appt.calMeetingUrl = calResult.meetingUrl;
+            appt.calStatus = calResult.status;
+            await this.appointmentsRepo.save(appt).catch(() => null);
+          } catch (err) {
+            this.logger.error(`Error generating meeting URL in notifyStudentDecision: ${err}`);
+          }
+        }
+      }
+
       const modalityText = isVirtual
         ? 'Online (Videollamada)'
         : 'Presencial en el centro';
@@ -1408,6 +1469,16 @@ export class AppointmentsService implements OnModuleInit {
               <p style="margin: 6px 0; color: #1e40af;">📌 <strong>Servicio / Actividad:</strong> ${appt.service}</p>
               <p style="margin: 6px 0; color: #1e40af;">📅 <strong>Fecha solicitada:</strong> ${formattedDate}</p>
               ${isSinFecha ? '' : `<p style="margin: 6px 0; color: #1e40af;">⏰ <strong>Horario:</strong> ${formattedTime}</p>`}
+              <p style="margin: 6px 0; color: #1e40af;">📍 <strong>Modalidad:</strong> ${modalityText}</p>
+              ${
+                isVirtual && appt.calMeetingUrl
+                  ? `<div style="margin: 10px 0; padding: 10px; background-color: #ffffff; border-radius: 6px; border: 1px dashed #93c5fd;">
+                       <p style="margin: 0; font-size: 13px; color: #1e40af;">🔗 <strong>Enlace provisional de la videollamada:</strong></p>
+                       <p style="margin: 4px 0 0 0;"><a href="${appt.calMeetingUrl}" style="color: #2563eb; font-weight: bold; word-break: break-all;">${appt.calMeetingUrl}</a></p>
+                       <p style="margin: 4px 0 0 0; font-size: 11px; color: #6b7280;">(El enlace se activará definitivamente una vez confirmada la cita por el profesor/terapeuta).</p>
+                     </div>`
+                  : ''
+              }
               <p style="margin: 6px 0; color: #1e40af;">👤 <strong>Terapeuta / Profesor:</strong> ${effectiveManager}</p>
               <p style="margin: 6px 0; color: #1e40af;">⏳ <strong>Estado:</strong> Pendiente de confirmación del profesor</p>
             </div>
@@ -1702,9 +1773,13 @@ export class AppointmentsService implements OnModuleInit {
       let smsText = '';
       const isResched = isRescheduled || Boolean(appt.notes && /reprogramad/i.test(appt.notes));
       if (decision === 'pending_approval') {
-        smsText = `Hola ${contact.name || ''}, tu solicitud para ${appt.service} el ${formattedDate} ha sido recibida y está pendiente de confirmación del profesor. Centro de Yoga Salvadora Conesa.`;
+        smsText = (isVirtual && appt.calMeetingUrl)
+          ? `Hola ${contact.name || ''}, tu solicitud online para ${appt.service} el ${formattedDate} ha sido recibida y está pendiente de confirmación. Enlace videollamada: ${appt.calMeetingUrl}. Centro Salvadora.`
+          : `Hola ${contact.name || ''}, tu solicitud para ${appt.service} el ${formattedDate} ha sido recibida y está pendiente de confirmación del profesor. Centro de Yoga Salvadora Conesa.`;
       } else if (decision === 'accepted' && isResched) {
-        smsText = `Hola ${contact.name || ''}, confirmamos el cambio de tu cita para ${appt.service}: tu nuevo horario es el ${formattedDate} a las ${formattedStartTime}. Centro de Yoga Salvadora Conesa.`;
+        smsText = (isVirtual && appt.calMeetingUrl)
+          ? `Hola ${contact.name || ''}, confirmamos el cambio de tu cita online de ${appt.service}: tu nuevo horario es el ${formattedDate} a las ${formattedStartTime}. Enlace videollamada: ${appt.calMeetingUrl}. Centro Salvadora.`
+          : `Hola ${contact.name || ''}, confirmamos el cambio de tu cita para ${appt.service}: tu nuevo horario es el ${formattedDate} a las ${formattedStartTime}. Centro de Yoga Salvadora Conesa.`;
       } else if (decision === 'accepted') {
         smsText = (isVirtual && appt.calMeetingUrl)
           ? `Hola ${contact.name || ''}, confirmamos tu cita online de ${appt.service} el ${formattedDate} a las ${formattedStartTime}. Enlace videollamada: ${appt.calMeetingUrl}. Centro Salvadora.`

@@ -282,4 +282,77 @@ describe('Appointments Multi-Channel Notifications (Service Level)', () => {
     );
     expect(zadarmaSmsMock.sendSms).toHaveBeenCalledTimes(1);
   });
+
+  it('includes meeting URL in email, WhatsApp and SMS when confirming an online appointment', async () => {
+    servicesRepoMock.findOne.mockResolvedValue({
+      id: 'svc-gestalt',
+      name: 'Terapia Gestalt (Sesión Individual)',
+      notifyByEmail: true,
+      notifyByWhatsapp: true,
+      notifyBySms: true,
+    });
+
+    const onlineAppt: any = {
+      id: 'appt-gestalt-online',
+      service: 'Terapia Gestalt (Sesión Individual)',
+      serviceId: 'svc-gestalt',
+      contactId: 'contact-test-1',
+      startsAt: new Date('2026-09-25T10:00:00.000Z'),
+      endsAt: new Date('2026-09-25T11:00:00.000Z'),
+      status: AppointmentStatus.SCHEDULED,
+      modality: 'virtual',
+      calMeetingUrl: 'https://meet.jit.si/salvadora-terapia-gestalt-test1234',
+      notes: 'Sesión online solicitada',
+    };
+
+    await (service as any).notifyStudentDecision(onlineAppt, 'accepted', 'Jose Ignacio Gomez Raya');
+
+    expect(emailServiceMock.sendNotification).toHaveBeenCalledTimes(1);
+    const [, , , emailHtml, chatText] = emailServiceMock.sendNotification.mock.calls[0];
+    expect(emailHtml).toContain('https://meet.jit.si/salvadora-terapia-gestalt-test1234');
+    expect(emailHtml).toContain('🎥 Acceder a la Videollamada');
+    expect(chatText).toContain('https://meet.jit.si/salvadora-terapia-gestalt-test1234');
+
+    expect(ycloudClientMock.sendTextMessage).toHaveBeenCalledTimes(1);
+    const [, , whatsappBody] = ycloudClientMock.sendTextMessage.mock.calls[0];
+    expect(whatsappBody).toContain('https://meet.jit.si/salvadora-terapia-gestalt-test1234');
+
+    expect(zadarmaSmsMock.sendSms).toHaveBeenCalledTimes(1);
+    const smsPayload = zadarmaSmsMock.sendSms.mock.calls[0][0];
+    expect(smsPayload.message).toContain('https://meet.jit.si/salvadora-terapia-gestalt-test1234');
+  });
+
+  it('includes provisional meeting URL in email and SMS for pending_approval virtual appointment', async () => {
+    servicesRepoMock.findOne.mockResolvedValue({
+      id: 'svc-gestalt',
+      name: 'Terapia Gestalt (Sesión Individual)',
+      notifyByEmail: true,
+      notifyByWhatsapp: true,
+      notifyBySms: true,
+    });
+
+    const onlineApptPending: any = {
+      id: 'appt-gestalt-pending',
+      service: 'Terapia Gestalt (Sesión Individual)',
+      serviceId: 'svc-gestalt',
+      contactId: 'contact-test-1',
+      startsAt: new Date('2026-09-25T10:00:00.000Z'),
+      endsAt: new Date('2026-09-25T11:00:00.000Z'),
+      status: AppointmentStatus.PENDING_APPROVAL,
+      modality: 'virtual',
+      calMeetingUrl: 'https://meet.jit.si/salvadora-terapia-gestalt-provisional',
+      notes: 'Sesión online por videollamada',
+    };
+
+    await (service as any).notifyStudentDecision(onlineApptPending, 'pending_approval', 'Jose Ignacio Gomez Raya');
+
+    expect(emailServiceMock.sendNotification).toHaveBeenCalledTimes(1);
+    const [, , , emailHtml] = emailServiceMock.sendNotification.mock.calls[0];
+    expect(emailHtml).toContain('https://meet.jit.si/salvadora-terapia-gestalt-provisional');
+    expect(emailHtml).toContain('Online (Videollamada)');
+
+    expect(zadarmaSmsMock.sendSms).toHaveBeenCalledTimes(1);
+    const smsPayload = zadarmaSmsMock.sendSms.mock.calls[0][0];
+    expect(smsPayload.message).toContain('https://meet.jit.si/salvadora-terapia-gestalt-provisional');
+  });
 });

@@ -69,6 +69,11 @@ export function buildVapiToolDefinitions(webhookUrl: string, credentialId?: stri
             inicioIso: { type: 'string', description: 'Código ISO del hueco elegido (obtenido de consultar_huecos)' },
             servicio: { type: 'string', description: 'Nombre del servicio a reservar' },
             nombre: { type: 'string', description: 'Nombre completo del cliente' },
+            modalidad: {
+              type: 'string',
+              description: 'Modalidad de la sesión: "presencial" u "online" / "virtual". Por defecto "presencial" a menos que el cliente indique online o videollamada.',
+              enum: ['presencial', 'online', 'virtual'],
+            },
             email: { type: 'string', description: 'Correo electrónico del cliente si lo facilita' },
             notas: { type: 'string', description: 'Motivo o notas adicionales de la cita' },
           },

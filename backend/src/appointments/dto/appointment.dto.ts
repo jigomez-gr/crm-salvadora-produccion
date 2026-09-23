@@ -84,6 +84,10 @@ export class CreateAppointmentDto {
   @IsOptional()
   @IsEnum(PaymentStatus)
   paymentStatus?: PaymentStatus;
+
+  @IsOptional()
+  @IsString()
+  calMeetingUrl?: string;
 }
 
 export class UpdateAppointmentDto {

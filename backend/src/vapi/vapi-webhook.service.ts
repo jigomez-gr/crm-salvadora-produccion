@@ -1125,7 +1125,15 @@ export class VapiWebhookService {
         params?.modalidad === 'virtual' ||
         params?.modality === 'virtual' ||
         params?.modalidad === 'online' ||
-        params?.modality === 'online';
+        params?.modality === 'online' ||
+        /online|virtual|videollamada/i.test(params?.modalidad || '') ||
+        /online|virtual|videollamada/i.test(params?.modality || '') ||
+        /online|virtual|videollamada/i.test(params?.notas || '') ||
+        /online|virtual|videollamada/i.test(params?.notes || '') ||
+        /online|virtual|videollamada/i.test(params?.motivo || '') ||
+        /online|virtual|videollamada/i.test(officialSvc?.name || '') ||
+        /online|virtual|videollamada/i.test(serviceEntity?.name || '') ||
+        /online|virtual|videollamada/i.test(serviceName || '');
       const appt = await this.appointmentsService.create({
         contactId: contact.id,
         service: officialSvc?.name || serviceEntity?.name || serviceName,
