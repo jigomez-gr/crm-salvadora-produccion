@@ -192,4 +192,94 @@ describe('Appointments Multi-Channel Notifications (Service Level)', () => {
     expect(ycloudClientMock.sendTextMessage).toHaveBeenCalledTimes(1);
     expect(zadarmaSmsMock.sendSms).toHaveBeenCalledTimes(1);
   });
+
+  it('accept() triggers both Email and Zadarma SMS to student even if notifyBySms is false on the service', async () => {
+    servicesRepoMock.findOne.mockResolvedValue({
+      id: 'svc-gestalt',
+      name: 'Terapia Gestalt',
+      notifyByEmail: true,
+      notifyByWhatsapp: true,
+      notifyBySms: false, // Default false in DB
+      manager: { name: 'Jose Ignacio Gomez Raya' },
+    });
+
+    const pendingAppt: any = {
+      ...baseAppt,
+      id: 'appt-gestalt-1',
+      service: 'Terapia Gestalt (Sesión Individual)',
+      status: AppointmentStatus.PENDING_APPROVAL,
+      acceptedAt: null,
+      contact: {
+        id: 'contact-test-1',
+        name: 'Jose Ignacio Gomez Raya',
+        phone: '+34649453996',
+        email: 'jigomez@hotmail.com',
+      },
+    };
+
+    appointmentsRepoMock.findOne = jest.fn().mockResolvedValue(pendingAppt);
+    appointmentsRepoMock.save = jest.fn().mockImplementation((a) => Promise.resolve({ ...a }));
+
+    await service.accept('appt-gestalt-1', 'Jose Ignacio Gomez Raya');
+
+    expect(emailServiceMock.sendNotification).toHaveBeenCalledTimes(1);
+    expect(zadarmaSmsMock.sendSms).toHaveBeenCalledTimes(1);
+    expect(zadarmaSmsMock.sendSms).toHaveBeenCalledWith(
+      expect.objectContaining({
+        number: '+34649453996',
+        message: expect.stringContaining('ha sido confirmada'),
+      }),
+    );
+  });
+
+  it('auto-recovers email for contact when appointment contact email is missing but profile with same phone exists', async () => {
+    servicesRepoMock.findOne.mockResolvedValue({
+      id: 'svc-gestalt',
+      name: 'Terapia Gestalt',
+      notifyByEmail: true,
+      notifyByWhatsapp: true,
+      notifyBySms: true,
+    });
+
+    const contactWithoutEmail: any = {
+      id: 'contact-vapi-dup',
+      name: 'Cliente Telefónico',
+      phone: '+34649453996',
+      email: null,
+    };
+
+    contactsRepoMock.findOne = jest.fn().mockResolvedValue(contactWithoutEmail);
+    contactsRepoMock.save = jest.fn().mockResolvedValue(contactWithoutEmail);
+    contactsRepoMock.createQueryBuilder = jest.fn().mockReturnValue({
+      where: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue({
+        id: 'contact-original',
+        name: 'Jose Ignacio Gomez',
+        phone: '649453996',
+        email: 'jigomez@hotmail.com',
+      }),
+    });
+
+    const appt: any = {
+      ...baseAppt,
+      contactId: 'contact-vapi-dup',
+      contact: contactWithoutEmail,
+    };
+
+    await (service as any).notifyStudentDecision(appt, 'accepted', 'Jose Ignacio Gomez Raya');
+
+    // Email should have been recovered and sent!
+    expect(emailServiceMock.sendNotification).toHaveBeenCalledTimes(1);
+    expect(emailServiceMock.sendNotification).toHaveBeenCalledWith(
+      'jigomez@hotmail.com',
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+      undefined,
+      'contact-vapi-dup',
+    );
+    expect(zadarmaSmsMock.sendSms).toHaveBeenCalledTimes(1);
+  });
 });

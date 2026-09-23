@@ -445,6 +445,69 @@ export class VapiWebhookService {
     }
   }
 
+  private async findContactByPhoneOrEmail(
+    phone?: string | null,
+    email?: string | null,
+  ): Promise<Contact | null> {
+    if (!phone && !email) return null;
+
+    if (typeof this.contactsRepo?.createQueryBuilder === 'function') {
+      try {
+        const qb = this.contactsRepo.createQueryBuilder('c');
+        const conditions: string[] = [];
+        const params: Record<string, any> = {};
+
+        if (phone) {
+          const digits = phone.replace(/\D/g, '');
+          const last9 = digits.slice(-9);
+          if (last9.length === 9) {
+            conditions.push('(c.phone = :rawPhone OR c.phone LIKE :p9)');
+            params.rawPhone = phone;
+            params.p9 = `%${last9}`;
+          } else {
+            conditions.push('c.phone = :rawPhone');
+            params.rawPhone = phone;
+          }
+        }
+
+        if (email) {
+          const cleanEmail = email.toLowerCase().trim();
+          if (cleanEmail) {
+            conditions.push('LOWER(c.email) = :cleanEmail');
+            params.cleanEmail = cleanEmail;
+          }
+        }
+
+        if (conditions.length > 0) {
+          const result = await qb
+            .where(conditions.join(' OR '), params)
+            .orderBy('c.updatedAt', 'DESC')
+            .getOne();
+          if (result) return result;
+        }
+      } catch {
+        // Fall back to findOne
+      }
+    }
+
+    // Direct findOne fallback
+    if (phone) {
+      const byPhone = await this.contactsRepo.findOne({ where: { phone } }).catch(() => null);
+      if (byPhone) return byPhone;
+      const digits = phone.replace(/\D/g, '');
+      const last9 = digits.slice(-9);
+      if (last9.length === 9 && last9 !== phone) {
+        const by9 = await this.contactsRepo.findOne({ where: { phone: last9 } }).catch(() => null);
+        if (by9) return by9;
+      }
+    }
+    if (email) {
+      const byEmail = await this.contactsRepo.findOne({ where: { email } }).catch(() => null);
+      if (byEmail) return byEmail;
+    }
+    return null;
+  }
+
   private formatSpokenDate(
     d: Date | string,
     timezone: string,
@@ -461,7 +524,7 @@ export class VapiWebhookService {
       return 'El cliente no tiene ficha previa (llamada nueva). Trátalo con calidez como cliente nuevo y pídele su nombre cuando vaya a reservar.';
     }
 
-    const contact = await this.contactsRepo.findOne({ where: { phone: ctx.callerNumber } });
+    const contact = await this.findContactByPhoneOrEmail(ctx.callerNumber);
     if (!contact) {
       return 'Este número no consta en la base de datos. Es un cliente nuevo: pregúntale su nombre amablemente cuando vaya a reservar.';
     }
@@ -944,9 +1007,10 @@ export class VapiWebhookService {
       ctx.callerNumber ||
       `+34600${Math.floor(100000 + Math.random() * 900000)}`;
 
-    // 1. Find or create Contact
-    let contact = await this.contactsRepo.findOne({ where: { phone: effectivePhone } });
     const providedEmail = normalizeSpokenEmail(params?.email || params?.correo || '');
+
+    // 1. Find or create Contact
+    let contact = await this.findContactByPhoneOrEmail(effectivePhone, providedEmail);
     if (!contact) {
       contact = this.contactsRepo.create({
         name: customerName,
@@ -964,6 +1028,10 @@ export class VapiWebhookService {
       }
       if (providedEmail && contact.email !== providedEmail) {
         contact.email = providedEmail;
+        contactNeedsSave = true;
+      }
+      if (effectivePhone && (!contact.phone || contact.phone.startsWith('+34600'))) {
+        contact.phone = effectivePhone;
         contactNeedsSave = true;
       }
       if (contactNeedsSave) {
@@ -1053,6 +1121,11 @@ export class VapiWebhookService {
     // 3. Create appointment with conflict handling
     try {
       const requiresApproval = Boolean(officialSvc?.requiresApproval || serviceEntity?.requiresApproval);
+      const isVirtual =
+        params?.modalidad === 'virtual' ||
+        params?.modality === 'virtual' ||
+        params?.modalidad === 'online' ||
+        params?.modality === 'online';
       const appt = await this.appointmentsService.create({
         contactId: contact.id,
         service: officialSvc?.name || serviceEntity?.name || serviceName,
@@ -1061,7 +1134,7 @@ export class VapiWebhookService {
         startsAt: startsAt.toISOString(),
         endsAt: endsAt.toISOString(),
         status: requiresApproval ? AppointmentStatus.PENDING_APPROVAL : AppointmentStatus.SCHEDULED,
-        modality: 'in_person',
+        modality: isVirtual ? 'virtual' : 'in_person',
         notes: params?.notas || params?.notes || params?.motivo || `Cita reservada por el asistente de voz VAPI.`,
       });
 
@@ -1158,7 +1231,7 @@ export class VapiWebhookService {
       return 'No puedo localizar tu cita sin el número de teléfono. Anota el aviso para que el equipo te llame.';
     }
 
-    const contact = await this.contactsRepo.findOne({ where: { phone: ctx.callerNumber } });
+    const contact = await this.findContactByPhoneOrEmail(ctx.callerNumber, params?.email || params?.correo);
     if (!contact) {
       return 'No encuentro ningún cliente registrado con este número. ¿Deseas agendar una nueva cita?';
     }
@@ -1369,7 +1442,7 @@ export class VapiWebhookService {
       return 'No puedo localizar la cita sin el número de teléfono.';
     }
 
-    const contact = await this.contactsRepo.findOne({ where: { phone: ctx.callerNumber } });
+    const contact = await this.findContactByPhoneOrEmail(ctx.callerNumber);
     if (!contact) {
       return 'No consta ningún cliente con este número de teléfono.';
     }
@@ -1540,9 +1613,7 @@ export class VapiWebhookService {
     }
 
     const effectivePhone = ctx.callerNumber;
-    let contact = effectivePhone
-      ? await this.contactsRepo.findOne({ where: { phone: effectivePhone } })
-      : null;
+    let contact = await this.findContactByPhoneOrEmail(effectivePhone, rawEmail);
 
     if (!contact && ctx.vapiCallId) {
       const call = await this.callsRepo.findOne({ where: { vapiCallId: ctx.vapiCallId } });
@@ -1688,7 +1759,7 @@ export class VapiWebhookService {
       const fromNumber = rawCustomer ? normalizePhoneLoose(rawCustomer) : null;
       let contactId: string | null = null;
       if (fromNumber) {
-        const contact = await this.contactsRepo.findOne({ where: { phone: fromNumber } });
+        const contact = await this.findContactByPhoneOrEmail(fromNumber);
         if (contact) contactId = contact.id;
       }
 

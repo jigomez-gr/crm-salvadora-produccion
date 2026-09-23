@@ -1076,6 +1076,21 @@ export class AppointmentsService implements OnModuleInit {
           relations: ['manager'],
         })
         .catch(() => null);
+      if (!serviceEntity) {
+        const cleanSvc = appt.service.toLowerCase();
+        const isGestalt = /gestalt/i.test(cleanSvc);
+        const isBienestar = /bienestar/i.test(cleanSvc);
+        serviceEntity = await this.servicesRepo
+          .findOne({
+            where: [
+              { name: ILike(`%${appt.service}%`) },
+              ...(isGestalt ? [{ name: ILike('%gestalt%') }] : []),
+              ...(isBienestar ? [{ name: ILike('%bienestar%') }] : []),
+            ],
+            relations: ['manager'],
+          })
+          .catch(() => null);
+      }
     }
 
     // Cal.com sync upon approval if virtual and not yet generated
@@ -1108,12 +1123,16 @@ export class AppointmentsService implements OnModuleInit {
     const saved = await this.appointmentsRepo.save(appt);
     this.eventEmitter.emit('appointment.created', saved);
 
-    // Notify student via Email and/or WhatsApp only if this is the first time it is accepted
+    // Notify student via Email, WhatsApp and SMS only if this is the first time it is accepted
     if (!wasAlreadyAccepted) {
       await this.notifyStudentDecision(
         saved,
         'accepted',
         serviceEntity?.manager?.name || acceptedBy || 'Jose Ignacio Gomez Raya',
+        undefined,
+        undefined,
+        false,
+        { email: true, whatsapp: true, sms: true },
       );
     }
 
@@ -1160,20 +1179,22 @@ export class AppointmentsService implements OnModuleInit {
         .catch(() => null);
     }
 
-    // Notify student via Email and/or WhatsApp and update conversation thread
+    // Notify student via Email, WhatsApp and SMS and update conversation thread
     await this.notifyStudentDecision(
       appt,
       requestReschedule ? 'reschedule_requested' : 'rejected',
       serviceEntity?.manager?.name || rejectedBy || 'Jose Ignacio Gomez Raya',
       defaultReason,
       proposedTimes,
+      false,
+      { email: true, whatsapp: true, sms: true },
     );
 
     return appt;
   }
 
   /**
-   * Dispatches the confirmation notification (Email, WhatsApp) for a specific appointment,
+   * Dispatches the confirmation notification (Email, WhatsApp, SMS) for a specific appointment,
    * typically called when a customer's contact details (email/phone) become available after booking.
    */
   async sendAppointmentConfirmationNotification(
@@ -1186,9 +1207,9 @@ export class AppointmentsService implements OnModuleInit {
 
     // Reload latest contact data to ensure we have the freshly saved email/phone
     const contact = await this.contactsRepo.findOne({ where: { id: appt.contactId } });
-    if (!contact || !contact.email) {
+    if (!contact || (!contact.email && !contact.phone)) {
       this.logger.warn(
-        `Cannot send confirmation notification for appt ${appointmentId}: contact has no email`,
+        `Cannot send confirmation notification for appt ${appointmentId}: contact has neither email nor phone`,
       );
       return false;
     }
@@ -1231,7 +1252,7 @@ export class AppointmentsService implements OnModuleInit {
       undefined,
       undefined,
       isRescheduled,
-      channelOverrides,
+      channelOverrides || { email: true, whatsapp: true, sms: true },
     );
     return true;
   }
@@ -1254,6 +1275,35 @@ export class AppointmentsService implements OnModuleInit {
         return;
       }
 
+      // If contact has no email, but has a phone number, attempt to recover email from any existing contact profile matching the phone
+      if (!contact.email && contact.phone && typeof this.contactsRepo?.createQueryBuilder === 'function') {
+        const digits = contact.phone.replace(/\D/g, '');
+        const last9 = digits.slice(-9);
+        if (last9.length === 9) {
+          const matchWithEmail = await this.contactsRepo
+            .createQueryBuilder('c')
+            .where('(c.phone LIKE :p1 OR c.phone = :p2) AND c.email IS NOT NULL AND c.email != :empty', {
+              p1: `%${last9}`,
+              p2: contact.phone,
+              empty: '',
+            })
+            .orderBy('c.updatedAt', 'DESC')
+            .getOne()
+            .catch(() => null);
+
+          if (matchWithEmail?.email) {
+            contact.email = matchWithEmail.email;
+            if (!contact.name || contact.name === 'Alumno' || contact.name === 'Cliente Telefónico') {
+              contact.name = matchWithEmail.name;
+            }
+            await this.contactsRepo.save(contact).catch(() => null);
+            this.logger.log(
+              `[Notification] Auto-linked email ${contact.email} to contact ${contact.id} from matching contact profile`,
+            );
+          }
+        }
+      }
+
       // Load serviceEntity for full details, description, reminderNotes and manager info
       let serviceEntity: Service | null = null;
       if (appt.serviceId) {
@@ -1272,9 +1322,16 @@ export class AppointmentsService implements OnModuleInit {
           })
           .catch(() => null);
         if (!serviceEntity) {
+          const cleanSvc = appt.service.toLowerCase();
+          const isGestalt = /gestalt/i.test(cleanSvc);
+          const isBienestar = /bienestar/i.test(cleanSvc);
           serviceEntity = await this.servicesRepo
             .findOne({
-              where: { name: ILike(`%${appt.service}%`) },
+              where: [
+                { name: ILike(`%${appt.service}%`) },
+                ...(isGestalt ? [{ name: ILike('%gestalt%') }] : []),
+                ...(isBienestar ? [{ name: ILike('%bienestar%') }] : []),
+              ],
               relations: ['manager'],
             })
             .catch(() => null);
@@ -1649,7 +1706,9 @@ export class AppointmentsService implements OnModuleInit {
       } else if (decision === 'accepted' && isResched) {
         smsText = `Hola ${contact.name || ''}, confirmamos el cambio de tu cita para ${appt.service}: tu nuevo horario es el ${formattedDate} a las ${formattedStartTime}. Centro de Yoga Salvadora Conesa.`;
       } else if (decision === 'accepted') {
-        smsText = `Hola ${contact.name || ''}, tu cita para ${appt.service} el ${formattedDate} a las ${formattedStartTime} ha sido confirmada en Centro de Yoga Salvadora Conesa. ¡Te esperamos!`;
+        smsText = (isVirtual && appt.calMeetingUrl)
+          ? `Hola ${contact.name || ''}, confirmamos tu cita online de ${appt.service} el ${formattedDate} a las ${formattedStartTime}. Enlace videollamada: ${appt.calMeetingUrl}. Centro Salvadora.`
+          : `Hola ${contact.name || ''}, tu cita para ${appt.service} el ${formattedDate} a las ${formattedStartTime} ha sido confirmada en Centro de Yoga Salvadora Conesa. ¡Te esperamos!`;
       } else if (decision === 'reschedule_requested') {
         smsText = `Hola ${contact.name || ''}, para tu cita de ${appt.service} el ${formattedDate}, solicitamos cambiar de fecha u horario. Motivo: ${rejectionReason || 'No disponible'}`;
       } else if (decision === 'cancelled') {
