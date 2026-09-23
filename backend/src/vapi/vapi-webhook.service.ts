@@ -12,6 +12,7 @@ import { VapiAccount } from '../common/entities/vapi-account.entity';
 import { AppointmentsService } from '../appointments/appointments.service';
 import { ContactsService } from '../contacts/contacts.service';
 import { ZadarmaSmsService } from '../sms/zadarma-sms.service';
+import { HumanHandoffNotificationService } from '../notifications/human-handoff-notification.service';
 import { normalizePhoneLoose } from '../common/phone';
 import {
   VapiWebhookMessage,
@@ -280,6 +281,8 @@ export class VapiWebhookService {
     private readonly eventEmitter: EventEmitter2,
     @Optional()
     private readonly zadarmaSms?: ZadarmaSmsService,
+    @Optional()
+    private readonly humanNoticeService?: HumanHandoffNotificationService,
   ) {}
 
   /**
@@ -1495,6 +1498,31 @@ export class VapiWebhookService {
 
     if (ctx.vapiCallId) {
       await this.callsRepo.update({ vapiCallId: ctx.vapiCallId }, { needsReview: true, notes: `Handoff: ${motivo}` });
+    }
+
+    let contactName: string | undefined;
+    const contactPhone = ctx.callerNumber || undefined;
+    let contactEmail: string | undefined;
+    if (ctx.callerNumber) {
+      const contact = await this.contactsRepo.findOne({ where: { phone: ctx.callerNumber } });
+      if (contact) {
+        contactName = contact.name;
+        contactEmail = contact.email || undefined;
+      }
+    }
+
+    if (this.humanNoticeService) {
+      this.humanNoticeService
+        .notifyHumanRequest({
+          channel: 'vapi',
+          customerName: contactName,
+          customerPhone: contactPhone,
+          customerEmail: contactEmail,
+          reason: motivo,
+        })
+        .catch((err) =>
+          this.logger.error(`Error notifying human request from VAPI: ${err.message}`),
+        );
     }
 
     if (acc?.handoffNumber) {

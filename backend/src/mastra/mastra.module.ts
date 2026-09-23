@@ -11,6 +11,8 @@ import { ContactsService } from '../contacts/contacts.service';
 import { AppointmentsService } from '../appointments/appointments.service';
 import { PaymentsService } from '../payments/payments.service';
 import { MessagesService } from '../conversations/messages.service';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { HumanHandoffNotificationService } from '../notifications/human-handoff-notification.service';
 import { createBookingAgent, TEMPLATE_AGENT_ID } from './booking-agent';
 
 export { NestMastraModule };
@@ -21,18 +23,21 @@ export { NestMastraModule };
     AppointmentsModule,
     PaymentsModule,
     ConversationsModule,
+    NotificationsModule,
     NestMastraModule.registerAsync({
       imports: [
         ContactsModule,
         AppointmentsModule,
         PaymentsModule,
         ConversationsModule,
+        NotificationsModule,
       ],
       useFactory: (
         contactsService: ContactsService,
         appointmentsService: AppointmentsService,
         paymentsService: PaymentsService,
         messagesService: MessagesService,
+        humanNoticeService: HumanHandoffNotificationService,
       ) => {
         const databaseUrl =
           process.env.DATABASE_URL ||
@@ -159,6 +164,12 @@ export { NestMastraModule };
               customerEmail: params.customerEmail,
             });
           }),
+          notifyHumanRequest: async (payload: any) => {
+            return humanNoticeService.notifyHumanRequest(payload);
+          },
+          setConversationHandoff: async (threadId: string, handoff: boolean) => {
+            return messagesService.setHandoff(threadId, handoff);
+          },
         };
 
         const agent = createBookingAgent(deps, memory);
@@ -170,7 +181,13 @@ export { NestMastraModule };
 
         return { mastra };
       },
-      inject: [ContactsService, AppointmentsService, PaymentsService],
+      inject: [
+        ContactsService,
+        AppointmentsService,
+        PaymentsService,
+        MessagesService,
+        HumanHandoffNotificationService,
+      ],
     }),
   ],
   exports: [NestMastraModule],

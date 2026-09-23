@@ -50,6 +50,7 @@ import { KnowledgeModule } from './knowledge/knowledge.module';
 import { EmailModule } from './email/email.module';
 import { PaymentsModule } from './payments/payments.module';
 import { CalcomModule } from './calcom/calcom.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { AgentsModule } from './agents/agents.module';
 
 @Module({
@@ -110,6 +111,7 @@ import { AgentsModule } from './agents/agents.module';
     EmailModule,
     PaymentsModule,
     CalcomModule,
+    NotificationsModule,
     ZadarmaSmsModule,
     VapiModule,
     CallsModule,

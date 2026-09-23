@@ -276,7 +276,7 @@ describe('VapiWebhookService', () => {
       };
 
       const response = await service.handleWebhook(payload);
-      expect(response.results![0].result).toContain('no hay sesiones de «Constelaciones Familiares» para esa fecha');
+      expect(response.results![0].result).toContain('El calendario oficial para «Constelaciones Familiares»');
       expect(response.results![0].result).toContain('domingo 27 de septiembre');
     });
 

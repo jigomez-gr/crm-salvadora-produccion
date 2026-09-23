@@ -11,12 +11,14 @@ import {
   Header,
   HttpCode,
   HttpStatus,
+  Optional,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { AgentsConfigService } from '../agents/agents-config.service';
 import { AgentRunnerService } from '../agents/agent-runner.service';
 import { MessagesService, toMessageView } from '../conversations/messages.service';
 import { ContactsService } from '../contacts/contacts.service';
+import { HumanHandoffNotificationService } from '../notifications/human-handoff-notification.service';
 import { SettingsService } from '../settings/settings.service';
 import { ServicesService } from '../services/services.service';
 import { CategoriesService } from '../categories/categories.service';
@@ -92,6 +94,7 @@ export class WidgetController {
     private readonly usersService: UsersService,
     private readonly vapiService: VapiService,
     private readonly vapiWebhookService: VapiWebhookService,
+    @Optional() private readonly humanHandoffNoticeService?: HumanHandoffNotificationService,
   ) {}
 
   @Get('config/:agentKey')
@@ -360,6 +363,25 @@ export class WidgetController {
     }
 
     const whatsappUrl = `https://wa.me/${cleanTarget}?text=${encodeURIComponent(waText)}`;
+
+    // 4. Notify team via SMS / Email / VAPI outbound if configured in Settings
+    if (this.humanHandoffNoticeService) {
+      this.humanHandoffNoticeService
+        .notifyHumanRequest({
+          channel: 'landing',
+          customerName: dto.name,
+          customerPhone: dto.phone,
+          customerEmail: dto.email,
+          reason:
+            dto.note ||
+            (dto.serviceName
+              ? `Interés en ${dto.serviceName} desde widget web`
+              : 'Solicitud de atención humana desde widget web'),
+        })
+        .catch((err) =>
+          console.error('Error notifying human handoff from web widget:', err),
+        );
+    }
 
     return {
       ok: true,

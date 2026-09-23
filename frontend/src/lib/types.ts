@@ -382,6 +382,11 @@ export interface AppSettings {
   brandColor: string;
   logoUrl: string | null;
   onboardingCompleted: boolean;
+  humanNoticeEmail?: string | null;
+  humanNoticePhone?: string | null;
+  humanNoticeEmailEnabled?: boolean;
+  humanNoticeSmsEnabled?: boolean;
+  humanNoticeVapiEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }

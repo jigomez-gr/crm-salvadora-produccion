@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import {
@@ -10,13 +10,27 @@ import { AgentsConfigService } from '../agents/agents-config.service';
 import { VERTICAL_PRESETS, findPreset } from './presets';
 
 @Injectable()
-export class SettingsService {
+export class SettingsService implements OnModuleInit {
   constructor(
     @InjectRepository(AppSettings)
     private readonly repo: Repository<AppSettings>,
     private readonly dataSource: DataSource,
     private readonly agentsConfig: AgentsConfigService,
   ) {}
+
+  async onModuleInit() {
+    try {
+      await this.repo.query(`
+        ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticeEmail" character varying;
+        ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticePhone" character varying;
+        ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticeEmailEnabled" boolean DEFAULT false;
+        ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticeSmsEnabled" boolean DEFAULT false;
+        ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticeVapiEnabled" boolean DEFAULT false;
+      `);
+    } catch (e) {
+      console.warn('Auto-migration warning in app_settings table:', e);
+    }
+  }
 
   presets() {
     return VERTICAL_PRESETS;
@@ -51,6 +65,18 @@ export class SettingsService {
       settings.logoUrl = dto.logoUrl === '' ? null : dto.logoUrl;
     if (dto.onboardingCompleted !== undefined)
       settings.onboardingCompleted = dto.onboardingCompleted;
+
+    if (dto.humanNoticeEmail !== undefined)
+      settings.humanNoticeEmail = dto.humanNoticeEmail ? dto.humanNoticeEmail.trim() : null;
+    if (dto.humanNoticePhone !== undefined)
+      settings.humanNoticePhone = dto.humanNoticePhone ? dto.humanNoticePhone.trim() : null;
+    if (dto.humanNoticeEmailEnabled !== undefined)
+      settings.humanNoticeEmailEnabled = Boolean(dto.humanNoticeEmailEnabled);
+    if (dto.humanNoticeSmsEnabled !== undefined)
+      settings.humanNoticeSmsEnabled = Boolean(dto.humanNoticeSmsEnabled);
+    if (dto.humanNoticeVapiEnabled !== undefined)
+      settings.humanNoticeVapiEnabled = Boolean(dto.humanNoticeVapiEnabled);
+
     return this.repo.save(settings);
   }
 

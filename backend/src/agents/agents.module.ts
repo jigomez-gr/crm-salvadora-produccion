@@ -16,6 +16,7 @@ import { AppointmentsModule } from '../appointments/appointments.module';
 import { EmailModule } from '../email/email.module';
 import { UsersModule } from '../users/users.module';
 import { VapiModule } from '../vapi/vapi.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { VapiModule } from '../vapi/vapi.module';
     EmailModule,
     UsersModule,
     VapiModule,
+    NotificationsModule,
   ],
   providers: [AgentRunnerService, OpenRouterService],
   controllers: [AgentsController, WidgetController],

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ShieldAlert, Upload, Trash2, Bot, Mail, Send, CreditCard, Copy, Check, Video, PhoneCall, RefreshCw, FileText } from "lucide-react";
+import { ShieldAlert, Upload, Trash2, Bot, Mail, Send, CreditCard, Copy, Check, Video, PhoneCall, RefreshCw, FileText, UserCheck, Bell } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { readableTextColor } from "@/lib/color";
 import { AppSettings, EmailConfig, PaymentConfig, CalcomConfig, VapiAccountConfig } from "@/lib/types";
@@ -1010,6 +1010,220 @@ function VapiCard() {
   );
 }
 
+// ─── Human Handoff Notification Card ─────────────────────────────────────────
+
+function HumanNoticeCard() {
+  const toast = useToast();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [emailEnabled, setEmailEnabled] = useState(true);
+  const [smsEnabled, setSmsEnabled] = useState(true);
+  const [vapiEnabled, setVapiEnabled] = useState(false);
+
+  useEffect(() => {
+    apiFetch<AppSettings>("/api/settings")
+      .then((data) => {
+        setPhone(data.humanNoticePhone ?? "");
+        setEmail(data.humanNoticeEmail ?? "");
+        setEmailEnabled(data.humanNoticeEmailEnabled ?? true);
+        setSmsEnabled(data.humanNoticeSmsEnabled ?? true);
+        setVapiEnabled(data.humanNoticeVapiEnabled ?? false);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await apiFetch("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify({
+          humanNoticePhone: phone.trim(),
+          humanNoticeEmail: email.trim(),
+          humanNoticeEmailEnabled: emailEnabled,
+          humanNoticeSmsEnabled: smsEnabled,
+          humanNoticeVapiEnabled: vapiEnabled,
+        }),
+      });
+      toast.success("Avisos de atención humana guardados.");
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "No se pudo guardar la configuración de avisos."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleTest() {
+    setTesting(true);
+    try {
+      const res = await apiFetch<{
+        ok: boolean;
+        results: {
+          email?: { attempted: boolean; success: boolean; error?: string };
+          sms?: { attempted: boolean; success: boolean; error?: string };
+          vapi?: { attempted: boolean; success: boolean; error?: string };
+        };
+      }>("/api/notifications/test-human-notice", {
+        method: "POST",
+      });
+
+      const parts: string[] = [];
+      if (res.results.email?.attempted) {
+        parts.push(`Email: ${res.results.email.success ? "✓ Enviado" : "✗ Falló"}`);
+      }
+      if (res.results.sms?.attempted) {
+        parts.push(`SMS: ${res.results.sms.success ? "✓ Enviado" : "✗ Falló"}`);
+      }
+      if (res.results.vapi?.attempted) {
+        parts.push(`Llamada VAPI: ${res.results.vapi.success ? "✓ Iniciada" : "✗ Falló"}`);
+      }
+
+      if (parts.length === 0) {
+        toast.info("Ningún canal activo configurado para probar.");
+      } else {
+        toast.success(`Prueba de avisos: ${parts.join(" | ")}`);
+      }
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Error al ejecutar la prueba de aviso."
+      );
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return (
+    <div className="mt-6 max-w-xl rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
+      <div className="flex items-center gap-2">
+        <UserCheck className="h-5 w-5 text-indigo-600" />
+        <h2 className="text-sm font-semibold text-neutral-900">
+          Avisos de Atención Humana (Escalado)
+        </h2>
+      </div>
+      <p className="mt-1 text-sm text-neutral-500">
+        Recibe avisos inmediatos cuando un usuario en la Web / Landing, WhatsApp o en llamada con la IA solicite y confirme hablar con una persona.
+      </p>
+
+      <div className="mt-4 space-y-4">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-neutral-700">
+            Móvil de aviso (SMS y llamadas salientes VAPI)
+          </label>
+          <Input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+34 695 17 26 25"
+          />
+          <p className="mt-1 text-[11px] text-neutral-400">
+            Número al que se enviará el SMS urgente y/o donde llamará la IA de VAPI al responsable.
+          </p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-neutral-700">
+            Email de aviso
+          </label>
+          <Input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="jigomez@hotmail.com"
+          />
+          <p className="mt-1 text-[11px] text-neutral-400">
+            Dirección donde se enviará el correo con los datos del contacto y resumen.
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-neutral-100 bg-neutral-50/70 p-3.5 space-y-2.5">
+          <span className="block text-xs font-semibold text-neutral-700">
+            Canales de aviso habilitados:
+          </span>
+
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={emailEnabled}
+              onChange={(e) => setEmailEnabled(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <div>
+              <span className="text-xs font-medium text-neutral-800">
+                Aviso por Email
+              </span>
+              <p className="text-[11px] text-neutral-500">
+                Envía un correo con el nombre, teléfono, email, motivo y canal del cliente.
+              </p>
+            </div>
+          </label>
+
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={smsEnabled}
+              onChange={(e) => setSmsEnabled(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <div>
+              <span className="text-xs font-medium text-neutral-800">
+                Aviso por SMS
+              </span>
+              <p className="text-[11px] text-neutral-500">
+                Envía un SMS urgente al móvil de aviso (mediante la integración Zadarma).
+              </p>
+            </div>
+          </label>
+
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={vapiEnabled}
+              onChange={(e) => setVapiEnabled(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <div>
+              <span className="text-xs font-medium text-neutral-800">
+                Llamada saliente VAPI (Outbound)
+              </span>
+              <p className="text-[11px] text-neutral-500">
+                La IA llama por teléfono al móvil de aviso para comunicar de viva voz que un cliente solicita atención humana.
+              </p>
+            </div>
+          </label>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 pt-2">
+          <Button onClick={handleSave} disabled={saving}>
+            <Upload className="h-4 w-4" />
+            {saving ? "Guardando…" : "Guardar avisos"}
+          </Button>
+
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleTest}
+            disabled={testing || saving}
+          >
+            <Bell className="h-4 w-4" />
+            {testing ? "Probando…" : "Probar avisos ahora"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { user } = useAuth();
   const branding = useBranding();
@@ -1231,6 +1445,9 @@ export default function SettingsPage() {
 
       {/* Voz Telefónica (VAPI & Zadarma) y SMS */}
       <VapiCard />
+
+      {/* Avisos de Atención Humana (Escalado) */}
+      <HumanNoticeCard />
 
       {/* Test environment reset card */}
       <div className="mt-6 max-w-xl rounded-xl border border-amber-300 bg-amber-50/60 p-6 shadow-sm">

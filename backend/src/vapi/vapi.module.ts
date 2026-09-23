@@ -11,6 +11,7 @@ import { AppointmentsModule } from '../appointments/appointments.module';
 import { ContactsModule } from '../contacts/contacts.module';
 import { AuthModule } from '../auth/auth.module';
 import { ZadarmaSmsModule } from '../sms/zadarma-sms.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { VapiService } from './vapi.service';
 import { VapiWebhookService } from './vapi-webhook.service';
 import { VapiController } from './vapi.controller';
@@ -31,6 +32,7 @@ import { VapiWebhookController } from './vapi-webhook.controller';
     forwardRef(() => ContactsModule),
     AuthModule,
     ZadarmaSmsModule,
+    forwardRef(() => NotificationsModule),
   ],
   providers: [VapiService, VapiWebhookService],
   controllers: [VapiWebhookController, VapiController],

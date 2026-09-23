@@ -39,4 +39,26 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsBoolean()
   onboardingCompleted?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  humanNoticeEmail?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  humanNoticePhone?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  humanNoticeEmailEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  humanNoticeSmsEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  humanNoticeVapiEnabled?: boolean;
 }
