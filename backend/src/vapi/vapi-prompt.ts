@@ -16,6 +16,7 @@ export interface PromptInputData {
     description?: string | null;
     maxCapacity?: number | null;
     requiresApproval?: boolean;
+    allowedModalities?: string[];
   }>;
   facts?: Array<{ question: string; answer: string }>;
 }
@@ -100,6 +101,19 @@ export function composeVapiSystemPrompt(input: PromptInputData): string {
     ? ' Requiere aprobación de Jose Ignacio Gomez Raya.'
     : ' Confirmación inmediata.';
 
+  const getModalityText = (svc?: { allowedModalities?: string[] }, defaultText = 'Presencial') => {
+    if (!svc?.allowedModalities || svc.allowedModalities.length === 0) return defaultText;
+    const hasInPerson = svc.allowedModalities.includes('in_person');
+    const hasVirtual = svc.allowedModalities.includes('virtual');
+    if (hasInPerson && hasVirtual) return 'Presencial u Online';
+    if (hasVirtual) return 'Online (videollamada)';
+    return 'Presencial';
+  };
+
+  const gestaltModality = getModalityText(gestaltSvc, 'Presencial u Online');
+  const bienestarModality = getModalityText(bienestarSvc, 'Presencial (Exposición en Auditorio de Madrid)');
+  const bienestarSchedule = bienestarSvc?.scheduleText || 'Se comunicará la fecha en Octubre';
+
   const approvalServices = (input.services || [])
     .filter((s) => {
       if (!s.requiresApproval) return false;
@@ -164,9 +178,10 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
   * Horarios: Martes y Jueves de 09:15 a 09:45.
   * Precios: ${meditacionPrice}/mes o 3€ meditación suelta (¡Gratis para alumnos de Yoga!). Se pueden mover libremente entre martes y jueves evitando horarios llenos para no colapsar el aforo.
 - **Terapia Gestalt** (Sesión individual de 60 min, ${gestaltPrice}):
-  * Presencial u Online.${gestaltApprovalText}
-- **Bienestar Experience** (Sesión individual de 60 min, ${bienestarPrice}):
-  * Presencial u Online.${bienestarApprovalText}
+  * Modalidad: ${gestaltModality}.${gestaltApprovalText}
+- **Bienestar Experience** (${bienestarPrice}):
+  * Modalidad: ${bienestarModality}.${bienestarApprovalText}
+  * Fechas y horarios: ${bienestarSchedule}. Reserva directa de plaza.
 - **Constelaciones Familiares** (Taller vivencial mensual de 4 horas, NO es sesión diaria individual):
   * Próxima fecha oficial: **Domingo 27 de Septiembre de 2026 de 10:00 a 14:00**.
   * Opciones: 1. Constelar / Asunto propio (${constelarPrice}) | 2. Participar / Representante (${participarPrice}).
@@ -205,7 +220,7 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
    - Si prefiere no darlo o duda al deletrear, NUNCA insistas ni bloquees la cita: respóndele "No te preocupes, te lo dejo todo registrado con tu número de teléfono" y despídete con cercanía y calidez.
 6. **Reprogramar o cambiar cita**: Si el cliente quiere mover su cita (aplica a Yoga, Terapia Gestalt, Bienestar Experience o cualquier servicio):
    - Consulta primero los nuevos huecos disponibles con "consultar_huecos".
-   - Recuerda que para Hatha Yoga los turnos oficiales son exclusivamente martes (09:45, 11:15, 17:00, 18:30 y 20:00), miércoles (20:15) y jueves (09:45, 11:15, 16:00, 17:30 y 19:00). Para sesiones individuales (Gestalt, Bienestar Experience), son de lunes a viernes de 09:00 a 20:00.
+   - Recuerda que para Hatha Yoga los turnos oficiales son exclusivamente martes (09:45, 11:15, 17:00, 18:30 y 20:00), miércoles (20:15) y jueves (09:45, 11:15, 16:00, 17:30 y 19:00). Para sesiones individuales de Gestalt, son de lunes a viernes de 09:00 a 20:00. Para Bienestar Experience, la fecha se comunicará en octubre (se formaliza plaza prioritaria directamente).
    - Tras la confirmación del cliente con el nuevo turno, ejecuta "reprogramar_cita" pasando el nuevo código ISO (y su email si te lo facilita). El sistema actualizará el calendario, liberará el turno anterior y le enviará el correo con el nuevo horario actualizado. Si el sistema te indica que no tiene correo electrónico registrado, pídeselo deletreado letra por letra (por ejemplo: jota, i, g, o, m, e, z, arroba gmail punto com) y regístralo con "guardar_datos_contacto" para enviarle la confirmación.
 7. **Anular o cancelar cita**: Si el cliente solicita cancelar una cita (aplica a Yoga, Gestalt, Bienestar Experience, Baños de Gong, Constelaciones o cualquier servicio):
    - Pídele confirmación y pregúntale con amabilidad el motivo de la cancelación.
@@ -220,7 +235,8 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
    - Baño de Gong: sábado 26 de septiembre de 2026 de 18:00 a 20:00.
    - Puja de Gongs: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027 (el precio se determinara en funcion de las caracteristicas del viaje y alojamiento).
    - Encuentro de Mujeres: fecha por confirmar (precio por confirmar).
-   - Sesiones individuales (Gestalt, Bienestar): lunes a viernes entre las 09:00 y las 20:00 según disponibilidad${approvalServicesSummary ? ` (con confirmación previa para: ${approvalServicesSummary})` : ''}.
+   - Terapia Gestalt: lunes a viernes entre las 09:00 y las 20:00 según disponibilidad${gestaltRequiresApproval ? ' (con confirmación previa de Jose Ignacio)' : ''}.
+   - Bienestar Experience: ${bienestarSchedule} (${bienestarModality}, plaza directa sin aprobación).
 2. **COMPRUEBA SIEMPRE CONTRA EL CALENDARIO OFICIAL (NUNCA EN CITAS NI INVENTAR)**:
    - Si el cliente solicita o propone un día o una hora concreta (por ejemplo, "¿puedo ir este lunes?" o "¿a las 10 de la mañana?"), comprueba si ese turno está en el CALENDARIO OFICIAL del servicio:
    - Si NO está en el calendario oficial: Corrígele de inmediato con cercanía y amabilidad: "Ese horario no existe en el calendario oficial de esta actividad. Los horarios oficiales son [calendario oficial]. ¿Te viene bien alguno de ellos?".

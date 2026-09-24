@@ -97,11 +97,11 @@ export const OFFICIAL_SERVICES: OfficialServiceConfig[] = [
     name: 'Bienestar Experience (Sesión Individual)',
     aliases: /bienestar|longevidad/i,
     category: 'individual_flexible',
-    scheduleSummary: 'lunes a viernes de 09:00 a 20:00 según disponibilidad',
+    scheduleSummary: 'Se comunicará la fecha en Octubre (Auditorio de Madrid)',
     durationMinutes: 60,
     maxCapacity: 1,
     requiresApproval: false,
-    priceInfo: '19.99€ por sesión de 1 hora.',
+    priceInfo: '19.99€ por plaza/sesión.',
   },
   {
     id: 'constelaciones',

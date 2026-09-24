@@ -869,6 +869,13 @@ export class ServicesService implements OnModuleInit {
         WHERE name ILIKE '%fin de semana%' OR name ILIKE '%gong%' OR name ILIKE '%taller%';
       `).catch(() => null);
 
+      // Ensure Bienestar Experience allowedModalities is in_person only
+      await this.serviceRepo.query(`
+        UPDATE services 
+        SET "allowedModalities" = '["in_person"]'::jsonb
+        WHERE name ILIKE '%bienestar%';
+      `).catch(() => null);
+
       // Ensure Bienestar Experience price is 19.99 and description matches across all database tables
       await this.serviceRepo.query(`
         UPDATE services 
