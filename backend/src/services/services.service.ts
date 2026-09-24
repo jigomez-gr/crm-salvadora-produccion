@@ -196,13 +196,15 @@ export class ServicesService implements OnModuleInit {
         if (!bienestarSvc.price || bienestarSvc.price === '25.00' || bienestarSvc.price === '25') {
           bienestarSvc.price = '19.99';
         }
-        bienestarSvc.allowedModalities = ['in_person', 'virtual'];
+        if (!bienestarSvc.allowedModalities || bienestarSvc.allowedModalities.length === 0) {
+          bienestarSvc.allowedModalities = ['in_person'];
+        }
         bienestarSvc.isActive = true;
         if (bienestarSvc.description && bienestarSvc.description.includes('25€')) {
           bienestarSvc.description = bienestarSvc.description.replace(/25€/g, '19.99€');
         } else if (!bienestarSvc.description) {
           bienestarSvc.description =
-            'Programa y sesiones de asesoramiento personalizado presencial y online en longevidad, bienestar integral, nutrición, biohacking, meditación y psicología positiva. Horario convenido individualmente. Requiere aprobación previa del responsable (Jose Ignacio Gomez Raya). Precio: 19.99€ por sesión de 1 hora. Pago en el centro.';
+            'Programa y sesiones de asesoramiento personalizado en longevidad, bienestar integral, nutrición, biohacking, meditación y psicología positiva. Horario convenido individualmente. Precio: 19.99€ por sesión de 1 hora. Pago en el centro.';
         }
         await this.serviceRepo.save(bienestarSvc);
       } else {
@@ -218,7 +220,7 @@ export class ServicesService implements OnModuleInit {
             calendarId: 'cal-bienestar-experience',
             managerId: manager.id,
             requiresApproval: false,
-            allowedModalities: ['in_person', 'virtual'],
+            allowedModalities: ['in_person'],
             isActive: true,
           }),
         );
@@ -614,7 +616,7 @@ export class ServicesService implements OnModuleInit {
               maxCapacity: 1,
               durationMinutes: 60,
               price: bienestarSvc?.price || s.price || '19.99',
-              allowedModalities: ['in_person', 'virtual'],
+              allowedModalities: bienestarSvc?.allowedModalities || s.allowedModalities || ['in_person'],
             };
           }
           if (/mujeres|femenino/i.test(s.name || '')) {
