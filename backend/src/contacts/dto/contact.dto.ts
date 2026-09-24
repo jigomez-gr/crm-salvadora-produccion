@@ -63,6 +63,11 @@ export class CreateContactDto {
   @IsOptional()
   @IsString()
   studentModality?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1)
+  bloqueado?: string;
 }
 
 export class UpdateContactDto {
@@ -128,6 +133,11 @@ export class UpdateContactDto {
   @IsOptional()
   @IsNumber()
   boardPosition?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1)
+  bloqueado?: string;
 }
 
 export class ConvertToStudentDto {

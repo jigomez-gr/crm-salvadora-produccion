@@ -1,4 +1,4 @@
-import { Injectable, Inject, Logger } from '@nestjs/common';
+import { Injectable, Inject, Logger, Optional } from '@nestjs/common';
 import { MASTRA } from '@mastra/nestjs';
 import { Mastra } from '@mastra/core/mastra';
 import { RequestContext } from '@mastra/core/request-context';
@@ -19,6 +19,8 @@ import { KnowledgeService } from '../knowledge/knowledge.service';
 import { KNOWLEDGE_BUDGET_CHARS } from '../knowledge/knowledge-core';
 import { normalizeColloquialSpanishTimes } from '../common/time';
 import { ServicesService } from '../services/services.service';
+import { SettingsService } from '../settings/settings.service';
+import { MAINTENANCE_MESSAGE, BLOCKED_USER_MESSAGE } from '../common/system-messages';
 
 // Hard cap on tool-call/generation steps per turn — bounds the agent loop so a
 // misbehaving model (or a prompt-injection loop) can't rack up unbounded
@@ -85,6 +87,7 @@ export class AgentRunnerService {
     private readonly eventEmitter: EventEmitter2,
     private readonly knowledgeService: KnowledgeService,
     private readonly servicesService: ServicesService,
+    @Optional() private readonly settingsService?: SettingsService,
   ) {}
 
   /** Persist an outbound reply (status by channel) and emit a sanitized SSE. */
@@ -162,6 +165,31 @@ export class AgentRunnerService {
       ...toMessageView(inbound),
       threadId: inbound.threadId,
     });
+
+    // 1. Maintenance Mode Check ('S')
+    const isMaintenance = await this.settingsService?.isMaintenanceActive().catch(() => false);
+    if (isMaintenance) {
+      this.logger.log(`Maintenance mode active ('S') — replying with maintenance message.`);
+      const reply = MAINTENANCE_MESSAGE;
+      const outbound = await this.emitOutbound(params, reply);
+      return { reply, outbound };
+    }
+
+    // 2. Blocked User Check ('S')
+    let isBlocked = false;
+    if (contactId) {
+      const c = await this.contactsService.findById(contactId).catch(() => null);
+      if (c?.bloqueado === 'S') isBlocked = true;
+    }
+    if (!isBlocked && phone) {
+      isBlocked = await this.contactsService.isContactBlocked(phone).catch(() => false);
+    }
+    if (isBlocked) {
+      this.logger.log(`Contact ${contactId || phone} is blocked ('S') — replying with blocked restriction message.`);
+      const reply = BLOCKED_USER_MESSAGE;
+      const outbound = await this.emitOutbound(params, reply);
+      return { reply, outbound };
+    }
 
     // Consent keywords (STOP/BAJA → opt-out, ALTA/START → opt-in). Honored on
     // WhatsApp BEFORE the disabled/handoff checks (a STOP must always be obeyed)
@@ -267,6 +295,9 @@ export class AgentRunnerService {
           textosinpreciodefinitivo: s.textosinpreciodefinitivo,
         }));
       }
+
+      (agentConfig as any).serviciosEnMantenimiento =
+        (await this.settingsService?.get().catch(() => null))?.serviciosEnMantenimiento || 'N';
 
       requestContext.set('agentConfig', agentConfig);
       if (agentConfig.openrouterApiKey && agentConfig.openrouterApiKey !== 'sk-or-placeholder') {

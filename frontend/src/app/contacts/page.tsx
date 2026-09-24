@@ -227,6 +227,7 @@ function ContactsPageInner() {
       customFields,
       isStudent: data.isStudent,
       studentModality: data.isStudent ? (data.studentModality || "1_clase_semanal") : null,
+      bloqueado: data.bloqueado || "N",
     };
     if (editingContact) {
       await apiFetch(`/api/contacts/${editingContact.id}`, {
@@ -371,6 +372,11 @@ function ContactsPageInner() {
                     >
                       {c.name}
                     </Link>
+                    {c.bloqueado === "S" && (
+                      <span className="ml-2 inline-flex items-center gap-0.5 rounded-full bg-red-100 border border-red-300 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
+                        🚫 Bloqueado
+                      </span>
+                    )}
                     {c.optedOut && (
                       <span className="ml-2 rounded-full bg-yellow-100 px-1.5 py-0.5 text-[10px] font-medium text-yellow-700">
                         Baja

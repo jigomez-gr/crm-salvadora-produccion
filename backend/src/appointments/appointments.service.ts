@@ -18,6 +18,8 @@ import {
 } from '../common/entities/appointment.entity';
 import { Service } from '../common/entities/service.entity';
 import { VapiAccount } from '../common/entities/vapi-account.entity';
+import { AppSettings } from '../common/entities/app-settings.entity';
+import { MAINTENANCE_MESSAGE, BLOCKED_USER_MESSAGE } from '../common/system-messages';
 import { CalcomService } from '../calcom/calcom.service';
 import { ZadarmaSmsService } from '../sms/zadarma-sms.service';
 import { TZDate } from '@date-fns/tz';
@@ -82,6 +84,8 @@ export class AppointmentsService implements OnModuleInit {
     private readonly ycloudClient: YCloudClient,
     private readonly agentsConfigService: AgentsConfigService,
     private readonly messagesService: MessagesService,
+    @InjectRepository(AppSettings)
+    private readonly settingsRepo: Repository<AppSettings>,
     @Optional()
     private readonly zadarmaSms?: ZadarmaSmsService,
   ) {}
@@ -169,6 +173,20 @@ export class AppointmentsService implements OnModuleInit {
   }
 
   async create(dto: CreateAppointmentDto): Promise<Appointment> {
+    // 0. Maintenance Mode Check
+    const [settings] = await this.settingsRepo.find({ take: 1 }).catch(() => []);
+    if (settings?.serviciosEnMantenimiento === 'S') {
+      throw new BadRequestException(MAINTENANCE_MESSAGE);
+    }
+
+    // 0.1 Blocked Contact Check
+    if (dto.contactId) {
+      const contact = await this.contactsRepo.findOne({ where: { id: dto.contactId } });
+      if (contact?.bloqueado === 'S') {
+        throw new BadRequestException(BLOCKED_USER_MESSAGE);
+      }
+    }
+
     if (dto.replacesAppointmentId) {
       const toCancel = await this.appointmentsRepo.findOne({
         where: { id: dto.replacesAppointmentId },
@@ -2167,6 +2185,11 @@ export class AppointmentsService implements OnModuleInit {
     serviceId?: string,
     serviceName?: string,
   ): Promise<TimeSlot[]> {
+    const [settings] = await this.settingsRepo.find({ take: 1 }).catch(() => []);
+    if (settings?.serviciosEnMantenimiento === 'S') {
+      return [];
+    }
+
     // Day window in the business timezone
     const zoned = new TZDate(date.getTime(), timezone);
     const dayStart = new TZDate(zoned.getFullYear(), zoned.getMonth(), zoned.getDate(), 0, 0, timezone);

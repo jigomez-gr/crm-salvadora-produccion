@@ -19,6 +19,7 @@ import { VapiAccountConfigDto } from './vapi.types';
 import { VAPI_CATALOG } from './vapi-catalog';
 import { composeVapiSystemPrompt, PromptInputData } from './vapi-prompt';
 import { buildVapiToolDefinitions, VapiToolDefinition } from './vapi-tools';
+import { MAINTENANCE_MESSAGE, BLOCKED_USER_MESSAGE } from '../common/system-messages';
 
 const VAPI_BASE_URL = 'https://api.vapi.ai';
 
@@ -405,6 +406,7 @@ export class VapiService implements OnModuleInit {
         allowedModalities: s.allowedModalities,
       })),
       phone: agent?.whatsappNumber || null,
+      serviciosEnMantenimiento: settings?.serviciosEnMantenimiento || 'N',
     };
   }
 
@@ -1319,13 +1321,42 @@ export class VapiService implements OnModuleInit {
   }> {
     const rawPhone = (dto.phoneNumber || '').trim();
 
-    // 1. Validate E.164 phone format
+    // 1. Check maintenance mode
+    const appSettings = await this.settingsRepo.find({ order: { createdAt: 'ASC' }, take: 1 });
+    if (appSettings[0]?.serviciosEnMantenimiento === 'S') {
+      return {
+        success: false,
+        error: MAINTENANCE_MESSAGE,
+        statusCode: 503,
+      };
+    }
+
+    // 2. Validate E.164 phone format
     if (!rawPhone || !rawPhone.startsWith('+')) {
       return {
         success: false,
         error: 'El número de teléfono es obligatorio y debe tener formato E.164 (+34...)',
         statusCode: 400,
       };
+    }
+
+    // 3. Check blocked user
+    const cleanDigits = rawPhone.replace(/\D/g, '');
+    if (cleanDigits.length >= 7) {
+      const national = cleanDigits.length > 9 ? cleanDigits.slice(-9) : cleanDigits;
+      const contact = await this.contactsRepo
+        .createQueryBuilder('c')
+        .where("REPLACE(REPLACE(c.phone, ' ', ''), '-', '') LIKE :clean", {
+          clean: `%${national}%`,
+        })
+        .getOne();
+      if (contact?.bloqueado === 'S') {
+        return {
+          success: false,
+          error: BLOCKED_USER_MESSAGE,
+          statusCode: 403,
+        };
+      }
     }
 
     const acc = await this.getAccount();

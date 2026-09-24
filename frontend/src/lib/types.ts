@@ -125,6 +125,7 @@ export interface Contact {
   pipelineStage?: PipelineStage;
   boardPosition?: number;
   // Consent / GDPR.
+  bloqueado?: string;
   optedOut: boolean;
   optedOutAt?: string | null;
   anonymizedAt?: string | null;
@@ -381,6 +382,7 @@ export interface AppSettings {
   businessName: string;
   brandColor: string;
   logoUrl: string | null;
+  serviciosEnMantenimiento?: string;
   onboardingCompleted: boolean;
   humanNoticeEmail?: string | null;
   humanNoticePhone?: string | null;
@@ -395,6 +397,7 @@ export interface PublicBranding {
   businessName: string;
   brandColor: string;
   logoUrl: string | null;
+  serviciosEnMantenimiento?: string;
 }
 
 // ─── Email (SMTP) ───

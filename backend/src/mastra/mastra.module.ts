@@ -65,6 +65,9 @@ export { NestMastraModule };
           findContact: async (phone?: string, email?: string) => {
             return contactsService.findByPhoneOrEmail(phone, email);
           },
+          isContactBlocked: async (phoneOrEmailOrId: string) => {
+            return contactsService.isContactBlocked(phoneOrEmailOrId);
+          },
           findContactByPhone: async (phone: string) => {
             return contactsService.findByPhone(phone);
           },

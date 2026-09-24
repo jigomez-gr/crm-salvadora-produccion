@@ -8,6 +8,7 @@ import {
   parseFlexibleStartsAt,
   normalizeColloquialSpanishTimes,
 } from '../common/time';
+import { MAINTENANCE_MESSAGE, BLOCKED_USER_MESSAGE } from '../common/system-messages';
 
 // A single reusable agent template serves every configured agent. The concrete
 // business persona, model and credentials are resolved per request from the
@@ -31,6 +32,7 @@ export interface BookingAgentDeps {
     fields: { name?: string; email?: string; phone?: string },
   ) => Promise<any>;
   findContact?: (phone?: string, email?: string) => Promise<any>;
+  isContactBlocked?: (phoneOrEmailOrId: string) => Promise<boolean>;
   getAvailableSlots: (
     date: string,
     durationMinutes: number,
@@ -366,6 +368,24 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     }),
     execute: async (inputData, context) => {
       const config = getConfig(context);
+      if (config?.serviciosEnMantenimiento === 'S') {
+        return {
+          error: MAINTENANCE_MESSAGE,
+          message: MAINTENANCE_MESSAGE,
+        };
+      }
+
+      const customer = getCustomer(context);
+      if (customer?.contactId && deps.isContactBlocked) {
+        const isBlocked = await deps.isContactBlocked(customer.contactId).catch(() => false);
+        if (isBlocked) {
+          return {
+            error: BLOCKED_USER_MESSAGE,
+            message: BLOCKED_USER_MESSAGE,
+          };
+        }
+      }
+
       const workingHours = config?.workingHours || [];
       const timezone = config?.timezone || 'Europe/Madrid';
 
@@ -568,6 +588,34 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
             email: emailToUse,
           })
           .catch(() => null);
+      }
+
+      // Check maintenance mode
+      if (config?.serviciosEnMantenimiento === 'S') {
+        return {
+          error: MAINTENANCE_MESSAGE,
+          message: MAINTENANCE_MESSAGE,
+        };
+      }
+
+      // Check blocked user right before appointment operation
+      if (contactId && deps.isContactBlocked) {
+        const isBlocked = await deps.isContactBlocked(contactId).catch(() => false);
+        if (isBlocked) {
+          return {
+            error: BLOCKED_USER_MESSAGE,
+            message: BLOCKED_USER_MESSAGE,
+          };
+        }
+      }
+      if (phoneToUse && deps.isContactBlocked) {
+        const isBlocked = await deps.isContactBlocked(phoneToUse).catch(() => false);
+        if (isBlocked) {
+          return {
+            error: BLOCKED_USER_MESSAGE,
+            message: BLOCKED_USER_MESSAGE,
+          };
+        }
       }
 
       if (!contactId) {

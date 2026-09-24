@@ -20,6 +20,7 @@ import {
   VapiToolResponseResult,
   VapiWebhookResponse,
 } from './vapi.types';
+import { MAINTENANCE_MESSAGE, BLOCKED_USER_MESSAGE } from '../common/system-messages';
 import { format, parseISO, isValid, addDays, startOfWeek, endOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { TZDate } from '@date-fns/tz';
@@ -416,6 +417,22 @@ export class VapiWebhookService {
     }
 
     this.logger.log(`Executing VAPI Tool: [${name}] with params: ${JSON.stringify(params)} for caller: ${ctx.callerNumber}`);
+
+    // 1. Maintenance Mode Check
+    const [settings] = await this.settingsRepo.find({ take: 1 }).catch(() => []);
+    if (settings?.serviciosEnMantenimiento === 'S') {
+      this.logger.log(`VAPI Tool [${name}] blocked due to active maintenance mode ('S')`);
+      return MAINTENANCE_MESSAGE;
+    }
+
+    // 2. Blocked Caller Check
+    if (ctx.callerNumber) {
+      const contact = await this.findContactByPhoneOrEmail(ctx.callerNumber).catch(() => null);
+      if (contact?.bloqueado === 'S') {
+        this.logger.log(`VAPI Tool [${name}] blocked: Caller ${ctx.callerNumber} is blocked ('S')`);
+        return BLOCKED_USER_MESSAGE;
+      }
+    }
 
     try {
       switch (name) {
@@ -1026,6 +1043,9 @@ export class VapiWebhookService {
 
     // 1. Find or create Contact
     let contact = await this.findContactByPhoneOrEmail(effectivePhone, providedEmail);
+    if (contact?.bloqueado === 'S') {
+      return BLOCKED_USER_MESSAGE;
+    }
     if (!contact) {
       contact = this.contactsRepo.create({
         name: customerName,

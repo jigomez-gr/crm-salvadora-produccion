@@ -35,6 +35,7 @@ import {
   AnalizaIaPublicRequestDto,
   AnalizaIaEnviarPeticionDto,
 } from './dto/analizaia.dto';
+import { MAINTENANCE_MESSAGE, BLOCKED_USER_MESSAGE } from '../common/system-messages';
 
 function formatAiDiagnosisToHtml(rawText: string): string {
   if (!rawText) {
@@ -155,6 +156,8 @@ export class WidgetController {
       businessDescription: config.businessDescription || '',
       brandColor: branding?.brandColor || '#800020',
       logoUrl: branding?.logoUrl || null,
+      serviciosEnMantenimiento: branding?.serviciosEnMantenimiento || 'N',
+      mantenimientoMessage: branding?.serviciosEnMantenimiento === 'S' ? MAINTENANCE_MESSAGE : null,
       tone: config.tone || 'cálido, profesional y cercano',
       whatsappNumber: config.whatsappNumber || '34695172625',
       services,
@@ -196,6 +199,8 @@ export class WidgetController {
       businessDescription: agentConfig?.businessDescription || '',
       brandColor: branding?.brandColor || '#800020',
       logoUrl: branding?.logoUrl || null,
+      serviciosEnMantenimiento: branding?.serviciosEnMantenimiento || 'N',
+      mantenimientoMessage: branding?.serviciosEnMantenimiento === 'S' ? MAINTENANCE_MESSAGE : null,
       whatsappNumber: whatsappPhone,
       categories: dbCategories.map((c) => ({
         id: c.id,
@@ -274,12 +279,32 @@ export class WidgetController {
     @Param('agentKey') agentKey: string,
     @Body() dto: WidgetChatDto,
   ) {
+    const threadId = `${agentKey}:widget-${dto.sessionId}`;
+
+    // 1. Maintenance Check
+    const isMaintenance = await this.settingsService.isMaintenanceActive().catch(() => false);
+    if (isMaintenance) {
+      return {
+        reply: MAINTENANCE_MESSAGE,
+        threadId,
+      };
+    }
+
+    // 2. Blocked Check
+    if (dto.phone) {
+      const isBlocked = await this.contactsService.isContactBlocked(dto.phone).catch(() => false);
+      if (isBlocked) {
+        return {
+          reply: BLOCKED_USER_MESSAGE,
+          threadId,
+        };
+      }
+    }
+
     const config = await this.agentsConfigService.findByKeyOrNull(agentKey);
     if (!config) {
       throw new NotFoundException(`Agente ${agentKey} no encontrado.`);
     }
-
-    const threadId = `${agentKey}:widget-${dto.sessionId}`;
 
     let contactId: string | undefined;
     let contactName = dto.name;
@@ -299,6 +324,12 @@ export class WidgetController {
         contactId = conv.contactId;
         const contact = await this.contactsService.findById(conv.contactId).catch(() => null);
         if (contact) {
+          if (contact.bloqueado === 'S') {
+            return {
+              reply: BLOCKED_USER_MESSAGE,
+              threadId,
+            };
+          }
           contactName = contactName || contact.name;
           dto.phone = dto.phone || contact.phone;
         }
@@ -335,6 +366,15 @@ export class WidgetController {
     @Param('agentKey') agentKey: string,
     @Body() dto: { sessionId: string; name: string; phone: string; email?: string; serviceName?: string; note?: string },
   ) {
+    const isMaintenance = await this.settingsService.isMaintenanceActive().catch(() => false);
+    if (isMaintenance) {
+      throw new BadRequestException(MAINTENANCE_MESSAGE);
+    }
+    const isBlocked = await this.contactsService.isContactBlocked(dto.phone).catch(() => false);
+    if (isBlocked) {
+      throw new BadRequestException(BLOCKED_USER_MESSAGE);
+    }
+
     const config = await this.agentsConfigService.findByKeyOrNull(agentKey);
     const targetPhone = config?.whatsappNumber || '34695172625';
     const cleanTarget = targetPhone.replace(/\D/g, '');
@@ -401,11 +441,58 @@ export class WidgetController {
   // LLAMADAS SALIENTES VAPI (VOICE AI) — LANDING & WIDGET
   // ─────────────────────────────────────────────────────────────
 
+  @Get('check-contact')
+  async checkContact(
+    @Query('phone') phone?: string,
+    @Query('email') email?: string,
+  ) {
+    const isMaintenance = await this.settingsService.isMaintenanceActive().catch(() => false);
+    if (isMaintenance) {
+      return {
+        maintenance: true,
+        blocked: false,
+        message: MAINTENANCE_MESSAGE,
+      };
+    }
+
+    let isBlocked = false;
+    if (phone) {
+      isBlocked = await this.contactsService.isContactBlocked(phone).catch(() => false);
+    }
+    if (!isBlocked && email) {
+      isBlocked = await this.contactsService.isContactBlocked(email).catch(() => false);
+    }
+
+    return {
+      maintenance: false,
+      blocked: isBlocked,
+      message: isBlocked ? BLOCKED_USER_MESSAGE : null,
+    };
+  }
+
   @Post('vapi/call')
   async handleVapiOutboundCall(
     @Body() dto: WidgetVapiCallDto,
     @Res({ passthrough: true }) res: Response,
   ) {
+    const isMaintenance = await this.settingsService.isMaintenanceActive().catch(() => false);
+    if (isMaintenance) {
+      res.status(400);
+      return {
+        success: false,
+        error: MAINTENANCE_MESSAGE,
+      };
+    }
+
+    const isBlocked = await this.contactsService.isContactBlocked(dto.phoneNumber).catch(() => false);
+    if (isBlocked) {
+      res.status(400);
+      return {
+        success: false,
+        error: BLOCKED_USER_MESSAGE,
+      };
+    }
+
     const result = await this.vapiService.triggerLandingOutboundCall(dto);
     if (!result.success) {
       res.status(result.statusCode || 400);

@@ -26,6 +26,7 @@ export class SettingsService implements OnModuleInit {
         ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticeEmailEnabled" boolean DEFAULT false;
         ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticeSmsEnabled" boolean DEFAULT false;
         ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticeVapiEnabled" boolean DEFAULT false;
+        ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "serviciosEnMantenimiento" character varying(1) DEFAULT 'N';
       `);
     } catch (e) {
       console.warn('Auto-migration warning in app_settings table:', e);
@@ -47,12 +48,18 @@ export class SettingsService implements OnModuleInit {
     return this.repo.save(this.repo.create({}));
   }
 
+  async isMaintenanceActive(): Promise<boolean> {
+    const s = await this.get();
+    return s.serviciosEnMantenimiento === 'S';
+  }
+
   async getBranding(): Promise<PublicBranding> {
     const s = await this.get();
     return {
       businessName: s.businessName,
       brandColor: s.brandColor,
       logoUrl: s.logoUrl,
+      serviciosEnMantenimiento: s.serviciosEnMantenimiento || 'N',
     };
   }
 
@@ -76,6 +83,11 @@ export class SettingsService implements OnModuleInit {
       settings.humanNoticeSmsEnabled = Boolean(dto.humanNoticeSmsEnabled);
     if (dto.humanNoticeVapiEnabled !== undefined)
       settings.humanNoticeVapiEnabled = Boolean(dto.humanNoticeVapiEnabled);
+
+    if (dto.serviciosEnMantenimiento !== undefined) {
+      settings.serviciosEnMantenimiento =
+        dto.serviciosEnMantenimiento?.toUpperCase() === 'S' ? 'S' : 'N';
+    }
 
     return this.repo.save(settings);
   }

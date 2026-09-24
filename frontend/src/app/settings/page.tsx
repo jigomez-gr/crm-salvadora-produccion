@@ -1232,6 +1232,7 @@ export default function SettingsPage() {
   const [businessName, setBusinessName] = useState("");
   const [brandColor, setBrandColor] = useState("#4f46e5");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [serviciosEnMantenimiento, setServiciosEnMantenimiento] = useState<"S" | "N">("N");
   const [saving, setSaving] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -1247,6 +1248,9 @@ export default function SettingsPage() {
         setBusinessName(data.businessName);
         setBrandColor(data.brandColor);
         setLogoUrl(data.logoUrl);
+        setServiciosEnMantenimiento(
+          data.serviciosEnMantenimiento === "S" ? "S" : "N"
+        );
       })
       .catch(() => {})
       .finally(() => {
@@ -1296,6 +1300,7 @@ export default function SettingsPage() {
           businessName,
           brandColor,
           logoUrl: logoUrl ?? "",
+          serviciosEnMantenimiento,
         }),
       });
       await branding.refresh();
@@ -1356,6 +1361,77 @@ export default function SettingsPage() {
       <p className="mt-1 text-sm text-neutral-500">
         Personaliza la marca y gestiona los datos de la aplicación.
       </p>
+
+      {/* Servicios en Mantenimiento */}
+      <div
+        className={cn(
+          "mt-6 max-w-xl rounded-xl border p-6 transition-all shadow-xs",
+          serviciosEnMantenimiento === "S"
+            ? "border-red-300 bg-red-50/70"
+            : "border-neutral-200 bg-white"
+        )}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <ShieldAlert
+                className={cn(
+                  "h-5 w-5",
+                  serviciosEnMantenimiento === "S"
+                    ? "text-red-600"
+                    : "text-neutral-500"
+                )}
+              />
+              <h2 className="text-sm font-semibold text-neutral-800">
+                Servicios en Mantenimiento
+              </h2>
+            </div>
+            <p className="mt-1 text-xs text-neutral-600">
+              Control general de operatividad. Cuando esté en <strong>'S'</strong>, todos los servicios de la Escuela de Yoga responderán indicando que no están operativos y no se gestionará ninguna reserva (afectando a WhatsApp, burbuja web y VAPI).
+            </p>
+          </div>
+          <span
+            className={cn(
+              "rounded-full px-2.5 py-0.5 text-xs font-semibold shrink-0",
+              serviciosEnMantenimiento === "S"
+                ? "bg-red-100 text-red-800 border border-red-200"
+                : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+            )}
+          >
+            {serviciosEnMantenimiento === "S"
+              ? "Mantenimiento Activo (S)"
+              : "Operativo Normal (N)"}
+          </span>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <label className="text-xs font-medium text-neutral-700">
+            Estado de los servicios:
+          </label>
+          <select
+            value={serviciosEnMantenimiento}
+            onChange={(e) =>
+              setServiciosEnMantenimiento(e.target.value as "S" | "N")
+            }
+            className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold shadow-xs focus:border-indigo-500 focus:outline-none"
+          >
+            <option value="N">N — Operativo Normal (Servicios activos)</option>
+            <option value="S">S — Servicios en Mantenimiento (Bloquear reservas)</option>
+          </select>
+          <Button onClick={handleSave} disabled={saving} size="sm">
+            {saving ? "Guardando…" : "Guardar Estado"}
+          </Button>
+        </div>
+
+        {serviciosEnMantenimiento === "S" && (
+          <div className="mt-3 rounded-lg border border-red-200 bg-red-100/90 p-3 text-xs text-red-900 leading-relaxed shadow-2xs">
+            ⚠️ <strong>Modo Mantenimiento Activado:</strong> Todos los canales (WhatsApp, burbuja web y VAPI) responderán:
+            <div className="mt-1.5 rounded bg-white/90 p-2 font-mono text-[11px] text-red-950 border border-red-200">
+              "Los servicios en línea de la Escuela de Yoga de Salvadora Conesa No están operativos en estos momentos Intentelo más tarde "
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Branding */}
       <div className="mt-6 max-w-xl rounded-xl border border-neutral-200 bg-white p-6">

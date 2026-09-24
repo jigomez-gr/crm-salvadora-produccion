@@ -123,6 +123,7 @@ export class ContactsService {
         ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "studentModality" character varying;
         ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "studentSchedule" jsonb;
         ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "studentEnrolledAt" timestamptz;
+        ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "bloqueado" character varying(1) DEFAULT 'N';
       `);
     } catch {
       // Non-fatal schema migration
@@ -413,6 +414,7 @@ export class ContactsService {
       phone,
       tags: dto.tags ?? [],
       source: dto.source ?? 'manual',
+      bloqueado: dto.bloqueado?.toUpperCase() === 'S' ? 'S' : 'N',
       // New contacts land at the top of their column (newest first).
       boardPosition: Date.now(),
     });
@@ -439,11 +441,16 @@ export class ContactsService {
       'isStudent',
       'studentModality',
       'studentSchedule',
+      'bloqueado',
     ] as const;
     const target = contact as unknown as Record<string, unknown>;
     for (const key of simpleFields) {
       if (dto[key] !== undefined) {
-        target[key] = dto[key];
+        if (key === 'bloqueado') {
+          target[key] = dto.bloqueado?.toUpperCase() === 'S' ? 'S' : 'N';
+        } else {
+          target[key] = dto[key];
+        }
       }
     }
 
@@ -471,6 +478,19 @@ export class ContactsService {
     const saved = await this.contactsRepo.save(contact);
     this.emitUpdated(saved);
     return saved;
+  }
+
+  async isContactBlocked(phoneOrEmailOrId?: string | null): Promise<boolean> {
+    if (!phoneOrEmailOrId) return false;
+    const clean = phoneOrEmailOrId.trim();
+    let contact: Contact | null = null;
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean)) {
+      contact = await this.findById(clean).catch(() => null);
+    }
+    if (!contact) {
+      contact = await this.findByPhoneOrEmail(clean, clean).catch(() => null);
+    }
+    return contact?.bloqueado === 'S';
   }
 
   /**

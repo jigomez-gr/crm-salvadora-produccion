@@ -61,4 +61,9 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsBoolean()
   humanNoticeVapiEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1)
+  serviciosEnMantenimiento?: string;
 }

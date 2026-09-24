@@ -98,6 +98,10 @@ export class Contact {
   @Column({ type: 'timestamptz', nullable: true })
   studentEnrolledAt: Date | null;
 
+  // Blocked status: 'S' = blocked due to technical restriction, 'N' = active (default)
+  @Column({ type: 'varchar', length: 1, default: 'N' })
+  bloqueado: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

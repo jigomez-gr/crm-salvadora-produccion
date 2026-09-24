@@ -19,6 +19,7 @@ import {
   Paperclip,
   GraduationCap,
   Pencil,
+  ShieldAlert,
 } from "lucide-react";
 import Link from "next/link";
 import { apiFetch, ApiError, apiUrl } from "@/lib/api";
@@ -253,6 +254,7 @@ export default function ContactDetailPage({
       customFields,
       isStudent: data.isStudent,
       studentModality: data.isStudent ? (data.studentModality || "1_clase_semanal") : null,
+      bloqueado: data.bloqueado || "N",
     };
     await apiFetch(`/api/contacts/${id}`, {
       method: "PATCH",
@@ -260,6 +262,30 @@ export default function ContactDetailPage({
     });
     await refresh();
     toast.success("Contacto actualizado.");
+  }
+
+  async function handleToggleBlock() {
+    if (!contact) return;
+    const newStatus = contact.bloqueado === "S" ? "N" : "S";
+    setBusy(true);
+    try {
+      await apiFetch(`/api/contacts/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ bloqueado: newStatus }),
+      });
+      await refresh();
+      toast.success(
+        newStatus === "S"
+          ? "🚫 Contacto bloqueado por restricción técnica."
+          : "✅ Contacto desbloqueado. Servicios operativos para este usuario."
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Error al actualizar bloqueo del contacto."
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleSaveEmail(e: React.FormEvent) {
@@ -393,6 +419,11 @@ export default function ContactDetailPage({
             {contact.optedOut && (
               <Badge variant="warning">Baja (opt-out)</Badge>
             )}
+            {contact.bloqueado === "S" && (
+              <Badge variant="danger" className="bg-red-600 text-white font-semibold">
+                🚫 Bloqueado (Restricción técnica)
+              </Badge>
+            )}
             {contact.anonymizedAt && (
               <Badge variant="default">Anonimizado</Badge>
             )}
@@ -494,6 +525,20 @@ export default function ContactDetailPage({
               )}
             </Button>
             <Button
+              variant={contact.bloqueado === "S" ? "secondary" : "danger"}
+              size="sm"
+              disabled={busy}
+              onClick={handleToggleBlock}
+              title={
+                contact.bloqueado === "S"
+                  ? "Desbloquear este contacto para permitir llamadas, chats y citas"
+                  : "Bloquear este contacto ante cualquier petición con aviso de restricción técnica"
+              }
+            >
+              <ShieldAlert className="h-3.5 w-3.5" />
+              {contact.bloqueado === "S" ? "Desbloquear usuario" : "Bloquear (Técnico)"}
+            </Button>
+            <Button
               variant="danger"
               size="sm"
               disabled={busy}
@@ -505,6 +550,21 @@ export default function ContactDetailPage({
           </div>
         )}
       </div>
+
+      {contact.bloqueado === "S" && (
+        <div className="mt-4 rounded-xl border border-red-300 bg-red-50 p-4 text-xs text-red-900 shadow-xs">
+          <div className="flex items-center gap-2 font-bold text-sm text-red-700">
+            <ShieldAlert className="h-4 w-4 text-red-600" />
+            Usuario Bloqueado por restricción técnica
+          </div>
+          <p className="mt-1 text-xs text-red-800">
+            Cualquier petición iniciada por este usuario mediante <strong>WhatsApp</strong>, <strong>Burbuja web</strong> o <strong>Llamadas VAPI</strong> será rechazada inmediatamente con la respuesta reglamentaria:
+          </p>
+          <div className="mt-2 rounded-lg bg-white/90 p-2.5 font-mono text-[11px] text-red-950 border border-red-200 shadow-2xs">
+            "Usuario Bloqueado por restricción técnica puede apelar enviando un correo a jigomezjub@gmail.com  y si lo consideramos nos pondremos en contacto con vd "
+          </div>
+        </div>
+      )}
 
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-neutral-200 bg-white p-4">

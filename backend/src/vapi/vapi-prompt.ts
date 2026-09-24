@@ -1,3 +1,5 @@
+import { MAINTENANCE_MESSAGE } from '../common/system-messages';
+
 export interface PromptInputData {
   businessName: string;
   businessDescription?: string;
@@ -8,6 +10,7 @@ export interface PromptInputData {
   timezone: string;
   tone: string;
   hours: Array<{ day: number; open: string; close: string }>;
+  serviciosEnMantenimiento?: string;
   services: Array<{
     name: string;
     durationMinutes: number;
@@ -40,6 +43,16 @@ export function formatWeeklyHours(hours: Array<{ day: number; open: string; clos
 }
 
 export function composeVapiSystemPrompt(input: PromptInputData): string {
+  if (input.serviciosEnMantenimiento === 'S') {
+    return `Eres la recepcionista telefónica y asistente de voz oficial de la Escuela de Yoga de Salvadora Conesa.
+AVISO CRÍTICO DE MANTENIMIENTO TÉCNICO:
+En estos momentos los servicios en línea se encuentran temporalmente en mantenimiento técnico.
+REGLA INQUEBRANTABLE:
+Ante CUALQUIER consulta, saludo, pregunta o solicitud de reserva por parte de quien llame, debes responder siempre y de manera literal y exclusiva lo siguiente:
+"${MAINTENANCE_MESSAGE}"
+Bajo ninguna circunstancia reserves ni consultes citas ni des horarios.`;
+  }
+
   const fechaHoy = `{{ "now" | date: "%d/%m/%Y", "${input.timezone}" }}`;
   const horaAhora = `{{ "now" | date: "%H:%M", "${input.timezone}" }}`;
 

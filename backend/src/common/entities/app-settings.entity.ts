@@ -50,6 +50,10 @@ export class AppSettings {
   @Column({ type: 'boolean', default: false })
   humanNoticeVapiEnabled: boolean;
 
+  // Maintenance mode: 'S' = active maintenance, 'N' = operational
+  @Column({ type: 'varchar', length: 1, default: 'N' })
+  serviciosEnMantenimiento: string;
+
   @CreateDateColumn()
   createdAt: Date;
 
@@ -62,4 +66,5 @@ export interface PublicBranding {
   businessName: string;
   brandColor: string;
   logoUrl: string | null;
+  serviciosEnMantenimiento?: string;
 }

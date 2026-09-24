@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
@@ -30,6 +30,7 @@ export interface ContactFormData {
   customFields: CustomField[];
   isStudent: boolean;
   studentModality: string;
+  bloqueado: string;
 }
 
 export function toForm(c?: Partial<Contact>): ContactFormData {
@@ -47,6 +48,7 @@ export function toForm(c?: Partial<Contact>): ContactFormData {
     })),
     isStudent: c?.isStudent ?? false,
     studentModality: c?.studentModality ?? "1_clase_semanal",
+    bloqueado: c?.bloqueado === "S" ? "S" : "N",
   };
 }
 
@@ -208,6 +210,26 @@ export function ContactModal({
                 <option value="2_clases_semanales">2 clases semanales (42 € / mes)</option>
               </select>
             </div>
+          )}
+        </div>
+        <div className={`rounded-lg border p-3 space-y-2 ${form.bloqueado === "S" ? "border-red-300 bg-red-50/70" : "border-neutral-200 bg-neutral-50/70"}`}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-neutral-800">
+              Bloqueo por restricción técnica
+            </span>
+            <select
+              className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs font-medium focus:border-red-500 focus:outline-none"
+              value={form.bloqueado}
+              onChange={(e) => setField("bloqueado", e.target.value)}
+            >
+              <option value="N">No (Permitido)</option>
+              <option value="S">Sí (Bloqueado)</option>
+            </select>
+          </div>
+          {form.bloqueado === "S" && (
+            <p className="text-[11px] leading-relaxed text-red-700">
+              🚫 <strong>Atención:</strong> Cualquier intento de cita o interacción vía WhatsApp, burbuja web o VAPI será rechazado con el mensaje oficial de apelación a jigomezjub@gmail.com.
+            </p>
           )}
         </div>
         <div>
