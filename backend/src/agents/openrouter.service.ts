@@ -76,4 +76,43 @@ export class OpenRouterService {
       return this.cache?.models ?? [];
     }
   }
+
+  /**
+   * Direct Chat Completion call to OpenRouter with optional JSON response format.
+   */
+  async createChatCompletion(
+    apiKey: string,
+    model: string,
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+    options?: { jsonMode?: boolean; temperature?: number },
+  ): Promise<string> {
+    const url = 'https://openrouter.ai/api/v1/chat/completions';
+    const body: Record<string, any> = {
+      model: model || 'openai/gpt-4.1-mini',
+      messages,
+      temperature: options?.temperature ?? 0.2,
+    };
+    if (options?.jsonMode) {
+      body.response_format = { type: 'json_object' };
+    }
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://crm-salvadoraconesa.jigretera.com',
+        'X-Title': 'CRM Salvadora',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`OpenRouter completion failed with status ${res.status}: ${errText}`);
+    }
+
+    const data = (await res.json()) as any;
+    return data?.choices?.[0]?.message?.content ?? '';
+  }
 }

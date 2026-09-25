@@ -17,6 +17,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Mail,
+  Sparkles,
+  RotateCcw,
+  TrendingUp,
 } from "lucide-react";
 import { apiFetch, apiUrl, ApiError } from "@/lib/api";
 import {
@@ -46,6 +49,141 @@ const MEDIA_PLACEHOLDERS = new Set([
 ]);
 function isMediaPlaceholder(body: string): boolean {
   return MEDIA_PLACEHOLDERS.has(body) || body.startsWith("📄 ");
+}
+
+function parseEmailInboundMessage(body: string) {
+  let isAiEvaluated = false;
+  let isOpportunity = false;
+  let priority = "";
+  let summary = "";
+  let reasoning = "";
+  let recommendedAction = "";
+  let aiDraft: { subject: string; body: string } | null = null;
+
+  if (body.includes("OPORTUNIDAD DE NEGOCIO") || body.includes("CONSULTA INFORMATIVA")) {
+    isAiEvaluated = true;
+    isOpportunity = body.includes("OPORTUNIDAD DE NEGOCIO");
+    const prioMatch = body.match(/PRIORIDAD\s+([A-Z]+)/i);
+    if (prioMatch) priority = prioMatch[1].toUpperCase();
+
+    const sumMatch = body.match(/•\s*Resumen IA:\s*([^\n]+)/i);
+    if (sumMatch) summary = sumMatch[1].trim();
+
+    const reaMatch = body.match(/•\s*Análisis:\s*([^\n]+)/i);
+    if (reaMatch) reasoning = reaMatch[1].trim();
+
+    const recMatch = body.match(/•\s*Acción recomendada:\s*([^\n]+)/i);
+    if (recMatch) recommendedAction = recMatch[1].trim();
+  }
+
+  // Parse draft
+  if (body.includes("📝 [BORRADOR SUGERIDO POR IA]:")) {
+    const draftPart = body.split("📝 [BORRADOR SUGERIDO POR IA]:")[1] || "";
+    const subjectMatch = draftPart.match(/ASUNTO:\s*([^\n]+)/i);
+    const bodyMatch = draftPart.split(/CUERPO:\s*\n/i);
+    const draftSubject = subjectMatch ? subjectMatch[1].trim() : "";
+    const draftBody = bodyMatch.length > 1 ? bodyMatch[1].trim() : "";
+
+    if (draftSubject || draftBody) {
+      aiDraft = { subject: draftSubject, body: draftBody };
+    }
+  }
+
+  return {
+    isAiEvaluated,
+    isOpportunity,
+    priority,
+    summary,
+    reasoning,
+    recommendedAction,
+    aiDraft,
+  };
+}
+
+function AiEvaluatedEmailBubble({ body }: { body: string }) {
+  const parsed = parseEmailInboundMessage(body);
+  if (!parsed.isAiEvaluated) {
+    return <p className="whitespace-pre-wrap">{body}</p>;
+  }
+
+  // Extract client section
+  const clientPart = body.includes("👤 [DATOS DEL CLIENTE")
+    ? body.split("👤 [DATOS DEL CLIENTE")[1]?.split("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")[0]?.trim()
+    : "";
+
+  return (
+    <div className="space-y-3 font-sans">
+      {/* AI Header */}
+      <div
+        className={cn(
+          "rounded-xl p-3 border",
+          parsed.isOpportunity
+            ? "bg-rose-50/80 border-rose-200 text-rose-950"
+            : "bg-blue-50/80 border-blue-200 text-blue-950"
+        )}
+      >
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <div className="flex items-center gap-1.5 font-bold text-xs">
+            {parsed.isOpportunity ? (
+              <span className="flex items-center gap-1 text-rose-700">
+                <TrendingUp className="h-4 w-4" /> OPORTUNIDAD DE NEGOCIO
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-blue-700">
+                <Mail className="h-4 w-4" /> CONSULTA INFORMATIVA
+              </span>
+            )}
+          </div>
+          <span
+            className={cn(
+              "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase",
+              parsed.priority === "ALTA"
+                ? "bg-rose-600 text-white"
+                : parsed.priority === "MEDIA"
+                ? "bg-amber-500 text-white"
+                : "bg-blue-600 text-white"
+            )}
+          >
+            Prioridad {parsed.priority || "ESTÁNDAR"}
+          </span>
+        </div>
+
+        {parsed.summary && (
+          <p className="text-xs font-semibold mb-1">• {parsed.summary}</p>
+        )}
+        {parsed.reasoning && (
+          <p className="text-[11px] text-neutral-600 mb-1">
+            <strong>Análisis:</strong> {parsed.reasoning}
+          </p>
+        )}
+        {parsed.recommendedAction && (
+          <p className="text-[11px] text-emerald-800 font-medium bg-emerald-50 border border-emerald-200 rounded p-1.5 mt-1.5">
+            <strong>Acción recomendada:</strong> {parsed.recommendedAction}
+          </p>
+        )}
+      </div>
+
+      {/* Client message */}
+      {clientPart ? (
+        <div className="bg-neutral-50 rounded-lg p-2.5 text-xs text-neutral-800 border border-neutral-200">
+          <p className="font-semibold text-neutral-700 mb-1 text-[11px]">👤 Petición del Cliente:</p>
+          <div className="whitespace-pre-wrap text-neutral-800">
+            {clientPart.replace(/^•\s*-\s*FORMULARIO WEB\]\s*/, "")}
+          </div>
+        </div>
+      ) : (
+        <p className="whitespace-pre-wrap">{body}</p>
+      )}
+
+      {/* Draft notice */}
+      {parsed.aiDraft && (
+        <div className="flex items-center gap-1.5 text-[11px] text-purple-700 bg-purple-50 border border-purple-200 rounded-lg p-2">
+          <Sparkles className="h-3.5 w-3.5 shrink-0 text-purple-600" />
+          <span>Borrador de respuesta generado por IA listo para revisar y enviar en el editor inferior.</span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Delivery status indicator shown on outbound WhatsApp messages.
@@ -186,6 +324,12 @@ function ConversationsPageInner() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
 
+  // Email thread composer state (AI prepared draft, custom editing, SMTP send)
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [initialAiDraft, setInitialAiDraft] = useState<{ subject: string; body: string } | null>(null);
+  const [sendingEmail, setSendingEmail] = useState(false);
+
   // Spinner shown while the selected thread's messages haven't loaded yet.
   const loadingMessages = selected !== null && selected !== loadedThread;
 
@@ -260,6 +404,23 @@ function ConversationsPageInner() {
         )
       );
       markRead(selected);
+
+      // If email thread, pre-populate composer with the latest AI draft
+      if (selected.includes(":email:") || threads.find((t) => t.threadId === selected)?.channel === "email") {
+        const latestInbound = [...data].reverse().find((m) => m.direction === "inbound");
+        if (latestInbound) {
+          const parsed = parseEmailInboundMessage(latestInbound.body);
+          if (parsed.aiDraft) {
+            setEmailSubject(parsed.aiDraft.subject);
+            setEmailBody(parsed.aiDraft.body);
+            setInitialAiDraft(parsed.aiDraft);
+          } else {
+            setEmailSubject("Re: Consulta — Escuela de Yoga Salvadora Conesa");
+            setEmailBody("");
+            setInitialAiDraft(null);
+          }
+        }
+      }
     });
     return () => {
       cancelled = true;
@@ -378,6 +539,36 @@ function ConversationsPageInner() {
       );
     } finally {
       setSending(false);
+    }
+  }
+
+  async function sendEmailReply() {
+    const body = emailBody.trim();
+    if (!body || !selected || sendingEmail) return;
+    setSendingEmail(true);
+    try {
+      await apiFetch(`/api/conversations/${selected}/reply-email`, {
+        method: "POST",
+        body: JSON.stringify({
+          subject: emailSubject.trim() || "Re: Consulta — Escuela de Yoga Salvadora Conesa",
+          body,
+        }),
+      });
+      toast.success(
+        selectedThread?.contact?.email
+          ? `Correo de respuesta enviado con éxito a ${selectedThread.contact.email}`
+          : "Correo de respuesta enviado con éxito"
+      );
+      setEmailBody("");
+      const data = await loadMessages(selected);
+      setMessages(data);
+      refreshThreads();
+    } catch (e) {
+      toast.error(
+        e instanceof ApiError ? e.message : "No se pudo enviar el correo de respuesta"
+      );
+    } finally {
+      setSendingEmail(false);
     }
   }
 
@@ -618,7 +809,13 @@ function ConversationsPageInner() {
                       {/* Hide the bare "📷 Imagen"-style placeholder once the
                           media itself renders; keep a real caption / filename. */}
                       {!(m.mediaType && isMediaPlaceholder(m.body)) && (
-                        <p className="whitespace-pre-wrap">{m.body}</p>
+                        selectedThread?.channel === "email" &&
+                        m.direction === "inbound" &&
+                        (m.body.includes("OPORTUNIDAD DE NEGOCIO") || m.body.includes("CONSULTA INFORMATIVA")) ? (
+                          <AiEvaluatedEmailBubble body={m.body} />
+                        ) : (
+                          <p className="whitespace-pre-wrap">{m.body}</p>
+                        )
                       )}
                       <div
                         className={cn(
@@ -644,27 +841,106 @@ function ConversationsPageInner() {
               <div ref={bottomRef} />
             </div>
 
-            {/* Email quick action bar */}
+            {/* Email Composer & Action Bar */}
             {selectedThread?.channel === "email" && (
-              <div className="border-t border-neutral-200 bg-amber-50/60 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="text-xs text-neutral-600 flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-amber-600 shrink-0" />
-                  <span>
-                    Consulta/reserva recibida por email.
-                    {selectedThread.contact?.email ? (
-                      <> Responder directamente a: <strong className="text-neutral-900">{selectedThread.contact.email}</strong></>
-                    ) : null}
-                  </span>
+              <div className="border-t border-neutral-200 bg-neutral-50/70 p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200/80 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#800020]/10 text-[#800020]">
+                      <Mail className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-semibold text-neutral-900">
+                        Responder por Correo Electrónico
+                      </h3>
+                      <p className="text-[11px] text-neutral-500">
+                        Destinatario: <strong className="text-neutral-700">{selectedThread.contact?.email || selected}</strong>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {initialAiDraft && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-0.5 text-[11px] font-medium text-purple-700 border border-purple-200">
+                        <Sparkles className="h-3 w-3 text-purple-600" />
+                        Borrador IA preparado
+                      </span>
+                    )}
+
+                    {initialAiDraft && (emailBody !== initialAiDraft.body || emailSubject !== initialAiDraft.subject) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEmailSubject(initialAiDraft.subject);
+                          setEmailBody(initialAiDraft.body);
+                          toast.info("Borrador original de la IA restablecido");
+                        }}
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-600 hover:text-indigo-800 transition"
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                        Restaurar borrador IA
+                      </button>
+                    )}
+                  </div>
                 </div>
-                {selectedThread.contact?.email && (
-                  <a
-                    href={`mailto:${selectedThread.contact.email}?subject=Re: Consulta - Escuela de Yoga Salvadora Conesa`}
-                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#800020] text-white text-xs font-semibold rounded-lg hover:bg-[#800020]/90 transition shrink-0"
-                  >
-                    <Mail className="h-3.5 w-3.5" />
-                    <span>Responder por Correo</span>
-                  </a>
-                )}
+
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-[11px] font-medium text-neutral-600 mb-1">
+                      Asunto del Correo:
+                    </label>
+                    <input
+                      type="text"
+                      value={emailSubject}
+                      onChange={(e) => setEmailSubject(e.target.value)}
+                      placeholder="Asunto del correo…"
+                      className="w-full text-xs rounded-lg border border-neutral-300 bg-white px-3 py-2 text-neutral-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-neutral-600 mb-1">
+                      Cuerpo del Correo (revisa y modifica el texto libremente antes de enviar):
+                    </label>
+                    <Textarea
+                      value={emailBody}
+                      onChange={(e) => setEmailBody(e.target.value)}
+                      rows={6}
+                      placeholder="Escribe la respuesta por correo electrónico…"
+                      className="text-xs leading-relaxed font-sans"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                  <span className="text-[10px] text-neutral-500">
+                    Se enviará desde el correo oficial del centro mediante SMTP.
+                  </span>
+
+                  <div className="flex items-center gap-2">
+                    {selectedThread.contact?.email && (
+                      <a
+                        href={`mailto:${selectedThread.contact.email}?subject=${encodeURIComponent(
+                          emailSubject || "Re: Consulta - Escuela de Yoga Salvadora Conesa"
+                        )}&body=${encodeURIComponent(emailBody)}`}
+                        className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 border border-neutral-300 bg-white text-neutral-700 text-xs font-medium rounded-lg hover:bg-neutral-50 transition"
+                        title="Abrir en cliente de correo local (Outlook/Gmail)"
+                      >
+                        <Mail className="h-3 w-3 text-neutral-500" />
+                        <span>Abrir en cliente local</span>
+                      </a>
+                    )}
+
+                    <Button
+                      onClick={sendEmailReply}
+                      disabled={sendingEmail || !emailBody.trim()}
+                      className="bg-[#800020] hover:bg-[#800020]/90 text-white text-xs gap-1.5 shadow-sm"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      {sendingEmail ? "Enviando correo…" : "Enviar Respuesta por Correo"}
+                    </Button>
+                  </div>
+                </div>
               </div>
             )}
 

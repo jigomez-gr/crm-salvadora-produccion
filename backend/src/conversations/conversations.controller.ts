@@ -24,6 +24,7 @@ import { YCloudClient } from '../whatsapp/ycloud-client.service';
 import {
   SetHandoffDto,
   SendManualMessageDto,
+  ReplyEmailDto,
   QueryThreadsDto,
 } from './dto/conversation.dto';
 import {
@@ -31,6 +32,8 @@ import {
   MessageDirection,
   MessageStatus,
 } from '../common/entities/message.entity';
+import { EmailService } from '../email/email.service';
+import { ContactsService } from '../contacts/contacts.service';
 
 // Cap the wait when streaming media from YCloud so a slow/hung upstream can't
 // pin a request open. WhatsApp media is small (≤16 MB; 100 MB for documents).
@@ -50,6 +53,8 @@ export class ConversationsController {
     private readonly agentsConfigService: AgentsConfigService,
     private readonly ycloudClient: YCloudClient,
     private readonly eventEmitter: EventEmitter2,
+    private readonly emailService: EmailService,
+    private readonly contactsService: ContactsService,
   ) {}
 
   @Get()
@@ -201,6 +206,9 @@ export class ConversationsController {
    * via handoff). Free-text is only valid inside WhatsApp's 24h window; outside
    * it the send will fail and the message is marked `failed`.
    */
+  /**
+   * Operator sends a manual reply on a thread (WhatsApp or Email).
+   */
   @Post(':threadId/messages')
   async sendManual(
     @Param('threadId') threadId: string,
@@ -208,9 +216,14 @@ export class ConversationsController {
   ) {
     const conv = await this.messagesService.getConversation(threadId);
     if (!conv) throw new NotFoundException('Conversación no encontrada');
+
+    if (conv.channel === MessageChannel.EMAIL) {
+      return this.replyEmail(threadId, { body: dto.body, subject: dto.subject });
+    }
+
     if (conv.channel !== MessageChannel.WHATSAPP) {
       throw new BadRequestException(
-        'Solo se pueden enviar mensajes manuales en conversaciones de WhatsApp',
+        'Solo se pueden enviar mensajes manuales en conversaciones de WhatsApp o Email',
       );
     }
 
@@ -262,6 +275,76 @@ export class ConversationsController {
     const saved = { ...message, status: result.ok ? MessageStatus.SENT : MessageStatus.FAILED };
     const view = toMessageView(saved);
     this.eventEmitter.emit('message.sent', { ...view, threadId: saved.threadId });
+    return view;
+  }
+
+  /**
+   * Operator sends an email reply to an email thread.
+   * Sends the email via SMTP, saves the outbound message, marks thread read, and emits real-time events.
+   */
+  @Post(':threadId/reply-email')
+  async replyEmail(
+    @Param('threadId') threadId: string,
+    @Body() dto: ReplyEmailDto,
+  ) {
+    const conv = await this.messagesService.getConversation(threadId);
+    if (!conv) throw new NotFoundException('Conversación no encontrada');
+
+    let contact = conv.contactId
+      ? await this.contactsService.findById(conv.contactId).catch(() => null)
+      : null;
+
+    let targetEmail = contact?.email;
+
+    // Fallback: extract from threadId if salvadora:email:user@domain.com
+    if (!targetEmail && threadId.includes(':email:')) {
+      targetEmail = threadId.split(':email:')[1]?.trim();
+    }
+
+    if (!targetEmail) {
+      throw new BadRequestException(
+        'No se encontró una dirección de correo para responder a este contacto.',
+      );
+    }
+
+    if (!contact) {
+      contact = await this.contactsService.findByPhoneOrEmail(undefined, targetEmail);
+      if (contact) {
+        await this.messagesService.linkContact(threadId, contact.id);
+      }
+    }
+
+    if (!contact) {
+      contact = await this.contactsService.create({
+        name: targetEmail,
+        email: targetEmail,
+        phone: `+34000${Date.now().toString().slice(-6)}`,
+        source: 'email_reply',
+      });
+      await this.messagesService.linkContact(threadId, contact.id);
+    }
+
+    const subject = dto.subject?.trim() || 'Re: Consulta — Centro de Yoga Salvadora Conesa';
+
+    // Send email via EmailService (SMTP)
+    await this.emailService.send(contact.id, subject, dto.body, 'operador');
+
+    // Persist outbound message in MessagesService
+    const message = await this.messagesService.saveMessage({
+      contactId: contact.id,
+      threadId,
+      direction: MessageDirection.OUTBOUND,
+      channel: MessageChannel.EMAIL,
+      body: dto.body,
+      status: MessageStatus.SENT,
+    });
+
+    await this.messagesService.markRead(threadId);
+
+    const view = toMessageView(message);
+    this.eventEmitter.emit('message.sent', { ...view, threadId });
+    this.eventEmitter.emit('conversation.updated', { threadId });
+
     return view;
   }
 

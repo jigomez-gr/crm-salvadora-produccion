@@ -37,6 +37,7 @@ import {
   AnalizaIaEnviarPeticionDto,
 } from './dto/analizaia.dto';
 import { MAINTENANCE_MESSAGE, BLOCKED_USER_MESSAGE } from '../common/system-messages';
+import { ContactQueryEvaluatorService } from './contact-query-evaluator.service';
 
 function formatAiDiagnosisToHtml(rawText: string): string {
   if (!rawText) {
@@ -96,6 +97,7 @@ export class WidgetController {
     private readonly usersService: UsersService,
     private readonly vapiService: VapiService,
     private readonly vapiWebhookService: VapiWebhookService,
+    private readonly contactQueryEvaluator: ContactQueryEvaluatorService,
     @Optional() private readonly humanHandoffNoticeService?: HumanHandoffNotificationService,
     @Optional() private readonly eventEmitter?: EventEmitter2,
   ) {}
@@ -487,26 +489,63 @@ export class WidgetController {
     // Buscar si ya existe el contacto por email o por teléfono
     let contact = await this.contactsService.findByPhoneOrEmail(phone || undefined, email);
 
-    const queryTag = isReserva ? 'lead_web_reserva' : 'lead_web_consulta';
+    // Evaluación Inteligente con IA (clasificación, oportunidad de negocio, prioridad y redacción de borrador)
+    const evaluation = await this.contactQueryEvaluator.evaluateQuery({
+      name,
+      email,
+      phone,
+      serviceName,
+      serviceId: dto.serviceId,
+      message,
+      requestType: dto.requestType,
+    });
+
+    const isOpportunity = evaluation.isBusinessOpportunity;
+    const queryTag = isOpportunity ? 'lead_web_reserva' : 'lead_web_consulta';
+    const priorityTag = `prioridad_${evaluation.qualificationLevel.toLowerCase()}`;
+    const oppTag = isOpportunity ? 'oportunidad_negocio' : 'consulta_informativa';
     const serviceTag = serviceName !== 'Consulta General' ? serviceName : null;
-    const actionLabel = isReserva ? 'Solicitud de Reserva por Email' : 'Consulta Web por Email';
+    const actionLabel = isOpportunity
+      ? `Solicitud de Reserva (${evaluation.qualificationLevel})`
+      : 'Consulta Web';
+
+    const evalNoteSummary = `[${actionLabel} - ${serviceName}]\nConsulta: "${message}"\n[IA: ${evaluation.summary} | Acción: ${evaluation.recommendedAction}]`;
 
     if (!contact) {
+      const initialTags = Array.from(
+        new Set([
+          queryTag,
+          oppTag,
+          priorityTag,
+          ...(evaluation.tags || []),
+          ...(serviceTag ? [serviceTag] : []),
+        ]),
+      );
+
       contact = await this.contactsService.create({
         name,
         email,
         phone: phone || `+34000${Date.now().toString().slice(-6)}`,
-        status: 'lead' as any,
+        status: isOpportunity ? ('lead' as any) : ('prospect' as any),
         source: 'web_formulario_email',
-        tags: serviceTag ? [queryTag, serviceTag] : [queryTag],
-        notes: `[${actionLabel} - ${serviceName}]\n${message}`,
+        tags: initialTags,
+        notes: evalNoteSummary,
       });
     } else {
       const existingTags = contact.tags || [];
-      const newTags = Array.from(new Set([...existingTags, queryTag, ...(serviceTag ? [serviceTag] : [])]));
+      const newTags = Array.from(
+        new Set([
+          ...existingTags,
+          queryTag,
+          oppTag,
+          priorityTag,
+          ...(evaluation.tags || []),
+          ...(serviceTag ? [serviceTag] : []),
+        ]),
+      );
       const updatedNotes = contact.notes
-        ? `${contact.notes}\n\n[${actionLabel} - ${serviceName}]\n${message}`
-        : `[${actionLabel} - ${serviceName}]\n${message}`;
+        ? `${contact.notes}\n\n${evalNoteSummary}`
+        : evalNoteSummary;
 
       contact = await this.contactsService.update(contact.id, {
         name: contact.name && contact.name !== contact.phone ? contact.name : name,
@@ -521,15 +560,26 @@ export class WidgetController {
     // Registrar conversación en la bandeja de "Conversaciones" del CRM
     try {
       const threadId = `salvadora:email:${email}`;
-      const headerPrefix = isReserva
-        ? '🚨 [SOLICITUD DE RESERVA POR EMAIL]'
-        : '✉️ [CONSULTA POR EMAIL]';
-      const formattedBody = `${headerPrefix}\n` +
+      const headerPrefix = isOpportunity
+        ? `🚨 [OPORTUNIDAD DE NEGOCIO - PRIORIDAD ${evaluation.qualificationLevel}]`
+        : `✉️ [CONSULTA INFORMATIVA - PRIORIDAD ${evaluation.qualificationLevel}]`;
+
+      const formattedBody =
+        `${headerPrefix}\n` +
+        `• Resumen IA: ${evaluation.summary}\n` +
+        `• Análisis: ${evaluation.reasoning}\n` +
+        `• Acción recomendada: ${evaluation.recommendedAction}\n\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `👤 [DATOS DEL CLIENTE - FORMULARIO WEB]\n` +
         `• Servicio: ${serviceName}\n` +
         `• Nombre: ${name}\n` +
         `• Email: ${email}` +
         (phone ? `\n• Teléfono: ${phone}` : '') +
-        `\n\n${message}`;
+        `\n\nMensaje:\n"${message}"\n\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `📝 [BORRADOR SUGERIDO POR IA]:\n` +
+        `ASUNTO: ${evaluation.suggestedDraftEmail.subject}\n` +
+        `CUERPO:\n${evaluation.suggestedDraftEmail.body}`;
 
       await this.messagesService.saveMessage({
         threadId,
@@ -556,7 +606,7 @@ export class WidgetController {
           customerName: name,
           customerPhone: phone || 'No facilitado',
           customerEmail: email,
-          reason: `${actionLabel} [${serviceName}]:\n"${message}"`,
+          reason: `${actionLabel} [${serviceName}] - ${evaluation.summary}:\n"${message}"\nAcción recomendada: ${evaluation.recommendedAction}`,
         })
         .catch((err) =>
           console.error('Error notifying team about contact query:', err),
@@ -567,15 +617,12 @@ export class WidgetController {
     try {
       const emailStatus = await this.emailService.status().catch(() => ({ configured: false }));
       if (emailStatus.configured && contact.email) {
-        const subject = isReserva
-          ? `Hemos recibido tu solicitud de reserva — Centro de Yoga Salvadora Conesa`
-          : `Hemos recibido tu consulta — Centro de Yoga Salvadora Conesa`;
-
-        const body = isReserva
-          ? `Hola ${name},\n\nGracias por solicitar tu reserva de plaza con la Escuela de Yoga Salvadora Conesa.\n\nHemos registrado tu solicitud para "${serviceName}":\n\n"${message}"\n\nNos pondremos en contacto contigo a la mayor brevedad posible para confirmarte los detalles de tu plaza y resolver cualquier duda.\n\nUn cordial saludo,\nEquipo de la Escuela de Yoga de Salvadora Conesa\nTeléfono: 695 172 625\nhttps://salvadora.jigretera.com`
-          : `Hola ${name},\n\nGracias por ponerte en contacto con la Escuela de Yoga Salvadora Conesa.\n\nHemos recibido tu consulta sobre "${serviceName}":\n\n"${message}"\n\nNos pondremos en contacto contigo a la mayor brevedad posible a través de este correo electrónico o por teléfono.\n\nUn cordial saludo,\nEquipo de la Escuela de Yoga de Salvadora Conesa\nTeléfono: 695 172 625\nhttps://salvadora.jigretera.com`;
-
-        await this.emailService.send(contact.id, subject, body, 'sistema');
+        await this.emailService.send(
+          contact.id,
+          evaluation.acknowledgementEmail.subject,
+          evaluation.acknowledgementEmail.body,
+          'sistema',
+        );
       }
     } catch (emailErr) {
       console.warn('No se pudo enviar acuse de recibo al usuario por email:', emailErr);

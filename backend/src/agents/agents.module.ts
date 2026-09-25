@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AgentsConfigModule } from './agents-config.module';
 import { AgentRunnerService } from './agent-runner.service';
 import { OpenRouterService } from './openrouter.service';
+import { ContactQueryEvaluatorService } from '../widget/contact-query-evaluator.service';
 import { AgentsController } from './agents.controller';
 import { WidgetController } from '../widget/widget.controller';
 import { ConversationsModule } from '../conversations/conversations.module';
@@ -37,9 +38,9 @@ import { NotificationsModule } from '../notifications/notifications.module';
     VapiModule,
     NotificationsModule,
   ],
-  providers: [AgentRunnerService, OpenRouterService],
+  providers: [AgentRunnerService, OpenRouterService, ContactQueryEvaluatorService],
   controllers: [AgentsController, WidgetController],
-  exports: [AgentRunnerService, AgentsConfigModule],
+  exports: [AgentRunnerService, AgentsConfigModule, ContactQueryEvaluatorService],
 })
 export class AgentsModule {}
 

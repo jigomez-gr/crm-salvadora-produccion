@@ -32,10 +32,24 @@ export class QueryThreadsDto {
   offset?: number;
 }
 
-/** Operator sends a manual WhatsApp reply on a thread. */
+/** Operator sends a manual reply (WhatsApp or Email) on a thread. */
 export class SendManualMessageDto {
   @IsString()
   @MinLength(1)
   @MaxLength(4096)
   body: string;
+
+  @IsOptional()
+  @IsString()
+  subject?: string;
+}
+
+export class ReplyEmailDto {
+  @IsString()
+  @MinLength(1)
+  body: string;
+
+  @IsOptional()
+  @IsString()
+  subject?: string;
 }

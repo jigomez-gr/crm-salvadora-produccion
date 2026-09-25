@@ -7,6 +7,8 @@ import { ConversationsController } from './conversations.controller';
 import { AuthModule } from '../auth/auth.module';
 import { YCloudModule } from '../whatsapp/ycloud.module';
 import { AgentsConfigModule } from '../agents/agents-config.module';
+import { EmailModule } from '../email/email.module';
+import { ContactsModule } from '../contacts/contacts.module';
 
 @Module({
   imports: [
@@ -17,6 +19,8 @@ import { AgentsConfigModule } from '../agents/agents-config.module';
     // dependency-free of ConversationsModule, so no import cycle.
     YCloudModule,
     AgentsConfigModule,
+    EmailModule,
+    ContactsModule,
   ],
   providers: [MessagesService],
   controllers: [ConversationsController],
