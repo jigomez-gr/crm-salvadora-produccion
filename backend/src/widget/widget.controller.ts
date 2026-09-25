@@ -438,6 +438,119 @@ export class WidgetController {
   }
 
   // ─────────────────────────────────────────────────────────────
+  // FORMULARIO DE CONSULTA / CONTACTO (CANAL EMAIL)
+  // ─────────────────────────────────────────────────────────────
+
+  @Post('contact-query')
+  async handleContactQuery(
+    @Body()
+    dto: {
+      name: string;
+      email: string;
+      phone?: string;
+      serviceName?: string;
+      serviceId?: string;
+      message: string;
+    },
+  ) {
+    const isMaintenance = await this.settingsService.isMaintenanceActive().catch(() => false);
+    if (isMaintenance) {
+      throw new BadRequestException(MAINTENANCE_MESSAGE);
+    }
+
+    const name = (dto.name || '').trim();
+    const email = (dto.email || '').trim().toLowerCase();
+    const phone = (dto.phone || '').trim();
+    const message = (dto.message || '').trim();
+    const serviceName = (dto.serviceName || '').trim() || 'Consulta General';
+
+    if (!name || !email || !message) {
+      throw new BadRequestException('Por favor, indica tu nombre, correo electrónico y consulta.');
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      throw new BadRequestException('El formato del correo electrónico no es válido.');
+    }
+
+    if (phone) {
+      const isPhoneBlocked = await this.contactsService.isContactBlocked(phone).catch(() => false);
+      if (isPhoneBlocked) throw new BadRequestException(BLOCKED_USER_MESSAGE);
+    }
+    const isEmailBlocked = await this.contactsService.isContactBlocked(email).catch(() => false);
+    if (isEmailBlocked) throw new BadRequestException(BLOCKED_USER_MESSAGE);
+
+    // Buscar si ya existe el contacto por email o por teléfono
+    let contact = await this.contactsService.findByPhoneOrEmail(phone || undefined, email);
+
+    const queryTag = 'lead_web_consulta';
+    const serviceTag = serviceName !== 'Consulta General' ? serviceName : null;
+
+    if (!contact) {
+      contact = await this.contactsService.create({
+        name,
+        email,
+        phone: phone || `+34000${Date.now().toString().slice(-6)}`,
+        status: 'lead' as any,
+        source: 'web_formulario_email',
+        tags: serviceTag ? [queryTag, serviceTag] : [queryTag],
+        notes: `[Consulta Web por Email - ${serviceName}]\n${message}`,
+      });
+    } else {
+      const existingTags = contact.tags || [];
+      const newTags = Array.from(new Set([...existingTags, queryTag, ...(serviceTag ? [serviceTag] : [])]));
+      const updatedNotes = contact.notes
+        ? `${contact.notes}\n\n[Consulta Web por Email - ${serviceName}]\n${message}`
+        : `[Consulta Web por Email - ${serviceName}]\n${message}`;
+
+      contact = await this.contactsService.update(contact.id, {
+        name: contact.name && contact.name !== contact.phone ? contact.name : name,
+        email,
+        phone: phone || contact.phone,
+        tags: newTags,
+        source: contact.source || 'web_formulario_email',
+        notes: updatedNotes,
+      });
+    }
+
+    // Notificar al equipo del centro por Email
+    if (this.humanHandoffNoticeService) {
+      this.humanHandoffNoticeService
+        .notifyHumanRequest({
+          channel: 'landing',
+          customerName: name,
+          customerPhone: phone || 'No facilitado',
+          customerEmail: email,
+          reason: `Consulta Web por Email [${serviceName}]:\n"${message}"`,
+        })
+        .catch((err) =>
+          console.error('Error notifying team about contact query:', err),
+        );
+    }
+
+    // Enviar confirmación cordial al usuario si el SMTP está configurado
+    try {
+      const emailStatus = await this.emailService.status().catch(() => ({ configured: false }));
+      if (emailStatus.configured && contact.email) {
+        await this.emailService.send(
+          contact.id,
+          `Hemos recibido tu consulta — Centro de Yoga Salvadora Conesa`,
+          `Hola ${name},\n\nGracias por ponerte en contacto con la Escuela de Yoga Salvadora Conesa.\n\nHemos recibido tu consulta sobre "${serviceName}":\n\n"${message}"\n\nNos pondremos en contacto contigo a la mayor brevedad posible a través de este correo electrónico o por teléfono.\n\nUn cordial saludo,\nEquipo de la Escuela de Yoga de Salvadora Conesa\nTeléfono: 695 172 625\nhttps://salvadora.jigretera.com`,
+          'sistema',
+        );
+      }
+    } catch (emailErr) {
+      console.warn('No se pudo enviar acuse de recibo al usuario por email:', emailErr);
+    }
+
+    return {
+      success: true,
+      message: 'Tu consulta ha sido enviada con éxito. Te responderemos por correo electrónico o teléfono a la mayor brevedad.',
+      contactId: contact.id,
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────
   // LLAMADAS SALIENTES VAPI (VOICE AI) — LANDING & WIDGET
   // ─────────────────────────────────────────────────────────────
 
