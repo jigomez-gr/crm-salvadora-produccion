@@ -352,12 +352,12 @@ export type MessageStatus =
 
 export interface Conversation {
   threadId: string;
-  channel: "whatsapp" | "playground" | "widget" | string;
+  channel: "whatsapp" | "playground" | "widget" | "email" | string;
   // Human handoff: the agent stops auto-replying on this thread.
   handoff: boolean;
   // Inbound messages the operator hasn't opened yet (inbox badge).
   unreadCount: number;
-  contact?: { name: string; phone: string };
+  contact?: { name: string; phone: string; email?: string };
   lastMessage: {
     body: string;
     direction: "inbound" | "outbound";

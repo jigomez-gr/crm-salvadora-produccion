@@ -16,6 +16,7 @@ import {
   Download,
   ChevronLeft,
   ChevronRight,
+  Mail,
 } from "lucide-react";
 import { apiFetch, apiUrl, ApiError } from "@/lib/api";
 import {
@@ -316,6 +317,13 @@ function ConversationsPageInner() {
         </Badge>
       );
     }
+    if (channel === "email") {
+      return (
+        <Badge variant="warning" className="gap-1 bg-amber-50 text-amber-800 border border-amber-200">
+          <Mail className="h-3 w-3 text-amber-600" /> Email
+        </Badge>
+      );
+    }
     return (
       <Badge variant="default" className="gap-1">
         <Bot className="h-3 w-3 text-neutral-500" /> Playground
@@ -530,11 +538,17 @@ function ConversationsPageInner() {
                 <p className="truncate text-sm font-medium text-neutral-900">
                   {selectedThread?.contact?.name ?? selected}
                 </p>
-                {selectedThread?.contact?.phone && (
-                  <p className="truncate text-xs text-neutral-500">
-                    {selectedThread.contact.phone}
-                  </p>
-                )}
+                <div className="flex flex-wrap items-center gap-x-2 text-xs text-neutral-500">
+                  {selectedThread?.contact?.email && (
+                    <span className="truncate">{selectedThread.contact.email}</span>
+                  )}
+                  {selectedThread?.contact?.email && selectedThread?.contact?.phone && !selectedThread.contact.phone.startsWith("+34000") && (
+                    <span>•</span>
+                  )}
+                  {selectedThread?.contact?.phone && !selectedThread.contact.phone.startsWith("+34000") && (
+                    <span className="truncate">{selectedThread.contact.phone}</span>
+                  )}
+                </div>
               </div>
               <div className="ml-auto flex items-center gap-2">
                 {isWhatsapp && selectedThread && (
@@ -629,6 +643,30 @@ function ConversationsPageInner() {
               )}
               <div ref={bottomRef} />
             </div>
+
+            {/* Email quick action bar */}
+            {selectedThread?.channel === "email" && (
+              <div className="border-t border-neutral-200 bg-amber-50/60 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="text-xs text-neutral-600 flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-amber-600 shrink-0" />
+                  <span>
+                    Consulta/reserva recibida por email.
+                    {selectedThread.contact?.email ? (
+                      <> Responder directamente a: <strong className="text-neutral-900">{selectedThread.contact.email}</strong></>
+                    ) : null}
+                  </span>
+                </div>
+                {selectedThread.contact?.email && (
+                  <a
+                    href={`mailto:${selectedThread.contact.email}?subject=Re: Consulta - Escuela de Yoga Salvadora Conesa`}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#800020] text-white text-xs font-semibold rounded-lg hover:bg-[#800020]/90 transition shrink-0"
+                  >
+                    <Mail className="h-3.5 w-3.5" />
+                    <span>Responder por Correo</span>
+                  </a>
+                )}
+              </div>
+            )}
 
             {/* Composer — manual reply (WhatsApp threads only) */}
             {isWhatsapp && (

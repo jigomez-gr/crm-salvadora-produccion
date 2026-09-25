@@ -66,7 +66,7 @@ export class ConversationsController {
         handoff: t.handoff,
         unreadCount: t.unreadCount,
         contact: t.contact
-          ? { name: t.contact.name, phone: t.contact.phone }
+          ? { name: t.contact.name, phone: t.contact.phone, email: t.contact.email }
           : undefined,
         lastMessage: {
           body: t.lastMessage.body,

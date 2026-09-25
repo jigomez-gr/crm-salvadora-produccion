@@ -25,7 +25,8 @@ import { CategoriesService } from '../categories/categories.service';
 import { AnalizaIaService } from '../appointments/analiza-ia.service';
 import { EmailService } from '../email/email.service';
 import { UsersService } from '../users/users.service';
-import { MessageChannel, MessageDirection } from '../common/entities/message.entity';
+import { MessageChannel, MessageDirection, MessageStatus } from '../common/entities/message.entity';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { WidgetChatDto } from './dto/widget-chat.dto';
 import { WidgetVapiCallDto } from './dto/widget-vapi-call.dto';
 import { VapiService } from '../vapi/vapi.service';
@@ -96,6 +97,7 @@ export class WidgetController {
     private readonly vapiService: VapiService,
     private readonly vapiWebhookService: VapiWebhookService,
     @Optional() private readonly humanHandoffNoticeService?: HumanHandoffNotificationService,
+    @Optional() private readonly eventEmitter?: EventEmitter2,
   ) {}
 
   @Get('config/:agentKey')
@@ -514,6 +516,36 @@ export class WidgetController {
         source: contact.source || 'web_formulario_email',
         notes: updatedNotes,
       });
+    }
+
+    // Registrar conversación en la bandeja de "Conversaciones" del CRM
+    try {
+      const threadId = `salvadora:email:${email}`;
+      const headerPrefix = isReserva
+        ? '🚨 [SOLICITUD DE RESERVA POR EMAIL]'
+        : '✉️ [CONSULTA POR EMAIL]';
+      const formattedBody = `${headerPrefix}\n` +
+        `• Servicio: ${serviceName}\n` +
+        `• Nombre: ${name}\n` +
+        `• Email: ${email}` +
+        (phone ? `\n• Teléfono: ${phone}` : '') +
+        `\n\n${message}`;
+
+      await this.messagesService.saveMessage({
+        threadId,
+        contactId: contact.id,
+        direction: MessageDirection.INBOUND,
+        channel: MessageChannel.EMAIL,
+        body: formattedBody,
+        status: MessageStatus.RECEIVED,
+      });
+
+      if (this.eventEmitter) {
+        this.eventEmitter.emit('conversation.updated', { threadId });
+        this.eventEmitter.emit('message.received', { threadId });
+      }
+    } catch (convErr) {
+      console.error('Error registrando conversación por email en CRM:', convErr);
     }
 
     // Notificar al equipo del centro por Email

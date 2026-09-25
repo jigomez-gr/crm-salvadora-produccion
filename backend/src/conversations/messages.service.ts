@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -64,7 +64,7 @@ export interface ThreadSummary {
   channel: string;
   handoff: boolean;
   unreadCount: number;
-  contact: { id: string; name: string; phone: string } | null;
+  contact: { id: string; name: string; phone: string; email?: string } | null;
   lastMessage: {
     body: string;
     direction: string;
@@ -87,13 +87,34 @@ export interface ThreadPage {
 }
 
 @Injectable()
-export class MessagesService {
+export class MessagesService implements OnModuleInit {
   constructor(
     @InjectRepository(Message)
     private readonly messagesRepo: Repository<Message>,
     @InjectRepository(Conversation)
     private readonly conversationsRepo: Repository<Conversation>,
   ) {}
+
+  async onModuleInit() {
+    try {
+      await this.messagesRepo.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_enum e
+            JOIN pg_type t ON e.enumtypid = t.oid
+            WHERE t.typname = 'messages_channel_enum' AND e.enumlabel = 'email'
+          ) THEN
+            ALTER TYPE "public"."messages_channel_enum" ADD VALUE 'email';
+          END IF;
+        EXCEPTION
+          WHEN others THEN NULL;
+        END $$;
+      `);
+    } catch {
+      // Ignore if DB does not use enum or running under test
+    }
+  }
 
   async saveMessage(dto: SaveMessageDto): Promise<Message> {
     if (dto.externalId) {
@@ -200,7 +221,7 @@ export class MessagesService {
       handoff: c.handoff,
       unreadCount: c.unreadCount,
       contact: c.contact
-        ? { id: c.contact.id, name: c.contact.name, phone: c.contact.phone }
+        ? { id: c.contact.id, name: c.contact.name, phone: c.contact.phone, email: c.contact.email }
         : null,
       lastMessage: {
         body: c.lastMessageBody ?? '',
