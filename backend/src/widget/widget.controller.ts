@@ -451,6 +451,7 @@ export class WidgetController {
       serviceName?: string;
       serviceId?: string;
       message: string;
+      requestType?: 'consulta' | 'reserva';
     },
   ) {
     const isMaintenance = await this.settingsService.isMaintenanceActive().catch(() => false);
@@ -463,6 +464,7 @@ export class WidgetController {
     const phone = (dto.phone || '').trim();
     const message = (dto.message || '').trim();
     const serviceName = (dto.serviceName || '').trim() || 'Consulta General';
+    const isReserva = dto.requestType === 'reserva';
 
     if (!name || !email || !message) {
       throw new BadRequestException('Por favor, indica tu nombre, correo electrónico y consulta.');
@@ -483,8 +485,9 @@ export class WidgetController {
     // Buscar si ya existe el contacto por email o por teléfono
     let contact = await this.contactsService.findByPhoneOrEmail(phone || undefined, email);
 
-    const queryTag = 'lead_web_consulta';
+    const queryTag = isReserva ? 'lead_web_reserva' : 'lead_web_consulta';
     const serviceTag = serviceName !== 'Consulta General' ? serviceName : null;
+    const actionLabel = isReserva ? 'Solicitud de Reserva por Email' : 'Consulta Web por Email';
 
     if (!contact) {
       contact = await this.contactsService.create({
@@ -494,14 +497,14 @@ export class WidgetController {
         status: 'lead' as any,
         source: 'web_formulario_email',
         tags: serviceTag ? [queryTag, serviceTag] : [queryTag],
-        notes: `[Consulta Web por Email - ${serviceName}]\n${message}`,
+        notes: `[${actionLabel} - ${serviceName}]\n${message}`,
       });
     } else {
       const existingTags = contact.tags || [];
       const newTags = Array.from(new Set([...existingTags, queryTag, ...(serviceTag ? [serviceTag] : [])]));
       const updatedNotes = contact.notes
-        ? `${contact.notes}\n\n[Consulta Web por Email - ${serviceName}]\n${message}`
-        : `[Consulta Web por Email - ${serviceName}]\n${message}`;
+        ? `${contact.notes}\n\n[${actionLabel} - ${serviceName}]\n${message}`
+        : `[${actionLabel} - ${serviceName}]\n${message}`;
 
       contact = await this.contactsService.update(contact.id, {
         name: contact.name && contact.name !== contact.phone ? contact.name : name,
@@ -521,7 +524,7 @@ export class WidgetController {
           customerName: name,
           customerPhone: phone || 'No facilitado',
           customerEmail: email,
-          reason: `Consulta Web por Email [${serviceName}]:\n"${message}"`,
+          reason: `${actionLabel} [${serviceName}]:\n"${message}"`,
         })
         .catch((err) =>
           console.error('Error notifying team about contact query:', err),
@@ -532,12 +535,15 @@ export class WidgetController {
     try {
       const emailStatus = await this.emailService.status().catch(() => ({ configured: false }));
       if (emailStatus.configured && contact.email) {
-        await this.emailService.send(
-          contact.id,
-          `Hemos recibido tu consulta — Centro de Yoga Salvadora Conesa`,
-          `Hola ${name},\n\nGracias por ponerte en contacto con la Escuela de Yoga Salvadora Conesa.\n\nHemos recibido tu consulta sobre "${serviceName}":\n\n"${message}"\n\nNos pondremos en contacto contigo a la mayor brevedad posible a través de este correo electrónico o por teléfono.\n\nUn cordial saludo,\nEquipo de la Escuela de Yoga de Salvadora Conesa\nTeléfono: 695 172 625\nhttps://salvadora.jigretera.com`,
-          'sistema',
-        );
+        const subject = isReserva
+          ? `Hemos recibido tu solicitud de reserva — Centro de Yoga Salvadora Conesa`
+          : `Hemos recibido tu consulta — Centro de Yoga Salvadora Conesa`;
+
+        const body = isReserva
+          ? `Hola ${name},\n\nGracias por solicitar tu reserva de plaza con la Escuela de Yoga Salvadora Conesa.\n\nHemos registrado tu solicitud para "${serviceName}":\n\n"${message}"\n\nNos pondremos en contacto contigo a la mayor brevedad posible para confirmarte los detalles de tu plaza y resolver cualquier duda.\n\nUn cordial saludo,\nEquipo de la Escuela de Yoga de Salvadora Conesa\nTeléfono: 695 172 625\nhttps://salvadora.jigretera.com`
+          : `Hola ${name},\n\nGracias por ponerte en contacto con la Escuela de Yoga Salvadora Conesa.\n\nHemos recibido tu consulta sobre "${serviceName}":\n\n"${message}"\n\nNos pondremos en contacto contigo a la mayor brevedad posible a través de este correo electrónico o por teléfono.\n\nUn cordial saludo,\nEquipo de la Escuela de Yoga de Salvadora Conesa\nTeléfono: 695 172 625\nhttps://salvadora.jigretera.com`;
+
+        await this.emailService.send(contact.id, subject, body, 'sistema');
       }
     } catch (emailErr) {
       console.warn('No se pudo enviar acuse de recibo al usuario por email:', emailErr);
@@ -545,7 +551,9 @@ export class WidgetController {
 
     return {
       success: true,
-      message: 'Tu consulta ha sido enviada con éxito. Te responderemos por correo electrónico o teléfono a la mayor brevedad.',
+      message: isReserva
+        ? 'Tu solicitud de reserva ha sido enviada con éxito. Te responderemos por correo o teléfono para confirmar tu plaza.'
+        : 'Tu consulta ha sido enviada con éxito. Te responderemos por correo electrónico o teléfono a la mayor brevedad.',
       contactId: contact.id,
     };
   }
