@@ -7,6 +7,7 @@ import { normalizePhoneLoose } from '../common/phone';
 import {
   parseFlexibleStartsAt,
   normalizeColloquialSpanishTimes,
+  resolveNextRecurringEventDate,
 } from '../common/time';
 import { MAINTENANCE_MESSAGE, BLOCKED_USER_MESSAGE } from '../common/system-messages';
 
@@ -416,23 +417,57 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
             ? svc.availableSeats
             : svc.maxCapacity;
         const isSinFecha = svc.sinfechadefinitiva === 'S';
-        const displayDates = isSinFecha && svc.textosinfechadefinitiva
-          ? svc.textosinfechadefinitiva
-          : svc.eventDatesText ||
+
+        // Check if event has a recurrence rule (e.g. Baño de Gong -> último sábado de cada mes)
+        const recurring = resolveNextRecurringEventDate(svc.name, new Date(), timezone);
+        let displayDates: string;
+        let effectiveStartsAt: string;
+        let effectiveEndsAt: string;
+
+        if (recurring.hasRule && recurring.dateText) {
+          displayDates = recurring.dateText;
+          effectiveStartsAt = recurring.startsAtIso || '2099-12-31T20:00:00.000Z';
+          effectiveEndsAt = recurring.endsAtIso || effectiveStartsAt;
+        } else if (isSinFecha) {
+          displayDates = svc.textosinfechadefinitiva || 'próximamente';
+          effectiveStartsAt = '2099-12-31T20:00:00.000Z';
+          effectiveEndsAt = effectiveStartsAt;
+        } else if (svc.eventStartDate && new Date(svc.eventStartDate).getTime() <= Date.now()) {
+          // Date has already passed and no recurrence rule exists
+          displayDates = 'próximamente (fechas por confirmar)';
+          effectiveStartsAt = '2099-12-31T20:00:00.000Z';
+          effectiveEndsAt = effectiveStartsAt;
+        } else {
+          displayDates =
+            svc.eventDatesText ||
             (svc.eventStartDate
               ? new Date(svc.eventStartDate).toLocaleDateString('es-ES')
-              : 'Fechas por confirmar');
-        const effectiveStartsAt = isSinFecha
-          ? '2099-12-31T20:00:00.000Z'
-          : (svc.eventStartDate ? new Date(svc.eventStartDate).toISOString() : '2099-12-31T20:00:00.000Z');
+              : 'próximamente');
+          effectiveStartsAt = svc.eventStartDate
+            ? new Date(svc.eventStartDate).toISOString()
+            : '2099-12-31T20:00:00.000Z';
+          effectiveEndsAt = svc.eventEndDate || effectiveStartsAt;
+        }
+
+        const isVariablePrice =
+          svc.sinpreciodefinitivo === 'S' ||
+          !svc.price ||
+          svc.price === '0.00' ||
+          svc.price === '0';
+        const displayPrice = isVariablePrice
+          ? 'El precio se determinará en función de las características del viaje y alojamiento.'
+          : svc.price
+          ? `${svc.price}€`
+          : undefined;
 
         return {
           isEvent: true,
           service: svc.name,
           sinfechadefinitiva: isSinFecha,
           datesText: displayDates,
+          priceText: displayPrice,
           startsAt: effectiveStartsAt,
-          endsAt: svc.eventEndDate || effectiveStartsAt,
+          endsAt: effectiveEndsAt,
           maxCapacity: svc.maxCapacity,
           minQuorum: svc.minQuorum,
           quorumReached: svc.quorumReached,
@@ -442,15 +477,9 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           message:
             remaining !== null && remaining !== undefined && remaining <= 0
               ? `Las plazas para ${svc.name} están agotadas.`
-              : isSinFecha
-              ? `El evento ${svc.name} tiene fechas: "${displayDates}". ¡SÍ se puede y se debe reservar plaza prioritaria de inmediato llamando a 'bookAppointment' con startsAt: "${effectiveStartsAt}"! Quedan ${
+              : `El evento ${svc.name} tiene lugar en las fechas: ${displayDates}. Se aceptan reservas provisionales. ¡SÍ se puede y se debe formalizar la reserva provisional de inmediato llamando a 'bookAppointment' con startsAt: "${effectiveStartsAt}"! Quedan ${
                   remaining !== null && remaining !== undefined ? remaining : 'plazas'
-                } disponibles.`
-              : `El evento ${svc.name} tiene lugar en las fechas: ${displayDates}. Quedan ${
-                  remaining !== null && remaining !== undefined
-                    ? remaining
-                    : 'plazas'
-                } disponibles${
+                } disponibles${displayPrice ? `. Precio: ${displayPrice}` : ''}${
                   svc.minQuorum
                     ? ` (quórum mínimo requerido: ${svc.minQuorum} participantes)`
                     : ''
@@ -1302,14 +1331,19 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       const gestaltPrice = getServicePrice(/gestalt/i, '35€');
       const bienestarPrice = getServicePrice(/bienestar/i, '19.99€');
       const gongPrice = getServicePrice(/baño.*gong|meditación sonora/i, '16€');
-      const pujaPrice = getServicePrice(/puja/i, 'el precio se determinara en funcion de las caracteristicas del viaje y alojamiento');
+      const pujaPrice = getServicePrice(/puja/i, 'El precio se determinará en función de las características del viaje y alojamiento.');
       const constelarPrice = getServicePrice(/constel.*(constelar|propio)/i, '60€');
       const participarPrice = getServicePrice(/constel.*(particip|represen)/i, '20€');
-      const mujeresPrice = getServicePrice(/mujeres|femenino/i, 'fecha por confirmar');
+      const mujeresPrice = getServicePrice(/mujeres|femenino/i, 'El precio se determinará en función de las características del viaje y alojamiento.');
       const ayunoPrice = getServicePrice(/ayuno/i, '250€');
+      const gongRecurring = resolveNextRecurringEventDate('Baño de Gong', new Date(), timezone);
+      const gongDate =
+        gongRecurring.hasRule && gongRecurring.dateText
+          ? gongRecurring.dateText
+          : getServiceDate(/baño.*gong|meditación sonora/i, 'Sábado 31 de Octubre de 2026 (18:00 a 20:00)');
 
       const pujaDate = getServiceDate(/puja/i, 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027');
-      const mujeresDate = getServiceDate(/mujeres|femenino/i, 'fecha por confirmar');
+      const mujeresDate = getServiceDate(/mujeres|femenino/i, 'próximamente');
 
       // Shared behaviour rules — applied with or without a stored config. These
       // are the guardrails that keep the agent on-task and stop it leaking the
@@ -1321,6 +1355,20 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
 - NUNCA inventes horarios, días u horas disponibles. ANTES de sugerir cualquier horario, debes llamar OBLIGATORIAMENTE a la herramienta 'checkAvailability' para la fecha y servicio solicitados.
 - Si el día pedido está cerrado (como fines de semana) o 'checkAvailability' no devuelve huecos, indícaselo con total claridad al cliente (p. ej. "Los sábados y domingos estamos cerrados") y ofrece consultar el siguiente día laborable en que haya disponibilidad.
 - Ofrece únicamente los horarios reales que te devuelva 'checkAvailability', en la zona horaria ${timezone} y en lenguaje natural (p. ej. "el lunes a las 10:00").
+- REGLA ESTRICTA DE FECHAS PASADAS, PERIODICIDAD, "PRÓXIMAMENTE", PRECIOS VARIABLES Y RESERVAS PROVISIONALES (OBLIGATORIA):
+  1. PROHIBICIÓN ABSOLUTA DE OFRECER FECHAS PASADAS:
+     - NUNCA, bajo ninguna circunstancia, respondas ofreciendo una fecha o sesión que ya haya transcurrido respecto a la fecha actual (hoy es ${now}).
+  2. ACTIVIDADES CON REGLA DE RECURRENCIA (EJ. BAÑO DE GONG):
+     - Para el Baño de Gong y Meditación Sonora, la regla oficial es que se celebra EL ÚLTIMO SÁBADO DE CADA MES (de 18:00 a 20:00).
+     - Si la fecha de un mes ya ha pasado (como el sábado 26 de septiembre de 2026), debes suponer y ofrecer directamente la sesión del último sábado del mes siguiente: en este caso, el SÁBADO 31 DE OCTUBRE DE 2026 (de 18:00 a 20:00).
+  3. ACTIVIDADES SIN REGLA DE RECURRENCIA:
+     - Si la fecha de un evento o actividad ha transcurrido o no está fijada y NO existe una regla de periodicidad, debes responder que tendrá lugar "próximamente" (fechas próximamente por confirmar).
+  4. PRECIO VARIABLE O NO DEFINIDO:
+     - Si un servicio no tiene precio cerrado definitivo (o es un viaje/retiro/evento como la Puja de Gongs o similar), debes responder textualmente:
+       "El precio se determinará en función de las características del viaje y alojamiento."
+  5. ACEPTACIÓN INMEDIATA DE RESERVAS PROVISIONALES:
+     - ¡SÍ se aceptan ya RESERVAS PROVISIONALES para todas estas actividades (tanto para la próxima fecha calculada como para las que son próximamente)!
+     - Si el cliente solicita plaza o muestra interés en reservar, pídele sus datos (nombre completo, teléfono móvil y correo electrónico) y FORMALIZA LA RESERVA PROVISIONAL DE INMEDIATO con 'bookAppointment'. Confírmale con total calidez que su reserva provisional queda registrada y garantizada.
 - RESERVAS DE EVENTOS, RETIROS, VIAJES O ACTIVIDADES CON FECHA POR CONFIRMAR O PROVISIONAL (APLICA A CUALQUIER SERVICIO CON 'SIN FECHA DEFINITIVA'):
   * Aplica de forma general a CUALQUIER servicio, viaje, retiro, taller o evento del catálogo que tenga fecha por confirmar, provisional o el atributo de sin fecha definitiva establecida (por ejemplo: Puja de Gongs, Encuentro de Mujeres, o cualquier otro servicio futuro que se cree o edite en el CRM con fecha por confirmar).
   * Aunque la fecha exacta esté por confirmar o sea provisional, ¡SÍ SE PERMITE Y SE DEBE FORMALIZAR LA RESERVA DE PLAZA DE INMEDIATO! Es una reserva de plaza prioritaria (pre-reserva garantizada para el asistente).
@@ -1396,9 +1444,10 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
 - BAÑOS DE GONG Y MEDITACIÓN SONORA (SESIÓN MENSUAL 2 HORAS):
   * Modalidad: Actividad grupal presencial (aforo máximo: 30 personas).
   * Estructura: 2 horas de preparación corporal, inmersión en baño de sonido con gongs afinados y meditación integradora.
-  * Próxima fecha oficial: Sábado 26 de Septiembre de 2026 (de 18:00 a 20:00).
+  * Regla de periodicidad: Un sábado al mes (el último sábado de cada mes).
+  * Próxima fecha oficial: ${gongDate}.
   * Precio: ${gongPrice} por asistente (pago en el centro).
-  * Cuando un cliente pregunte o solicite plaza, informa de la fecha y formaliza con 'bookAppointment'.
+  * RESERVAS PROVISIONALES: Se aceptan ya reservas provisionales de plaza. Cuando un cliente pregunte o solicite plaza, informa de la próxima fecha (${gongDate}) y formaliza de inmediato su reserva provisional con 'bookAppointment'.
 - PUJA DE GONGS (NOCHE SAGRADA DE SONIDO - 11 HORAS):
   * Modalidad: Evento vivencial de inmersión y transformación sonora durante toda la noche (11 horas continuas de sonido, aforo máximo: 30 personas).
   * Fecha oficial: ${pujaDate}.
@@ -1550,7 +1599,8 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
           .replace(/S[áa]bado\s*28\s*de\s*Noviembre\s*de\s*2026[^\.\n]*/gi, pujaDate)
           .replace(/95\s*€/gi, pujaPrice)
           .replace(/S[áa]bado\s*15\s*de\s*Mayo\s*de\s*2027[^\.\n]*/gi, mujeresDate)
-          .replace(/45\s*€/gi, mujeresPrice);
+          .replace(/45\s*€/gi, mujeresPrice)
+          .replace(/S[áa]bado\s*26\s*de\s*Septiembre\s*de\s*2026[^\.\n]*/gi, gongDate);
       }
       const customInstructionsBlock = customInstructions
         ? `\n\n== Instrucciones del negocio (personalización) ==\nEl negocio ha añadido estas indicaciones sobre cómo atender. Síguelas siempre que no contradigan las reglas OBLIGATORIAS:\n${customInstructions}`
@@ -1566,7 +1616,8 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
           .replace(/S[áa]bado\s*28\s*de\s*Noviembre\s*de\s*2026[^\.\n]*/gi, pujaDate)
           .replace(/95\s*€/gi, pujaPrice)
           .replace(/S[áa]bado\s*15\s*de\s*Mayo\s*de\s*2027[^\.\n]*/gi, mujeresDate)
-          .replace(/45\s*€/gi, mujeresPrice);
+          .replace(/45\s*€/gi, mujeresPrice)
+          .replace(/S[áa]bado\s*26\s*de\s*Septiembre\s*de\s*2026[^\.\n]*/gi, gongDate);
       }
       const knowledgeBlock = knowledgeBase
         ? `\n\n== Base de conocimiento ==\nUsa esta información del negocio para responder las dudas del cliente. Si la respuesta no está aquí, dilo con sinceridad; NO la inventes.\n"""\n${knowledgeBase}\n"""`
@@ -1605,11 +1656,14 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
           }) => {
             const hasNoFixedDate = s.sinfechadefinitiva === 'S';
             const hasNoFixedPrice = s.sinpreciodefinitivo === 'S';
-            const dateStr = hasNoFixedDate
-              ? (s.textosinfechadefinitiva || 'fecha por confirmar')
+            let dateStr = hasNoFixedDate
+              ? (s.textosinfechadefinitiva || 'próximamente')
               : s.eventDatesText;
+            if (/baño.*gong|meditación sonora/i.test(s.name || '')) {
+              dateStr = gongDate;
+            }
             const priceStr = hasNoFixedPrice
-              ? (s.textosinpreciodefinitivo || 'precio por confirmar')
+              ? (s.textosinpreciodefinitivo || 'El precio se determinará en función de las características del viaje y alojamiento.')
               : (s.price ? `${s.price} €` : undefined);
 
             let details = `- ${s.name}`;
@@ -1635,9 +1689,10 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
               }
               if (hasNoFixedPrice) {
                 desc = desc
-                  .replace(/95\s*€/gi, s.textosinpreciodefinitivo || 'precio por confirmar')
-                  .replace(/45\s*€/gi, s.textosinpreciodefinitivo || 'precio por confirmar');
+                  .replace(/95\s*€/gi, s.textosinpreciodefinitivo || 'El precio se determinará en función de las características del viaje y alojamiento.')
+                  .replace(/45\s*€/gi, s.textosinpreciodefinitivo || 'El precio se determinará en función de las características del viaje y alojamiento.');
               }
+              desc = desc.replace(/S[áa]bado\s*26\s*de\s*Septiembre\s*de\s*2026[^\.]*/gi, gongDate);
               details += ` | Descripción y condiciones: ${desc}`;
             }
             if (hasNoFixedDate) {

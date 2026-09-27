@@ -3,6 +3,7 @@ import { AgentsConfigService } from '../agents/agents-config.service';
 import { ServicesService } from '../services/services.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
 import { OpenRouterService } from '../agents/openrouter.service';
+import { resolveNextRecurringEventDate } from '../common/time';
 
 export interface ContactQueryInput {
   name: string;
@@ -69,14 +70,28 @@ export class ContactQueryEvaluatorService {
       // Gather live center services
       const dbServices = await this.servicesService.findAll(true).catch(() => []);
       const servicesCatalog = dbServices
-        .map(
-          (s) =>
-            `- Servicio: ${s.name}\n  Precio: ${s.price ? `${s.price} €` : 'Consultar'}\n  Horario/Fechas: ${
-              s.scheduleText || s.eventDatesText || 'Consultar programación'
-            }\n  Modalidad: ${s.allowedModalities?.join(', ') || 'presencial'}\n  Descripción: ${
-              s.description || 'Sin descripción adicional'
-            }`,
-        )
+        .map((s) => {
+          const recurring = resolveNextRecurringEventDate(s.name, new Date(), 'Europe/Madrid');
+          let dates = s.scheduleText || s.eventDatesText;
+          if (recurring.hasRule && recurring.dateText) {
+            dates = `${recurring.dateText} (último sábado de cada mes)`;
+          } else if (s.sinfechadefinitiva === 'S') {
+            dates = s.textosinfechadefinitiva || 'próximamente';
+          } else if (s.eventStartDate && new Date(s.eventStartDate).getTime() <= Date.now()) {
+            dates = 'próximamente (fechas por confirmar)';
+          }
+
+          let priceStr = s.price ? `${s.price} €` : 'Consultar';
+          if (s.sinpreciodefinitivo === 'S' || !s.price || s.price === '0.00' || s.price === '0') {
+            priceStr = 'El precio se determinará en función de las características del viaje y alojamiento.';
+          }
+
+          return `- Servicio: ${s.name}\n  Precio: ${priceStr}\n  Horario/Fechas: ${
+            dates || 'Consultar programación'
+          }\n  Modalidad: ${s.allowedModalities?.join(', ') || 'presencial'}\n  Descripción: ${
+            s.description || 'Sin descripción adicional'
+          }\n  Reservas provisionales: Se aceptan reservas provisionales de plaza de inmediato.`;
+        })
         .join('\n\n');
 
       // Gather knowledge base context if available
@@ -92,6 +107,13 @@ Teléfono de contacto directo: 695 172 625.
 Web: https://salvadora.jigretera.com
 Email oficial: salvadoraconesa@salvadoraconesa.es
 
+REGLAS ESTRICTAS DE FECHAS, PERIODICIDAD, PRECIOS Y RESERVAS PROVISIONALES:
+- NUNCA respondas con una fecha pasada respecto a la fecha actual.
+- Si una actividad tiene regla de periodicidad (como Baño de Gong y Meditación Sonora, que se celebra el último sábado de cada mes), indica SIEMPRE la próxima sesión calculada: el último sábado de octubre (Sábado 31 de Octubre de 2026 de 18:00 a 20:00).
+- Si una actividad no tiene regla de periodicidad y su fecha ha pasado o está pendiente, responde que se celebrará "próximamente".
+- Si el precio de un servicio o viaje no está fijado, indica textualmente: "El precio se determinará en función de las características del viaje y alojamiento."
+- SE ACEPTAN RESERVAS PROVISIONALES: Clasifícalas como oportunidad de reserva provisional con prioridad ALTA, y redacta el borrador confirmando con calidez que se ha registrado su reserva provisional de plaza prioritaria.
+
 Tu tarea es evaluar la solicitud enviada por un usuario desde el formulario web y clasificarla:
 
 1. SI ES UNA CONSULTA TRIVIAL O INFORMATIVA (preguntas sobre horarios, precios de clases, qué ropa llevar, dudas sobre si hay esterillas, ubicación del centro en Fuenlabrada, dudas generales sobre qué es el yoga terapéutico, etc., sin una petición explícita de reserva ni intención de compra inmediata):
@@ -103,16 +125,16 @@ Tu tarea es evaluar la solicitud enviada por un usuario desde el formulario web 
    - "suggestedDraftEmail": Objeto con { "subject": string, "body": string }. Redacta un correo completo, sumamente amable, profesional y cálido respondiendo con total exactitud a las preguntas del usuario, usando el catálogo de servicios y datos del centro. Termina con una cordial invitación a probar una clase o contactar por WhatsApp/teléfono al 695 172 625.
    - "acknowledgementEmail": Objeto con { "subject": string, "body": string }. Acuse de recibo cordial indicando que su consulta está registrada.
 
-2. SI ES UNA OPORTUNIDAD DE NEGOCIO O SOLICITUD DE RESERVA (el usuario quiere reservar plaza, inscribirse, asistir a un evento con plazas limitadas como Baño de Gong, Retiro de Ayuno, Encuentro de Mujeres, Consulta Individual de Gestalt, o pide explícitamente que le llamen o confirma que quiere empezar):
+2. SI ES UNA OPORTUNIDAD DE NEGOCIO O SOLICITUD DE RESERVA (el usuario quiere reservar plaza, pre-reserva, reserva provisional, inscribirse, asistir a un evento con plazas limitadas como Baño de Gong, Retiro de Ayuno, Encuentro de Mujeres, Consulta Individual de Gestalt, o pide explícitamente que le llamen o confirma que quiere empezar):
    - "isBusinessOpportunity": true
    - "qualificationLevel":
-     * "ALTA": Pide plaza formal, indica fechas, viene en grupo, o deja su teléfono pidiendo confirmación o llamada rápida.
+     * "ALTA": Pide plaza formal o reserva provisional, indica fechas, viene en grupo, o deja su teléfono pidiendo confirmación o llamada rápida.
      * "MEDIA": Muestra interés claro en inscribirse a un curso o retiro pero tiene alguna consulta de fechas o condiciones antes de cerrar.
    - "summary": Resumen ejecutivo de la oportunidad en 1 frase para el equipo.
    - "reasoning": Justificación clara de por qué es una oportunidad de negocio y su grado de madurez comercial.
-   - "recommendedAction": Recomendación concreta para el equipo humano (ej: "Confirmar la plaza y enviar las indicaciones prácticas").
-   - "suggestedDraftEmail": Objeto con { "subject": string, "body": string }. Redacta un correo de respuesta muy cuidado y formal confirmando la disponibilidad, agradeciendo su confianza, explicando los pasos para asegurar la plaza (o fianza si corresponde), y facilitando el teléfono 695 172 625 por si desea asistencia inmediata.
-   - "acknowledgementEmail": Objeto con { "subject": string, "body": string }. Acuse de recibo confirmando que su solicitud de reserva ha sido recibida y que el equipo del centro se pondrá en contacto a la mayor brevedad.
+   - "recommendedAction": Recomendación concreta para el equipo humano (ej: "Confirmar la reserva provisional y registrar la plaza prioritaria").
+   - "suggestedDraftEmail": Objeto con { "subject": string, "body": string }. Redacta un correo de respuesta muy cuidado y formal confirmando la recepción de la reserva provisional o disponibilidad, agradeciendo su confianza, explicando los pasos para asegurar la plaza, y facilitando el teléfono 695 172 625 por si desea asistencia inmediata.
+   - "acknowledgementEmail": Objeto con { "subject": string, "body": string }. Acuse de recibo confirmando que su solicitud de reserva provisional ha sido recibida y que el equipo del centro se pondrá en contacto a la mayor brevedad.
 
 CATÁLOGO ACTUAL DE SERVICIOS EN EL CENTRO:
 ${servicesCatalog}
@@ -221,22 +243,27 @@ RESPONDE EXCLUSIVAMENTE UN OBJETO JSON VÁLIDO CON LA SIGUIENTE ESTRUCTURA (SIN 
     const qualificationLevel = isOpportunity ? (input.phone || isExplicitReserva ? 'ALTA' : 'MEDIA') : 'BAJA';
 
     if (isOpportunity) {
-      return {
-        isBusinessOpportunity: true,
-        qualificationLevel,
-        summary: `Solicitud de reserva / plaza para ${input.serviceName || 'actividades del centro'}.`,
-        reasoning: `El usuario solicita plaza formalmente o muestra interés directo en actividades con cupo limitado.`,
-        recommendedAction: input.phone
-          ? `Llamar o contactar por WhatsApp al ${input.phone} para confirmar plaza y disponibilidad.`
-          : `Responder por email para coordinar la reserva y confirmar plaza.`,
-        suggestedDraftEmail: {
-          subject: `Confirmación de solicitud de plaza para ${input.serviceName || 'actividades'} — Escuela de Yoga Salvadora Conesa`,
-          body: `Hola ${input.name},\n\nMuchas gracias por tu interés en reservar tu plaza para ${input.serviceName || 'nuestras actividades'} en la Escuela de Yoga Salvadora Conesa.\n\nHemos recibido correctamente tu solicitud. Para confirmar y formalizar tu plaza, por favor indícanos si prefieres que te llamemos por teléfono o coordinarlo por este medio.\n\nTambién puedes llamarnos o escribirnos por WhatsApp al 695 172 625 para una confirmación inmediata.\n\nUn cordial saludo,\nEquipo de la Escuela de Yoga Salvadora Conesa\nTeléfono: 695 172 625\nhttps://salvadora.jigretera.com`,
-        },
-        acknowledgementEmail: {
-          subject: `Hemos recibido tu solicitud de reserva — Centro de Yoga Salvadora Conesa`,
-          body: `Hola ${input.name},\n\nGracias por solicitar tu reserva de plaza con la Escuela de Yoga Salvadora Conesa.\n\nHemos registrado tu solicitud para "${input.serviceName || 'nuestras actividades'}":\n\n"${input.message}"\n\nNos pondremos en contacto contigo a la mayor brevedad posible para confirmarte los detalles de tu plaza y resolver cualquier duda.\n\nUn cordial saludo,\nEquipo de la Escuela de Yoga de Salvadora Conesa\nTeléfono: 695 172 625\nhttps://salvadora.jigretera.com`,
-        },
+        const isGongQuery = /gong|sonor/i.test(textLower);
+        const gongInfo = isGongQuery
+          ? ' En relación al Baño de Gong y Meditación Sonora, la próxima sesión oficial se celebrará el sábado 31 de octubre de 2026 de 18:00 a 20:00 (último sábado de cada mes, 16€ en el centro). Tu reserva provisional queda registrada con prioridad.'
+          : '';
+
+        return {
+          isBusinessOpportunity: true,
+          qualificationLevel,
+          summary: `Solicitud de reserva / plaza para ${input.serviceName || 'actividades del centro'}.`,
+          reasoning: `El usuario solicita plaza formalmente o muestra interés directo en actividades con cupo limitado.`,
+          recommendedAction: input.phone
+            ? `Llamar o contactar por WhatsApp al ${input.phone} para confirmar plaza y disponibilidad.`
+            : `Responder por email para coordinar la reserva y confirmar plaza.`,
+          suggestedDraftEmail: {
+            subject: `Confirmación de reserva provisional de plaza para ${input.serviceName || 'actividades'} — Escuela de Yoga Salvadora Conesa`,
+            body: `Hola ${input.name},\n\nMuchas gracias por tu interés en reservar tu plaza para ${input.serviceName || 'nuestras actividades'} en la Escuela de Yoga Salvadora Conesa.${gongInfo}\n\nHemos registrado correctamente tu solicitud de reserva provisional. Para confirmar y formalizar tu plaza, por favor indícanos si prefieres que te llamemos por teléfono o coordinarlo por este medio.\n\nTambién puedes llamarnos o escribirnos por WhatsApp al 695 172 625 para una confirmación inmediata.\n\nUn cordial saludo,\nEquipo de la Escuela de Yoga Salvadora Conesa\nTeléfono: 695 172 625\nhttps://salvadora.jigretera.com`,
+          },
+          acknowledgementEmail: {
+            subject: `Hemos recibido tu solicitud de reserva provisional — Centro de Yoga Salvadora Conesa`,
+            body: `Hola ${input.name},\n\nGracias por solicitar tu reserva de plaza con la Escuela de Yoga Salvadora Conesa.${gongInfo}\n\nHemos registrado tu solicitud para "${input.serviceName || 'nuestras actividades'}":\n\n"${input.message}"\n\nNos pondremos en contacto contigo a la mayor brevedad posible para confirmarte los detalles de tu plaza y resolver cualquier duda.\n\nUn cordial saludo,\nEquipo de la Escuela de Yoga de Salvadora Conesa\nTeléfono: 695 172 625\nhttps://salvadora.jigretera.com`,
+          },
         tags: ['oportunidad_negocio', `prioridad_${qualificationLevel.toLowerCase()}`, 'lead_web_reserva'],
       };
     }

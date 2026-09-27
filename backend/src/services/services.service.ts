@@ -15,6 +15,7 @@ import { CreateServiceDto, UpdateServiceDto } from './dto/service.dto';
 import { parseWeeklyScheduleFromText } from './schedule-parser';
 import { EmailService } from '../email/email.service';
 import { YCloudClient } from '../whatsapp/ycloud-client.service';
+import { resolveNextRecurringEventDate } from '../common/time';
 
 @Injectable()
 export class ServicesService implements OnModuleInit {
@@ -132,10 +133,17 @@ export class ServicesService implements OnModuleInit {
             "sinfechadefinitiva" = 'S', 
             "textosinfechadefinitiva" = 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
             "sinpreciodefinitivo" = 'S',
-            "textosinpreciodefinitivo" = 'el precio se determinara en funcion de las caracteristicas del viaje y alojamiento',
+            "textosinpreciodefinitivo" = 'El precio se determinará en función de las características del viaje y alojamiento.',
             "eventDatesText" = 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
-            "description" = 'Evento vivencial de inmersión y transformación sonora durante toda la noche (11 horas continuas de sonido). Fechas: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027. Precio: el precio se determinara en funcion de las caracteristicas del viaje y alojamiento.'
+            "description" = 'Evento vivencial de inmersión y transformación sonora durante toda la noche (11 horas continuas de sonido). Fechas: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027. El precio se determinará en función de las características del viaje y alojamiento. Se aceptan reservas provisionales.'
           WHERE "name" ILIKE '%puja%';
+
+          UPDATE services SET
+            "description" = 'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 31 de Octubre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€. Pago en el centro. Se aceptan reservas provisionales.',
+            "eventDatesText" = 'Sábado 31 de Octubre de 2026 (18:00 a 20:00)',
+            "eventStartDate" = '2026-10-31T17:00:00.000Z',
+            "eventEndDate" = '2026-10-31T19:00:00.000Z'
+          WHERE ("name" ILIKE '%baño de gong%' OR "name" ILIKE '%meditación sonora%');
         `);
       } catch (colErr) {
         console.warn('Auto-migration warning in services table:', colErr);
@@ -327,16 +335,20 @@ export class ServicesService implements OnModuleInit {
       let gongSvc = await this.serviceRepo.findOne({
         where: [{ name: ILike('%baño de gong%') }, { name: ILike('%meditación sonora%') }],
       });
+      const gongDesc =
+        'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 31 de Octubre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€. Pago en el centro. Se aceptan reservas provisionales.';
+      const gongDateText = 'Sábado 31 de Octubre de 2026 (18:00 a 20:00)';
+      const gongStart = new Date('2026-10-31T17:00:00.000Z');
+      const gongEnd = new Date('2026-10-31T19:00:00.000Z');
       if (!gongSvc) {
         gongSvc = await this.serviceRepo.save(
           this.serviceRepo.create({
             name: 'Baño de Gong y Meditación Sonora',
-            description:
-              'Sesión mensual de 2 horas (a finales de mes). Preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima fecha: Sábado 26 de Septiembre de 2026 (18:00 a 20:00). Aforo: 30 personas. Precio: 16€. Pago en el centro.',
+            description: gongDesc,
             serviceType: ServiceType.EVENT,
-            eventDatesText: 'Sábado 26 de Septiembre de 2026 (18:00 a 20:00)',
-            eventStartDate: new Date('2026-09-26T16:00:00.000Z'),
-            eventEndDate: new Date('2026-09-26T18:00:00.000Z'),
+            eventDatesText: gongDateText,
+            eventStartDate: gongStart,
+            eventEndDate: gongEnd,
             durationMinutes: 120,
             price: '16.00',
             maxCapacity: 30,
@@ -350,9 +362,11 @@ export class ServicesService implements OnModuleInit {
           }),
         );
       } else {
+        gongSvc.description = gongDesc;
+        gongSvc.eventDatesText = gongDateText;
+        gongSvc.eventStartDate = gongStart;
+        gongSvc.eventEndDate = gongEnd;
         gongSvc.managerId = manager.id;
-        gongSvc.eventStartDate = new Date('2026-09-26T16:00:00.000Z');
-        gongSvc.eventEndDate = new Date('2026-09-26T18:00:00.000Z');
         gongSvc.reminderNotes =
           gongSvc.reminderNotes ||
           'Llevar ropa cómoda de abrigo, calcetines cálidos y, si lo deseas, tu propia manta o cojín para disfrutar de la experiencia sonora con el máximo confort.';
@@ -641,10 +655,10 @@ export class ServicesService implements OnModuleInit {
               sinfechadefinitiva: 'S',
               textosinfechadefinitiva: 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
               sinpreciodefinitivo: 'S',
-              textosinpreciodefinitivo: 'el precio se determinara en funcion de las caracteristicas del viaje y alojamiento',
+              textosinpreciodefinitivo: 'El precio se determinará en función de las características del viaje y alojamiento.',
               eventDatesText: 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
               description:
-                'Evento vivencial de inmersión y transformación sonora durante toda la noche (11 horas continuas de sonido). Fechas: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027. Precio: el precio se determinara en funcion de las caracteristicas del viaje y alojamiento.',
+                'Evento vivencial de inmersión y transformación sonora durante toda la noche (11 horas continuas de sonido). Fechas: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027. El precio se determinará en función de las características del viaje y alojamiento. Se aceptan reservas provisionales.',
             };
           }
           if (/ayuno/i.test(s.name || '')) {
@@ -652,6 +666,15 @@ export class ServicesService implements OnModuleInit {
           }
           if (/baño de gong|sonora/i.test(s.name || '')) {
             hasGong = true;
+            changed = true;
+            return {
+              ...s,
+              eventDatesText: 'Sábado 31 de Octubre de 2026 (18:00 a 20:00)',
+              eventStartDate: '2026-10-31T17:00:00.000Z',
+              eventEndDate: '2026-10-31T19:00:00.000Z',
+              description:
+                'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 31 de Octubre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€. Pago en el centro. Se aceptan reservas provisionales.',
+            };
           }
           if (/constelar|asunto propio/i.test(s.name || '')) {
             hasConstelar = true;
@@ -726,6 +749,13 @@ export class ServicesService implements OnModuleInit {
           agentConfig.customInstructions = agentConfig.customInstructions.replace(
             /S[áa]bado\s*28\s*de\s*Noviembre\s*de\s*2026[^\.\n]*/gi,
             'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
+          );
+          changed = true;
+        }
+        if (agentConfig.customInstructions && /26 de Septiembre/i.test(agentConfig.customInstructions)) {
+          agentConfig.customInstructions = agentConfig.customInstructions.replace(
+            /S[áa]bado\s*26\s*de\s*Septiembre\s*de\s*2026[^\.\n]*/gi,
+            'Sábado 31 de Octubre de 2026, 18:00 a 20:00 (último sábado de cada mes). Se aceptan reservas provisionales',
           );
           changed = true;
         }
@@ -1088,6 +1118,14 @@ export class ServicesService implements OnModuleInit {
     service.quorumReached = service.minQuorum
       ? attendeesCount >= service.minQuorum
       : true;
+
+    if (/baño.*gong|meditación sonora/i.test(service.name)) {
+      const nextDate = resolveNextRecurringEventDate(service.name);
+      if (nextDate.hasRule && nextDate.dateText) {
+        service.eventDatesText = nextDate.dateText;
+      }
+    }
+
     return service;
   }
 
@@ -1159,26 +1197,35 @@ export class ServicesService implements OnModuleInit {
       const allServices = await this.serviceRepo.find({ where: { isActive: true } });
       const agentConfigs = await this.agentConfigRepo.find();
       for (const agent of agentConfigs) {
-        agent.services = allServices.map((s) => ({
-          name: s.name,
-          durationMinutes: s.durationMinutes,
-          price: s.price,
-          serviceType: s.serviceType,
-          eventDatesText: s.eventDatesText,
-          scheduleText: s.scheduleText,
-          description: s.description,
-          weeklySchedule: s.weeklySchedule,
-          maxCapacity: s.maxCapacity,
-          minQuorum: s.minQuorum,
-          paymentType: s.paymentType,
-          externalPaymentUrl: s.externalPaymentUrl,
-          allowedModalities: s.allowedModalities,
-          requiresReason: s.requiresReason,
-          sinfechadefinitiva: s.sinfechadefinitiva,
-          textosinfechadefinitiva: s.textosinfechadefinitiva,
-          sinpreciodefinitivo: s.sinpreciodefinitivo,
-          textosinpreciodefinitivo: s.textosinpreciodefinitivo,
-        }));
+        agent.services = allServices.map((s) => {
+          let eventDatesText = s.eventDatesText;
+          if (/baño.*gong|meditación sonora/i.test(s.name)) {
+            const nextDate = resolveNextRecurringEventDate(s.name);
+            if (nextDate.hasRule && nextDate.dateText) {
+              eventDatesText = nextDate.dateText;
+            }
+          }
+          return {
+            name: s.name,
+            durationMinutes: s.durationMinutes,
+            price: s.price,
+            serviceType: s.serviceType,
+            eventDatesText,
+            scheduleText: s.scheduleText,
+            description: s.description,
+            weeklySchedule: s.weeklySchedule,
+            maxCapacity: s.maxCapacity,
+            minQuorum: s.minQuorum,
+            paymentType: s.paymentType,
+            externalPaymentUrl: s.externalPaymentUrl,
+            allowedModalities: s.allowedModalities,
+            requiresReason: s.requiresReason,
+            sinfechadefinitiva: s.sinfechadefinitiva,
+            textosinfechadefinitiva: s.textosinfechadefinitiva,
+            sinpreciodefinitivo: s.sinpreciodefinitivo,
+            textosinpreciodefinitivo: s.textosinpreciodefinitivo,
+          };
+        });
         await this.agentConfigRepo.save(agent);
       }
     } catch (err) {

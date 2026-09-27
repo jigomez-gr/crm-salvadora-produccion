@@ -310,3 +310,97 @@ export function parseFlexibleStartsAt(
 
   return fallbackDate.toISOString();
 }
+
+/**
+ * Resolves the next recurring event date when a service has a monthly recurrence rule.
+ * Specifically handles:
+ * - "último sábado de cada mes" (e.g. Baño de Gong y Meditación Sonora, 18:00 a 20:00)
+ * - "último domingo de cada mes" (e.g. Constelaciones Familiares, 10:00 a 14:00)
+ */
+export function resolveNextRecurringEventDate(
+  serviceName: string,
+  referenceDate: Date = new Date(),
+  timezone: string = 'Europe/Madrid',
+): {
+  hasRule: boolean;
+  dateText?: string;
+  startsAtIso?: string;
+  endsAtIso?: string;
+} {
+  const name = (serviceName || '').toLowerCase();
+  const isGong = /baño.*gong|meditación sonora/i.test(name);
+  const isConstelaciones = /constelaci/i.test(name);
+
+  if (!isGong && !isConstelaciones) {
+    return { hasRule: false };
+  }
+
+  const zonedRef = new TZDate(referenceDate.getTime(), timezone);
+  const targetWeekday = isGong ? 6 : 0; // 6 = Saturday, 0 = Sunday
+  const startHour = isGong ? 18 : 10;
+  const startMinute = 0;
+  const durationHours = isGong ? 2 : 4;
+  const endHour = startHour + durationHours;
+
+  const findLastWeekday = (year: number, month: number) => {
+    const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+    for (let day = lastDayOfMonth; day >= 1; day--) {
+      const candidate = new TZDate(year, month, day, startHour, startMinute, 0, timezone);
+      if (candidate.getDay() === targetWeekday) {
+        return candidate;
+      }
+    }
+    return new TZDate(year, month, lastDayOfMonth, startHour, startMinute, 0, timezone);
+  };
+
+  // Check current month
+  let candidate = findLastWeekday(zonedRef.getFullYear(), zonedRef.getMonth());
+  if (candidate.getTime() <= referenceDate.getTime()) {
+    // Already passed in current month, take next month
+    const nextMonthYear =
+      zonedRef.getMonth() === 11 ? zonedRef.getFullYear() + 1 : zonedRef.getFullYear();
+    const nextMonth = (zonedRef.getMonth() + 1) % 12;
+    candidate = findLastWeekday(nextMonthYear, nextMonth);
+  }
+
+  const candidateEnd = new TZDate(
+    candidate.getFullYear(),
+    candidate.getMonth(),
+    candidate.getDate(),
+    endHour,
+    0,
+    0,
+    timezone,
+  );
+
+  const MONTHS_ES = [
+    'Enero',
+    'Febrero',
+    'Marzo',
+    'Abril',
+    'Mayo',
+    'Junio',
+    'Julio',
+    'Agosto',
+    'Septiembre',
+    'Octubre',
+    'Noviembre',
+    'Diciembre',
+  ];
+  const DAY_NAME_ES = isGong ? 'Sábado' : 'Domingo';
+  const dayNum = candidate.getDate();
+  const monthName = MONTHS_ES[candidate.getMonth()];
+  const yearNum = candidate.getFullYear();
+
+  const dateText = `${DAY_NAME_ES} ${dayNum} de ${monthName} de ${yearNum} (${String(
+    startHour,
+  ).padStart(2, '0')}:00 a ${String(endHour).padStart(2, '0')}:00)`;
+
+  return {
+    hasRule: true,
+    dateText,
+    startsAtIso: new Date(candidate.getTime()).toISOString(),
+    endsAtIso: new Date(candidateEnd.getTime()).toISOString(),
+  };
+}
+
