@@ -29,8 +29,8 @@ describe('WidgetController - VAPI Outbound Call Integration', () => {
       {} as any, // agentsConfigService
       {} as any, // agentRunnerService
       mockMessagesService as any,
-      {} as any, // contactsService
-      {} as any, // settingsService
+      { isContactBlocked: jest.fn().mockResolvedValue(false) } as any, // contactsService
+      { isMaintenanceActive: jest.fn().mockResolvedValue(false) } as any, // settingsService
       {} as any, // servicesService
       {} as any, // categoriesService
       {} as any, // analizaIaService
@@ -38,6 +38,7 @@ describe('WidgetController - VAPI Outbound Call Integration', () => {
       {} as any, // usersService
       mockVapiService as any,
       mockVapiWebhookService as any,
+      {} as any, // contactQueryEvaluator
     );
   });
 

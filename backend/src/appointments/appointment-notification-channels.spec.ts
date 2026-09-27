@@ -66,6 +66,11 @@ describe('Appointments Multi-Channel Notifications (Service Level)', () => {
       emit: jest.fn(),
     };
 
+    const settingsRepoMock = {
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(null),
+    };
+
     service = new AppointmentsService(
       appointmentsRepoMock as any,
       servicesRepoMock as any,
@@ -78,6 +83,7 @@ describe('Appointments Multi-Channel Notifications (Service Level)', () => {
       ycloudClientMock as any,
       agentConfigServiceMock as any,
       messagesServiceMock as any,
+      settingsRepoMock as any,
       zadarmaSmsMock,
     );
   });

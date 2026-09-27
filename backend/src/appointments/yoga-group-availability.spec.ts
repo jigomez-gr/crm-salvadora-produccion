@@ -154,6 +154,11 @@ describe('Yoga & Meditacion Group Availability (Aforo vs Agenda Profesor)', () =
       },
     ];
 
+    const settingsRepoMock = {
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(null),
+    };
+
     appointmentsService = new AppointmentsService(
       appointmentsRepoMock,
       servicesRepoMock,
@@ -166,6 +171,7 @@ describe('Yoga & Meditacion Group Availability (Aforo vs Agenda Profesor)', () =
       null as any,
       null as any,
       null as any,
+      settingsRepoMock as any,
     );
   });
 

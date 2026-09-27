@@ -164,6 +164,11 @@ describe('Yoga Appointments & Student Lifecycle', () => {
     ];
     inMemoryAppointments = [];
 
+    const settingsRepoMock = {
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(null),
+    };
+
     appointmentsService = new AppointmentsService(
       appointmentsRepoMock,
       servicesRepoMock,
@@ -176,6 +181,7 @@ describe('Yoga Appointments & Student Lifecycle', () => {
       null as any, // ycloudClient
       null as any, // agentsConfigService
       null as any, // messagesService
+      settingsRepoMock as any,
     );
 
     contactsService = new ContactsService(

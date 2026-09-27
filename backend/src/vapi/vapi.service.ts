@@ -915,7 +915,7 @@ export class VapiService implements OnModuleInit {
     }
 
     const customerName = contact?.name || 'Alumno';
-    const message = `Hola ${customerName}, te llamamos del Centro de Yoga Salvadora Conesa para informarte de que tu solicitud de cita para ${appt.service} ha sido recibida y se encuentra actualmente a la espera de la decisión y confirmación del profesor Jose Ignacio Gomez Raya. Te avisaremos en cuanto esté confirmada. ¡Muchas gracias!`;
+    const message = `Hola ${customerName}, te llamamos del Centro de Yoga Salvadora Conesa para informarte de que tu solicitud de cita para ${appt.service} ha sido recibida y se encuentra actualmente a la espera de la decisión y confirmación de la profesora y responsable Salvadora Conesa Martinez. Te avisaremos en cuanto esté confirmada. ¡Muchas gracias!`;
 
     return this.startOutboundCall(phone, contact?.id, message);
   }

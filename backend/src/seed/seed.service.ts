@@ -637,6 +637,11 @@ export class SeedService implements OnModuleInit {
     // Ensure demo doctors and specialists exist
     const doctorSeeds = [
       {
+        name: 'Salvadora Conesa Martinez',
+        email: 'salvadoraconesa@gmail.com',
+        role: UserRole.SERVICE_MANAGER,
+      },
+      {
         name: 'Dr. José Ignacio Gómez (Odontología & Diagnóstico)',
         email: 'jigomez@hotmail.com',
         role: UserRole.SERVICE_MANAGER,

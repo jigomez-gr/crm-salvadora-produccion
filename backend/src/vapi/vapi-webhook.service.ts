@@ -91,7 +91,7 @@ export const OFFICIAL_SERVICES: OfficialServiceConfig[] = [
     durationMinutes: 60,
     maxCapacity: 1,
     requiresApproval: true,
-    priceInfo: '35€ por sesión de 1 hora. Requiere aprobación de Jose Ignacio Gomez Raya',
+    priceInfo: '35€ por sesión de 1 hora. Requiere aprobación de Salvadora Conesa Martinez',
   },
   {
     id: 'bienestar-experience',
@@ -788,7 +788,7 @@ export class VapiWebhookService {
             const iso = slotDate.toISOString();
             const spoken = format(zonedSlot, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
             const approvalQuestion = requiresApproval
-              ? ' Esta cita queda registrada pendiente de aprobación del terapeuta Jose Ignacio Gomez Raya. ¿Deseas solicitar esta cita?'
+              ? ' Esta cita queda registrada pendiente de aprobación de la terapeuta Salvadora Conesa Martinez. ¿Deseas solicitar esta cita?'
               : ' Esta cita queda confirmada de inmediato. ¿Deseas reservar esta cita?';
             return `${weekendNotice}Sí, para «${officialSvc.name}» tenemos disponible el ${spoken} [${iso}]. ${officialSvc.priceInfo}.${approvalQuestion}`;
           }
@@ -824,7 +824,7 @@ export class VapiWebhookService {
 
       const hourMissedNotice = targetHourNorm ? `A las ${targetHourNorm} no está disponible. ` : '';
       const approvalNote = requiresApproval
-        ? 'Al solicitarla queda registrada pendiente de aprobación de Jose Ignacio Gomez Raya.'
+        ? 'Al solicitarla queda registrada pendiente de aprobación de Salvadora Conesa Martinez.'
         : 'Al solicitarla queda confirmada de inmediato.';
 
       return `${weekendNotice}${hourMissedNotice}Para «${officialSvc.name}» (lunes a viernes de 09:00 a 20:00, ${officialSvc.priceInfo}), los próximos huecos disponibles son: ${optionsFormatted}. ${approvalNote} Ofrece estas opciones y usa el código ISO entre corchetes para reservar cuando elija. Nunca leas el código entre corchetes en voz alta.`;
@@ -1198,7 +1198,7 @@ export class VapiWebhookService {
       const customerPhone = contact.phone || effectivePhone;
       if (customerPhone && this.zadarmaSms) {
         const defaultMsg = requiresApproval
-          ? `Centro Salvadora: Solicitud recibida para ${appt.service} el ${spokenDate}. Pendiente de confirmacion del terapeuta Jose Ignacio Gomez Raya. Te avisaremos en cuanto se confirme.`
+          ? `Centro Salvadora: Solicitud recibida para ${appt.service} el ${spokenDate}. Pendiente de confirmacion de la terapeuta Salvadora Conesa Martinez. Te avisaremos en cuanto se confirme.`
           : `Centro Salvadora: Confirmamos tu cita de ${appt.service} para el ${spokenDate}. Si deseas recibir los detalles por correo, respóndenos a este SMS con tu email. ¡Te esperamos!`;
 
         this.vapiAccountRepo.findOne({ where: {} }).then((vapiAcc) => {
@@ -1245,9 +1245,9 @@ export class VapiWebhookService {
           } catch (mailErr: any) {
             this.logger.error(`[VAPI] Error enviando email de solicitud de cita: ${mailErr?.message || mailErr}`);
           }
-          return `¡Solicitud registrada con éxito! Tu cita para ${appt.service} el ${spokenDate} a nombre de ${customerName} ha quedado registrada pendiente de aprobación del terapeuta Jose Ignacio Gomez Raya. Confírmaselo amablemente e infórmale de que le hemos enviado un correo a su dirección registrada (${emailAddress}) con el resumen de la solicitud, y que le avisaremos en cuanto se confirme. NO le pidas su email. Despídete con calidez.`;
+          return `¡Solicitud registrada con éxito! Tu cita para ${appt.service} el ${spokenDate} a nombre de ${customerName} ha quedado registrada pendiente de aprobación de la terapeuta Salvadora Conesa Martinez. Confírmaselo amablemente e infórmale de que le hemos enviado un correo a su dirección registrada (${emailAddress}) con el resumen de la solicitud, y que le avisaremos en cuanto se confirme. NO le pidas su email. Despídete con calidez.`;
         }
-        return `¡Solicitud registrada con éxito! Tu cita para ${appt.service} el ${spokenDate} a nombre de ${customerName} ha quedado registrada pendiente de aprobación del terapeuta Jose Ignacio. Confírmaselo y pregúntale: "Si quieres que te envíe un resumen con los datos de acceso, ¿me dices tu correo electrónico? Por favor, dímelo letra por letra, por ejemplo: jota, i, g, o, m, e, z, arroba gmail punto com". Si prefiere no darlo o duda al deletrear, dile "No te preocupes, te lo dejo todo registrado con tu número de teléfono" y despídete.`;
+        return `¡Solicitud registrada con éxito! Tu cita para ${appt.service} el ${spokenDate} a nombre de ${customerName} ha quedado registrada pendiente de aprobación de la terapeuta Salvadora Conesa Martinez. Confírmaselo y pregúntale: "Si quieres que te envíe un resumen con los datos de acceso, ¿me dices tu correo electrónico? Por favor, dímelo letra por letra, por ejemplo: jota, i, g, o, m, e, z, arroba gmail punto com". Si prefiere no darlo o duda al deletrear, dile "No te preocupes, te lo dejo todo registrado con tu número de teléfono" y despídete.`;
       }
 
       if (hasEmail) {

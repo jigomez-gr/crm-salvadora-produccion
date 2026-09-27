@@ -310,7 +310,7 @@ describe('Batería de Pruebas de Regresión Exhaustiva: Ciclo de Vida de Citas y
       notifyApprovalPendingCall: jest.fn().mockImplementation(async (appointmentId, phoneOverride) => {
         const appt = inMemoryAppointments.find((a) => a.id === appointmentId);
         const phone = phoneOverride || TEST_CALLER_PHONE;
-        const msg = `Hola ${TEST_CALLER_NAME}, te llamamos del Centro de Yoga Salvadora Conesa para informarte de que tu solicitud de cita para ${appt?.service || 'Terapia'} ha sido recibida y se encuentra actualmente a la espera de la decisión y confirmación del profesor Jose Ignacio Gomez Raya. Te avisaremos en cuanto esté confirmada. ¡Muchas gracias!`;
+        const msg = `Hola ${TEST_CALLER_NAME}, te llamamos del Centro de Yoga Salvadora Conesa para informarte de que tu solicitud de cita para ${appt?.service || 'Terapia'} ha sido recibida y se encuentra actualmente a la espera de la decisión y confirmación de la profesora y responsable Salvadora Conesa Martinez. Te avisaremos en cuanto esté confirmada. ¡Muchas gracias!`;
         return vapiServiceMock.startOutboundCall(phone, inMemoryContacts[0].id, msg);
       }),
     };
@@ -480,8 +480,8 @@ describe('Batería de Pruebas de Regresión Exhaustiva: Ciclo de Vida de Citas y
     const outboundCall = inMemoryCalls[0];
     expect(outboundCall.toNumber).toBe(TEST_CALLER_PHONE);
 
-    // 4. Verificar que el mensaje hablado para el móvil dice textualmente que está a la espera de Jose Ignacio
-    expect(outboundCall.customMessage).toContain('se encuentra actualmente a la espera de la decisión y confirmación del profesor Jose Ignacio Gomez Raya');
+    // 4. Verificar que el mensaje hablado para el móvil dice textualmente que está a la espera de Salvadora Conesa
+    expect(outboundCall.customMessage).toContain('se encuentra actualmente a la espera de la decisión y confirmación de la profesora y responsable Salvadora Conesa Martinez');
     expect(outboundCall.customMessage).toContain(TEST_CALLER_NAME);
   });
 
@@ -700,7 +700,7 @@ describe('Batería de Pruebas de Regresión Exhaustiva: Ciclo de Vida de Citas y
     expect(resultText).toContain('domingo 27 de septiembre a las 10:00');
   });
 
-  it('[T8] Guarda Terapia Gestalt como PENDING_APPROVAL y avisa de la aprobación por Jose Ignacio', async () => {
+  it('[T8] Guarda Terapia Gestalt como PENDING_APPROVAL y avisa de la aprobación por Salvadora Conesa', async () => {
     const payload: any = {
       message: {
         type: 'tool-calls',
@@ -723,7 +723,7 @@ describe('Batería de Pruebas de Regresión Exhaustiva: Ciclo de Vida de Citas y
     const resultText = res.results![0].result;
 
     expect(resultText).toContain('¡Solicitud registrada con éxito!');
-    expect(resultText).toContain('pendiente de aprobación del terapeuta Jose Ignacio');
+    expect(resultText).toContain('pendiente de aprobación de la terapeuta Salvadora Conesa Martinez');
   });
 
   it('[T9] Formatea las horas habladas estrictamente en zona horaria Europe/Madrid (sin desfase UTC)', () => {
@@ -805,7 +805,7 @@ describe('Batería de Pruebas de Regresión Exhaustiva: Ciclo de Vida de Citas y
     expect(res.results![0].toolCallId).toBe('call-t13');
     const resultText = res.results![0].result;
     expect(resultText).toContain('Terapia Gestalt');
-    expect(resultText).toContain('Jose Ignacio Gomez Raya');
+    expect(resultText).toContain('Salvadora Conesa Martinez');
     expect(resultText).toMatch(/\[\d{4}-\d{2}-\d{2}T/); // Contiene el código ISO entre corchetes
   });
 

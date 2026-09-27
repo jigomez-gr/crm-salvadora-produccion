@@ -114,10 +114,10 @@ Bajo ninguna circunstancia reserves ni consultes citas ni des horarios.`;
     bienestarSvc?.requiresApproval !== undefined ? Boolean(bienestarSvc.requiresApproval) : false;
 
   const gestaltApprovalText = gestaltRequiresApproval
-    ? ' Requiere aprobación del terapeuta (Jose Ignacio Gomez Raya).'
+    ? ' Requiere aprobación de la terapeuta y responsable (Salvadora Conesa Martinez).'
     : ' Confirmación inmediata.';
   const bienestarApprovalText = bienestarRequiresApproval
-    ? ' Requiere aprobación de Jose Ignacio Gomez Raya.'
+    ? ' Requiere aprobación de Salvadora Conesa Martinez.'
     : ' Confirmación inmediata.';
 
   const getModalityText = (svc?: { allowedModalities?: string[] }, defaultText = 'Presencial') => {
@@ -150,7 +150,7 @@ Bajo ninguna circunstancia reserves ni consultes citas ni des horarios.`;
 
   const approvalSectionText = approvalServicesSummary
     ? `3. **CITAS QUE REQUIEREN APROBACIÓN (${approvalServicesSummary})**:
-   - Al agendar, indícale claramente que la solicitud queda registrada y pendiente de confirmación por el terapeuta / profesor responsable Jose Ignacio Gomez Raya.`
+   - Al agendar, indícale claramente que la solicitud queda registrada y pendiente de confirmación por la terapeuta / profesora responsable Salvadora Conesa Martinez.`
     : `3. **CONFIRMACIÓN INMEDIATA DE CITAS**:
    - Todas las citas quedan formalizadas y confirmadas en el momento de la llamada.`;
 

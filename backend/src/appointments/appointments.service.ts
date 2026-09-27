@@ -1171,7 +1171,7 @@ export class AppointmentsService implements OnModuleInit {
       await this.notifyStudentDecision(
         saved,
         'accepted',
-        serviceEntity?.manager?.name || acceptedBy || 'Jose Ignacio Gomez Raya',
+        serviceEntity?.manager?.name || acceptedBy || 'Salvadora Conesa Martinez',
         undefined,
         undefined,
         false,
@@ -1226,7 +1226,7 @@ export class AppointmentsService implements OnModuleInit {
     await this.notifyStudentDecision(
       appt,
       requestReschedule ? 'reschedule_requested' : 'rejected',
-      serviceEntity?.manager?.name || rejectedBy || 'Jose Ignacio Gomez Raya',
+      serviceEntity?.manager?.name || rejectedBy || 'Salvadora Conesa Martinez',
       defaultReason,
       proposedTimes,
       false,
@@ -1382,7 +1382,7 @@ export class AppointmentsService implements OnModuleInit {
       }
 
       const effectiveManager =
-        serviceEntity?.manager?.name || managerName || 'Jose Ignacio Gomez Raya';
+        serviceEntity?.manager?.name || managerName || 'Salvadora Conesa Martinez';
 
       const isSinFecha = serviceEntity?.sinfechadefinitiva === 'S';
       const isSinPrecio = serviceEntity?.sinpreciodefinitivo === 'S';
@@ -1952,7 +1952,7 @@ export class AppointmentsService implements OnModuleInit {
       await this.notifyStudentDecision(
         appt,
         'cancelled',
-        serviceEntity?.manager?.name || cancelledBy || 'Jose Ignacio Gomez Raya',
+        serviceEntity?.manager?.name || cancelledBy || 'Salvadora Conesa Martinez',
         reason,
       ).catch((err) => {
         this.logger.error(`Error notifying student on cancel: ${err}`);

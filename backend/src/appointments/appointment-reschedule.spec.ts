@@ -3,6 +3,15 @@ import { Appointment, AppointmentStatus } from '../common/entities/appointment.e
 import { Contact, ContactStatus } from '../common/entities/contact.entity';
 
 describe('AppointmentsService - rescheduleAppointment', () => {
+  beforeAll(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-20T10:00:00.000Z'));
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   let service: AppointmentsService;
   let appointmentsRepo: any;
   let contactsRepo: any;
@@ -125,6 +134,11 @@ describe('AppointmentsService - rescheduleAppointment', () => {
       find: jest.fn(async () => []),
     };
 
+    const settingsRepoMock = {
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(null),
+    };
+
     service = new AppointmentsService(
       appointmentsRepo,
       servicesRepo,
@@ -140,6 +154,7 @@ describe('AppointmentsService - rescheduleAppointment', () => {
       null as any, // ycloudClient
       null as any, // agentsConfigService
       null as any, // messagesService
+      settingsRepoMock as any,
       { sendAppointmentDecisionSms: jest.fn().mockResolvedValue({}) } as any, // zadarmaSmsService
     );
   });

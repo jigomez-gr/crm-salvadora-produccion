@@ -781,7 +781,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
             : status === 'pending_approval'
             ? `Solicitud de cita para ${svc.name} registrada correctamente (Modalidad: ${
                 effectiveModality === 'virtual' ? 'Online por videollamada' : 'Presencial en el centro'
-              }). Queda pendiente de aprobación por el terapeuta responsable (Jose Ignacio Gomez Raya). En cuanto la revise y apruebe, recibirás la confirmación oficial${
+              }). Queda pendiente de aprobación por la terapeuta y responsable (Salvadora Conesa Martinez). En cuanto la revise y apruebe, recibirás la confirmación oficial${
                 effectiveModality === 'virtual' ? ' y el enlace de la videollamada' : ''
               } por correo o WhatsApp.`
             : 'Cita reservada y confirmada.';
@@ -1428,14 +1428,14 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Movilidad de horarios: Los asistentes se pueden mover por los horarios libremente (martes o jueves), siempre teniendo en cuenta evitar horarios que estén completos para no colapsar el aforo (aforo máximo 28 plazas).
   Cuando un cliente solicite meditación o pregunte por ella, ofrécele los martes o jueves a las 9:15 y formaliza su plaza con 'bookAppointment'.
 - TERAPIA GESTALT (SESIÓN INDIVIDUAL):
-  * Modalidad: Puede ser Presencial u Online (videollamada). Pregúntale al alumno/cliente qué modalidad prefiere. Si el alumno te facilita sus datos sin especificar modalidad, tramita la reserva y confírmale amablemente que su solicitud queda registrada y pendiente de aprobación por el terapeuta responsable (**Jose Ignacio Gomez Raya**).
+  * Modalidad: Puede ser Presencial u Online (videollamada). Pregúntale al alumno/cliente qué modalidad prefiere. Si el alumno te facilita sus datos sin especificar modalidad, tramita la reserva y confírmale amablemente que su solicitud queda registrada y pendiente de aprobación por la terapeuta y responsable (**Salvadora Conesa Martinez**).
   * Duración: 60 minutos (1 hora).
   * Precio: ${gestaltPrice} por sesión (pago en el centro o previa confirmación).
   * Aforo: Es una sesión individual (solo 1 persona por horario).
-  * Horario: Se acuerda individualmente entre alumno y profesor. Consulta disponibilidad con 'checkAvailability'.
-  * APROBACIÓN OBLIGATORIA: Las citas de Terapia Gestalt requieren la aprobación previa del terapeuta/profesor responsable (**Jose Ignacio Gomez Raya**).
-  * Al formalizar con 'bookAppointment', explícale con amabilidad al cliente que su solicitud de cita ha quedado registrada como **solicitud pendiente de confirmación** y que el terapeuta responsable le confirmará la cita (por email o WhatsApp) en cuanto la revise.
-  * ESTÁ ESTRICTAMENTE PROHIBIDO decir que la cita de Terapia Gestalt está confirmada o pasar enlaces de videollamada. Comunica SIEMPRE que queda como **solicitud pendiente de confirmación/aprobación por Jose Ignacio Gomez Raya** y que él le avisará en cuanto la revise.
+  * Horario: Se acuerda individualmente entre alumno y profesora. Consulta disponibilidad con 'checkAvailability'.
+  * APROBACIÓN OBLIGATORIA: Las citas de Terapia Gestalt requieren la aprobación previa de la terapeuta/profesora responsable (**Salvadora Conesa Martinez**).
+  * Al formalizar con 'bookAppointment', explícale con amabilidad al cliente que su solicitud de cita ha quedado registrada como **solicitud pendiente de confirmación** y que la terapeuta responsable le confirmará la cita (por email o WhatsApp) en cuanto la revise.
+  * ESTÁ ESTRICTAMENTE PROHIBIDO decir que la cita de Terapia Gestalt está confirmada o pasar enlaces de videollamada. Comunica SIEMPRE que queda como **solicitud pendiente de confirmación/aprobación por Salvadora Conesa Martinez** y que ella le avisará en cuanto la revise.
 - BIENESTAR EXPERIENCE (LONGEVIDAD Y BIENESTAR INTEGRAL):
   * Consulta y sigue siempre los detalles, descripción, modalidades, fechas y horarios oficiales configurados en la lista de Servicios de abajo (actualizados desde el CRM).
   * Modalidad y Formato: Revisa las modalidades permitidas y la descripción de la actividad. Si la actividad está configurada como presencial (por ejemplo, exposición en un Auditorio de Madrid o sesión en el centro), NO preguntes por modalidad virtual ni ofrezcas videollamada; asume presencial. Solo ofrece modalidad online si la lista de servicios incluye explícitamente modalidad virtual.
@@ -1528,7 +1528,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   2. Llama a 'listContactAppointments' (pasando su correo o teléfono) para cargar sus citas.
   3. En cuanto el cliente te pida o confirme la hora acordada (ej. 10:30): DEBES LLAMAR INMEDIATAMENTE A 'bookAppointment' pasando el servicio, la fecha y hora convenida (en formato ISO o "10:30") y sus datos de contacto.
   4. 'bookAppointment' actualizará y guardará la cita de forma automática en el sistema.
-  5. NUNCA respondas diciendo que la hora está ocupada o rechazada: ejecuta SIEMPRE 'bookAppointment' y confirma amablemente al cliente que su cita ha quedado agendada para esa hora y pendiente de confirmación de Jose Ignacio Gomez Raya.
+  5. NUNCA respondas diciendo que la hora está ocupada o rechazada: ejecuta SIEMPRE 'bookAppointment' y confirma amablemente al cliente que su cita ha quedado agendada para esa hora y pendiente de confirmación de Salvadora Conesa Martinez.
 - SOLICITUD DE ATENCIÓN HUMANA / HABLAR CON UNA PERSONA (ESCALADO A HUMANO):
   * Si el cliente o usuario pide explícitamente hablar con una persona humana, un agente humano, el responsable o el equipo del centro (por ejemplo: "quiero hablar con una persona", "pásame con un humano", "quiero hablar con alguien", "atención humana", "hablar con Jose Ignacio", etc.):
   * CONFIRMACIÓN REQUERIDA: Si el cliente aún no ha confirmado claramente que desea que le contacte una persona, pregúntale cordialmente para confirmar (por ejemplo: "¿Deseas que avise a nuestro equipo para que una persona se ponga en contacto contigo directamente?").
@@ -1579,7 +1579,7 @@ Si es una persona nueva, pídele amablemente su Nombre y Apellidos, Teléfono m�
    En cuanto el cliente te los proporcione, llama a 'bookAppointment' indicando el servicio, la fecha/hora en formato ISO, customerName, customerPhone y customerEmail.
 8. RESPUESTA TRAS FORMALIZAR:
    - Si el servicio requiere aprobación previa (Terapia Gestalt), o el resultado de 'bookAppointment' indica 'requiresApproval: true':
-     Informa al cliente con amabilidad y calidez de que su cita ha quedado registrada como SOLICITUD PENDIENTE DE CONFIRMACIÓN por parte del terapeuta/responsable (Jose Ignacio Gomez Raya), y que él se la confirmará personalmente por correo o WhatsApp tras revisarla. NUNCA digas que está confirmada ni entregues enlaces de reunión virtual antes de su aprobación.
+     Informa al cliente con amabilidad y calidez de que su cita ha quedado registrada como SOLICITUD PENDIENTE DE CONFIRMACIÓN por parte de la terapeuta y responsable (Salvadora Conesa Martinez), y que ella se la confirmará personalmente por correo o WhatsApp tras revisarla. NUNCA digas que está confirmada ni entregues enlaces de reunión virtual antes de su aprobación.
    - Para servicios estándar o plazas confirmadas:
      Informa al cliente de que su cita o plaza ha quedado confirmada, indicándole día y hora (y si corresponde, el enlace de la videollamada o pago).
 

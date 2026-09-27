@@ -149,14 +149,38 @@ export class ServicesService implements OnModuleInit {
         console.warn('Auto-migration warning in services table:', colErr);
       }
 
-      // 1. Ensure Jose Ignacio Gomez Raya exists as SERVICE_MANAGER
-      let manager = await this.userRepo.findOne({
-        where: [{ email: 'jigomez@hotmail.com' }, { name: ILike('%Jose Ignacio Gomez%') }],
+      // 1. Ensure Salvadora Conesa Martinez exists as SERVICE_MANAGER
+      let salvadora = await this.userRepo.findOne({
+        where: [{ email: 'salvadoraconesa@gmail.com' }, { name: ILike('%Salvadora Conesa%') }],
       });
 
-      if (!manager) {
+      if (!salvadora) {
         const passwordHash = await bcrypt.hash('Admin1234!', 10);
-        manager = await this.userRepo.save(
+        salvadora = await this.userRepo.save(
+          this.userRepo.create({
+            name: 'Salvadora Conesa Martinez',
+            email: 'salvadoraconesa@gmail.com',
+            passwordHash,
+            role: UserRole.SERVICE_MANAGER,
+            isActive: true,
+          }),
+        );
+      } else {
+        salvadora.name = 'Salvadora Conesa Martinez';
+        salvadora.role = UserRole.SERVICE_MANAGER;
+        salvadora.isActive = true;
+        await this.userRepo.save(salvadora);
+      }
+
+      const manager = salvadora;
+
+      // Ensure Jose Ignacio exists for human handoffs
+      let joseIgnacio = await this.userRepo.findOne({
+        where: [{ email: 'jigomez@hotmail.com' }, { name: ILike('%Jose Ignacio Gomez%') }],
+      });
+      if (!joseIgnacio) {
+        const passwordHash = await bcrypt.hash('Admin1234!', 10);
+        joseIgnacio = await this.userRepo.save(
           this.userRepo.create({
             name: 'Jose Ignacio Gomez Raya',
             email: 'jigomez@hotmail.com',
@@ -165,40 +189,43 @@ export class ServicesService implements OnModuleInit {
             isActive: true,
           }),
         );
-      } else {
-        manager.name = 'Jose Ignacio Gomez Raya';
-        manager.role = UserRole.SERVICE_MANAGER;
-        manager.isActive = true;
-        await this.userRepo.save(manager);
       }
 
-      // 2. Ensure Terapia Gestalt service exists with requiresApproval=true and managerId
+      // Reassign any services previously under Jose Ignacio to Salvadora Conesa
+      if (joseIgnacio) {
+        await this.serviceRepo.query(
+          'UPDATE services SET "managerId" = $1 WHERE "managerId" = $2',
+          [salvadora.id, joseIgnacio.id],
+        ).catch(() => null);
+      }
+
+      // 2. Ensure Terapia Gestalt service exists with requiresApproval=true and managerId = salvadora.id
       let gestaltSvc = await this.serviceRepo.findOne({
         where: [{ name: ILike('%gestalt%') }],
       });
 
       if (gestaltSvc) {
-        gestaltSvc.managerId = manager.id;
+        gestaltSvc.managerId = salvadora.id;
         gestaltSvc.requiresApproval = true;
         gestaltSvc.maxCapacity = 1;
         gestaltSvc.durationMinutes = 60;
         gestaltSvc.price = gestaltSvc.price || '35.00';
         gestaltSvc.allowedModalities = ['in_person', 'virtual'];
         gestaltSvc.isActive = true;
-        if (!gestaltSvc.description) {
+        if (!gestaltSvc.description || gestaltSvc.description.includes('Jose Ignacio')) {
           gestaltSvc.description =
-            'Sesión individual de psicoterapia Gestalt presencial u online. Enfoque humanista y toma de conciencia. Horario convenido individualmente entre terapeuta y alumno/paciente. Requiere aprobación previa por parte del terapeuta responsable (Jose Ignacio Gomez Raya). Precio: 35€ por sesión de 1 hora. Pago en el centro.';
+            'Sesión individual de psicoterapia Gestalt presencial u online. Enfoque humanista y toma de conciencia. Horario convenido individualmente entre terapeuta y alumno/paciente. Requiere aprobación previa por parte de la terapeuta y responsable (Salvadora Conesa Martinez). Precio: 35€ por sesión de 1 hora. Pago en el centro.';
         }
         await this.serviceRepo.save(gestaltSvc);
       }
 
-      // 3. Ensure Bienestar Experience service exists with requiresApproval=true and managerId
+      // 3. Ensure Bienestar Experience service exists with managerId = salvadora.id
       let bienestarSvc = await this.serviceRepo.findOne({
         where: [{ name: ILike('%bienestar experience%') }, { name: ILike('%bienestar integral%') }],
       });
 
       if (bienestarSvc) {
-        bienestarSvc.managerId = manager.id;
+        bienestarSvc.managerId = salvadora.id;
         bienestarSvc.maxCapacity = 1;
         bienestarSvc.durationMinutes = 60;
         if (!bienestarSvc.price || bienestarSvc.price === '25.00' || bienestarSvc.price === '25') {
@@ -210,9 +237,12 @@ export class ServicesService implements OnModuleInit {
         bienestarSvc.isActive = true;
         if (bienestarSvc.description && bienestarSvc.description.includes('25€')) {
           bienestarSvc.description = bienestarSvc.description.replace(/25€/g, '19.99€');
+        }
+        if (bienestarSvc.description && bienestarSvc.description.includes('Jose Ignacio')) {
+          bienestarSvc.description = bienestarSvc.description.replace(/Jose Ignacio Gomez Raya|Jose Ignacio Gomez|Jose Ignacio/g, 'Salvadora Conesa Martinez');
         } else if (!bienestarSvc.description) {
           bienestarSvc.description =
-            'Programa y sesiones de asesoramiento personalizado en longevidad, bienestar integral, nutrición, biohacking, meditación y psicología positiva. Horario convenido individualmente. Precio: 19.99€ por sesión de 1 hora. Pago en el centro.';
+            'Programa y sesiones de asesoramiento personalizado en longevidad, bienestar integral, nutrición, biohacking, meditación y psicología positiva. Horario convenido individualmente. Responsable: Salvadora Conesa Martinez. Precio: 19.99€ por sesión de 1 hora. Pago en el centro.';
         }
         await this.serviceRepo.save(bienestarSvc);
       } else {
@@ -220,13 +250,13 @@ export class ServicesService implements OnModuleInit {
           this.serviceRepo.create({
             name: 'Bienestar Experience (Longevidad y Bienestar Integral)',
             description:
-              'Programa y sesiones de asesoramiento personalizado presencial y online en longevidad, bienestar integral, nutrición, biohacking, meditación y psicología positiva. Horario convenido individualmente. Requiere aprobación previa del responsable (Jose Ignacio Gomez Raya). Precio: 19.99€ por sesión de 1 hora. Pago en el centro.',
+              'Programa y sesiones de asesoramiento personalizado presencial y online en longevidad, bienestar integral, nutrición, biohacking, meditación y psicología positiva. Horario convenido individualmente. Responsable: Salvadora Conesa Martinez. Precio: 19.99€ por sesión de 1 hora. Pago en el centro.',
             serviceType: ServiceType.RECURRING,
             durationMinutes: 60,
             price: '19.99',
             maxCapacity: 1,
             calendarId: 'cal-bienestar-experience',
-            managerId: manager.id,
+            managerId: salvadora.id,
             requiresApproval: false,
             allowedModalities: ['in_person'],
             isActive: true,
