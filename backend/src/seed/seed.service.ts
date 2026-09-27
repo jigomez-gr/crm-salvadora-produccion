@@ -20,25 +20,21 @@ import {
 import { MessagesService } from '../conversations/messages.service';
 import { PipelineStage } from '../contacts/pipeline';
 import * as bcrypt from 'bcryptjs';
-import { generateDoctorReportPdfBuffer } from '../appointments/pdf-report.generator';
-import { getSampleLumbarRadiographyBuffer } from '../appointments/sample-radiography';
-
 // Business timezone the demo appointments are placed in. TZDate converts the
 // wall-clock time below into the correct UTC instant (handles CET/CEST).
 const TZ = 'Europe/Madrid';
 
-// Service keys & durations for seed mapping
+// Service keys & durations for seed mapping (Centro Holístico y Escuela de Yoga Salvadora Conesa)
 const SVC = {
-  medica: { name: 'Consulta Médica y Diagnóstico Clínico', dur: 45 },
-  fisio: { name: 'Fisioterapia y Rehabilitación Postural', dur: 60 },
   yoga: { name: 'Hatha Yoga Terapéutico', dur: 90 },
-  pilates: { name: 'Pilates', dur: 60 },
-  ninjutsu: { name: 'Bujinkan Budo Taijutsu / Ninjutsu', dur: 90 },
-  funcional: { name: 'Entrenamiento Funcional', dur: 60 },
-  orientales: { name: 'Actividades Orientales (Daruma, Kaisai, Kobudo)', dur: 55 },
-  taichi: { name: 'Tai Chi Chuan', dur: 90 },
-  iaido: { name: 'Iaido (Esgrima Japonesa)', dur: 60 },
-  finde: { name: 'Sesión Mensual de Fin de Semana (Baño de Gong / Talleres)', dur: 120 },
+  gestalt: { name: 'Terapia Gestalt (Sesión Individual)', dur: 60 },
+  gong: { name: 'Baño de Gong y Meditación Sonora', dur: 120 },
+  puja: { name: 'Puja de Gongs (Noche Sagrada de Sonido - 11h)', dur: 660 },
+  constelaciones: { name: 'Constelaciones Familiares (Constelar / Asunto Propio)', dur: 240 },
+  ayuno: { name: 'Retiro de Ayuno Terapéutico', dur: 1440 },
+  mujeres: { name: 'Encuentro de Mujeres (Primavera)', dur: 360 },
+  meditacion: { name: 'Meditaciones Guiadas', dur: 30 },
+  bienestar: { name: 'Bienestar Experience (Longevidad y Bienestar Integral)', dur: 60 },
 };
 
 /**
@@ -104,28 +100,8 @@ export class SeedService implements OnModuleInit {
 
     const managerSeeds = [
       {
-        name: 'Dr. Carlos Mendoza (Responsable de Citas / Doctor)',
-        email: 'doctor@demo.com',
-        role: UserRole.SERVICE_MANAGER,
-      },
-      {
-        name: 'Laura Navarro (Shakti - Resp. Yoga)',
-        email: 'yoga@crmsalvadora.local',
-        role: UserRole.SERVICE_MANAGER,
-      },
-      {
-        name: 'Marcos Benítez (Vikram - Maestro de Gong)',
-        email: 'gong@crmsalvadora.local',
-        role: UserRole.SERVICE_MANAGER,
-      },
-      {
-        name: 'Dra. Elena Salgado (Resp. Gestalt y Constelaciones)',
-        email: 'gestalt@crmsalvadora.local',
-        role: UserRole.SERVICE_MANAGER,
-      },
-      {
-        name: 'Silvia Morales (Resp. Encuentros y Retiros)',
-        email: 'eventos@crmsalvadora.local',
+        name: 'Salvadora Conesa Martinez',
+        email: 'salvadoraconesa@gmail.com',
         role: UserRole.SERVICE_MANAGER,
       },
     ];
@@ -144,13 +120,15 @@ export class SeedService implements OnModuleInit {
           }),
         );
       } else {
-        u.passwordHash = defaultPasswordHash;
+        u.name = m.name;
         u.role = m.role;
         u.isActive = true;
         await this.usersRepo.save(u);
       }
       managers[m.email] = u;
     }
+
+    const salvadoraManager = managers['salvadoraconesa@gmail.com'];
 
     // ─── Seed Services with distinct calendars, schedules, flyer, prices, managers ───
     const serviceList = [
@@ -163,126 +141,131 @@ export class SeedService implements OnModuleInit {
         scheduleText: 'Mañanas: Martes y Jueves (9:45, 11:15) | Tardes: Martes (17:00, 18:30, 20:00), Miércoles (20:15), Jueves (16:00, 17:30, 19:00)',
         flyerUrl: '/flyer-parque-granada.png',
         calendarId: 'cal-yoga',
-        managerId: managers['yoga@crmsalvadora.local'].id,
+        managerId: salvadoraManager.id,
         requiresApproval: false,
       },
       {
-        name: SVC.pilates.name,
-        description: 'Fortalecimiento del core, postura, movilidad y control corporal en grupos reducidos.',
+        name: SVC.gestalt.name,
+        description: 'Acompañamiento terapéutico individual centrado en el aquí y ahora, toma de consciencia y autorregulación emocional.',
         durationMinutes: 60,
-        price: '0.00',
-        paymentType: ServicePaymentType.FREE,
-        scheduleText: 'Lunes y Miércoles de 12:00 a 13:00',
-        flyerUrl: '/flyer-parque-granada.png',
-        calendarId: 'cal-pilates',
-        managerId: managers['yoga@crmsalvadora.local'].id,
-        requiresApproval: false,
-      },
-      {
-        name: SVC.ninjutsu.name,
-        description: 'Arte marcial tradicional japonés de defensa personal, biomecánica y acondicionamiento.',
-        durationMinutes: 90,
-        price: '0.00',
-        paymentType: ServicePaymentType.FREE,
-        scheduleText: 'Mañanas: Lunes y Viernes de 10:00 a 11:30 | Tardes: Lunes y Miércoles de 20:00 a 21:30',
-        flyerUrl: '/flyer-parque-granada.png',
-        calendarId: 'cal-ninjutsu',
-        managerId: managers['gong@crmsalvadora.local'].id,
-        requiresApproval: false,
-      },
-      {
-        name: SVC.funcional.name,
-        description: 'Entrenamiento funcional de alta energía para fuerza, resistencia y salud cardiovascular.',
-        durationMinutes: 60,
-        price: '0.00',
-        paymentType: ServicePaymentType.FREE,
-        scheduleText: 'Mañanas: Lunes, Miércoles y Viernes de 7:15 a 8:15 | Tardes: Lunes y Miércoles de 19:00 a 20:00',
-        flyerUrl: '/flyer-parque-granada.png',
-        calendarId: 'cal-funcional',
-        managerId: managers['yoga@crmsalvadora.local'].id,
-        requiresApproval: false,
-      },
-      {
-        name: SVC.orientales.name,
-        description: 'Disciplinas orientales tradicionales: Daruma (19:00), Kaisai (20:00) y Kobudo con armas (21:00).',
-        durationMinutes: 55,
-        price: '0.00',
-        paymentType: ServicePaymentType.FREE,
-        scheduleText: 'Martes y Jueves: Daruma (19:00-19:55) | Kaisai (20:00-20:55) | Kobudo (21:00-21:45)',
-        flyerUrl: '/flyer-parque-granada.png',
-        calendarId: 'cal-orientales',
-        managerId: managers['gong@crmsalvadora.local'].id,
-        requiresApproval: false,
-      },
-      {
-        name: SVC.taichi.name,
-        description: 'Movimientos fluidos, respiración consciente, equilibrio y desbloqueo articular.',
-        durationMinutes: 90,
-        price: '0.00',
-        paymentType: ServicePaymentType.FREE,
-        scheduleText: 'Miércoles de 17:30 a 19:00 | Viernes de 10:00 a 11:30',
-        flyerUrl: '/flyer-parque-granada.png',
-        calendarId: 'cal-taichi',
-        managerId: managers['yoga@crmsalvadora.local'].id,
-        requiresApproval: false,
-      },
-      {
-        name: SVC.iaido.name,
-        description: 'Esgrima japonesa tradicional con katana. Precisión, concentración, corte y etiqueta marcial.',
-        durationMinutes: 60,
-        price: '0.00',
-        paymentType: ServicePaymentType.FREE,
-        scheduleText: 'Lunes de 20:00 a 21:00 | Jueves de 20:30 a 22:00',
-        flyerUrl: '/flyer-parque-granada.png',
-        calendarId: 'cal-iaido',
-        managerId: managers['gong@crmsalvadora.local'].id,
-        requiresApproval: false,
-      },
-      {
-        name: SVC.finde.name,
-        description: 'Talleres mensuales: Baño de Gong, Constelaciones Familiares, Chi Kung, Masajes, Meditación y Yoga Nidra.',
-        durationMinutes: 120,
         price: '35.00',
         paymentType: ServicePaymentType.STRIPE,
-        scheduleText: 'Una sesión al mes en fin de semana (Sábados/Domingos)',
+        scheduleText: 'Lunes a Viernes de 10:00 a 14:00 y 16:00 a 20:00',
         flyerUrl: '/flyer-parque-granada.png',
-        calendarId: 'cal-finde',
-        managerId: managers['eventos@crmsalvadora.local'].id,
-        requiresApproval: false,
-      },
-      {
-        name: SVC.medica.name,
-        description: 'Consulta médica especializada para evaluación diagnóstica, anamnesis, prescripción de tratamiento y seguimiento clínico.',
-        durationMinutes: 45,
-        price: '50.00',
-        paymentType: ServicePaymentType.STRIPE,
-        scheduleText: 'Lunes a Viernes de 9:00 a 14:00 y 16:00 a 19:00',
-        flyerUrl: '/flyer-parque-granada.png',
-        calendarId: 'cal-medica',
-        managerId: managers['doctor@demo.com'].id,
-        requiresApproval: false,
-        requiresReason: true,
-        allowedModalities: ['in_person', 'phone', 'virtual'],
-      },
-      {
-        name: SVC.fisio.name,
-        description: 'Tratamiento manual descontracturante, reeducación postural y rehabilitación músculo-esquelética.',
-        durationMinutes: 60,
-        price: '45.00',
-        paymentType: ServicePaymentType.IN_PERSON,
-        scheduleText: 'Lunes a Jueves de 10:00 a 20:00',
-        flyerUrl: '/flyer-parque-granada.png',
-        calendarId: 'cal-fisio',
-        managerId: managers['doctor@demo.com'].id,
+        calendarId: 'cal-gestalt',
+        managerId: salvadoraManager.id,
         requiresApproval: true,
-        requiresReason: true,
         allowedModalities: ['in_person', 'virtual'],
+      },
+      {
+        name: SVC.gong.name,
+        description: 'Inmersión profunda en vibración armónica y relajación sonora con gongs y cuencos tibetanos.',
+        durationMinutes: 120,
+        price: '16.00',
+        paymentType: ServicePaymentType.STRIPE,
+        scheduleText: 'Viernes o Sábados a las 18:00 y 20:00',
+        flyerUrl: '/flyer-parque-granada.png',
+        calendarId: 'cal-gong-mensual',
+        managerId: salvadoraManager.id,
+        requiresApproval: false,
+      },
+      {
+        name: SVC.puja.name,
+        description: 'Ceremonia sagrada de sonido nocturna ininterrumpida de 11 horas para regeneración celular y descanso profundo.',
+        durationMinutes: 660,
+        price: '95.00',
+        paymentType: ServicePaymentType.STRIPE,
+        scheduleText: 'Sábados de 21:00 a 08:00 (Domingo)',
+        flyerUrl: '/flyer-parque-granada.png',
+        calendarId: 'cal-puja-gongs',
+        managerId: salvadoraManager.id,
+        requiresApproval: false,
+      },
+      {
+        name: SVC.constelaciones.name,
+        description: 'Taller sistémico vivencial para desbloquear dinámicas familiares o personales y restablecer los órdenes del amor.',
+        durationMinutes: 240,
+        price: '60.00',
+        paymentType: ServicePaymentType.STRIPE,
+        scheduleText: 'Sábados intensivos de 10:00 a 14:00',
+        flyerUrl: '/flyer-parque-granada.png',
+        calendarId: 'cal-constelaciones',
+        managerId: salvadoraManager.id,
+        requiresApproval: false,
+      },
+      {
+        name: 'Constelaciones Familiares (Participante / Representante)',
+        description: 'Participación como representante en el taller vivencial de constelaciones familiares.',
+        durationMinutes: 240,
+        price: '20.00',
+        paymentType: ServicePaymentType.STRIPE,
+        scheduleText: 'Sábados intensivos de 10:00 a 14:00',
+        flyerUrl: '/flyer-parque-granada.png',
+        calendarId: 'cal-constelaciones',
+        managerId: salvadoraManager.id,
+        requiresApproval: false,
+      },
+      {
+        name: SVC.ayuno.name,
+        description: 'Retiro residencial o particular supervisado de desintoxicación, descanso digestivo, yoga suave y meditación.',
+        durationMinutes: 1440,
+        price: '250.00',
+        paymentType: ServicePaymentType.STRIPE,
+        scheduleText: 'Fines de semana y fechas programadas',
+        flyerUrl: '/flyer-parque-granada.png',
+        calendarId: 'cal-ayuno-terapeutico',
+        managerId: salvadoraManager.id,
+        requiresApproval: true,
+      },
+      {
+        name: SVC.mujeres.name,
+        description: 'Círculo vivencial de conexión femenina, arquetipos, movimiento consciente y sabiduría compartida.',
+        durationMinutes: 360,
+        price: '45.00',
+        paymentType: ServicePaymentType.STRIPE,
+        scheduleText: 'Sábados de 10:00 a 16:00',
+        flyerUrl: '/flyer-parque-granada.png',
+        calendarId: 'cal-encuentro-mujeres',
+        managerId: salvadoraManager.id,
+        requiresApproval: false,
+      },
+      {
+        name: SVC.meditacion.name,
+        description: 'Espacio semanal de quietud, atención plena (mindfulness) y conexión interior.',
+        durationMinutes: 30,
+        price: '15.00',
+        paymentType: ServicePaymentType.FREE,
+        scheduleText: 'Lunes a Jueves a las 14:00 y 20:45',
+        flyerUrl: '/flyer-parque-granada.png',
+        calendarId: 'cal-meditacion',
+        managerId: salvadoraManager.id,
+        requiresApproval: false,
+      },
+      {
+        name: SVC.bienestar.name,
+        description: 'Sesión integral combinada de bioenergética, respiración consciente, pautas de longevidad y relajación.',
+        durationMinutes: 60,
+        price: '19.99',
+        paymentType: ServicePaymentType.STRIPE,
+        scheduleText: 'Viernes por la tarde',
+        flyerUrl: '/flyer-parque-granada.png',
+        calendarId: 'cal-bienestar-experience',
+        managerId: salvadoraManager.id,
+        requiresApproval: false,
       },
     ];
 
-    const seededServices = await this.servicesRepo.save(
-      serviceList.map((s) => this.servicesRepo.create(s)),
-    );
+    const seededServices: Service[] = [];
+    for (const s of serviceList) {
+      let existing = await this.servicesRepo.findOne({ where: { name: s.name } });
+      if (!existing) {
+        existing = await this.servicesRepo.save(this.servicesRepo.create(s));
+      } else {
+        Object.assign(existing, s);
+        existing = await this.servicesRepo.save(existing);
+      }
+      seededServices.push(existing);
+    }
     const svcMap = new Map(seededServices.map((s) => [s.name, s]));
 
     // ─── 10 Realistic Contacts ───
@@ -426,48 +409,26 @@ export class SeedService implements OnModuleInit {
     }[] = [
       // Hoy
       { day: fwd[0], hh: 9, mm: 45, c: 0, s: SVC.yoga, st: AppointmentStatus.SCHEDULED, notes: 'Clase matinal de Hatha Yoga Terapéutico' },
-      { day: fwd[0], hh: 11, mm: 0, c: 0, s: SVC.medica, st: AppointmentStatus.SCHEDULED, reason: 'Dolor lumbar agudo tras esfuerzo físico e inflamación paravertebral', notes: 'Paciente acude por dolor agudo de 4 días de evolución tras levantar peso.', modality: 'in_person' as const },
-      { day: fwd[0], hh: 12, mm: 0, c: 1, s: SVC.pilates, st: AppointmentStatus.SCHEDULED, notes: 'Clase de Pilates - Prueba gratis' },
-      { day: fwd[0], hh: 20, mm: 0, c: 3, s: SVC.ninjutsu, st: AppointmentStatus.SCHEDULED, notes: 'Bujinkan Budo Taijutsu / Ninjutsu - Clase de prueba' },
+      { day: fwd[0], hh: 17, mm: 0, c: 3, s: SVC.gestalt, st: AppointmentStatus.SCHEDULED, notes: 'Sesión individual de Terapia Gestalt', modality: 'in_person' as const },
+      { day: fwd[0], hh: 18, mm: 30, c: 1, s: SVC.gong, st: AppointmentStatus.SCHEDULED, notes: 'Baño de Gong y Meditación Sonora' },
 
       // Mañana
-      { day: fwd[1], hh: 7, mm: 15, c: 4, s: SVC.funcional, st: AppointmentStatus.SCHEDULED, notes: 'Entrenamiento Funcional matinal' },
-      { day: fwd[1], hh: 12, mm: 0, c: 2, s: SVC.fisio, st: AppointmentStatus.PENDING_APPROVAL, reason: 'Evaluación de contractura cervical y mareos posturales', notes: 'Solicitud de sesión online para pautas posturales.', modality: 'virtual' as const },
-      { day: fwd[1], hh: 17, mm: 0, c: 6, s: SVC.yoga, st: AppointmentStatus.SCHEDULED, notes: 'Hatha Yoga turno de tarde' },
+      { day: fwd[1], hh: 10, mm: 0, c: 4, s: SVC.constelaciones, st: AppointmentStatus.SCHEDULED, notes: 'Taller de Constelaciones Familiares - Constelar' },
+      { day: fwd[1], hh: 16, mm: 0, c: 2, s: SVC.yoga, st: AppointmentStatus.SCHEDULED, notes: 'Hatha Yoga turno de tarde' },
+      { day: fwd[1], hh: 18, mm: 0, c: 5, s: SVC.ayuno, st: AppointmentStatus.PENDING_APPROVAL, notes: 'Consulta de valoración previa para Retiro de Ayuno Terapéutico', modality: 'virtual' as const },
 
       // Días siguientes
-      { day: fwd[2], hh: 19, mm: 0, c: 5, s: SVC.orientales, st: AppointmentStatus.SCHEDULED, notes: 'Actividades Orientales (Daruma)' },
-      { day: fwd[2], hh: 20, mm: 30, c: 9, s: SVC.iaido, st: AppointmentStatus.SCHEDULED, notes: 'Iaido - Esgrima Japonesa' },
-      { day: fwd[3], hh: 10, mm: 0, c: 2, s: SVC.taichi, st: AppointmentStatus.SCHEDULED, notes: 'Tai Chi Chuan - Sesión matinal' },
-      { day: fwd[3], hh: 18, mm: 0, c: 7, s: SVC.finde, st: AppointmentStatus.PENDING_APPROVAL, notes: 'Sesión Mensual de Baño de Gong en Fin de Semana' },
-      { day: fwd[4], hh: 11, mm: 15, c: 8, s: SVC.yoga, st: AppointmentStatus.SCHEDULED, notes: 'Hatha Yoga Terapéutico' },
-      { day: fwd[5], hh: 19, mm: 0, c: 1, s: SVC.funcional, st: AppointmentStatus.SCHEDULED, notes: 'Entrenamiento Funcional tarde' },
+      { day: fwd[2], hh: 10, mm: 0, c: 6, s: SVC.mujeres, st: AppointmentStatus.SCHEDULED, notes: 'Encuentro de Mujeres (Primavera)' },
+      { day: fwd[2], hh: 19, mm: 0, c: 7, s: SVC.yoga, st: AppointmentStatus.SCHEDULED, notes: 'Hatha Yoga Terapéutico para principiantes' },
+      { day: fwd[3], hh: 21, mm: 0, c: 8, s: SVC.puja, st: AppointmentStatus.SCHEDULED, notes: 'Puja de Gongs - Noche Sagrada de Sonido' },
+      { day: fwd[3], hh: 14, mm: 0, c: 9, s: SVC.meditacion, st: AppointmentStatus.SCHEDULED, notes: 'Meditación Guiada del mediodía' },
+      { day: fwd[4], hh: 17, mm: 30, c: 0, s: SVC.bienestar, st: AppointmentStatus.SCHEDULED, notes: 'Bienestar Experience - Longevidad y Bienestar Integral' },
+      { day: fwd[5], hh: 11, mm: 15, c: 2, s: SVC.yoga, st: AppointmentStatus.SCHEDULED, notes: 'Hatha Yoga Terapéutico grupo matinal' },
 
       // Citas pasadas completadas
-      {
-        day: back[0],
-        hh: 10,
-        mm: 0,
-        c: 1,
-        s: SVC.medica,
-        st: AppointmentStatus.COMPLETED,
-        reason: 'Revisión dorsolumbar y contractura persistente',
-        notes: 'Diagnóstico emitido y firmado por el Dr. Carlos Mendoza.',
-        modality: 'in_person' as const,
-        responseDocument: {
-          templateKey: 'clinical_diagnosis',
-          title: 'Informe Clínico y Diagnóstico Lumbar',
-          symptoms: 'Paciente varón de 42 años refiere dolor punzante en zona lumbar L4-L5 de 5 días de evolución.',
-          diagnosis: 'Lumbalgia mecánica aguda con contractura muscular paravertebral bilateral sin compromiso radicular.',
-          treatment: 'Reposo relativo 48h, calor seco local 20 min 3 veces al día, y 3 sesiones de fisioterapia descontracturante.',
-          recommendations: 'Evitar sobrecargas y sedestación prolongada. Realizar estiramientos suaves de cadena posterior.',
-          notes: 'Reevaluación en 7 días si persiste sintomatología dolorosa.',
-          issuedAt: new Date(Date.now() - 86400000).toISOString(),
-          signedBy: 'Dr. Carlos Mendoza (Colegiado Nº 28491)',
-        },
-      },
-      { day: back[0], hh: 12, mm: 0, c: 0, s: SVC.pilates, st: AppointmentStatus.COMPLETED, notes: 'Primera clase de Pilates completada' },
-      { day: back[1], hh: 20, mm: 0, c: 3, s: SVC.ninjutsu, st: AppointmentStatus.COMPLETED, notes: 'Sesión Ninjutsu completada' },
+      { day: back[0], hh: 18, mm: 0, c: 1, s: SVC.gong, st: AppointmentStatus.COMPLETED, notes: 'Baño de Gong completado con éxito' },
+      { day: back[0], hh: 9, mm: 45, c: 0, s: SVC.yoga, st: AppointmentStatus.COMPLETED, notes: 'Clase matinal de Hatha Yoga completada' },
+      { day: back[1], hh: 17, mm: 0, c: 3, s: SVC.gestalt, st: AppointmentStatus.COMPLETED, notes: 'Sesión individual de Terapia Gestalt completada' },
     ];
 
     const appts = specs.map((sp) => {
@@ -570,7 +531,7 @@ export class SeedService implements OnModuleInit {
           [MessageDirection.INBOUND, 'Buenas, ¿hacéis sesiones individuales de Terapia Gestalt online por videollamada?'],
           [
             MessageDirection.OUTBOUND,
-            '¡Hola David! Sí, la Dra. Elena Salgado ofrece sesiones de Terapia Gestalt tanto presenciales como virtuales a través de videollamada Cal.com. ¿Te gustaría consultar los horarios disponibles?',
+            '¡Hola David! Sí, Salvadora Conesa ofrece sesiones de Terapia Gestalt tanto presenciales como virtuales a través de videollamada. ¿Te gustaría consultar los horarios disponibles?',
           ],
         ],
       ),
@@ -609,297 +570,6 @@ export class SeedService implements OnModuleInit {
     this.logger.log(
       `Demo data seeded: ${contacts.length} contacts, ${appts.length} appointments, ${seededServices.length} services, ${messages.length} messages`,
     );
-  }
-
-  private async ensureDoctorDemo() {
-    return; // Obsolete demo doctors and services disabled
-    const defaultPasswordHash = await bcrypt.hash('Admin1234!', 10);
-    let doctor = await this.usersRepo.findOne({ where: { email: 'doctor@demo.com' } });
-    if (!doctor) {
-      doctor = await this.usersRepo.save(
-        this.usersRepo.create({
-          name: 'Dr. Carlos Mendoza (Responsable de Citas / Doctor)',
-          email: 'doctor@demo.com',
-          passwordHash: defaultPasswordHash,
-          role: UserRole.SERVICE_MANAGER,
-          isActive: true,
-        }),
-      );
-      this.logger.log('Demo user doctor@demo.com created/ensured');
-    } else {
-      doctor.passwordHash = defaultPasswordHash;
-      doctor.role = UserRole.SERVICE_MANAGER;
-      doctor.isActive = true;
-      await this.usersRepo.save(doctor);
-      this.logger.log('Demo user doctor@demo.com credentials refreshed with new hash');
-    }
-
-    // Ensure demo doctors and specialists exist
-    const doctorSeeds = [
-      {
-        name: 'Salvadora Conesa Martinez',
-        email: 'salvadoraconesa@gmail.com',
-        role: UserRole.SERVICE_MANAGER,
-      },
-      {
-        name: 'Dr. José Ignacio Gómez (Odontología & Diagnóstico)',
-        email: 'jigomez@hotmail.com',
-        role: UserRole.SERVICE_MANAGER,
-      },
-      {
-        name: 'Dra. Elena Vázquez (Dermatología Clínica & Lesiones)',
-        email: 'derma@demo.com',
-        role: UserRole.SERVICE_MANAGER,
-      },
-      {
-        name: 'Dra. Sofía Rivas (Medicina Estética & Facial)',
-        email: 'estetica@demo.com',
-        role: UserRole.SERVICE_MANAGER,
-      },
-      {
-        name: 'Ana Beltrán (Recepción y Atención al Paciente)',
-        email: 'recepcion@crmsalvadora.local',
-        role: UserRole.EMPLOYEE,
-      },
-      {
-        name: 'Marcos Soto (Auxiliar Clínico y Triaje)',
-        email: 'auxiliar@crmsalvadora.local',
-        role: UserRole.EMPLOYEE,
-      },
-    ];
-
-    for (const doc of doctorSeeds) {
-      const existing = await this.usersRepo.findOne({ where: { email: doc.email } });
-      if (!existing) {
-        await this.usersRepo.save(
-          this.usersRepo.create({
-            name: doc.name,
-            email: doc.email,
-            passwordHash: defaultPasswordHash,
-            role: doc.role,
-            isActive: true,
-          }),
-        );
-        this.logger.log(`Demo user created: ${doc.email}`);
-      }
-    }
-
-    let svcMedica = await this.servicesRepo.findOne({ where: { calendarId: 'cal-medica' } });
-    if (!svcMedica) {
-      svcMedica = await this.servicesRepo.save(
-        this.servicesRepo.create({
-          name: 'Consulta Médica y Diagnóstico Clínico',
-          description: 'Consulta médica especializada para evaluación diagnóstica, anamnesis, prescripción de tratamiento y seguimiento clínico.',
-          durationMinutes: 45,
-          price: '50.00',
-          paymentType: ServicePaymentType.STRIPE,
-          scheduleText: 'Lunes a Viernes de 9:00 a 14:00 y 16:00 a 19:00',
-          flyerUrl: '/flyer-parque-granada.png',
-          calendarId: 'cal-medica',
-          managerId: doctor.id,
-          requiresApproval: false,
-          requiresReason: true,
-          allowedModalities: ['in_person', 'phone', 'virtual'],
-        }),
-      );
-    }
-
-    let svcFisio = await this.servicesRepo.findOne({ where: { calendarId: 'cal-fisio' } });
-    if (!svcFisio) {
-      svcFisio = await this.servicesRepo.save(
-        this.servicesRepo.create({
-          name: 'Fisioterapia y Rehabilitación Postural',
-          description: 'Tratamiento manual descontracturante, reeducación postural y rehabilitación músculo-esquelética.',
-          durationMinutes: 60,
-          price: '45.00',
-          paymentType: ServicePaymentType.IN_PERSON,
-          scheduleText: 'Lunes a Jueves de 10:00 a 20:00',
-          flyerUrl: '/flyer-parque-granada.png',
-          calendarId: 'cal-fisio',
-          managerId: doctor.id,
-          requiresApproval: true,
-          requiresReason: true,
-          allowedModalities: ['in_person', 'virtual'],
-        }),
-      );
-    }
-
-    // Check if appointments for doctor exist; if not, create demo appointments
-    const doctorAppts = await this.appointmentsRepo.find({
-      where: [{ calendarId: 'cal-medica' }, { calendarId: 'cal-fisio' }],
-      relations: ['contact'],
-    });
-
-    // Realistic lumbar radiography attachment
-    const rxAttachment = getSampleLumbarRadiographyBuffer();
-
-    if (doctorAppts.length === 0) {
-      const contacts = await this.contactsRepo.find({ take: 3 });
-      if (contacts.length > 0) {
-        const now = new Date();
-        const todayAt11 = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 11, 0, 0);
-        const todayAt1145 = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 11, 45, 0);
-        const yesterdayAt10 = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 10, 0, 0);
-        const yesterdayAt1045 = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 10, 45, 0);
-        const tomorrowAt12 = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 12, 0, 0);
-        const tomorrowAt13 = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 13, 0, 0);
-
-        const carlosDiagnosis = {
-          templateKey: 'clinical_diagnosis',
-          title: 'Informe Clínico y Diagnóstico Lumbar',
-          symptoms: 'Paciente varón de 42 años refiere dolor punzante en zona lumbar L4-L5 de 5 días de evolución.',
-          diagnosis: 'Lumbalgia mecánica aguda con contractura muscular paravertebral bilateral sin compromiso radicular.',
-          treatment: 'Reposo relativo 48h, calor seco local 20 min 3 veces al día, y 3 sesiones de fisioterapia descontracturante.',
-          recommendations: 'Evitar sobrecargas y sedestación prolongada. Realizar estiramientos suaves de cadena posterior.',
-          notes: 'Reevaluación en 7 días si persiste sintomatología dolorosa.',
-          issuedAt: yesterdayAt1045.toISOString(),
-          signedBy: 'Dr. Carlos Mendoza (Colegiado Nº 28491)',
-        };
-
-        const pdfBuffer = await generateDoctorReportPdfBuffer({
-          patientName: contacts[1]?.name || 'Carlos Ruiz',
-          patientPhone: contacts[1]?.phone || undefined,
-          patientEmail: contacts[1]?.email || undefined,
-          serviceName: svcMedica.name,
-          startsAt: yesterdayAt10,
-          endsAt: yesterdayAt1045,
-          ...carlosDiagnosis,
-        });
-
-        await this.appointmentsRepo.save([
-          // 1. Cita para hoy (Lucía Fernández) con documento adjunto del paciente (radiografía completa) y análisis IA
-          this.appointmentsRepo.create({
-            contactId: contacts[0].id,
-            service: svcMedica.name,
-            serviceId: svcMedica.id,
-            calendarId: svcMedica.calendarId,
-            price: svcMedica.price,
-            startsAt: todayAt11,
-            endsAt: todayAt1145,
-            status: AppointmentStatus.SCHEDULED,
-            modality: 'in_person',
-            reason: 'Dolor lumbar agudo tras esfuerzo físico e inflamación paravertebral',
-            notes: 'Paciente acude por dolor agudo de 4 días de evolución tras levantar peso.',
-            patientAttachmentData: rxAttachment.buffer,
-            patientAttachmentName: rxAttachment.filename,
-            patientAttachmentMime: rxAttachment.mimeType,
-            patientAttachmentSize: rxAttachment.buffer.length,
-            patientAttachmentUploadedAt: new Date(Date.now() - 3600000),
-            aiAnalysisType: 'dental_xray',
-            aiAnalysisResult:
-              'ANÁLISIS RADIOGRÁFICO IA (analizaia)\n' +
-              'Especialidad: Radiodiagnóstico Digital\n' +
-              'Hallazgos:\n' +
-              '1. Disminución del espacio intervertebral L4-L5 con esclerosis reactiva marginal.\n' +
-              '2. Alineación del muro posterior raquídeo íntegro.\n' +
-              'Juicio IA: Pinzamiento discal L4-L5 compatible con discopatía mecánica (Confianza: 95.4%).',
-            aiAnalysisDate: new Date(Date.now() - 3000000),
-            aiCroppedImageData: rxAttachment.buffer,
-            aiCroppedImageMime: rxAttachment.mimeType,
-          }),
-          // 2. Cita completada ayer (Carlos Ruiz) con diagnóstico emitido y PDF BLOB
-          this.appointmentsRepo.create({
-            contactId: contacts[1]?.id ?? contacts[0].id,
-            service: svcMedica.name,
-            serviceId: svcMedica.id,
-            calendarId: svcMedica.calendarId,
-            price: svcMedica.price,
-            startsAt: yesterdayAt10,
-            endsAt: yesterdayAt1045,
-            status: AppointmentStatus.COMPLETED,
-            modality: 'in_person',
-            reason: 'Revisión dorsolumbar y contractura persistente',
-            notes: 'Diagnóstico emitido y firmado por el Dr. Carlos Mendoza.',
-            responseDocument: carlosDiagnosis,
-            doctorReportPdf: pdfBuffer,
-            doctorReportPdfName: 'informe-carlos-ruiz-diagnostico.pdf',
-            doctorReportPdfMime: 'application/pdf',
-            doctorReportPdfSize: pdfBuffer.length,
-            aiAnalysisType: 'general',
-            aiAnalysisResult:
-              'DICTAMEN CLÍNICO GENERAL IA (analizaia)\n' +
-              'Valoración: Contractura paravertebral refleja bilateral con rango articular lumbar limitado por dolor mecánico.\n' +
-              'Recomendación IA: Fisioterapia descontracturante y reposo postural relativo.',
-            aiAnalysisDate: yesterdayAt1045,
-          }),
-          // 3. Cita pendiente de confirmación para mañana (María García)
-          this.appointmentsRepo.create({
-            contactId: contacts[2]?.id ?? contacts[0].id,
-            service: svcFisio.name,
-            serviceId: svcFisio.id,
-            calendarId: svcFisio.calendarId,
-            price: svcFisio.price,
-            startsAt: tomorrowAt12,
-            endsAt: tomorrowAt13,
-            status: AppointmentStatus.PENDING_APPROVAL,
-            modality: 'virtual',
-            reason: 'Evaluación de contractura cervical y mareos posturales',
-            notes: 'Solicitud de sesión online para pautas posturales.',
-          }),
-        ]);
-        this.logger.log('Demo appointments seeded with PDF and realistic patient attachment BLOBs');
-      }
-    } else {
-      // Sync BLOBs to existing demo appointments
-      for (const appt of doctorAppts) {
-        if (appt.status === AppointmentStatus.COMPLETED && appt.responseDocument && !appt.doctorReportPdfName) {
-          try {
-            const pdfBuffer = await generateDoctorReportPdfBuffer({
-              patientName: appt.contact?.name || 'Paciente',
-              patientPhone: appt.contact?.phone || undefined,
-              patientEmail: appt.contact?.email || undefined,
-              serviceName: appt.service,
-              startsAt: appt.startsAt,
-              endsAt: appt.endsAt,
-              templateKey: appt.responseDocument.templateKey,
-              title: appt.responseDocument.title,
-              symptoms: appt.responseDocument.symptoms,
-              diagnosis: appt.responseDocument.diagnosis,
-              treatment: appt.responseDocument.treatment,
-              recommendations: appt.responseDocument.recommendations,
-              notes: appt.responseDocument.notes,
-              issuedAt: appt.responseDocument.issuedAt,
-              signedBy: appt.responseDocument.signedBy,
-            });
-            appt.doctorReportPdf = pdfBuffer;
-            appt.doctorReportPdfName = `informe-${(appt.contact?.name || 'paciente').toLowerCase().replace(/[^a-z0-9]/g, '-')}.pdf`;
-            appt.doctorReportPdfMime = 'application/pdf';
-            appt.doctorReportPdfSize = pdfBuffer.length;
-            await this.appointmentsRepo.save(appt);
-            this.logger.log(`Synced doctor report PDF BLOB for appointment ${appt.id}`);
-          } catch (e) {
-            this.logger.warn(`Could not sync PDF BLOB: ${e}`);
-          }
-        }
-
-        // Replace placeholder or missing patient attachment with realistic lumbar radiograph
-        if (
-          appt.status === AppointmentStatus.SCHEDULED &&
-          (!appt.patientAttachmentName || (appt.patientAttachmentSize && appt.patientAttachmentSize < 2000))
-        ) {
-          appt.patientAttachmentData = rxAttachment.buffer;
-          appt.patientAttachmentName = rxAttachment.filename;
-          appt.patientAttachmentMime = rxAttachment.mimeType;
-          appt.patientAttachmentSize = rxAttachment.buffer.length;
-          appt.patientAttachmentUploadedAt = new Date();
-          if (!appt.aiAnalysisResult) {
-            appt.aiAnalysisType = 'dental_xray';
-            appt.aiAnalysisResult =
-              'ANÁLISIS RADIOGRÁFICO IA (analizaia)\n' +
-              'Especialidad: Radiodiagnóstico Digital\n' +
-              'Hallazgos:\n' +
-              '1. Disminución del espacio intervertebral L4-L5 con esclerosis reactiva marginal.\n' +
-              '2. Alineación del muro posterior raquídeo íntegro.\n' +
-              'Juicio IA: Pinzamiento discal L4-L5 compatible con discopatía mecánica (Confianza: 95.4%).';
-            appt.aiAnalysisDate = new Date();
-            appt.aiCroppedImageData = rxAttachment.buffer;
-            appt.aiCroppedImageMime = rxAttachment.mimeType;
-          }
-          await this.appointmentsRepo.save(appt);
-          this.logger.log(`Updated realistic patient radiography and AI BLOB for appointment ${appt.id}`);
-        }
-      }
-    }
   }
 
   private async ensureVapiDemo() {
@@ -961,17 +631,17 @@ export class SeedService implements OnModuleInit {
             endedReason: 'customer-ended-call',
             costCents: 15,
             needsReview: false,
-            summary: 'María Morales llamó solicitando cita de Fisioterapia y Rehabilitación Postural para tratamiento de lumbalgia. El asistente consultó la agenda en tiempo real, le ofreció huecos disponibles y formalizó la reserva para el jueves a las 17:30.',
-            transcript: 'Asistente: Centro Holístico y Escuela de Yoga, le atiende el asistente virtual. ¿En qué puedo ayudarle?\nCliente: Hola, buenos días. Quería pedir cita para fisioterapia, tengo bastante dolor en la zona lumbar.\nAsistente: Por supuesto María. Para Fisioterapia y Rehabilitación Postural dispongo de hueco el jueves a las 17:30 o el viernes a las 10:00. ¿Cuál prefiere?\nCliente: El jueves a las 17:30 me viene genial.\nAsistente: Perfecto, queda confirmada su cita para el jueves a las 17:30. ¡Muchas gracias y que tenga buen día!\nCliente: Gracias a vosotros, hasta luego.',
+            summary: 'María Morales llamó solicitando plaza para el Baño de Gong y Meditación Sonora. El asistente consultó la agenda, le ofreció huecos disponibles y formalizó la reserva para el viernes a las 18:00.',
+            transcript: 'Asistente: Centro Holístico y Escuela de Yoga Salvadora Conesa, le atiende el asistente virtual. ¿En qué puedo ayudarle?\nCliente: Hola, buenas tardes. Quería reservar plaza para el próximo Baño de Gong.\nAsistente: Por supuesto María. Para el Baño de Gong y Meditación Sonora disponemos de hueco este viernes a las 18:00 y a las 20:00. ¿Cuál prefieres?\nCliente: El viernes a las 18:00 me viene genial.\nAsistente: Perfecto, queda confirmada tu plaza para el viernes a las 18:00. Recuerda traer ropa cómoda y calcetines calientes. ¡Te esperamos!\nCliente: Gracias, nos vemos el viernes.',
             messages: [
-              { role: 'assistant', message: 'Centro Holístico y Escuela de Yoga, le atiende el asistente virtual. ¿En qué puedo ayudarle?' },
-              { role: 'customer', message: 'Hola, buenos días. Quería pedir cita para fisioterapia, tengo bastante dolor en la zona lumbar.' },
-              { role: 'tool', message: 'consultar_huecos({"servicio":"Fisioterapia"}) -> Huecos disponibles: jueves a las 17:30, viernes a las 10:00' },
-              { role: 'assistant', message: 'Por supuesto María. Para Fisioterapia y Rehabilitación Postural dispongo de hueco el jueves a las 17:30 o el viernes a las 10:00. ¿Cuál prefiere?' },
-              { role: 'customer', message: 'El jueves a las 17:30 me viene genial.' },
-              { role: 'tool', message: 'reservar_cita({"servicio":"Fisioterapia","inicioIso":"2026-08-27T17:30:00.000Z"}) -> Cita confirmada' },
-              { role: 'assistant', message: 'Perfecto, queda confirmada su cita para el jueves a las 17:30. ¡Muchas gracias y que tenga buen día!' },
-              { role: 'customer', message: 'Gracias a vosotros, hasta luego.' },
+              { role: 'assistant', message: 'Centro Holístico y Escuela de Yoga Salvadora Conesa, le atiende el asistente virtual. ¿En qué puedo ayudarle?' },
+              { role: 'customer', message: 'Hola, buenas tardes. Quería reservar plaza para el próximo Baño de Gong.' },
+              { role: 'tool', message: 'consultar_huecos({"servicio":"Baño de Gong"}) -> Huecos disponibles: viernes 18:00, viernes 20:00' },
+              { role: 'assistant', message: 'Por supuesto María. Para el Baño de Gong y Meditación Sonora disponemos de hueco este viernes a las 18:00 y a las 20:00. ¿Cuál prefieres?' },
+              { role: 'customer', message: 'El viernes a las 18:00 me viene genial.' },
+              { role: 'tool', message: 'reservar_cita({"servicio":"Baño de Gong y Meditación Sonora","inicioIso":"2026-10-02T18:00:00.000Z"}) -> Cita confirmada' },
+              { role: 'assistant', message: 'Perfecto, queda confirmada tu plaza para el viernes a las 18:00. Recuerda traer ropa cómoda y calcetines calientes. ¡Te esperamos!' },
+              { role: 'customer', message: 'Gracias, nos vemos el viernes.' },
             ],
             recordingUrl: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3',
             contact: maria,
@@ -988,15 +658,15 @@ export class SeedService implements OnModuleInit {
             endedReason: 'customer-ended-call',
             costCents: 11,
             needsReview: false,
-            summary: 'David Navarro consultó los horarios de las clases de Hatha Yoga Terapéutico y las tarifas mensuales. El asistente le detalló los grupos de lunes y miércoles y le invitó a una sesión de prueba.',
-            transcript: 'Asistente: Hola, Centro Holístico. ¿En qué puedo orientarle hoy?\nCliente: Hola, quería saber qué horarios tenéis para las clases de yoga para principiantes y el precio.\nAsistente: Hola David. El Hatha Yoga Terapéutico se imparte los lunes y miércoles de 18:00 a 19:30 y de 19:30 a 21:00. La cuota mensual es de 65 euros con 2 clases semanales. ¿Le gustaría reservar una sesión de prueba?\nCliente: Sí, lo consulto y os aviso. Muchas gracias.\nAsistente: Un placer, estamos a su disposición.',
+            summary: 'David Navarro consultó los horarios de las clases de Hatha Yoga Terapéutico y las modalidades de inscripción. El asistente le detalló los turnos y le ofreció probar una sesión.',
+            transcript: 'Asistente: Hola, Centro Holístico Salvadora Conesa. ¿En qué puedo orientarle hoy?\nCliente: Hola, quería saber qué horarios tenéis para Hatha Yoga y cómo funciona.\nAsistente: Hola David. El Hatha Yoga Terapéutico se imparte los martes y jueves por la mañana a las 9:45 y 11:15, y por las tardes a las 17:00, 18:30 y 20:00. ¿Te gustaría venir a probar una primera clase?\nCliente: Sí, me gustaría ir el jueves por la mañana.\nAsistente: Perfecto, te anoto para el jueves a las 9:45. ¡Te esperamos!',
             messages: [
-              { role: 'assistant', message: 'Hola, Centro Holístico. ¿En qué puedo orientarle hoy?' },
-              { role: 'customer', message: 'Hola, quería saber qué horarios tenéis para las clases de yoga para principiantes y el precio.' },
-              { role: 'tool', message: 'datos_del_negocio({"tipo":"servicios_precios"}) -> Hatha Yoga Terapéutico: 65€/mes' },
-              { role: 'assistant', message: 'Hola David. El Hatha Yoga Terapéutico se imparte los lunes y miércoles de 18:00 a 19:30 y de 19:30 a 21:00. La cuota mensual es de 65 euros con 2 clases semanales. ¿Le gustaría reservar una sesión de prueba?' },
-              { role: 'customer', message: 'Sí, lo consulto y os aviso. Muchas gracias.' },
-              { role: 'assistant', message: 'Un placer, estamos a su disposición.' },
+              { role: 'assistant', message: 'Hola, Centro Holístico Salvadora Conesa. ¿En qué puedo orientarle hoy?' },
+              { role: 'customer', message: 'Hola, quería saber qué horarios tenéis para Hatha Yoga y cómo funciona.' },
+              { role: 'tool', message: 'datos_del_negocio({"tipo":"servicios_precios"}) -> Hatha Yoga Terapéutico: Mañanas y tardes martes y jueves' },
+              { role: 'assistant', message: 'Hola David. El Hatha Yoga Terapéutico se imparte los martes y jueves por la mañana a las 9:45 y 11:15, y por las tardes a las 17:00, 18:30 y 20:00. ¿Te gustaría venir a probar una primera clase?' },
+              { role: 'customer', message: 'Sí, me gustaría ir el jueves por la mañana.' },
+              { role: 'assistant', message: 'Perfecto, te anoto para el jueves a las 9:45. ¡Te esperamos!' },
             ],
             contact: david,
           },
@@ -1012,12 +682,12 @@ export class SeedService implements OnModuleInit {
             endedReason: 'assistant-ended-call',
             costCents: 9,
             needsReview: false,
-            summary: 'Llamada automática saliente de recordatorio de cita médica programada para mañana a las 10:00 con el Dr. Carlos Mendoza. La paciente confirmó que acudirá con la radiografía solicitada.',
-            transcript: 'Asistente: Hola Lucía, le llamo del Centro Holístico para recordarle su consulta médica de mañana a las 10:00 con el Dr. Carlos Mendoza. ¿Podrá acudir puntualmente?\nCliente: Sí, claro, allí estaré. Ya tengo lista la prueba que me pidió.\nAsistente: Excelente Lucía, recuerde traerla consigo. Nos vemos mañana a las 10:00. ¡Que pase buen día!\nCliente: Muchas gracias, hasta mañana.',
+            summary: 'Llamada automática saliente de recordatorio para la sesión individual de Terapia Gestalt con Salvadora Conesa programada para mañana a las 17:00. La paciente confirmó asistencia.',
+            transcript: 'Asistente: Hola Lucía, te llamo del Centro Salvadora para recordarte tu sesión de Terapia Gestalt con Salvadora Conesa mañana a las 17:00. ¿Podrás asistir puntualmente?\nCliente: Sí, por supuesto, allí estaré puntual.\nAsistente: Estupendo Lucía, te esperamos mañana a las 17:00 en Calle Holanda 1. ¡Que tengas muy buen día!\nCliente: Muchas gracias, hasta mañana.',
             messages: [
-              { role: 'assistant', message: 'Hola Lucía, le llamo del Centro Holístico para recordarle su consulta médica de mañana a las 10:00 con el Dr. Carlos Mendoza. ¿Podrá acudir puntualmente?' },
-              { role: 'customer', message: 'Sí, claro, allí estaré. Ya tengo lista la prueba que me pidió.' },
-              { role: 'assistant', message: 'Excelente Lucía, recuerde traerla consigo. Nos vemos mañana a las 10:00. ¡Que pase buen día!' },
+              { role: 'assistant', message: 'Hola Lucía, te llamo del Centro Salvadora para recordarte tu sesión de Terapia Gestalt con Salvadora Conesa mañana a las 17:00. ¿Podrás asistir puntualmente?' },
+              { role: 'customer', message: 'Sí, por supuesto, allí estaré puntual.' },
+              { role: 'assistant', message: 'Estupendo Lucía, te esperamos mañana a las 17:00 en Calle Holanda 1. ¡Que tengas muy buen día!' },
               { role: 'customer', message: 'Muchas gracias, hasta mañana.' },
             ],
             contact: lucia,
@@ -1034,14 +704,14 @@ export class SeedService implements OnModuleInit {
             endedReason: 'customer-ended-call',
             costCents: 17,
             needsReview: false,
-            summary: 'Carlos Ruiz llamó para reprogramar su sesión de Pilates del martes a las 11:00. El asistente consultó alternativas de tarde y reubicó la cita al viernes a las 18:00.',
-            transcript: 'Asistente: Centro Holístico y Escuela de Yoga, ¿en qué puedo ayudarle?\nCliente: Hola, tenía cita de Pilates el martes por la mañana pero me ha surgido una reunión de trabajo. ¿Podría cambiarla a alguna tarde?\nAsistente: Compruebo su cita Carlos. Tiene sesión el martes a las 11:00. Disponemos de hueco libre este viernes a las 18:00 o la próxima semana. ¿Le viene bien el viernes?\nCliente: Sí, el viernes a las 18:00 me va perfecto.\nAsistente: Queda reprogramada su sesión para el viernes a las 18:00. Se ha actualizado su agenda.\nCliente: Mil gracias por la rapidez. Hasta el viernes.',
+            summary: 'Carlos Ruiz llamó para cambiar el horario de su clase de Hatha Yoga del martes por la tarde debido a un viaje. El asistente reubicó la asistencia al jueves.',
+            transcript: 'Asistente: Centro Holístico y Escuela de Yoga Salvadora Conesa, ¿en qué puedo ayudarte?\nCliente: Hola, tenía clase de Hatha Yoga el martes a las 18:30 pero estoy de viaje. ¿Puedo cambiarla al jueves?\nAsistente: Claro Carlos. En el grupo de jueves a las 17:30 tenemos plaza libre. ¿Te viene bien?\nCliente: Sí, genial, perfecto.\nAsistente: Queda actualizada tu asistencia para el jueves a las 17:30. ¡Buen viaje y hasta el jueves!\nCliente: Muchas gracias por la facilidad.',
             messages: [
-              { role: 'assistant', message: 'Centro Holístico y Escuela de Yoga, ¿en qué puedo ayudarle?' },
-              { role: 'customer', message: 'Hola, tenía cita de Pilates el martes por la mañana pero me ha surgido una reunión de trabajo. ¿Podría cambiarla a alguna tarde?' },
-              { role: 'tool', message: 'reprogramar_cita({"inicioIso":"2026-08-28T18:00:00.000Z"}) -> Cita reprogramada con éxito' },
-              { role: 'assistant', message: 'Queda reprogramada su sesión para el viernes a las 18:00. Se ha actualizado su agenda.' },
-              { role: 'customer', message: 'Mil gracias por la rapidez. Hasta el viernes.' },
+              { role: 'assistant', message: 'Centro Holístico y Escuela de Yoga Salvadora Conesa, ¿en qué puedo ayudarte?' },
+              { role: 'customer', message: 'Hola, tenía clase de Hatha Yoga el martes a las 18:30 pero estoy de viaje. ¿Puedo cambiarla al jueves?' },
+              { role: 'tool', message: 'reprogramar_cita({"inicioIso":"2026-10-01T17:30:00.000Z"}) -> Cita actualizada con éxito' },
+              { role: 'assistant', message: 'Queda actualizada tu asistencia para el jueves a las 17:30. ¡Buen viaje y hasta el jueves!' },
+              { role: 'customer', message: 'Muchas gracias por la facilidad.' },
             ],
             contact: carlos,
           },
@@ -1056,16 +726,16 @@ export class SeedService implements OnModuleInit {
             durationSeconds: 115,
             endedReason: 'customer-ended-call',
             costCents: 22,
-            needsReview: true,
-            notes: 'Paciente con dudas sobre medicación y diagnóstico. Se le indicó que el Dr. Mendoza contactará con ella esta tarde.',
-            summary: 'Elena Vega llamó con dudas clínicas específicas sobre la posología de su tratamiento y pidió hablar con un médico. El asistente registró la transferencia y dejó el aviso urgente para revisión del equipo.',
-            transcript: 'Asistente: Buenos días, Centro Holístico. ¿En qué le puedo asistir?\nCliente: Hola, estuve en consulta médica hace dos días y tengo una duda urgente sobre las indicaciones del tratamiento que me dio el doctor. ¿Puedo hablar con él?\nAsistente: Comprendo Elena. Tratándose de una duda médica sobre tratamiento prescrito, voy a transferir su aviso directamente al Dr. Mendoza para que revise su ficha y se comunique con usted lo antes posible.\nCliente: De acuerdo, por favor que me llame en cuanto pueda a este mismo teléfono.\nAsistente: Queda anotado como prioritario. El equipo médico se pondrá en contacto con usted hoy mismo.',
+            needsReview: false,
+            notes: 'Alumna interesada en el Retiro de Ayuno Terapéutico. Se le informó de los requisitos y preparación previa.',
+            summary: 'Elena Vega llamó para pedir información detallada sobre las fechas, preparación y acompañamiento en el Retiro de Ayuno Terapéutico. El asistente resolvió sus dudas y programó una llamada de contacto con Salvadora Conesa.',
+            transcript: 'Asistente: Buenos días, Centro Salvadora Conesa. ¿En qué te podemos ayudar?\nCliente: Hola, me interesa mucho el Retiro de Ayuno Terapéutico, pero nunca he hecho ayuno y tengo dudas de si es apto para mí.\nAsistente: Hola Elena. En el retiro todo el proceso se realiza bajo supervisión y acompañamiento cercano de Salvadora Conesa, con preparación dietética previa y dinámicas de yoga suave y meditación. Si lo deseas, puedo dejar nota a Salvadora para que te llame y valore tu caso personalmente.\nCliente: Sí por favor, me daría muchísima tranquilidad hablar con ella.\nAsistente: Queda anotado tu teléfono. Salvadora se pondrá en contacto contigo esta tarde. ¡Muchas gracias por tu interés!',
             messages: [
-              { role: 'assistant', message: 'Buenos días, Centro Holístico. ¿En qué le puedo asistir?' },
-              { role: 'customer', message: 'Hola, estuve en consulta médica hace dos días y tengo una duda urgente sobre las indicaciones del tratamiento que me dio el doctor. ¿Puedo hablar con él?' },
-              { role: 'tool', message: 'registrar_handoff({"motivo":"Duda urgente sobre tratamiento prescrito"}) -> Aviso registrado para equipo médico' },
-              { role: 'assistant', message: 'Queda anotado como prioritario. El equipo médico se pondrá en contacto con usted hoy mismo.' },
-              { role: 'customer', message: 'De acuerdo, muchas gracias.' },
+              { role: 'assistant', message: 'Buenos días, Centro Salvadora Conesa. ¿En qué te podemos ayudar?' },
+              { role: 'customer', message: 'Hola, me interesa mucho el Retiro de Ayuno Terapéutico, pero nunca he hecho ayuno y tengo dudas de si es apto para mí.' },
+              { role: 'tool', message: 'registrar_aviso({"motivo":"Información y valoración personal para Retiro de Ayuno"}) -> Aviso registrado para Salvadora Conesa' },
+              { role: 'assistant', message: 'Queda anotado tu teléfono. Salvadora se pondrá en contacto contigo esta tarde. ¡Muchas gracias por tu interés!' },
+              { role: 'customer', message: 'Muchas gracias, un saludo.' },
             ],
             contact: elena,
           },

@@ -895,16 +895,35 @@ export class ServicesService implements OnModuleInit {
         END $$;
       `).catch(() => null);
 
-      // Safety sweep: ensure any legacy deleted services are marked inactive in DB
+      // Safety sweep: ensure any legacy deleted services and appointments are removed
       await this.serviceRepo.query(`
-        UPDATE services 
-        SET "isActive" = false 
+        DELETE FROM appointment_reminders WHERE "appointmentId" IN (
+          SELECT id FROM appointments WHERE service ILIKE '%iaid%' 
+            OR service ILIKE '%ninjutsu%' 
+            OR service ILIKE '%taich%' 
+            OR service ILIKE '%entrenamiento funcional%'
+            OR service ILIKE '%fisioterapia%'
+            OR service ILIKE '%diagnóstico clínico%'
+            OR service ILIKE '%pilates%'
+            OR service ILIKE '%orientales%'
+        );
+        DELETE FROM appointments WHERE service ILIKE '%iaid%' 
+          OR service ILIKE '%ninjutsu%' 
+          OR service ILIKE '%taich%' 
+          OR service ILIKE '%entrenamiento funcional%'
+          OR service ILIKE '%fisioterapia%'
+          OR service ILIKE '%diagnóstico clínico%'
+          OR service ILIKE '%pilates%'
+          OR service ILIKE '%orientales%';
+        DELETE FROM services 
         WHERE name ILIKE '%iaid%' 
            OR name ILIKE '%ninjutsu%' 
            OR name ILIKE '%taich%' 
            OR name ILIKE '%entrenamiento funcional%'
            OR name ILIKE '%fisioterapia%'
-           OR name ILIKE '%diagnóstico clínico%';
+           OR name ILIKE '%diagnóstico clínico%'
+           OR name ILIKE '%pilates%'
+           OR name ILIKE '%orientales%';
       `).catch(() => null);
 
       // Ensure Bienestar Experience points to bienestar_madrid.mp4 and does not require approval
