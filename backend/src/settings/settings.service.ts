@@ -162,60 +162,80 @@ export class SettingsService implements OnModuleInit {
 
       const ids = demoContacts.map((c) => c.id);
 
-      if (ids.length === 0) {
-        return {
-          ok: true,
-          deletedContacts: 0,
-          deletedAppointments: 0,
-          deletedMessages: 0,
-        };
+      let delAppts: any[] = [];
+      let delContacts: any[] = [];
+
+      if (ids.length > 0) {
+        // 2. Delete reminders for appointments of these demo contacts
+        await m.query(
+          `DELETE FROM appointment_reminders 
+           WHERE "appointmentId" IN (
+             SELECT id FROM appointments WHERE "contactId" = ANY($1)
+           )`,
+          [ids],
+        );
+
+        // 3. Delete appointments for these demo contacts
+        delAppts = await m.query(
+          `DELETE FROM appointments 
+           WHERE "contactId" = ANY($1)
+           RETURNING id`,
+          [ids],
+        );
+
+        // 4. Delete calls for these demo contacts
+        await m.query(
+          `DELETE FROM calls 
+           WHERE "contactId" = ANY($1)`,
+          [ids],
+        );
+
+        // 5. Delete the demo contacts themselves
+        delContacts = await m.query(
+          `DELETE FROM contacts 
+           WHERE id = ANY($1)
+           RETURNING id`,
+          [ids],
+        );
       }
 
-      // 2. Delete reminders for appointments of these demo contacts
-      await m.query(
-        `DELETE FROM appointment_reminders 
-         WHERE "appointmentId" IN (
-           SELECT id FROM appointments WHERE "contactId" = ANY($1)
-         )`,
-        [ids],
-      );
+      // 6. Delete messages & conversations for demo contacts AND orphan widget/playground test chats
+      let delMsgs: any[] = [];
+      if (ids.length > 0) {
+        delMsgs = await m.query(
+          `DELETE FROM messages 
+           WHERE "contactId" = ANY($1)
+              OR "threadId" LIKE '%:widget-%'
+              OR "threadId" LIKE '%:playground-%'
+              OR "contactId" IS NULL
+           RETURNING id`,
+          [ids],
+        );
 
-      // 3. Delete appointments for these demo contacts
-      const delAppts = await m.query(
-        `DELETE FROM appointments 
-         WHERE "contactId" = ANY($1)
-         RETURNING id`,
-        [ids],
-      );
+        await m.query(
+          `DELETE FROM conversations 
+           WHERE "contactId" = ANY($1)
+              OR "threadId" LIKE '%:widget-%'
+              OR "threadId" LIKE '%:playground-%'
+              OR "contactId" IS NULL`,
+          [ids],
+        );
+      } else {
+        delMsgs = await m.query(
+          `DELETE FROM messages 
+           WHERE "threadId" LIKE '%:widget-%'
+              OR "threadId" LIKE '%:playground-%'
+              OR "contactId" IS NULL
+           RETURNING id`,
+        );
 
-      // 4. Delete messages & conversations for these demo contacts
-      const delMsgs = await m.query(
-        `DELETE FROM messages 
-         WHERE "contactId" = ANY($1)
-         RETURNING id`,
-        [ids],
-      );
-
-      await m.query(
-        `DELETE FROM conversations 
-         WHERE "contactId" = ANY($1)`,
-        [ids],
-      );
-
-      // 5. Delete calls for these demo contacts
-      await m.query(
-        `DELETE FROM calls 
-         WHERE "contactId" = ANY($1)`,
-        [ids],
-      );
-
-      // 6. Delete the demo contacts themselves
-      const delContacts = await m.query(
-        `DELETE FROM contacts 
-         WHERE id = ANY($1)
-         RETURNING id`,
-        [ids],
-      );
+        await m.query(
+          `DELETE FROM conversations 
+           WHERE "threadId" LIKE '%:widget-%'
+              OR "threadId" LIKE '%:playground-%'
+              OR "contactId" IS NULL`,
+        );
+      }
 
       return {
         ok: true,
