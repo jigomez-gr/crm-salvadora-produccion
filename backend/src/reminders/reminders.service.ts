@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, In, Repository } from 'typeorm';
 import { Cron } from '@nestjs/schedule';
@@ -37,7 +37,7 @@ import {
 const REMINDER_CRON = '*/15 * * * *'; // every 15 minutes
 
 @Injectable()
-export class RemindersService {
+export class RemindersService implements OnModuleInit {
   private readonly logger = new Logger(RemindersService.name);
 
   constructor(
@@ -53,6 +53,20 @@ export class RemindersService {
     private readonly zadarmaSmsService: ZadarmaSmsService,
     private readonly vapiService: VapiService,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    try {
+      await this.remindersRepo.query(`
+        ALTER TABLE "appointment_reminders" ADD COLUMN IF NOT EXISTS "channel" character varying NOT NULL DEFAULT 'whatsapp';
+        ALTER TABLE "appointment_reminders" DROP CONSTRAINT IF EXISTS "UQ_a2a304e63cdbacfacf60091a70c";
+        ALTER TABLE "appointment_reminders" DROP CONSTRAINT IF EXISTS "UQ_appointment_reminders_appt_offset_channel";
+        ALTER TABLE "appointment_reminders" ADD CONSTRAINT "UQ_appointment_reminders_appt_offset_channel" UNIQUE ("appointmentId", "offsetLabel", "channel");
+      `);
+      this.logger.log('Appointment reminders schema and channel column verified.');
+    } catch (err) {
+      this.logger.warn(`Could not verify schema on appointment_reminders: ${err}`);
+    }
+  }
 
   @Cron(REMINDER_CRON)
   async tick(): Promise<void> {
