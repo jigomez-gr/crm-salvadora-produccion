@@ -34,6 +34,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import { Modal } from "@/components/ui/Modal";
 import { SecretInput } from "@/components/ui/SecretInput";
 import { useToast } from "@/contexts/ToastContext";
+import { SensitiveAccessGate } from "@/contexts/SensitiveAccessContext";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -1356,14 +1357,18 @@ export default function AgentDetailPage({
     t === "config" ? "Configuración" : "Playground";
 
   return (
-    <div className="flex h-full flex-col p-8">
-      <Link
-        href="/agents"
-        className="inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-800"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Agentes
-      </Link>
+    <SensitiveAccessGate
+      title="Configuración del Agente de IA"
+      description="Esta sección permite gestionar el modelo de IA, claves de API, conexión de WhatsApp y base de conocimiento del agente."
+    >
+      <div className="flex h-full flex-col p-8">
+        <Link
+          href="/agents"
+          className="inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-800"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Agentes
+        </Link>
 
       <div className="mt-4 flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100">
@@ -1413,5 +1418,6 @@ export default function AgentDetailPage({
         )}
       </div>
     </div>
+    </SensitiveAccessGate>
   );
 }

@@ -72,6 +72,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // Clear local state regardless of the network result.
     }
+    try {
+      sessionStorage.removeItem("crm_sensitive_access_unlocked");
+    } catch {}
     setUser(null);
   }, []);
 

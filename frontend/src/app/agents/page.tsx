@@ -12,6 +12,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Textarea } from "@/components/ui/Textarea";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { SensitiveAccessGate } from "@/contexts/SensitiveAccessContext";
 
 function CreateAgentModal({
   open,
@@ -129,14 +130,18 @@ export default function AgentsPage() {
   }
 
   return (
-    <div className="p-4 sm:p-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-neutral-900">Agentes</h1>
-          <p className="mt-1 text-sm text-neutral-500">
-            Agentes de IA conectados a los canales de comunicación
-          </p>
-        </div>
+    <SensitiveAccessGate
+      title="Configuración de Agentes de IA"
+      description="Esta sección permite gestionar los modelos de lenguaje, números de WhatsApp y comportamiento de los agentes de IA."
+    >
+      <div className="p-4 sm:p-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-neutral-900">Agentes</h1>
+            <p className="mt-1 text-sm text-neutral-500">
+              Agentes de IA conectados a los canales de comunicación
+            </p>
+          </div>
         <Button onClick={() => setModalOpen(true)}>
           <Plus className="h-4 w-4" />
           Nuevo agente
@@ -227,5 +232,6 @@ export default function AgentsPage() {
         }}
       />
     </div>
+    </SensitiveAccessGate>
   );
 }

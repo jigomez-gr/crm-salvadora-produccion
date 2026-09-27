@@ -23,6 +23,7 @@ import {
   Shield,
   Search,
   User,
+  Lock,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import {
@@ -39,6 +40,7 @@ import { Modal } from "@/components/ui/Modal";
 import { SecretInput } from "@/components/ui/SecretInput";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/contexts/ToastContext";
+import { useSensitiveAccess, SensitiveAccessGate } from "@/contexts/SensitiveAccessContext";
 import { useEvents } from "@/hooks/useEvents";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -46,6 +48,7 @@ import { es } from "date-fns/locale";
 
 export default function CallsPage() {
   const toast = useToast();
+  const { isUnlocked: isSensitiveUnlocked, requestAccess: requestSensitiveAccess } = useSensitiveAccess();
   const [activeTab, setActiveTab] = useState<"logs" | "studio">("logs");
 
   // Call Logs state
@@ -551,7 +554,15 @@ export default function CallsPage() {
         </button>
 
         <button
-          onClick={() => setActiveTab("studio")}
+          onClick={() => {
+            if (!isSensitiveUnlocked) {
+              requestSensitiveAccess(() => {
+                setActiveTab("studio");
+              });
+              return;
+            }
+            setActiveTab("studio");
+          }}
           className={cn(
             "flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-semibold transition-colors",
             activeTab === "studio"
@@ -560,7 +571,10 @@ export default function CallsPage() {
           )}
         >
           <Settings2 className="h-4 w-4" />
-          Estudio y Conexión VAPI
+          <span>Estudio y Conexión VAPI</span>
+          {!isSensitiveUnlocked && (
+            <Lock className="h-3.5 w-3.5 text-neutral-400" />
+          )}
         </button>
       </div>
 
@@ -767,7 +781,11 @@ export default function CallsPage() {
 
       {/* ─── TAB 2: VAPI STUDIO & CONFIGURATION ─── */}
       {activeTab === "studio" && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <SensitiveAccessGate
+          title="Estudio y Conexión VAPI"
+          description="Esta sección contiene claves privadas de API (VAPI, Zadarma SIP, Webhook Tokens). Se requiere la contraseña adicional."
+        >
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Left Column: Quick Actions & Status */}
           <div className="space-y-6 lg:col-span-1">
             {/* Status Card */}
@@ -1185,6 +1203,7 @@ export default function CallsPage() {
             </form>
           </div>
         </div>
+        </SensitiveAccessGate>
       )}
 
       {/* ─── MODAL: DETALLE Y TRANSCRIPCIÓN ─── */}

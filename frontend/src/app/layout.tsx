@@ -5,6 +5,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { AuthGate } from "@/components/AuthGate";
 import { ToastProvider } from "@/contexts/ToastContext";
 import { BrandingProvider } from "@/contexts/BrandingContext";
+import { SensitiveAccessProvider } from "@/contexts/SensitiveAccessContext";
 
 const geist = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 
@@ -35,7 +36,9 @@ export default function RootLayout({
         <ToastProvider>
           <BrandingProvider>
             <AuthProvider>
-              <AuthGate>{children}</AuthGate>
+              <SensitiveAccessProvider>
+                <AuthGate>{children}</AuthGate>
+              </SensitiveAccessProvider>
             </AuthProvider>
           </BrandingProvider>
         </ToastProvider>

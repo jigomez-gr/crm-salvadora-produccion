@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { SecretInput } from "@/components/ui/SecretInput";
 import { cn } from "@/lib/utils";
+import { SensitiveAccessGate } from "@/contexts/SensitiveAccessContext";
 
 // ─── Email (SMTP) configuration ─────────────────────────────────────────────────
 
@@ -1380,11 +1381,15 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="p-4 sm:p-8">
-      <h1 className="text-xl font-semibold text-neutral-900">Ajustes</h1>
-      <p className="mt-1 text-sm text-neutral-500">
-        Personaliza la marca y gestiona los datos de la aplicación.
-      </p>
+    <SensitiveAccessGate
+      title="Ajustes del Sistema"
+      description="Esta sección contiene configuraciones confidenciales del CRM, pasarelas de pago, correo SMTP, telefonía y datos de la empresa."
+    >
+      <div className="p-4 sm:p-8">
+        <h1 className="text-xl font-semibold text-neutral-900">Ajustes</h1>
+        <p className="mt-1 text-sm text-neutral-500">
+          Personaliza la marca y gestiona los datos de la aplicación.
+        </p>
 
       {/* Servicios en Mantenimiento */}
       <div
@@ -1704,5 +1709,6 @@ export default function SettingsPage() {
         </div>
       </Modal>
     </div>
+    </SensitiveAccessGate>
   );
 }

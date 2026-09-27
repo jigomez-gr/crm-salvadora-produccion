@@ -21,12 +21,14 @@ import {
   PhoneCall,
   CreditCard,
   X,
+  Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { readableTextColor } from "@/lib/color";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
 import { useBranding } from "@/contexts/BrandingContext";
+import { useSensitiveAccess } from "@/contexts/SensitiveAccessContext";
 import { Modal } from "@/components/ui/Modal";
 import { ChangePasswordForm } from "@/components/ChangePasswordForm";
 
@@ -56,6 +58,7 @@ export function Sidebar({
   const { user, logout } = useAuth();
   const toast = useToast();
   const branding = useBranding();
+  const { isUnlocked: isSensitiveUnlocked, requestAccess: requestSensitiveAccess } = useSensitiveAccess();
   const [pwModalOpen, setPwModalOpen] = useState(false);
 
   // The role-specific navigation items
@@ -129,11 +132,24 @@ export function Sidebar({
         {navItems.map(({ href, label, icon: Icon }) => {
           const active =
             href === "/" ? pathname === "/" : pathname.startsWith(href);
+          const isSensitive = href === "/settings" || href === "/agents";
+          const isLocked = isSensitive && !isSensitiveUnlocked;
+
           return (
             <Link
               key={href}
               href={href}
-              onClick={onClose}
+              onClick={(e) => {
+                if (isLocked) {
+                  e.preventDefault();
+                  requestSensitiveAccess(() => {
+                    onClose?.();
+                    router.push(href);
+                  });
+                  return;
+                }
+                onClose?.();
+              }}
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                 active
@@ -142,7 +158,10 @@ export function Sidebar({
               )}
             >
               <Icon className="h-4 w-4 flex-shrink-0" />
-              {label}
+              <span className="flex-1 truncate">{label}</span>
+              {isLocked && (
+                <Lock className="h-3.5 w-3.5 text-neutral-400 shrink-0" />
+              )}
             </Link>
           );
         })}
