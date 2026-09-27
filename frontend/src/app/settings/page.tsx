@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ShieldAlert, Upload, Trash2, Bot, Mail, Send, CreditCard, Copy, Check, Video, PhoneCall, RefreshCw, FileText, UserCheck, Bell } from "lucide-react";
+import { ShieldAlert, Upload, Trash2, Bot, Mail, Send, CreditCard, Copy, Check, Video, PhoneCall, RefreshCw, FileText, UserCheck, Bell, Sparkles } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { readableTextColor } from "@/lib/color";
 import { AppSettings, EmailConfig, PaymentConfig, CalcomConfig, VapiAccountConfig } from "@/lib/types";
@@ -1238,6 +1238,8 @@ export default function SettingsPage() {
   const [clearing, setClearing] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [deleteDemoOpen, setDeleteDemoOpen] = useState(false);
+  const [deletingDemo, setDeletingDemo] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -1348,6 +1350,28 @@ export default function SettingsPage() {
       );
     } finally {
       setResetting(false);
+    }
+  }
+
+  async function handleDeleteDemoData() {
+    setDeletingDemo(true);
+    try {
+      const res = await apiFetch<{
+        ok: boolean;
+        deletedContacts: number;
+        deletedAppointments: number;
+        deletedMessages: number;
+      }>("/api/settings/delete-demo-data", { method: "POST" });
+      setDeleteDemoOpen(false);
+      toast.success(
+        `✅ Datos de prueba eliminados (${res.deletedContacts} contactos y ${res.deletedAppointments} citas de prueba). Los clientes reales se conservan intactos.`
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Error al eliminar los datos de prueba."
+      );
+    } finally {
+      setDeletingDemo(false);
     }
   }
 
@@ -1585,6 +1609,59 @@ export default function SettingsPage() {
             className="bg-amber-600 hover:bg-amber-700 text-white"
           >
             {resetting ? "Reiniciando…" : "Confirmar Reinicio"}
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Eliminar sólo datos de prueba (Safe for production) */}
+      <div className="mt-6 max-w-xl rounded-xl border border-indigo-200 bg-indigo-50/40 p-6">
+        <h2 className="text-sm font-semibold text-indigo-900 flex items-center gap-1.5">
+          <Sparkles className="h-4 w-4 text-indigo-600" />
+          Eliminar únicamente datos de prueba (Seguro para Producción)
+        </h2>
+        <p className="mt-1 text-sm text-neutral-600">
+          Elimina <strong>sólo los contactos y citas de prueba</strong> (aquellos con etiqueta <em>&quot;demo&quot;</em> o correos de prueba).
+          <strong> Tus clientes, citas y mensajes reales se conservan al 100%</strong> sin necesidad de restaurar copias de seguridad.
+        </p>
+        <Button
+          variant="secondary"
+          className="mt-3 border-indigo-300 bg-indigo-100 hover:bg-indigo-200 text-indigo-900 font-medium"
+          onClick={() => setDeleteDemoOpen(true)}
+        >
+          <Trash2 className="h-4 w-4 text-indigo-700" />
+          Eliminar datos de prueba
+        </Button>
+      </div>
+
+      <Modal
+        open={deleteDemoOpen}
+        onClose={() => setDeleteDemoOpen(false)}
+        title="Eliminar únicamente datos de prueba"
+      >
+        <div className="space-y-2 text-sm text-neutral-600">
+          <p>
+            Esta acción buscará y eliminará <strong>solamente los registros de prueba / demostración</strong>:
+          </p>
+          <ul className="list-disc list-inside text-xs text-neutral-600 space-y-1">
+            <li>Contactos con etiqueta <em>&quot;demo&quot;</em> o correos <em>@example.com</em>.</li>
+            <li>Citas, recordatorios y chats asociados a esos contactos de prueba.</li>
+            <li><strong>Tus clientes y citas reales NO se borrarán.</strong></li>
+          </ul>
+          <p className="pt-2 text-xs font-semibold text-indigo-900">
+            ¿Deseas proceder con la eliminación de los datos de prueba?
+          </p>
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setDeleteDemoOpen(false)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            onClick={handleDeleteDemoData}
+            disabled={deletingDemo}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+          >
+            {deletingDemo ? "Eliminando…" : "Confirmar eliminación"}
           </Button>
         </div>
       </Modal>

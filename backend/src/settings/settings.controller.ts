@@ -126,5 +126,24 @@ export class SettingsController {
   async resetTestData(@CurrentUser() actor: AuthUser, @Ip() ip: string) {
     return this.settings.resetTestData();
   }
+
+  /**
+   * Delete ONLY test/demo data without touching real contacts or real client appointments.
+   * Accessible by Admin via session JWT or x-admin-password header.
+   */
+  @Post('delete-demo-data')
+  @UseGuards(AdminResetGuard)
+  @Roles(UserRole.ADMIN)
+  async deleteDemoData(@CurrentUser() actor: AuthUser, @Ip() ip: string) {
+    const res = await this.settings.deleteDemoData();
+    this.audit({
+      actor: { id: actor.id, email: actor.email },
+      action: AuditAction.DATA_CLEAR_DEMO,
+      summary: `Eliminó solo los datos de prueba (${res.deletedContacts} contactos, ${res.deletedAppointments} citas)`,
+      targetType: 'data',
+      ip,
+    });
+    return res;
+  }
 }
 

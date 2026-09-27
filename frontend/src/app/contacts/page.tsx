@@ -382,6 +382,11 @@ function ContactsPageInner() {
                         Baja
                       </span>
                     )}
+                    {c.tags?.includes("demo") && (
+                      <span className="ml-2 inline-flex items-center gap-0.5 rounded-full bg-amber-100 border border-amber-300 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                        🧪 Prueba
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-1 items-start">

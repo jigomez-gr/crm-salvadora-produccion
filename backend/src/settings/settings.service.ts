@@ -140,6 +140,93 @@ export class SettingsService implements OnModuleInit {
   }
 
   /**
+   * Delete ONLY test/demo data (contacts tagged with 'demo' or created as demo seeds,
+   * along with their associated appointments, conversations, messages and reminders).
+   * Real business contacts, real clients and real appointments are strictly preserved.
+   */
+  async deleteDemoData(): Promise<{
+    ok: true;
+    deletedContacts: number;
+    deletedAppointments: number;
+    deletedMessages: number;
+  }> {
+    return await this.dataSource.transaction(async (m) => {
+      // 1. Identify demo contact IDs
+      const demoContacts: { id: string }[] = await m.query(`
+        SELECT id FROM contacts 
+        WHERE 'demo' = ANY(tags)
+           OR email ILIKE '%@example.com'
+           OR phone LIKE '+346112003%'
+           OR notes ILIKE '[DEMO]%'
+      `);
+
+      const ids = demoContacts.map((c) => c.id);
+
+      if (ids.length === 0) {
+        return {
+          ok: true,
+          deletedContacts: 0,
+          deletedAppointments: 0,
+          deletedMessages: 0,
+        };
+      }
+
+      // 2. Delete reminders for appointments of these demo contacts
+      await m.query(
+        `DELETE FROM appointment_reminders 
+         WHERE "appointmentId" IN (
+           SELECT id FROM appointments WHERE "contactId" = ANY($1)
+         )`,
+        [ids],
+      );
+
+      // 3. Delete appointments for these demo contacts
+      const delAppts = await m.query(
+        `DELETE FROM appointments 
+         WHERE "contactId" = ANY($1)
+         RETURNING id`,
+        [ids],
+      );
+
+      // 4. Delete messages & conversations for these demo contacts
+      const delMsgs = await m.query(
+        `DELETE FROM messages 
+         WHERE "contactId" = ANY($1)
+         RETURNING id`,
+        [ids],
+      );
+
+      await m.query(
+        `DELETE FROM conversations 
+         WHERE "contactId" = ANY($1)`,
+        [ids],
+      );
+
+      // 5. Delete calls for these demo contacts
+      await m.query(
+        `DELETE FROM calls 
+         WHERE "contactId" = ANY($1)`,
+        [ids],
+      );
+
+      // 6. Delete the demo contacts themselves
+      const delContacts = await m.query(
+        `DELETE FROM contacts 
+         WHERE id = ANY($1)
+         RETURNING id`,
+        [ids],
+      );
+
+      return {
+        ok: true,
+        deletedContacts: delContacts.length,
+        deletedAppointments: delAppts.length,
+        deletedMessages: delMsgs.length,
+      };
+    });
+  }
+
+  /**
    * Reset the CRM for testing:
    * 1. Deletes all contacts
    * 2. Deletes all conversations & messages (including mastra and email messages)

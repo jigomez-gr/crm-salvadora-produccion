@@ -83,12 +83,16 @@ function CardBody({ card }: { card: BoardCard }) {
 
       {card.tags.length > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1">
-          {card.tags.slice(0, 3).map((t) => (
+          {card.tags.slice(0, 4).map((t) => (
             <span
               key={t}
-              className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-600"
+              className={
+                t === "demo"
+                  ? "rounded bg-amber-100 border border-amber-300 px-1.5 py-0.5 text-[10px] font-bold text-amber-800"
+                  : "rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-600"
+              }
             >
-              {t}
+              {t === "demo" ? "🧪 Prueba" : t}
             </span>
           ))}
         </div>
