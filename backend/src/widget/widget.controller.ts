@@ -36,6 +36,8 @@ import {
   AnalizaIaPublicRequestDto,
   AnalizaIaEnviarPeticionDto,
 } from './dto/analizaia.dto';
+import { ContactStatus } from '../common/entities/contact.entity';
+import { normalizePhoneStrict, normalizePhoneLoose } from '../common/phone';
 import { MAINTENANCE_MESSAGE, BLOCKED_USER_MESSAGE } from '../common/system-messages';
 import { ContactQueryEvaluatorService } from './contact-query-evaluator.service';
 
@@ -522,11 +524,34 @@ export class WidgetController {
         ]),
       );
 
+      // Normalizar teléfono si fue facilitado; si no, generar un número de contacto válido y único (+346XXXXXXXX)
+      let contactPhone = '';
+      if (phone) {
+        try {
+          contactPhone = normalizePhoneStrict(phone);
+        } catch {
+          contactPhone = normalizePhoneLoose(phone) || '';
+        }
+      }
+      if (!contactPhone || contactPhone.length < 9) {
+        let attempts = 0;
+        while (attempts < 10) {
+          const rand8 = Math.floor(10000000 + Math.random() * 90000000);
+          const candidate = `+346${rand8}`;
+          const clash = await this.contactsService.findByPhone(candidate);
+          if (!clash) {
+            contactPhone = candidate;
+            break;
+          }
+          attempts++;
+        }
+      }
+
       contact = await this.contactsService.create({
         name,
         email,
-        phone: phone || `+34000${Date.now().toString().slice(-6)}`,
-        status: isOpportunity ? ('lead' as any) : ('prospect' as any),
+        phone: contactPhone,
+        status: ContactStatus.LEAD,
         source: 'web_formulario_email',
         tags: initialTags,
         notes: evalNoteSummary,
@@ -547,10 +572,19 @@ export class WidgetController {
         ? `${contact.notes}\n\n${evalNoteSummary}`
         : evalNoteSummary;
 
+      let contactPhoneToUpdate = contact.phone;
+      if (phone) {
+        try {
+          contactPhoneToUpdate = normalizePhoneStrict(phone);
+        } catch {
+          contactPhoneToUpdate = normalizePhoneLoose(phone) || contact.phone;
+        }
+      }
+
       contact = await this.contactsService.update(contact.id, {
         name: contact.name && contact.name !== contact.phone ? contact.name : name,
         email,
-        phone: phone || contact.phone,
+        phone: contactPhoneToUpdate,
         tags: newTags,
         source: contact.source || 'web_formulario_email',
         notes: updatedNotes,
@@ -617,10 +651,21 @@ export class WidgetController {
     try {
       const emailStatus = await this.emailService.status().catch(() => ({ configured: false }));
       if (emailStatus.configured && contact.email) {
+        const ackSubject =
+          evaluation.acknowledgementEmail?.subject ||
+          (isOpportunity
+            ? 'Hemos recibido tu solicitud de reserva — Centro de Yoga Salvadora Conesa'
+            : 'Hemos recibido tu consulta — Centro de Yoga Salvadora Conesa');
+        const ackBody =
+          evaluation.acknowledgementEmail?.body ||
+          (typeof evaluation.acknowledgementEmail === 'string'
+            ? evaluation.acknowledgementEmail
+            : `Hola ${name},\n\nHemos recibido correctamente tu mensaje respecto a "${serviceName}". Nos pondremos en contacto contigo a la mayor brevedad posible.\n\nUn cordial saludo,\nCentro de Yoga Salvadora Conesa\nTeléfono: 695 172 625`);
+
         await this.emailService.send(
           contact.id,
-          evaluation.acknowledgementEmail.subject,
-          evaluation.acknowledgementEmail.body,
+          ackSubject,
+          ackBody,
           'sistema',
         );
       }
