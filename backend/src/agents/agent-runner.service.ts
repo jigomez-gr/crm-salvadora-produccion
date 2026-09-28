@@ -400,7 +400,7 @@ export class AgentRunnerService {
       const result = await agent.generate(agentPrompt, {
         memory: {
           thread: threadId,
-          resource: contactId || threadId,
+          resource: threadId,
         },
         requestContext,
         // Bound the agent loop to keep per-message cost predictable.
@@ -409,10 +409,14 @@ export class AgentRunnerService {
 
       for (const step of (result as any).steps ?? []) {
         for (const tc of step.toolCalls ?? []) {
-          this.logger.log(`[ToolCall] ${tc?.toolName}: ${JSON.stringify(tc?.args || {})}`);
+          const name = tc?.toolName || tc?.name || tc?.function?.name || 'unknown';
+          const args = tc?.args ?? tc?.arguments ?? tc?.parameters ?? {};
+          this.logger.log(`[ToolCall] ${name}: ${JSON.stringify(args)}`);
         }
         for (const tr of step.toolResults ?? []) {
-          this.logger.log(`[ToolResult] ${tr?.toolName}: ${JSON.stringify(tr?.result || {})}`);
+          const name = tr?.toolName || tr?.name || 'unknown';
+          const res = tr?.result ?? tr?.output ?? {};
+          this.logger.log(`[ToolResult] ${name}: ${JSON.stringify(res)}`);
         }
       }
 
