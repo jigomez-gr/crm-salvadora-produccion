@@ -105,6 +105,7 @@ import { AgentsModule } from './agents/agents.module';
     ConversationsModule,
     DashboardModule,
     ReportsModule,
+    EventsModule,
     AuditModule,
     SettingsModule,
     KnowledgeModule,
@@ -121,7 +122,6 @@ import { AgentsModule } from './agents/agents.module';
     AuthModule,
     UsersModule,
     WhatsappModule,
-    EventsModule,
     AgentsModule,
   ],
   providers: [

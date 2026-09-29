@@ -80,7 +80,7 @@ export class SeedService implements OnModuleInit {
       return;
     }
 
-    if (contactsCount > 0) {
+    if (contactsCount > 0 || servicesCount > 0) {
       this.logger.log(
         `Demo data seed skipped — database already has ${contactsCount} contact(s) and ${servicesCount} service(s)`,
       );
