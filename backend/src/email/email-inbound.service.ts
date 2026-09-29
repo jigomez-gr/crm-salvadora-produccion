@@ -105,13 +105,20 @@ export class EmailInboundService implements OnModuleInit {
       await client.connect();
 
       const mailboxes = await client.list();
+      const targetProcessedMailbox = mailboxes.find(
+        (m) => m.path.toLowerCase() === 'procesados' || m.name.toLowerCase() === 'procesados',
+      );
+      const targetProcessedFolder = targetProcessedMailbox ? targetProcessedMailbox.path : 'procesados';
+
       const folderPaths = mailboxes
         .filter(
           (m) =>
-            m.path === 'INBOX' ||
-            m.specialUse === '\\Inbox' ||
-            m.specialUse === '\\Junk' ||
-            /junk|spam/i.test(m.path),
+            (m.path === 'INBOX' ||
+              m.specialUse === '\\Inbox' ||
+              m.specialUse === '\\Junk' ||
+              /junk|spam/i.test(m.path)) &&
+            !/procesad/i.test(m.path) &&
+            !/procesad/i.test(m.name),
         )
         .map((m) => m.path);
 
@@ -155,6 +162,27 @@ export class EmailInboundService implements OnModuleInit {
               // Check if already processed
               const alreadyExists = await this.messagesService.existsByExternalId(externalId);
               if (alreadyExists) {
+                continue;
+              }
+
+              // 0. Pre-filter: Check if from corporate sender, bot or automated system
+              const corporateCheck = this.isCorporateOrAutomatedEmail(parsed, rawFrom);
+              if (corporateCheck.isCorporate) {
+                this.logger.log(
+                  `🏢 Correo de empresa o servicio detectado (${rawFrom} - ${corporateCheck.reason}): omitiendo según política del centro.`,
+                );
+                // Record in DB so we never scan it again
+                await this.messagesService
+                  .saveMessage({
+                    contactId: null,
+                    threadId: `salvadora:corporate:${rawFrom}`,
+                    direction: MessageDirection.INBOUND,
+                    channel: MessageChannel.EMAIL,
+                    body: (parsed.subject || '') + ' ' + (parsed.text || ''),
+                    externalId,
+                    status: MessageStatus.RECEIVED,
+                  })
+                  .catch(() => null);
                 continue;
               }
 
@@ -251,7 +279,12 @@ export class EmailInboundService implements OnModuleInit {
               `AI Qualification for ${rawFrom}: [${evaluation.intent}] - ${evaluation.reasoning}`,
             );
 
-            if (evaluation.intent === 'HUMAN_HANDOFF') {
+            if (evaluation.intent === 'IGNORE') {
+              this.logger.log(
+                `🚫 Mensaje ignorado (${rawFrom}): ${evaluation.reasoning}. No se responderá por política del centro.`,
+              );
+              processResult.actionTaken = 'ignored_non_yoga_or_corporate';
+            } else if (evaluation.intent === 'HUMAN_HANDOFF') {
               // Mark conversation in handoff
               await this.messagesService.setHandoff(threadId, true);
               this.eventEmitter.emit('conversation.updated', { threadId });
@@ -269,9 +302,12 @@ export class EmailInboundService implements OnModuleInit {
               // Send polite acknowledgment informing that Salvadora will respond
               if (evaluation.replyBody) {
                 try {
+                  // Mover a la carpeta 'procesados' antes de responder
+                  await this.moveToProcessed(client, folder, msg.uid, targetProcessedFolder);
+
                   await this.emailService.send(
                     contact.id,
-                    evaluation.replySubject,
+                    evaluation.replySubject || cleanSubject,
                     evaluation.replyBody,
                     'sistema',
                   );
@@ -338,9 +374,12 @@ export class EmailInboundService implements OnModuleInit {
               // 2. Send automated intelligent email reply
               if (evaluation.replyBody) {
                 try {
+                  // Mover a la carpeta 'procesados' antes de responder
+                  await this.moveToProcessed(client, folder, msg.uid, targetProcessedFolder);
+
                   await this.emailService.send(
                     contact.id,
-                    evaluation.replySubject,
+                    evaluation.replySubject || cleanSubject,
                     evaluation.replyBody,
                     'sistema',
                   );
@@ -428,5 +467,95 @@ export class EmailInboundService implements OnModuleInit {
 
     const result = cleanLines.join('\n').trim();
     return result.length > 0 ? result : text.trim();
+  }
+
+  /**
+   * Move an email message to the target processed folder before replying,
+   * ensuring it is physically archived and not scanned again in future sync cycles.
+   */
+  private async moveToProcessed(
+    client: ImapFlow,
+    currentFolder: string,
+    uid: number,
+    targetFolder: string,
+  ): Promise<boolean> {
+    if (!targetFolder || currentFolder.toLowerCase() === targetFolder.toLowerCase()) {
+      return true;
+    }
+    try {
+      await client.messageMove(String(uid), targetFolder, { uid: true });
+      this.logger.log(`📦 Correo UID ${uid} movido de "${currentFolder}" a "${targetFolder}" antes de responder.`);
+      return true;
+    } catch (moveErr) {
+      this.logger.warn(`No se pudo mover el correo UID ${uid} a "${targetFolder}": ${moveErr}`);
+      return false;
+    }
+  }
+
+  /**
+   * Determine if an incoming email comes from a company, automated bot,
+   * billing system, platform service, or newsletter.
+   */
+  isCorporateOrAutomatedEmail(
+    parsed: any,
+    rawFrom: string,
+  ): { isCorporate: boolean; reason?: string } {
+    const fromLower = (rawFrom || '').toLowerCase().trim();
+
+    // 1. Technical headers for bulk / automated messages
+    const autoSubmitted = parsed.headers?.get?.('auto-submitted') || parsed.autoSubmitted;
+    if (autoSubmitted && String(autoSubmitted).toLowerCase() !== 'no') {
+      return { isCorporate: true, reason: `Cabecera Auto-Submitted (${autoSubmitted})` };
+    }
+
+    const precedence = parsed.headers?.get?.('precedence');
+    if (precedence && /bulk|list|junk/i.test(String(precedence))) {
+      return { isCorporate: true, reason: `Cabecera Precedence (${precedence})` };
+    }
+
+    if (parsed.headers?.get?.('list-unsubscribe') || parsed.headers?.get?.('list-id')) {
+      return { isCorporate: true, reason: 'Boletín o lista de distribución (List-Unsubscribe)' };
+    }
+
+    // 2. Automated / Corporate address prefixes
+    const [localPart = '', domainPart = ''] = fromLower.split('@');
+
+    const botPrefixes = [
+      'noreply', 'no-reply', 'donotreply', 'do-not-reply',
+      'service', 'support', 'soporte', 'billing', 'factura', 'facturacion',
+      'newsletter', 'news', 'marketing', 'promo', 'promociones',
+      'notifications', 'notificaciones', 'notification', 'notificacion',
+      'alert', 'alerts', 'alerta', 'alertas', 'mailer-daemon', 'postmaster',
+      'bounce', 'press', 'prensa', 'media', 'ventas', 'sales', 'commercial',
+      'comercial', 'leads', 'invoicing', 'security', 'seguridad', 'team',
+    ];
+
+    if (
+      botPrefixes.some(
+        (p) =>
+          localPart === p ||
+          localPart.startsWith(`${p}+`) ||
+          localPart.startsWith(`${p}.`) ||
+          localPart.startsWith(`${p}-`) ||
+          localPart.startsWith(`${p}_`),
+      )
+    ) {
+      return { isCorporate: true, reason: `Prefijo corporativo o de bot ("${localPart}")` };
+    }
+
+    // 3. Known automated platforms and services
+    const corporateDomains = [
+      'ycloud.com', 'sendgrid.net', 'mailchimp.com', 'stripe.com',
+      'amazonses.com', 'mailgun.org', 'postmarkapp.com', 'hubspot.com',
+      'salesforce.com', 'zendesk.com', 'intercom.com', 'freshdesk.com',
+      'dinaserver.com', 'dinahosting.com', 'meta.com', 'facebookmail.com',
+      'google.com', 'microsoft.com',
+    ];
+
+    if (corporateDomains.some((d) => domainPart === d || domainPart.endsWith(`.${d}`))) {
+      return { isCorporate: true, reason: `Dominio de plataforma/empresa ("${domainPart}")` };
+    }
+
+    return { isCorporate: false };
   }
 }

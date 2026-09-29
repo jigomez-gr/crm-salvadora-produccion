@@ -65,6 +65,16 @@ describe('EmailDialogueEvaluatorService', () => {
           }),
         );
       }
+      if (userMsg.includes('YCloud') || userMsg.includes('factura') || userMsg.includes('diseño web')) {
+        return Promise.resolve(
+          JSON.stringify({
+            intent: 'IGNORE',
+            reasoning: 'Mensaje de empresa o ajeno a la escuela de yoga.',
+            replySubject: null,
+            replyBody: null,
+          }),
+        );
+      }
       return Promise.resolve(
         JSON.stringify({
           intent: 'AUTO_INFO',
@@ -134,5 +144,23 @@ describe('EmailDialogueEvaluatorService', () => {
 
     expect(result.intent).toBe('AUTO_INFO');
     expect(result.replyBody).toContain('esterillas');
+  });
+
+  it('classifies corporate and non-yoga emails as IGNORE with no reply', async () => {
+    const result = await service.evaluateEmail({
+      contact: {
+        id: 'c4',
+        name: 'Empresa Externa',
+        email: 'ventas@disenoweb.com',
+      },
+      threadHistory: [],
+      latestInbound: {
+        subject: 'Oferta de diseño web y posicionamiento SEO',
+        body: 'Le ofrecemos servicios de diseño web para su empresa a precio reducido.',
+      },
+    });
+
+    expect(result.intent).toBe('IGNORE');
+    expect(result.replyBody).toBeUndefined();
   });
 });

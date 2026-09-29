@@ -25,7 +25,7 @@ export interface EmailDialogueInput {
 }
 
 export interface EmailDialogueEvaluation {
-  intent: 'AUTO_BOOKING' | 'AUTO_INFO' | 'HUMAN_HANDOFF';
+  intent: 'AUTO_BOOKING' | 'AUTO_INFO' | 'HUMAN_HANDOFF' | 'IGNORE';
   reasoning: string;
   handoffReason?: string;
   extractedBooking?: {
@@ -36,8 +36,8 @@ export interface EmailDialogueEvaluation {
     modality?: string;
     participants?: number;
   };
-  replySubject: string;
-  replyBody: string;
+  replySubject?: string;
+  replyBody?: string;
 }
 
 @Injectable()
@@ -111,22 +111,36 @@ Teléfono y WhatsApp: 695 172 625.
 Web: https://salvadora.jigretera.com
 Email de atención: salvadoraconesa@salvadoraconesa.es
 
-Tu tarea es leer la respuesta que un cliente ha enviado por correo electrónico en contestación al centro y determinar la mejor acción y redactar la respuesta por email:
+Tu tarea es leer la respuesta que un remitente ha enviado por correo electrónico y determinar la acción adecuada:
+
+REGLAS DE ORO OBLIGATORIAS (LEER ANTES DE CUALQUIER OTRA COSA):
+1. REGLA ESTRICTA DE "NO EMPRESAS":
+   - NUNCA RESPONDER A EMPRESAS, proveedores de servicios (software, SEO, marketing, telefonía, suministros, seguros, bancos, gestorías, etc.), plataformas automáticas o de soporte (como YCloud, Meta, WhatsApp Business, Google, Stripe, etc.), boletines (newsletters) ni spam comercial.
+   - SOLO responder a personas físicas individuales (clientes, alumnos o personas interesadas a título particular).
+   - Si el mensaje o remitente es de una empresa, plataforma o servicio comercial: CLASIFÍCALO INMEDIATAMENTE como "intent": "IGNORE", con "replyBody": null y "replySubject": null. ¡BAJO NINGÚN CONCEPTO SE DEBE RESPONDER A UNA EMPRESA!
+
+2. REGLA DE TEMÁTICA EXCLUSIVA (ACTIVIDADES DE LA ESCUELA DE YOGA DE SALVADORA CONESA):
+   - SOLO responder a mensajes que traten explícitamente sobre las actividades y servicios del Centro de Yoga Salvadora Conesa: clases de Hatha Yoga Terapéutico, Meditación, Baño de Gong y Meditación Sonora, Constelaciones Familiares, Terapia Gestalt, horarios de clase, tarifas, solicitar clase de prueba o información del centro.
+   - Si una persona escribe para ofrecer colaboraciones comerciales ajenas, vender algo, o sobre cualquier tema no relacionado con las actividades de la escuela de yoga: CLASIFÍCALO INMEDIATAMENTE como "intent": "IGNORE", con "replyBody": null y "replySubject": null.
 
 CATEGORÍAS DE INTENCIÓN:
-1. "AUTO_BOOKING":
-   - El cliente solicita cita, reserva o plaza (p. ej. "quiero reservar cita para yoga", "confírmame para el sábado", "me viene bien a las 18h", "¿tenéis hueco el jueves?").
-   - Acción: Progresar la reserva. Si falta concretar turno u horario, expón con amabilidad los horarios disponibles de esa actividad (p. ej. Yoga: mañanas 10:00 o tardes 18:00 y 19:30; Baño de Gong: último sábado de mes 18:00; Constelaciones: domingo 10:00). Si el horario ya está claro, confírmale su reserva provisional de plaza.
+1. "IGNORE":
+   - El mensaje proviene de una empresa, plataforma automatizada, proveedor técnico/comercial, O no trata sobre las actividades de la escuela de yoga de Salvadora Conesa.
+   - Acción: NO responder. "replySubject": null, "replyBody": null.
+
+2. "AUTO_BOOKING":
+   - Solo aplicable a personas físicas que solicitan cita, reserva o plaza para clases o talleres de yoga (p. ej. "quiero reservar cita para yoga", "confírmame para el jueves", "me viene bien a las 9:45").
+   - Acción: Progresar la reserva. Si falta concretar turno u horario, expón con amabilidad los horarios disponibles de esa actividad. Si el horario ya está claro, confírmale su reserva de plaza.
    - Redacta un correo ('replyBody') impecable, cálido y resolutivo facilitando la confirmación de la cita.
 
-2. "AUTO_INFO":
-   - El cliente pregunta dudas estándar sobre precios, material (facilitamos esterillas y accesorios en la sala), qué ropa traer, horarios, ubicación o cómo funciona una actividad, SIN requerir criterio clínico.
+3. "AUTO_INFO":
+   - Solo aplicable a personas físicas que preguntan dudas sobre precios, material (facilitamos esterillas y accesorios en la sala), qué ropa traer, horarios, ubicación o cómo funciona una actividad de la escuela de yoga, SIN requerir criterio clínico.
    - Acción: Responder con claridad y calidez, resolviendo su duda con los datos del centro e invitándole a probar o reservar.
 
-3. "HUMAN_HANDOFF":
-   - El cliente plantea una situación personal/médica compleja (lesión de columna, embarazo de riesgo, cirugía reciente, consulta profunda de psicoterapia/Gestalt), expresa una queja, solicita hablar o contactar personalmente con Salvadora ("quiero que me llame Salvadora", "necesito hablar con ella"), o la consulta es tan atípica que requiere criterio humano directo.
+4. "HUMAN_HANDOFF":
+   - Solo aplicable a personas físicas que plantean una situación personal/médica compleja (lesión de columna, embarazo de riesgo, cirugía reciente, consulta profunda de psicoterapia/Gestalt), expresan una queja, o solicitan hablar personalmente con Salvadora ("quiero que me llame Salvadora", "necesito hablar con ella").
    - Acción: Marcar pase a humano.
-   - Redacta un correo cordial ('replyBody') avisando al cliente de que hemos transferido su mensaje directamente a Salvadora para que lo revise personalmente y le contacte a la mayor brevedad.
+   - Redacta un correo cordial ('replyBody') avisando de que hemos transferido su mensaje directamente a Salvadora para que lo revise personalmente.
 
 REGLAS DE RESPUESTA:
 - El tono debe ser siempre muy cercano, respetuoso, cálido y profesional en español.
@@ -145,7 +159,7 @@ Si el usuario dice "el martes", "el jueves a las 9:45", etc., calcula la fecha p
 
 RESPONDE EXCLUSIVAMENTE UN OBJETO JSON VÁLIDO CON ESTA ESTRUCTURA:
 {
-  "intent": "AUTO_BOOKING" | "AUTO_INFO" | "HUMAN_HANDOFF",
+  "intent": "AUTO_BOOKING" | "AUTO_INFO" | "HUMAN_HANDOFF" | "IGNORE",
   "reasoning": "Breve explicación de la decisión tomada",
   "handoffReason": "Razón para el equipo humano si es HUMAN_HANDOFF o null",
   "extractedBooking": {
@@ -156,8 +170,8 @@ RESPONDE EXCLUSIVAMENTE UN OBJETO JSON VÁLIDO CON ESTA ESTRUCTURA:
     "modality": "presencial" | "online" | null,
     "participants": 1
   },
-  "replySubject": "Asunto apropiado del correo (ej: 'Re: Información sobre servicios y reserva de cita')",
-  "replyBody": "Texto completo y formateado del correo electrónico para el cliente"
+  "replySubject": "Asunto apropiado del correo o null si es IGNORE",
+  "replyBody": "Texto completo y formateado del correo electrónico para el cliente o null si es IGNORE"
 }`;
 
       const userPrompt = `HISTORIAL DE LA CONVERSACIÓN:
@@ -181,19 +195,27 @@ Mensaje:
       ]);
 
       const parsed = this.parseJsonSafe(raw);
-      if (parsed && parsed.intent && parsed.replyBody) {
-        return {
-          intent: parsed.intent,
-          reasoning: parsed.reasoning || 'Evaluado con IA',
-          handoffReason: parsed.handoffReason || undefined,
-          extractedBooking: parsed.extractedBooking || undefined,
-          replySubject:
-            parsed.replySubject ||
-            (input.latestInbound.subject.startsWith('Re:')
-              ? input.latestInbound.subject
-              : `Re: ${input.latestInbound.subject}`),
-          replyBody: parsed.replyBody,
-        };
+      if (parsed && parsed.intent) {
+        if (parsed.intent === 'IGNORE') {
+          return {
+            intent: 'IGNORE',
+            reasoning: parsed.reasoning || 'Mensaje de empresa o no relacionado con actividades de yoga',
+          };
+        }
+        if (parsed.replyBody) {
+          return {
+            intent: parsed.intent,
+            reasoning: parsed.reasoning || 'Evaluado con IA',
+            handoffReason: parsed.handoffReason || undefined,
+            extractedBooking: parsed.extractedBooking || undefined,
+            replySubject:
+              parsed.replySubject ||
+              (input.latestInbound.subject.startsWith('Re:')
+                ? input.latestInbound.subject
+                : `Re: ${input.latestInbound.subject}`),
+            replyBody: parsed.replyBody,
+          };
+        }
       }
 
       this.logger.warn('Failed to parse LLM evaluation JSON. Using heuristic fallback.');
@@ -217,6 +239,33 @@ Mensaje:
   private heuristicFallback(input: EmailDialogueInput): EmailDialogueEvaluation {
     const text = `${input.latestInbound.subject} ${input.latestInbound.body}`.toLowerCase();
     const name = input.contact.name || 'amig@';
+    const email = (input.contact.email || '').toLowerCase();
+
+    // 0. Check for corporate / automated / platform keywords or senders
+    const corporateKeywords = [
+      'ycloud', 'meta', 'whatsapp business', 'verification code', 'código de verificación',
+      'factura', 'invoice', 'hosting', 'dominio', 'dns', 'newsletter', 'unsubscribe',
+      'b2b', 'comercial', 'proveedor', 'seguridad', 'password reset', 'coexistence',
+    ];
+    if (corporateKeywords.some((k) => text.includes(k) || email.includes(k))) {
+      return {
+        intent: 'IGNORE',
+        reasoning: 'Mensaje de empresa, servicio automatizado o plataforma técnica externa.',
+      };
+    }
+
+    // 1. Check if the message is related to Centro de Yoga Salvadora Conesa activities
+    const yogaKeywords = [
+      'yoga', 'hatha', 'gong', 'meditaci', 'constelaci', 'gestalt', 'salvadora',
+      'clase', 'taller', 'reserva', 'cita', 'horario', 'precio', 'esterilla', 'plaza', 'sesion',
+    ];
+    const isYogaRelated = yogaKeywords.some((k) => text.includes(k));
+    if (!isYogaRelated) {
+      return {
+        intent: 'IGNORE',
+        reasoning: 'El mensaje no trata sobre las actividades de la escuela de yoga de Salvadora Conesa.',
+      };
+    }
 
     const wantsHuman =
       text.includes('salvadora') &&

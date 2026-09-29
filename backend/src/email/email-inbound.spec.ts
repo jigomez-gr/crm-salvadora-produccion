@@ -65,4 +65,35 @@ Asunto: Confirmación`;
     const cleaned = (service as any).cleanReplyBody(raw);
     expect(cleaned).toBe('Confirmo la cita.');
   });
+
+  describe('isCorporateOrAutomatedEmail', () => {
+    it('detects corporate bot prefixes like noreply and service', () => {
+      const check1 = service.isCorporateOrAutomatedEmail({}, 'noreply@sg.ycloud.com');
+      expect(check1.isCorporate).toBe(true);
+
+      const check2 = service.isCorporateOrAutomatedEmail({}, 'service@ycloud.com');
+      expect(check2.isCorporate).toBe(true);
+
+      const check3 = service.isCorporateOrAutomatedEmail({}, 'support@stripe.com');
+      expect(check3.isCorporate).toBe(true);
+
+      const check4 = service.isCorporateOrAutomatedEmail({}, 'facturacion@empresa.es');
+      expect(check4.isCorporate).toBe(true);
+    });
+
+    it('detects automated headers like List-Unsubscribe or Auto-Submitted', () => {
+      const headers = new Map();
+      headers.set('auto-submitted', 'auto-generated');
+      const check = service.isCorporateOrAutomatedEmail({ headers }, 'juan@example.com');
+      expect(check.isCorporate).toBe(true);
+    });
+
+    it('allows individual personal emails', () => {
+      const check1 = service.isCorporateOrAutomatedEmail({}, 'jigomez@hotmail.com');
+      expect(check1.isCorporate).toBe(false);
+
+      const check2 = service.isCorporateOrAutomatedEmail({}, 'maria.garcia@gmail.com');
+      expect(check2.isCorporate).toBe(false);
+    });
+  });
 });
