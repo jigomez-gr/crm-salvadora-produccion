@@ -127,8 +127,9 @@ export class EmailInboundService implements OnModuleInit {
             continue;
           }
 
-          // Parse RFC822 raw message
-          const parsed = await simpleParser(msg.source);
+          try {
+            // Parse RFC822 raw message
+            const parsed = await simpleParser(msg.source);
           const rawFrom = parsed.from?.value?.[0]?.address?.toLowerCase().trim();
           const fromName = parsed.from?.value?.[0]?.name?.trim() || rawFrom || 'Cliente';
 
@@ -161,10 +162,12 @@ export class EmailInboundService implements OnModuleInit {
           // 1. Identify or create Contact
           let contact = await this.contactsService.findByPhoneOrEmail(undefined, rawFrom);
           if (!contact) {
+            // Spanish mobile E.164 format (+34600xxxxxx) to ensure phone validation succeeds
+            const rand6 = Math.floor(100000 + Math.random() * 900000);
             contact = await this.contactsService.create({
               name: fromName,
               email: rawFrom,
-              phone: `+34000${Date.now().toString().slice(-6)}`,
+              phone: `+34600${rand6}`,
               source: 'email_inbound',
             });
           }
@@ -312,7 +315,12 @@ export class EmailInboundService implements OnModuleInit {
             }
           }
 
-          details.push(processResult);
+            details.push(processResult);
+          } catch (msgErr) {
+            this.logger.error(
+              `Error processing inbound email UID ${msg.uid}: ${msgErr}`,
+            );
+          }
         }
 
         // Save last processed UID

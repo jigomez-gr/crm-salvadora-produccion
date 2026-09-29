@@ -6,6 +6,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { Contact } from './common/entities/contact.entity';
+import { ContactIdentityChange } from './contacts/entities/contact-identity-change.entity';
 import { Appointment } from './common/entities/appointment.entity';
 import { AgentConfig } from './common/entities/agent-config.entity';
 import { Message } from './common/entities/message.entity';
@@ -65,6 +66,7 @@ import { AgentsModule } from './agents/agents.module';
         'postgresql://postgres:W39xlpS9@172.17.0.1:5433/crm_salvadora',
       entities: [
         Contact,
+        ContactIdentityChange,
         Appointment,
         Service,
         ServiceCategory,
