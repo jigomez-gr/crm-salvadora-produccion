@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Message } from '../common/entities/message.entity';
 import { Conversation } from '../common/entities/conversation.entity';
@@ -19,8 +19,8 @@ import { ContactsModule } from '../contacts/contacts.module';
     // dependency-free of ConversationsModule, so no import cycle.
     YCloudModule,
     AgentsConfigModule,
-    EmailModule,
-    ContactsModule,
+    forwardRef(() => EmailModule),
+    forwardRef(() => ContactsModule),
   ],
   providers: [MessagesService],
   controllers: [ConversationsController],

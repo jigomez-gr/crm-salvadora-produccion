@@ -46,6 +46,32 @@ export class EmailAccount {
   @Column({ type: 'varchar', nullable: true })
   smtpPassword: string | null;
 
+  // IMAP server for reading inbound emails and replies (falls back to SMTP server if empty).
+  @Column({ type: 'varchar', nullable: true })
+  imapHost: string | null;
+
+  @Column({ type: 'int', default: 993 })
+  imapPort: number;
+
+  @Column({ default: true })
+  imapSecure: boolean;
+
+  @Column({ type: 'varchar', nullable: true })
+  imapUser: string | null;
+
+  // SECRET — never returned by the API (sanitized to a `hasImapPassword` boolean).
+  @Column({ type: 'varchar', nullable: true })
+  imapPassword: string | null;
+
+  @Column({ default: true })
+  imapEnabled: boolean;
+
+  @Column({ type: 'int', nullable: true })
+  lastImapUid: number | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  lastImapCheckAt: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

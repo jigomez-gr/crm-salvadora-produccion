@@ -11,7 +11,7 @@ import { AuthModule } from '../auth/auth.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([AppSettings]),
-    EmailModule,
+    forwardRef(() => EmailModule),
     ZadarmaSmsModule,
     forwardRef(() => VapiModule),
     AuthModule,

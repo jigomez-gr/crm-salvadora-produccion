@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EmailService } from './email.service';
+import { EmailInboundService } from './email-inbound.service';
 import {
   SendEmailDto,
   TestEmailDto,
@@ -28,8 +29,15 @@ import { AUDIT_EVENT, AuditAction, AuditRecord } from '../audit/audit.types';
 export class EmailController {
   constructor(
     private readonly email: EmailService,
+    private readonly emailInbound: EmailInboundService,
     private readonly events: EventEmitter2,
   ) {}
+
+  /** Trigger immediate IMAP sync for customer replies — any authenticated operator. */
+  @Post('sync')
+  async syncInbound() {
+    return this.emailInbound.syncNow();
+  }
 
   private audit(record: AuditRecord): void {
     this.events.emit(AUDIT_EVENT, record);

@@ -1,4 +1,5 @@
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AppSettings } from '../common/entities/app-settings.entity';
@@ -7,7 +8,7 @@ import { ZadarmaSmsService } from '../sms/zadarma-sms.service';
 import { VapiService } from '../vapi/vapi.service';
 
 export interface HumanNoticePayload {
-  channel: 'landing' | 'whatsapp' | 'vapi';
+  channel: 'landing' | 'whatsapp' | 'vapi' | 'email';
   customerName?: string | null;
   customerPhone?: string | null;
   customerEmail?: string | null;
@@ -35,6 +36,13 @@ export class HumanHandoffNotificationService {
     @Inject(forwardRef(() => VapiService))
     private readonly vapiService: VapiService,
   ) {}
+
+  @OnEvent('human_handoff.requested')
+  async handleHandoffRequested(payload: HumanNoticePayload): Promise<void> {
+    await this.notifyHumanRequest(payload).catch((err) =>
+      this.logger.error(`Error processing human_handoff.requested event: ${err}`),
+    );
+  }
 
   private async getSettings(): Promise<AppSettings | null> {
     const [existing] = await this.settingsRepo.find({
@@ -65,6 +73,7 @@ export class HumanHandoffNotificationService {
       landing: 'Chat Web (Landing Page)',
       whatsapp: 'WhatsApp',
       vapi: 'Llamada de Voz (VAPI)',
+      email: 'Correo Electrónico (Email)',
     };
     const channelLabel = channelMap[payload.channel] || payload.channel;
     const clientName = payload.customerName?.trim() || 'Cliente interesado';

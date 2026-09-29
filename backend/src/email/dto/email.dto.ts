@@ -51,6 +51,35 @@ export class UpdateEmailConfigDto {
   @IsString()
   @MaxLength(400)
   smtpPassword?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  imapHost?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(65535)
+  imapPort?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  imapSecure?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  imapUser?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(400)
+  imapPassword?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  imapEnabled?: boolean;
 }
 
 /** Send a test email to verify the configuration (defaults to the from address). */

@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -26,10 +27,17 @@ export interface EmailConfigView {
   smtpSecure: boolean;
   smtpUser: string | null;
   hasSmtpPassword: boolean;
+  imapHost: string | null;
+  imapPort: number;
+  imapSecure: boolean;
+  imapUser: string | null;
+  hasImapPassword: boolean;
+  imapEnabled: boolean;
+  lastImapCheckAt: Date | null;
 }
 
 @Injectable()
-export class EmailService {
+export class EmailService implements OnModuleInit {
   private readonly logger = new Logger(EmailService.name);
 
   constructor(
@@ -41,6 +49,23 @@ export class EmailService {
     private readonly contactsRepo: Repository<Contact>,
   ) {}
 
+  async onModuleInit() {
+    try {
+      await this.accountRepo.query(`
+        ALTER TABLE email_account ADD COLUMN IF NOT EXISTS "imapHost" character varying;
+        ALTER TABLE email_account ADD COLUMN IF NOT EXISTS "imapPort" integer NOT NULL DEFAULT 993;
+        ALTER TABLE email_account ADD COLUMN IF NOT EXISTS "imapSecure" boolean NOT NULL DEFAULT true;
+        ALTER TABLE email_account ADD COLUMN IF NOT EXISTS "imapUser" character varying;
+        ALTER TABLE email_account ADD COLUMN IF NOT EXISTS "imapPassword" character varying;
+        ALTER TABLE email_account ADD COLUMN IF NOT EXISTS "imapEnabled" boolean NOT NULL DEFAULT true;
+        ALTER TABLE email_account ADD COLUMN IF NOT EXISTS "lastImapUid" integer;
+        ALTER TABLE email_account ADD COLUMN IF NOT EXISTS "lastImapCheckAt" timestamp with time zone;
+      `);
+    } catch (err) {
+      this.logger.warn(`Could not verify email_account IMAP columns: ${err}`);
+    }
+  }
+
   /** The single email-account row, get-or-created on first access. */
   async getAccount(): Promise<EmailAccount> {
     let [existing] = await this.accountRepo.find({
@@ -51,11 +76,11 @@ export class EmailService {
       existing = this.accountRepo.create({});
     }
 
-    const envHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-    const envPort = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
-    const envUser = process.env.SMTP_USER || 'jigretera@gmail.com';
-    const envPass = process.env.SMTP_PASS || 'moulqbjwksjrzdcg';
-    const envFrom = process.env.SMTP_FROM_EMAIL || 'jigretera@gmail.com';
+    const envHost = process.env.SMTP_HOST || 'salvadoraconesa-es.correoseguro.dinaserver.com';
+    const envPort = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 465;
+    const envUser = process.env.SMTP_USER || 'salvadoraconesa@salvadoraconesa.es';
+    const envPass = process.env.SMTP_PASS || 'Tejasverdes1966@';
+    const envFrom = process.env.SMTP_FROM_EMAIL || 'salvadoraconesa@salvadoraconesa.es';
     const envFromName = process.env.SMTP_FROM_NAME || 'Centro de Yoga Salvadora Conesa';
 
     let needsSave = false;
@@ -83,6 +108,30 @@ export class EmailService {
       existing.fromName = envFromName;
       needsSave = true;
     }
+    if (!existing.imapHost) {
+      existing.imapHost = existing.smtpHost || envHost;
+      needsSave = true;
+    }
+    if (!existing.imapPort) {
+      existing.imapPort = 993;
+      needsSave = true;
+    }
+    if (existing.imapSecure === undefined || existing.imapSecure === null) {
+      existing.imapSecure = true;
+      needsSave = true;
+    }
+    if (!existing.imapUser) {
+      existing.imapUser = existing.smtpUser || envUser;
+      needsSave = true;
+    }
+    if (!existing.imapPassword) {
+      existing.imapPassword = existing.smtpPassword || envPass;
+      needsSave = true;
+    }
+    if (existing.imapEnabled === undefined || existing.imapEnabled === null) {
+      existing.imapEnabled = true;
+      needsSave = true;
+    }
     if (needsSave) {
       existing = await this.accountRepo.save(existing);
     }
@@ -99,6 +148,13 @@ export class EmailService {
       smtpSecure: acc.smtpSecure,
       smtpUser: acc.smtpUser,
       hasSmtpPassword: !!acc.smtpPassword,
+      imapHost: acc.imapHost,
+      imapPort: acc.imapPort ?? 993,
+      imapSecure: acc.imapSecure ?? true,
+      imapUser: acc.imapUser,
+      hasImapPassword: !!acc.imapPassword,
+      imapEnabled: acc.imapEnabled ?? true,
+      lastImapCheckAt: acc.lastImapCheckAt ?? null,
     };
   }
 
@@ -132,6 +188,15 @@ export class EmailService {
     if (dto.smtpPassword !== undefined && dto.smtpPassword !== '') {
       acc.smtpPassword = dto.smtpPassword;
     }
+    if (dto.imapHost !== undefined) acc.imapHost = dto.imapHost || null;
+    if (dto.imapPort !== undefined) acc.imapPort = dto.imapPort;
+    if (dto.imapSecure !== undefined) acc.imapSecure = dto.imapSecure;
+    if (dto.imapUser !== undefined) acc.imapUser = dto.imapUser || null;
+    if (dto.imapPassword !== undefined && dto.imapPassword !== '') {
+      acc.imapPassword = dto.imapPassword;
+    }
+    if (dto.imapEnabled !== undefined) acc.imapEnabled = dto.imapEnabled;
+
     const saved = await this.accountRepo.save(acc);
     return this.sanitize(saved);
   }

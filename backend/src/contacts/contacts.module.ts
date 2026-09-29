@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Contact } from '../common/entities/contact.entity';
 import { Appointment } from '../common/entities/appointment.entity';
@@ -17,7 +17,7 @@ import { AgentsConfigModule } from '../agents/agents-config.module';
   imports: [
     TypeOrmModule.forFeature([Contact, Appointment, ContactIdentityChange]),
     AuthModule,
-    EmailModule,
+    forwardRef(() => EmailModule),
     ZadarmaSmsModule,
     YCloudModule,
     AgentsConfigModule,
