@@ -12,6 +12,7 @@ describe('EmailInboundService - cleanReplyBody', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     );
   });
 

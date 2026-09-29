@@ -12,6 +12,7 @@ import { EmailDialogueEvaluatorService } from './email-dialogue-evaluator.servic
 import { AuthModule } from '../auth/auth.module';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { ContactsModule } from '../contacts/contacts.module';
+import { AppointmentsModule } from '../appointments/appointments.module';
 
 /**
  * Business email (SMTP + IMAP) — configure account, send mail to contacts,
@@ -23,6 +24,7 @@ import { ContactsModule } from '../contacts/contacts.module';
     AuthModule,
     forwardRef(() => ConversationsModule),
     forwardRef(() => ContactsModule),
+    forwardRef(() => AppointmentsModule),
   ],
   providers: [EmailService, EmailDialogueEvaluatorService, EmailInboundService],
   controllers: [EmailController],

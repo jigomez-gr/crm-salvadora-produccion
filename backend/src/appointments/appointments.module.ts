@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Appointment } from '../common/entities/appointment.entity';
 import { Service } from '../common/entities/service.entity';
@@ -22,7 +22,7 @@ import { ZadarmaSmsModule } from '../sms/zadarma-sms.module';
     TypeOrmModule.forFeature([Appointment, Service, Contact, Conversation, Message, AppSettings]),
     AuthModule,
     CalcomModule,
-    EmailModule,
+    forwardRef(() => EmailModule),
     YCloudModule,
     AgentsConfigModule,
     ConversationsModule,

@@ -15,6 +15,8 @@ import { EmailService } from './email.service';
 import { EmailDialogueEvaluatorService } from './email-dialogue-evaluator.service';
 import { MessagesService, toMessageView } from '../conversations/messages.service';
 import { ContactsService } from '../contacts/contacts.service';
+import { AppointmentsService } from '../appointments/appointments.service';
+import { AppointmentStatus } from '../common/entities/appointment.entity';
 
 @Injectable()
 export class EmailInboundService implements OnModuleInit {
@@ -30,6 +32,8 @@ export class EmailInboundService implements OnModuleInit {
     private readonly messagesService: MessagesService,
     @Inject(forwardRef(() => ContactsService))
     private readonly contactsService: ContactsService,
+    @Inject(forwardRef(() => AppointmentsService))
+    private readonly appointmentsService: AppointmentsService,
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
@@ -290,7 +294,48 @@ export class EmailInboundService implements OnModuleInit {
 
               processResult.actionTaken = 'human_handoff_triggered';
             } else if (evaluation.intent === 'AUTO_BOOKING' || evaluation.intent === 'AUTO_INFO') {
-              // Send automated intelligent email reply
+              // 1. Auto-create appointment in CRM calendar if booking date/time is extracted
+              if (evaluation.intent === 'AUTO_BOOKING' && evaluation.extractedBooking) {
+                try {
+                  const eb = evaluation.extractedBooking;
+                  let targetStartsAt: string | null = null;
+                  if (eb.isoDateTime) {
+                    targetStartsAt = eb.isoDateTime;
+                  } else if (eb.requestedDate && eb.requestedTime) {
+                    targetStartsAt = `${eb.requestedDate}T${eb.requestedTime}:00`;
+                  }
+
+                  if (targetStartsAt) {
+                    const startDate = new Date(targetStartsAt);
+                    if (!isNaN(startDate.getTime())) {
+                      const endDate = new Date(startDate.getTime() + 75 * 60 * 1000);
+                      const serviceName = eb.serviceName || 'Hatha Yoga Terapéutico';
+
+                      this.logger.log(
+                        `📅 Auto-creating appointment in calendar from inbound email for ${contact.name} (${rawFrom}): ${serviceName} on ${startDate.toISOString()}`,
+                      );
+                      const appt = await this.appointmentsService.create({
+                        contactId: contact.id,
+                        service: serviceName,
+                        startsAt: startDate.toISOString(),
+                        endsAt: endDate.toISOString(),
+                        status: AppointmentStatus.SCHEDULED,
+                        modality: eb.modality || 'presencial',
+                        notes: `Reserva confirmada automáticamente por email. Solicitud: "${cleanedBody || cleanSubject}"`,
+                      });
+                      this.logger.log(`✅ Appointment created in calendar with ID: ${appt.id}`);
+                      processResult.appointmentCreated = true;
+                      processResult.appointmentId = appt.id;
+                    }
+                  }
+                } catch (apptErr: any) {
+                  this.logger.warn(
+                    `Could not auto-create calendar appointment for email booking: ${apptErr?.message || apptErr}`,
+                  );
+                }
+              }
+
+              // 2. Send automated intelligent email reply
               if (evaluation.replyBody) {
                 try {
                   await this.emailService.send(

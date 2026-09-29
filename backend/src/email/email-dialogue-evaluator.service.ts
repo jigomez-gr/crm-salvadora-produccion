@@ -32,6 +32,7 @@ export interface EmailDialogueEvaluation {
     serviceName?: string;
     requestedDate?: string;
     requestedTime?: string;
+    isoDateTime?: string;
     modality?: string;
     participants?: number;
   };
@@ -138,15 +139,20 @@ REGLAS DE RESPUESTA:
 CATÁLOGO DE SERVICIOS Y HORARIOS:
 ${servicesCatalog}
 
+FECHA Y HORA ACTUAL DE REFERENCIA (IMPORTANTE PARA CALCULAR DÍAS DE LA SEMANA):
+Hoy es ${new Intl.DateTimeFormat('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Europe/Madrid' }).format(new Date())} (${new Date().toISOString().split('T')[0]}). Zona horaria: Europe/Madrid.
+Si el usuario dice "el martes", "el jueves a las 9:45", etc., calcula la fecha próxima correspondiente a partir de hoy (nunca en el pasado).
+
 RESPONDE EXCLUSIVAMENTE UN OBJETO JSON VÁLIDO CON ESTA ESTRUCTURA:
 {
   "intent": "AUTO_BOOKING" | "AUTO_INFO" | "HUMAN_HANDOFF",
   "reasoning": "Breve explicación de la decisión tomada",
   "handoffReason": "Razón para el equipo humano si es HUMAN_HANDOFF o null",
   "extractedBooking": {
-    "serviceName": "Nombre del servicio detectado o null",
-    "requestedDate": "Fecha mencionada o null",
-    "requestedTime": "Hora o turno solicitado o null",
+    "serviceName": "Nombre exacto del servicio del catálogo (ej: 'Hatha Yoga Terapéutico', 'Baño de Gong y Meditación Sonora') o null",
+    "requestedDate": "Fecha calculada en formato YYYY-MM-DD o null",
+    "requestedTime": "Hora solicitada en formato HH:mm o null",
+    "isoDateTime": "Fecha y hora completa calculada en formato ISO 8601 (ej: '2026-10-01T09:45:00') para la fecha solicitada o null si aún no se ha concretado día y hora",
     "modality": "presencial" | "online" | null,
     "participants": 1
   },
