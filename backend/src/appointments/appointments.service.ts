@@ -285,7 +285,7 @@ export class AppointmentsService implements OnModuleInit {
     let additionalNotes = '';
 
     // 2. Strict validation: Hatha Yoga Terapéutico
-    if (isYoga) {
+    if (isYoga && !dto.allowCustomSchedule) {
       const HATHA_YOGA_TIMETABLE: Record<number, string[]> = {
         2: ['09:45', '11:15', '17:00', '18:30', '20:00'],
         3: ['20:15'],
@@ -419,19 +419,26 @@ export class AppointmentsService implements OnModuleInit {
 
     const isMeditacion =
       /meditaci/i.test(cleanServiceName) && !/gong|sonor/i.test(cleanServiceName);
-    if (isMeditacion) {
-      const MEDITACION_TIMETABLE: Record<number, string[]> = {
-        2: ['09:15'],
-        4: ['09:15'],
+    if (isMeditacion && !dto.allowCustomSchedule) {
+      const fallbackTimetable: Record<number, string[]> = {
+        1: ['14:00', '20:45'],
+        2: ['09:15', '14:00', '20:45'],
+        3: ['14:00', '20:45'],
+        4: ['09:15', '14:00', '20:45'],
       };
       const effectiveTimetable =
         serviceEntity?.weeklySchedule && Object.keys(serviceEntity.weeklySchedule).length > 0
           ? serviceEntity.weeklySchedule
-          : MEDITACION_TIMETABLE;
+          : fallbackTimetable;
       let zoned = new TZDate(startsAt.getTime(), 'Europe/Madrid');
       let dayOfWeek = zoned.getDay();
       let timeStr = format(zoned, 'HH:mm');
-      let allowed = effectiveTimetable[dayOfWeek] || [];
+      let allowed = Array.from(
+        new Set([
+          ...(effectiveTimetable[dayOfWeek] || []),
+          ...(fallbackTimetable[dayOfWeek] || []),
+        ]),
+      );
       if (!allowed.includes(timeStr)) {
         const rawTimeMatch = dto.startsAt?.match(/[T ](\d{1,2}:\d{2})/);
         if (rawTimeMatch) {
@@ -666,7 +673,19 @@ export class AppointmentsService implements OnModuleInit {
       const isMeditacion =
         /meditaci/i.test(targetServiceName) && !/gong|sonor/i.test(targetServiceName);
 
-      if (isYoga) {
+      let targetServiceEntity: Service | null = null;
+      if (appt.serviceId) {
+        targetServiceEntity = await this.servicesRepo
+          .findOne({ where: { id: appt.serviceId } })
+          .catch(() => null);
+      }
+      if (!targetServiceEntity && targetServiceName) {
+        targetServiceEntity = await this.servicesRepo
+          .findOne({ where: { name: targetServiceName } })
+          .catch(() => null);
+      }
+
+      if (isYoga && !dto.allowCustomSchedule) {
         let zoned = new TZDate(newStart.getTime(), 'Europe/Madrid');
         let dayOfWeek = zoned.getDay();
         let timeStr = format(zoned, 'HH:mm');
@@ -699,11 +718,27 @@ export class AppointmentsService implements OnModuleInit {
             'Ese horario no corresponde a los turnos oficiales de Hatha Yoga Terapéutico (Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15) y Jueves (9:45, 11:15, 16:00, 17:30, 19:00)).',
           );
         }
-      } else if (isMeditacion) {
+      } else if (isMeditacion && !dto.allowCustomSchedule) {
         let zoned = new TZDate(newStart.getTime(), 'Europe/Madrid');
         let dayOfWeek = zoned.getDay();
         let timeStr = format(zoned, 'HH:mm');
-        let allowed = MEDITACION_TIMETABLE[dayOfWeek] || [];
+        const fallbackTimetable: Record<number, string[]> = {
+          1: ['14:00', '20:45'],
+          2: ['09:15', '14:00', '20:45'],
+          3: ['14:00', '20:45'],
+          4: ['09:15', '14:00', '20:45'],
+        };
+        const effectiveTimetable =
+          targetServiceEntity?.weeklySchedule &&
+          Object.keys(targetServiceEntity.weeklySchedule).length > 0
+            ? targetServiceEntity.weeklySchedule
+            : fallbackTimetable;
+        let allowed = Array.from(
+          new Set([
+            ...(effectiveTimetable[dayOfWeek] || []),
+            ...(fallbackTimetable[dayOfWeek] || []),
+          ]),
+        );
         if (!allowed.includes(timeStr) && dto.startsAt) {
           const rawTimeMatch = dto.startsAt.match(/[T ](\d{1,2}:\d{2})/);
           if (rawTimeMatch) {
@@ -723,13 +758,20 @@ export class AppointmentsService implements OnModuleInit {
               zoned = correctedZoned;
               dayOfWeek = zoned.getDay();
               timeStr = format(zoned, 'HH:mm');
-              allowed = MEDITACION_TIMETABLE[dayOfWeek] || [];
+              allowed = Array.from(
+                new Set([
+                  ...(effectiveTimetable[dayOfWeek] || []),
+                  ...(fallbackTimetable[dayOfWeek] || []),
+                ]),
+              );
             }
           }
         }
         if (!allowed.includes(timeStr)) {
+          const scheduleDisplay =
+            targetServiceEntity?.scheduleText || 'Lunes a Jueves a las 14:00 y 20:45';
           throw new BadRequestException(
-            'Ese horario no corresponde al horario oficial de Meditación (Martes y Jueves de 09:15 a 09:45).',
+            `Ese horario no corresponde a los turnos oficiales de Meditaciones Guiadas (${scheduleDisplay}).`,
           );
         }
       }
@@ -2908,6 +2950,122 @@ export class AppointmentsService implements OnModuleInit {
       studentsProcessed: activeStudents.length,
       createdCount: totalCreated,
       details,
+    };
+  }
+
+  /**
+   * Retrieves the upcoming available official slots for a given service.
+   * Useful for UI slot pickers and operators to book without trial-and-error.
+   */
+  async getNextAvailableSlots(
+    serviceId?: string,
+    serviceName?: string,
+    startDateStr?: string,
+    daysAhead = 28,
+  ): Promise<{
+    serviceName: string;
+    scheduleText: string;
+    durationMinutes: number;
+    slots: Array<{
+      startsAt: string;
+      endsAt: string;
+      dateLabel: string;
+      timeLabel: string;
+      dayName: string;
+      isNext: boolean;
+    }>;
+  }> {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    let targetService: Service | null = null;
+    if (serviceId && UUID_REGEX.test(serviceId)) {
+      targetService = await this.servicesRepo.findOne({ where: { id: serviceId } }).catch(() => null);
+    }
+    if (!targetService && serviceName) {
+      targetService = await this.servicesRepo.findOne({ where: { name: serviceName } }).catch(() => null);
+      if (!targetService) {
+        targetService = await this.servicesRepo.findOne({ where: { name: ILike(`%${serviceName}%`) } }).catch(() => null);
+      }
+    }
+
+    const durationMinutes = targetService?.durationMinutes || 60;
+    const effectiveSvcName = targetService?.name || serviceName || 'General';
+    const scheduleText = targetService?.scheduleText || '';
+
+    const defaultWorkingHours: WorkingHourSlot[] = [
+      { day: 1, open: '08:00', close: '22:00' },
+      { day: 2, open: '08:00', close: '22:00' },
+      { day: 3, open: '08:00', close: '22:00' },
+      { day: 4, open: '08:00', close: '22:00' },
+      { day: 5, open: '08:00', close: '22:00' },
+      { day: 6, open: '08:00', close: '22:00' },
+      { day: 0, open: '08:00', close: '22:00' },
+    ];
+
+    const timezone = 'Europe/Madrid';
+    const now = new Date();
+    const startDate = startDateStr && !isNaN(new Date(startDateStr).getTime())
+      ? new Date(startDateStr)
+      : now;
+
+    const daysToScan = Math.min(Math.max(daysAhead, 1), 60);
+    const resultSlots: Array<{
+      startsAt: string;
+      endsAt: string;
+      dateLabel: string;
+      timeLabel: string;
+      dayName: string;
+      isNext: boolean;
+    }> = [];
+
+    const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const MONTH_NAMES = [
+      'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+    ];
+
+    for (let i = 0; i < daysToScan && resultSlots.length < 25; i++) {
+      const scanDate = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
+      const daySlots = await this.getAvailableSlots(
+        scanDate,
+        durationMinutes,
+        defaultWorkingHours,
+        timezone,
+        now,
+        targetService?.calendarId || 'default',
+        targetService?.id,
+        targetService?.name,
+      );
+
+      for (const slot of daySlots) {
+        if (slot.startsAt.getTime() <= now.getTime()) continue;
+
+        const zonedSlot = new TZDate(slot.startsAt.getTime(), timezone);
+        const zonedEnd = new TZDate(slot.endsAt.getTime(), timezone);
+
+        const dayName = DAY_NAMES[zonedSlot.getDay()];
+        const dayNum = zonedSlot.getDate();
+        const monthName = MONTH_NAMES[zonedSlot.getMonth()];
+        const dateLabel = `${dayName}, ${dayNum} de ${monthName}`;
+        const timeLabel = `${format(zonedSlot, 'HH:mm')} - ${format(zonedEnd, 'HH:mm')}`;
+
+        resultSlots.push({
+          startsAt: slot.startsAt.toISOString(),
+          endsAt: slot.endsAt.toISOString(),
+          dateLabel,
+          timeLabel,
+          dayName,
+          isNext: resultSlots.length === 0,
+        });
+
+        if (resultSlots.length >= 25) break;
+      }
+    }
+
+    return {
+      serviceName: effectiveSvcName,
+      scheduleText,
+      durationMinutes,
+      slots: resultSlots,
     };
   }
 }

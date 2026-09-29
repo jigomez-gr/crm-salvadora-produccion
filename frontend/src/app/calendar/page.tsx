@@ -95,6 +95,7 @@ interface ApptFormData {
   reason: string;
   price: string;
   isRecovery?: boolean;
+  allowCustomSchedule?: boolean;
 }
 
 function AppointmentModal({
@@ -107,6 +108,7 @@ function AppointmentModal({
   onSave,
   onAccept,
   onReject,
+  onDelete,
   onOpenResponseDoc,
 }: {
   open: boolean;
@@ -123,6 +125,7 @@ function AppointmentModal({
     requestReschedule?: boolean,
     proposedTimes?: string
   ) => Promise<void>;
+  onDelete?: (id: string) => Promise<void>;
   onOpenResponseDoc?: (a: Appointment) => void;
 }) {
   const toLocal = (iso: string) =>
@@ -150,6 +153,7 @@ function AppointmentModal({
     reason: initial?.reason ?? "",
     price: initial?.price ?? "",
     isRecovery: initial?.isRecovery ?? false,
+    allowCustomSchedule: false,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -164,6 +168,88 @@ function AppointmentModal({
     initial?.aiAnalysisResult || null
   );
   const [aiCropThumbnail, setAiCropThumbnail] = useState<string | null>(null);
+
+  // Available slots for the selected service
+  const [availableSlots, setAvailableSlots] = useState<
+    Array<{
+      startsAt: string;
+      endsAt: string;
+      dateLabel: string;
+      timeLabel: string;
+      dayName: string;
+      isNext: boolean;
+    }>
+  >([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [showSlotsPicker, setShowSlotsPicker] = useState(false);
+
+  const fetchUpcomingSlots = useCallback(async (svcId?: string, svcName?: string) => {
+    if (!svcId && !svcName) return;
+    setLoadingSlots(true);
+    try {
+      const params = new URLSearchParams();
+      if (svcId) params.set("serviceId", svcId);
+      else if (svcName) params.set("serviceName", svcName);
+      params.set("daysAhead", "28");
+      const res = await apiFetch<{
+        serviceName: string;
+        scheduleText: string;
+        durationMinutes: number;
+        slots: Array<{
+          startsAt: string;
+          endsAt: string;
+          dateLabel: string;
+          timeLabel: string;
+          dayName: string;
+          isNext: boolean;
+        }>;
+      }>(`/api/appointments/next-available-slots?${params.toString()}`);
+      if (res?.slots) {
+        setAvailableSlots(res.slots);
+      }
+    } catch (err) {
+      console.error("Error fetching available slots:", err);
+    } finally {
+      setLoadingSlots(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open && (form.serviceId || form.service)) {
+      fetchUpcomingSlots(form.serviceId, form.service);
+    }
+  }, [open, form.serviceId, form.service, fetchUpcomingSlots]);
+
+  function handlePickSlot(slot: { startsAt: string; endsAt: string }) {
+    setForm((f) => ({
+      ...f,
+      startsAt: toLocal(slot.startsAt),
+      endsAt: toLocal(slot.endsAt),
+    }));
+  }
+
+  async function handleSelectNextSlot() {
+    if (availableSlots.length > 0) {
+      handlePickSlot(availableSlots[0]);
+    } else {
+      setLoadingSlots(true);
+      try {
+        const params = new URLSearchParams();
+        if (form.serviceId) params.set("serviceId", form.serviceId);
+        else if (form.service) params.set("serviceName", form.service);
+        params.set("daysAhead", "28");
+        const res = await apiFetch<{
+          slots: Array<{ startsAt: string; endsAt: string }>;
+        }>(`/api/appointments/next-available-slots?${params.toString()}`);
+        if (res?.slots && res.slots.length > 0) {
+          setAvailableSlots(res.slots as any);
+          handlePickSlot(res.slots[0]);
+        }
+      } finally {
+        setLoadingSlots(false);
+      }
+    }
+  }
 
   const selectedService = services.find(
     (s) => s.id === form.serviceId || s.name === form.service
@@ -536,6 +622,122 @@ function AppointmentModal({
             </a>
           </div>
         )}
+
+        {/* Helper de Turnos Oficiales y Próxima Cita */}
+        <div className="rounded-xl border border-indigo-200 bg-gradient-to-r from-indigo-50/70 via-purple-50/40 to-white p-3.5 space-y-3 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+            <div>
+              <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-950">
+                <Sparkles className="h-4 w-4 text-indigo-600 shrink-0" />
+                <span>Turnos Oficiales y Disponibilidad</span>
+              </div>
+              {selectedService?.scheduleText ? (
+                <p className="mt-1 text-[11px] text-indigo-900 leading-snug">
+                  <span className="font-semibold text-indigo-950">Horarios oficiales:</span> {selectedService.scheduleText}
+                </p>
+              ) : (
+                <p className="mt-0.5 text-[11px] text-neutral-500">
+                  Selecciona un servicio para consultar los próximos turnos disponibles.
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleSelectNextSlot}
+                disabled={loadingSlots || (!form.serviceId && !form.service)}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-xs"
+              >
+                <Sparkles className="h-3.5 w-3.5 mr-1" />
+                {loadingSlots ? "Buscando…" : "⚡ Próxima cita"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => setShowSlotsPicker((v) => !v)}
+                disabled={!form.serviceId && !form.service}
+                className="text-xs font-medium border-indigo-200 bg-white hover:bg-indigo-50 text-indigo-900"
+              >
+                <CalendarDays className="h-3.5 w-3.5 mr-1" />
+                {showSlotsPicker ? "Ocultar turnos" : "Ver turnos disponibles"}
+              </Button>
+            </div>
+          </div>
+
+          {/* Selector expandible de turnos disponibles */}
+          {showSlotsPicker && (
+            <div className="pt-2 border-t border-indigo-100">
+              {loadingSlots ? (
+                <div className="py-3 text-center text-xs text-indigo-600 font-medium">
+                  Consultando turnos y aforos disponibles...
+                </div>
+              ) : availableSlots.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="text-[11px] font-semibold text-indigo-900 flex justify-between items-center">
+                    <span>Próximas fechas oficiales disponibles (haz clic para auto-rellenar):</span>
+                    <span className="text-[10px] text-neutral-500">{availableSlots.length} turnos</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pr-1">
+                    {availableSlots.map((slot, idx) => {
+                      const isSelected = form.startsAt === toLocal(slot.startsAt);
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handlePickSlot(slot)}
+                          className={cn(
+                            "flex items-center justify-between p-2 rounded-lg border text-left text-xs transition-colors",
+                            isSelected
+                              ? "border-indigo-600 bg-indigo-600 text-white font-semibold shadow-xs"
+                              : "border-neutral-200 bg-white hover:bg-indigo-50/80 text-neutral-800 hover:border-indigo-300"
+                          )}
+                        >
+                          <div className="min-w-0 pr-2">
+                            <span className={cn("block font-medium truncate", isSelected ? "text-white" : "text-neutral-900")}>
+                              {slot.dateLabel}
+                            </span>
+                            <span className={cn("text-[11px] block truncate", isSelected ? "text-indigo-100" : "text-neutral-500")}>
+                              {slot.timeLabel}
+                            </span>
+                          </div>
+                          {slot.isNext && (
+                            <Badge variant={isSelected ? "success" : "info"} className="text-[10px] px-1.5 py-0 shrink-0">
+                              Próxima
+                            </Badge>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="py-2.5 text-center text-xs text-neutral-500">
+                  No hay turnos oficiales libres en las próximas 4 semanas para este servicio.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Toggle para permitir horario libre / especial */}
+          <div className="pt-2 border-t border-indigo-100/80 flex items-center justify-between text-[11px]">
+            <label className="flex items-center gap-2 cursor-pointer text-neutral-700 hover:text-neutral-900 select-none">
+              <input
+                type="checkbox"
+                checked={Boolean(form.allowCustomSchedule)}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, allowCustomSchedule: e.target.checked }))
+                }
+                className="h-3.5 w-3.5 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <span className="font-medium">
+                ⚙️ Permitir horario personalizado fuera de turno oficial (sesión especial / privada)
+              </span>
+            </label>
+          </div>
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -949,9 +1151,54 @@ function AppointmentModal({
                 </Button>
               </>
             ) : (
-              <Button type="submit" disabled={saving}>
-                {saving ? "Guardando…" : "Guardar"}
-              </Button>
+              <>
+                {initial && (
+                  <>
+                    {onDelete && (
+                      <Button
+                        type="button"
+                        variant="danger"
+                        disabled={saving}
+                        onClick={async () => {
+                          if (initial && onDelete) {
+                            await onDelete(initial.id);
+                            onClose();
+                          }
+                        }}
+                        className="text-xs bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" />
+                        Eliminar Cita
+                      </Button>
+                    )}
+
+                    {form.status !== "cancelled" && (
+                      <Button
+                        type="button"
+                        disabled={saving}
+                        onClick={async () => {
+                          if (confirm("¿Estás seguro de que deseas marcar esta cita como cancelada?")) {
+                            setSaving(true);
+                            try {
+                              await onSave({ ...form, status: "cancelled" });
+                              onClose();
+                            } finally {
+                              setSaving(false);
+                            }
+                          }
+                        }}
+                        className="text-xs bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border border-neutral-300"
+                      >
+                        Cancelar Cita
+                      </Button>
+                    )}
+                  </>
+                )}
+
+                <Button type="submit" disabled={saving}>
+                  {saving ? "Guardando…" : initial ? "Guardar cambios" : "Guardar Cita"}
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -1758,6 +2005,7 @@ function CalendarPageInner() {
       status: data.status,
       price,
       isRecovery: data.isRecovery ?? false,
+      allowCustomSchedule: data.allowCustomSchedule ?? false,
     };
     if (editingAppt) {
       await apiFetch(`/api/appointments/${editingAppt.id}`, {
@@ -1773,6 +2021,21 @@ function CalendarPageInner() {
       toast.success("Cita creada correctamente.");
     }
     await refreshRange();
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("¿Estás seguro de que deseas eliminar permanentemente esta cita del calendario?")) return;
+    try {
+      await apiFetch(`/api/appointments/${id}`, { method: "DELETE" });
+      toast.success("Cita eliminada correctamente.");
+      setModalOpen(false);
+      setEditingAppt(undefined);
+      await refreshRange();
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Error al eliminar la cita."
+      );
+    }
   }
 
   async function handleAccept(id: string) {
@@ -2034,6 +2297,7 @@ function CalendarPageInner() {
         onSave={handleSave}
         onAccept={handleAccept}
         onReject={handleReject}
+        onDelete={handleDelete}
         onOpenResponseDoc={(a) => setResponseDocAppt(a)}
       />
 

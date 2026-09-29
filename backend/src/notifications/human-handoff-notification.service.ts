@@ -174,15 +174,15 @@ export class HumanHandoffNotificationService {
     }
 
     // 2. Envío por SMS (Zadarma)
-    // Para canal email: NUNCA enviar SMS salvo que el correo requiera atención urgente
+    // NUNCA enviar SMS salvo que el aviso requiera atención urgente (política del centro para no interrumpir al responsable)
     if (settings.humanNoticeSmsEnabled && settings.humanNoticePhone) {
-      if (payload.channel === 'email' && !isUrgent) {
+      if (!isUrgent) {
         this.logger.log(
-          `ℹ️ SMS de escalado omitido para ${clientName} (${payload.channel}): el correo no requiere atención urgente.`,
+          `ℹ️ SMS de escalado omitido para ${clientName} (${payload.channel}): la solicitud no requiere atención urgente.`,
         );
       } else {
         try {
-          const smsText = `[CRM Salvadora] AVISO${isUrgent ? ' URGENTE' : ''}: El cliente ${clientName} (${clientPhone}) solicita hablar con un humano por ${channelLabel}. Motivo: ${reasonText.slice(0, 75)}`;
+          const smsText = `[CRM Salvadora] AVISO URGENTE: El cliente ${clientName} (${clientPhone}) solicita hablar con un humano por ${channelLabel}. Motivo: ${reasonText.slice(0, 75)}`;
           const smsRes = await this.zadarmaSmsService.sendSms({
             number: settings.humanNoticePhone.trim(),
             message: smsText,
@@ -201,15 +201,15 @@ export class HumanHandoffNotificationService {
     }
 
     // 3. Llamada de Voz Saliente (VAPI Outbound)
-    // Para canal email: NUNCA llamar por teléfono salvo que el correo requiera atención urgente
+    // NUNCA llamar por teléfono salvo que la solicitud requiera atención urgente
     if (settings.humanNoticeVapiEnabled && settings.humanNoticePhone) {
-      if (payload.channel === 'email' && !isUrgent) {
+      if (!isUrgent) {
         this.logger.log(
-          `ℹ️ Llamada saliente VAPI omitida para ${clientName} (${payload.channel}): el correo no requiere atención urgente.`,
+          `ℹ️ Llamada saliente VAPI omitida para ${clientName} (${payload.channel}): la solicitud no requiere atención urgente.`,
         );
       } else {
         try {
-          const voiceMsg = `Hola, te llamamos del Centro Salvadora Conesa para avisarte de que un usuario ha solicitado hablar con un humano a través de ${channelLabel}. El cliente es ${clientName}${payload.customerPhone ? `, con teléfono ${payload.customerPhone}` : ''}. Motivo de su solicitud: ${reasonText}. Por favor revisa el CRM para ponerte en contacto con él. Gracias.`;
+          const voiceMsg = `Hola, te llamamos del Centro Salvadora Conesa para avisarte de una solicitud URGENTE de atención humana a través de ${channelLabel}. El cliente es ${clientName}${payload.customerPhone ? `, con teléfono ${payload.customerPhone}` : ''}. Motivo de su solicitud: ${reasonText}. Por favor revisa el CRM lo antes posible. Gracias.`;
           const callRes = await this.vapiService.startOutboundCall(
             settings.humanNoticePhone.trim(),
             undefined,

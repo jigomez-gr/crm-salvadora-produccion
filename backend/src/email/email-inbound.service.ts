@@ -99,7 +99,7 @@ export class EmailInboundService implements OnModuleInit {
         tls: { rejectUnauthorized: false },
         connectionTimeout: 15000,
         greetingTimeout: 15000,
-        socketTimeout: 30000,
+        socketTimeout: 120000,
       });
 
       await client.connect();
@@ -129,95 +129,120 @@ export class EmailInboundService implements OnModuleInit {
       const centerEmail = (acc.fromAddress || acc.smtpUser || '').toLowerCase().trim();
 
       for (const folder of uniqueFolders) {
+        const rawMessages: Array<{ uid: number; parsed: any; externalId: string }> = [];
         let lock: any = null;
         try {
           lock = await client.getMailboxLock(folder);
           const total = (client.mailbox && typeof client.mailbox === 'object' && 'exists' in client.mailbox ? client.mailbox.exists : 0) || 0;
-          if (total === 0) continue;
+          if (total > 0) {
+            // Fetch recent messages by sequence number (safe 1..total, avoiding invalid messageset on UID ranges)
+            const searchRange = `${Math.max(1, total - 40)}:*`;
 
-          // Fetch recent messages by sequence number (safe 1..total, avoiding invalid messageset on UID ranges)
-          const searchRange = `${Math.max(1, total - 40)}:*`;
+            for await (const msg of client.fetch(searchRange, {
+              uid: true,
+              flags: true,
+              source: true,
+              envelope: true,
+            })) {
+              try {
+                // Parse RFC822 raw message
+                const parsed = await simpleParser(msg.source);
+                const rawFrom = parsed.from?.value?.[0]?.address?.toLowerCase().trim();
 
-          for await (const msg of client.fetch(searchRange, {
-            uid: true,
-            flags: true,
-            source: true,
-            envelope: true,
-          })) {
-            try {
-              // Parse RFC822 raw message
-              const parsed = await simpleParser(msg.source);
-              const rawFrom = parsed.from?.value?.[0]?.address?.toLowerCase().trim();
-              const fromName = parsed.from?.value?.[0]?.name?.trim() || rawFrom || 'Cliente';
+                // Skip emails sent from the center itself or empty senders
+                if (!rawFrom || rawFrom === centerEmail || rawFrom.includes('salvadoraconesa')) {
+                  continue;
+                }
 
-              // Skip emails sent from the center itself or empty senders
-              if (!rawFrom || rawFrom === centerEmail || rawFrom.includes('salvadoraconesa')) {
-                continue;
+                // Generate unique external ID for deduplication
+                const messageIdHeader = parsed.messageId?.trim();
+                const externalId = messageIdHeader || `imap_${folder}_uid_${msg.uid}`;
+
+                // Check if already processed
+                const alreadyExists = await this.messagesService.existsByExternalId(externalId);
+                if (alreadyExists) {
+                  continue;
+                }
+
+                rawMessages.push({ uid: msg.uid, parsed, externalId });
+              } catch (parseErr) {
+                // Ignore single message parse failure
               }
-
-              // Generate unique external ID for deduplication
-              const messageIdHeader = parsed.messageId?.trim();
-              const externalId = messageIdHeader || `imap_${folder}_uid_${msg.uid}`;
-
-              // Check if already processed
-              const alreadyExists = await this.messagesService.existsByExternalId(externalId);
-              if (alreadyExists) {
-                continue;
-              }
-
-              // 0. Pre-filter: Check if from corporate sender, bot or automated system
-              const corporateCheck = this.isCorporateOrAutomatedEmail(parsed, rawFrom);
-              if (corporateCheck.isCorporate) {
-                this.logger.log(
-                  `🏢 Correo de empresa o servicio detectado (${rawFrom} - ${corporateCheck.reason}): omitiendo según política del centro.`,
-                );
-                // Record in DB so we never scan it again
-                await this.messagesService
-                  .saveMessage({
-                    contactId: null,
-                    threadId: `salvadora:corporate:${rawFrom}`,
-                    direction: MessageDirection.INBOUND,
-                    channel: MessageChannel.EMAIL,
-                    body: (parsed.subject || '') + ' ' + (parsed.text || ''),
-                    externalId,
-                    status: MessageStatus.RECEIVED,
-                  })
-                  .catch(() => null);
-                continue;
-              }
-
-          const rawSubject = (parsed.subject || '').trim();
-          const cleanSubject = rawSubject.replace(/^\[SPAM\]\s*/i, '').trim() || 'Consulta por correo';
-          const fullBody = parsed.text || (typeof parsed.html === 'string' ? parsed.html.replace(/<[^>]+>/g, ' ') : '') || '';
-          const cleanedBody = this.cleanReplyBody(fullBody);
-
-          if (!cleanedBody && !cleanSubject) {
-            continue;
+            }
           }
-
-          this.logger.log(`📥 Incoming email received from ${rawFrom} (UID: ${msg.uid}, Subject: "${cleanSubject}")`);
-
-          // 1. Identify or create Contact
-          let contact = await this.contactsService.findByPhoneOrEmail(undefined, rawFrom);
-          if (!contact) {
-            // Spanish mobile E.164 format (+34600xxxxxx) to ensure phone validation succeeds
-            const rand6 = Math.floor(100000 + Math.random() * 900000);
-            contact = await this.contactsService.create({
-              name: fromName,
-              email: rawFrom,
-              phone: `+34600${rand6}`,
-              source: 'email_inbound',
-            });
+        } catch (fetchErr) {
+          this.logger.error(`Error fetching messages in folder ${folder}: ${fetchErr}`);
+        } finally {
+          if (lock) {
+            lock.release();
+            lock = null;
           }
+        }
 
-          // 2. Resolve Thread ID
-          const threadId = `salvadora:email:${rawFrom}`;
-          await this.messagesService.linkContact(threadId, contact.id);
+        // Process downloaded messages OUTSIDE of mailbox lock to prevent socket timeouts
+        for (const { uid, parsed, externalId } of rawMessages) {
+          try {
+            const rawFrom = parsed.from?.value?.[0]?.address?.toLowerCase().trim();
+            const fromName = parsed.from?.value?.[0]?.name?.trim() || rawFrom || 'Cliente';
 
-          // 3. Save Inbound Message in CRM
-          const inboundMsg = await this.messagesService.saveMessage({
-            contactId: contact.id,
-            threadId,
+            if (!rawFrom) continue;
+
+            // 0. Pre-filter: Check if from corporate sender, bot or automated system
+            const corporateCheck = this.isCorporateOrAutomatedEmail(parsed, rawFrom);
+            if (corporateCheck.isCorporate) {
+              this.logger.log(
+                `🏢 Correo de empresa o servicio detectado (${rawFrom} - ${corporateCheck.reason}): omitiendo según política del centro.`,
+              );
+              // Record in DB so we never scan it again
+              await this.messagesService
+                .saveMessage({
+                  contactId: null,
+                  threadId: `salvadora:corporate:${rawFrom}`,
+                  direction: MessageDirection.INBOUND,
+                  channel: MessageChannel.EMAIL,
+                  body: (parsed.subject || '') + ' ' + (parsed.text || ''),
+                  externalId,
+                  status: MessageStatus.RECEIVED,
+                })
+                .catch(() => null);
+              continue;
+            }
+
+            const rawSubject = (parsed.subject || '').trim();
+            const cleanSubject = rawSubject.replace(/^\[SPAM\]\s*/i, '').trim() || 'Consulta por correo';
+            const fullBody = parsed.text || (typeof parsed.html === 'string' ? parsed.html.replace(/<[^>]+>/g, ' ') : '') || '';
+            const cleanedBody = this.cleanReplyBody(fullBody);
+
+            if (!cleanedBody && !cleanSubject) {
+              continue;
+            }
+
+            this.logger.log(`📥 Incoming email received from ${rawFrom} (UID: ${uid}, Subject: "${cleanSubject}")`);
+
+            // 1. Identify or create Contact
+            let contact = await this.contactsService.findByPhoneOrEmail(undefined, rawFrom);
+            if (!contact && (rawFrom === 'jigomez@hotmail.com' || rawFrom.includes('jigomez'))) {
+              contact = await this.contactsService.findByPhoneOrEmail(undefined, 'jigomezjub@gmail.com');
+            }
+            if (!contact) {
+              // Spanish mobile E.164 format (+34600xxxxxx) to ensure phone validation succeeds
+              const rand6 = Math.floor(100000 + Math.random() * 900000);
+              contact = await this.contactsService.create({
+                name: fromName,
+                email: rawFrom,
+                phone: `+34600${rand6}`,
+                source: 'email_inbound',
+              });
+            }
+
+            // 2. Resolve Thread ID
+            const threadId = `salvadora:email:${rawFrom}`;
+            await this.messagesService.linkContact(threadId, contact.id);
+
+            // 3. Save Inbound Message in CRM
+            const inboundMsg = await this.messagesService.saveMessage({
+              contactId: contact.id,
+              threadId,
             direction: MessageDirection.INBOUND,
             channel: MessageChannel.EMAIL,
             body: cleanedBody || cleanSubject,
@@ -232,7 +257,7 @@ export class EmailInboundService implements OnModuleInit {
 
           processedCount++;
           const processResult: any = {
-            uid: msg.uid,
+            uid,
             from: rawFrom,
             subject: cleanSubject,
             actionTaken: 'recorded_inbound',
@@ -309,7 +334,7 @@ export class EmailInboundService implements OnModuleInit {
               if (evaluation.replyBody) {
                 try {
                   // Mover a la carpeta 'procesados' antes de responder
-                  await this.moveToProcessed(client, folder, msg.uid, targetProcessedFolder);
+                  await this.moveToProcessed(client, folder, uid, targetProcessedFolder);
 
                   await this.emailService.send(
                     contact.id,
@@ -381,7 +406,7 @@ export class EmailInboundService implements OnModuleInit {
               if (evaluation.replyBody) {
                 try {
                   // Mover a la carpeta 'procesados' antes de responder
-                  await this.moveToProcessed(client, folder, msg.uid, targetProcessedFolder);
+                  await this.moveToProcessed(client, folder, uid, targetProcessedFolder);
 
                   await this.emailService.send(
                     contact.id,
@@ -414,13 +439,8 @@ export class EmailInboundService implements OnModuleInit {
             details.push(processResult);
           } catch (msgErr) {
             this.logger.error(
-              `Error processing inbound email UID ${msg.uid}: ${msgErr}`,
+              `Error processing inbound email UID ${uid}: ${msgErr}`,
             );
-          }
-          }
-        } finally {
-          if (lock) {
-            lock.release();
           }
         }
       }
@@ -488,13 +508,19 @@ export class EmailInboundService implements OnModuleInit {
     if (!targetFolder || currentFolder.toLowerCase() === targetFolder.toLowerCase()) {
       return true;
     }
+    let lock: any = null;
     try {
+      lock = await client.getMailboxLock(currentFolder);
       await client.messageMove(String(uid), targetFolder, { uid: true });
       this.logger.log(`📦 Correo UID ${uid} movido de "${currentFolder}" a "${targetFolder}" antes de responder.`);
       return true;
     } catch (moveErr) {
       this.logger.warn(`No se pudo mover el correo UID ${uid} a "${targetFolder}": ${moveErr}`);
       return false;
+    } finally {
+      if (lock) {
+        lock.release();
+      }
     }
   }
 

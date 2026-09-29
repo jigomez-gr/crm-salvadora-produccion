@@ -56,6 +56,22 @@ export class AppointmentsController {
     });
   }
 
+  @Get('next-available-slots')
+  async getNextAvailableSlots(
+    @Query('serviceId') serviceId?: string,
+    @Query('serviceName') serviceName?: string,
+    @Query('startDate') startDate?: string,
+    @Query('daysAhead') daysAhead?: string,
+  ) {
+    const days = daysAhead ? parseInt(daysAhead, 10) : 28;
+    return this.appointmentsService.getNextAvailableSlots(
+      serviceId,
+      serviceName,
+      startDate,
+      isNaN(days) ? 28 : days,
+    );
+  }
+
   // Static routes MUST be declared before the `:id` param route.
   @Get('today')
   findToday(@CurrentUser() user: AuthUser) {

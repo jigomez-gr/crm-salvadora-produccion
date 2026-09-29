@@ -88,6 +88,10 @@ export class CreateAppointmentDto {
   @IsOptional()
   @IsString()
   calMeetingUrl?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  allowCustomSchedule?: boolean;
 }
 
 export class UpdateAppointmentDto {
@@ -128,6 +132,10 @@ export class UpdateAppointmentDto {
   @IsOptional()
   @IsString()
   calMeetingUrl?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  allowCustomSchedule?: boolean;
 
   @IsOptional()
   @IsString()

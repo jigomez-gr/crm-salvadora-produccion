@@ -96,18 +96,19 @@ describe('HumanHandoffNotificationService', () => {
     expect(emailService.sendNotification.mock.calls[0][2]).toContain('URGENTE');
   });
 
-  it('triggers SMS and VAPI calls for non-email channels (e.g. landing or whatsapp) as standard', async () => {
+  it('omits SMS and VAPI calls for non-urgent requests on any channel to prevent interruptions', async () => {
     const result = await service.notifyHumanRequest({
       channel: 'whatsapp',
       customerName: 'Pedro Sanchez',
       customerPhone: '+34699887766',
       reason: 'Solicita hablar por teléfono con el equipo',
+      isUrgent: false,
     });
 
     expect(result.emailSent).toBe(true);
-    expect(result.smsSent).toBe(true);
-    expect(result.vapiSent).toBe(true);
-    expect(smsService.sendSms).toHaveBeenCalledTimes(1);
-    expect(vapiService.startOutboundCall).toHaveBeenCalledTimes(1);
+    expect(result.smsSent).toBe(false);
+    expect(result.vapiSent).toBe(false);
+    expect(smsService.sendSms).not.toHaveBeenCalled();
+    expect(vapiService.startOutboundCall).not.toHaveBeenCalled();
   });
 });

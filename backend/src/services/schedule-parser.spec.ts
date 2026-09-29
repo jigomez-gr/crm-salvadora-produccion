@@ -42,4 +42,26 @@ describe('schedule-parser', () => {
       4: ['16:00', '17:30'],
     });
   });
+
+  it('parses Lunes a Jueves a las 14:00 y 20:45 correctly', () => {
+    const text = 'Lunes a Jueves a las 14:00 y 20:45';
+    const parsed = parseWeeklyScheduleFromText(text);
+
+    expect(parsed).toEqual({
+      1: ['14:00', '20:45'],
+      2: ['14:00', '20:45'],
+      3: ['14:00', '20:45'],
+      4: ['14:00', '20:45'],
+    });
+  });
+
+  it('parses Viernes o Sábados a las 18:00 y 20:00 correctly', () => {
+    const text = 'Viernes o Sábados a las 18:00 y 20:00';
+    const parsed = parseWeeklyScheduleFromText(text);
+
+    expect(parsed).toEqual({
+      5: ['18:00', '20:00'],
+      6: ['18:00', '20:00'],
+    });
+  });
 });
