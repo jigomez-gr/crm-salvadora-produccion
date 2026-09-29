@@ -86,8 +86,7 @@ export class AppointmentsService implements OnModuleInit {
     private readonly messagesService: MessagesService,
     @InjectRepository(AppSettings)
     private readonly settingsRepo: Repository<AppSettings>,
-    @Optional()
-    private readonly zadarmaSms?: ZadarmaSmsService,
+    private readonly zadarmaSms: ZadarmaSmsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -763,7 +762,11 @@ export class AppointmentsService implements OnModuleInit {
     const statusChangedToCancelled =
       dto.status === AppointmentStatus.CANCELLED && appt.status !== AppointmentStatus.CANCELLED;
 
+    const wasPendingApproval = appt.status === AppointmentStatus.PENDING_APPROVAL;
     if (dto.status && dto.status !== appt.status) {
+      if (wasPendingApproval && dto.status === AppointmentStatus.SCHEDULED) {
+        return this.accept(id, 'Administrador');
+      }
       appt.status = dto.status;
       if (dto.status === AppointmentStatus.CANCELLED) {
         appt.cancelledAt = appt.cancelledAt ?? new Date();
@@ -1677,6 +1680,12 @@ export class AppointmentsService implements OnModuleInit {
       const isMeditacionSvc =
         (/meditaci/i.test(appt.service || '') && !/gong|sonor/i.test(appt.service || '')) ||
         Boolean(serviceEntity && /meditaci/i.test(serviceEntity.name) && !/gong|sonor/i.test(serviceEntity.name));
+      const isGestaltSvc =
+        /gestalt/i.test(appt.service || '') ||
+        Boolean(serviceEntity && /gestalt/i.test(serviceEntity.name));
+      const isFromVapiOrCall = Boolean(
+        appt.notes && /vapi|asistente de voz|llamada|asistente telefónico/i.test(appt.notes),
+      );
       const shouldEmail =
         channelOverrides?.email !== undefined
           ? channelOverrides.email
@@ -1694,6 +1703,8 @@ export class AppointmentsService implements OnModuleInit {
       const shouldSms =
         channelOverrides?.sms !== undefined
           ? channelOverrides.sms
+          : (isFromVapiOrCall || isGestaltSvc || isMeditacionSvc)
+          ? true
           : serviceEntity
           ? Boolean(serviceEntity.notifyBySms)
           : false;
@@ -1813,21 +1824,33 @@ export class AppointmentsService implements OnModuleInit {
       // Direct Zadarma SMS dispatch if enabled for this service and contact has phone
       if (shouldSms && contact.phone && this.zadarmaSms) {
         try {
-          const vapiAcc = await this.appointmentsRepo.manager
-            .getRepository(VapiAccount)
-            .findOne({ where: {} });
-          if (vapiAcc?.zadarmaSmsEnabled !== false) {
-            await this.zadarmaSms.sendSms({
-              number: contact.phone,
-              message: smsText,
-              sender: vapiAcc?.zadarmaSenderId || undefined,
-              contactId: contact.id,
-              appointmentId: appt.id,
-            });
-          }
+          this.logger.log(`[SMS] Dispatching Zadarma SMS for appointment ${appt.id} (${decision}) to ${contact.phone}...`);
+          let sender: string | undefined;
+          try {
+            const vapiAcc = await this.appointmentsRepo.manager
+              ?.getRepository(VapiAccount)
+              ?.findOne({ where: {} })
+              .catch(() => null);
+            if (vapiAcc?.zadarmaSenderId) {
+              sender = vapiAcc.zadarmaSenderId;
+            }
+          } catch {}
+
+          const smsResult = await this.zadarmaSms.sendSms({
+            number: contact.phone,
+            message: smsText,
+            sender,
+            contactId: contact.id,
+            appointmentId: appt.id,
+          });
+          this.logger.log(`[SMS] Zadarma SMS result for appt ${appt.id}: ${JSON.stringify(smsResult)}`);
         } catch (smsErr) {
-          this.logger.warn(`Could not dispatch Zadarma SMS for appointment ${appt.id}: ${smsErr}`);
+          this.logger.error(`Could not dispatch Zadarma SMS for appointment ${appt.id}: ${smsErr}`);
         }
+      } else {
+        this.logger.log(
+          `[SMS] Zadarma SMS skipped for appt ${appt.id}: shouldSms=${shouldSms}, hasPhone=${Boolean(contact.phone)}, hasZadarmaSms=${Boolean(this.zadarmaSms)}`,
+        );
       }
 
       await this.dispatchSmsWebhook({

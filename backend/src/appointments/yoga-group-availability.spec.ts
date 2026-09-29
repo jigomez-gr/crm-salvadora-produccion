@@ -172,6 +172,7 @@ describe('Yoga & Meditacion Group Availability (Aforo vs Agenda Profesor)', () =
       null as any,
       null as any,
       settingsRepoMock as any,
+      { sendSms: jest.fn().mockResolvedValue({ success: true }) } as any, // zadarmaSms
     );
   });
 

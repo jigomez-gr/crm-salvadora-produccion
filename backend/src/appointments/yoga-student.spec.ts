@@ -182,6 +182,7 @@ describe('Yoga Appointments & Student Lifecycle', () => {
       null as any, // agentsConfigService
       null as any, // messagesService
       settingsRepoMock as any,
+      { sendSms: jest.fn().mockResolvedValue({ success: true }) } as any, // zadarmaSms
     );
 
     contactsService = new ContactsService(

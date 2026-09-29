@@ -155,7 +155,10 @@ describe('AppointmentsService - rescheduleAppointment', () => {
       null as any, // agentsConfigService
       null as any, // messagesService
       settingsRepoMock as any,
-      { sendAppointmentDecisionSms: jest.fn().mockResolvedValue({}) } as any, // zadarmaSmsService
+      {
+        sendSms: jest.fn().mockResolvedValue({ success: true }),
+        sendAppointmentDecisionSms: jest.fn().mockResolvedValue({}),
+      } as any, // zadarmaSmsService
     );
   });
 
