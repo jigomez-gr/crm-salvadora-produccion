@@ -1,4 +1,4 @@
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef, OnModuleInit } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -17,7 +17,7 @@ import { MessagesService, toMessageView } from '../conversations/messages.servic
 import { ContactsService } from '../contacts/contacts.service';
 
 @Injectable()
-export class EmailInboundService {
+export class EmailInboundService implements OnModuleInit {
   private readonly logger = new Logger(EmailInboundService.name);
   private isPolling = false;
 
@@ -32,6 +32,15 @@ export class EmailInboundService {
     private readonly contactsService: ContactsService,
     private readonly eventEmitter: EventEmitter2,
   ) {}
+
+  async onModuleInit() {
+    // Initial sync 5s after startup so incoming replies are processed immediately without waiting 2 min
+    setTimeout(() => {
+      this.syncNow().catch((err) =>
+        this.logger.error(`Initial email sync error: ${err}`),
+      );
+    }, 5000);
+  }
 
   /**
    * Periodic cron job to check for inbound emails / customer replies every 2 minutes.
@@ -96,12 +105,9 @@ export class EmailInboundService {
 
         const centerEmail = (acc.fromAddress || acc.smtpUser || '').toLowerCase().trim();
 
-        // Check messages since last processed UID, or last 15 messages if first run
-        const minUid = acc.lastImapUid && acc.lastImapUid > 0 ? acc.lastImapUid + 1 : 1;
+        // Fetch recent messages by sequence number (safe 1..total, avoiding invalid messageset on UID ranges)
+        const searchRange = `${Math.max(1, total - 40)}:*`;
         let maxSeenUid = acc.lastImapUid || 0;
-
-        // Fetch unseen messages or messages with UID >= minUid
-        const searchRange = minUid > 1 ? `${minUid}:*` : `${Math.max(1, total - 15)}:*`;
 
         for await (const msg of client.fetch(searchRange, {
           uid: true,
@@ -346,7 +352,10 @@ export class EmailInboundService {
         /^Enviado el:\s+/i.test(trimmed) ||
         /^Sent:\s+/i.test(trimmed) ||
         /^El\s+.+,\s+.+\s+escribi[oó]:/i.test(trimmed) ||
-        /^On\s+.+,\s+.+\s+wrote:/i.test(trimmed)
+        /^El\s+.+\s+a las\s+[0-9]{1,2}:[0-9]{2}/i.test(trimmed) ||
+        /^On\s+.+,\s+.+\s+wrote:/i.test(trimmed) ||
+        /^On\s+.+at\s+[0-9]{1,2}:[0-9]{2}/i.test(trimmed) ||
+        trimmed.startsWith('>')
       ) {
         break;
       }
