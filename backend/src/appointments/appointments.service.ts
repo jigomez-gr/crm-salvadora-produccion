@@ -256,13 +256,14 @@ export class AppointmentsService implements OnModuleInit {
 
     const cleanServiceName = (dto.service || serviceEntity?.name || '').toLowerCase().trim();
 
-    // 1. Strict validation: Constelaciones Familiares
+    // 1. Strict validation: Constelaciones Familiares (taller vivencial mensual en domingo de 10:00 a 14:00)
     if (/constelaci/i.test(cleanServiceName)) {
       const zoned = new TZDate(startsAt.getTime(), 'Europe/Madrid');
+      const isSunday = zoned.getDay() === 0;
       const isSep27 = zoned.getMonth() === 8 && zoned.getDate() === 27 && zoned.getFullYear() === 2026;
-      if (!isSep27) {
+      if (!isSunday && !isSep27) {
         throw new BadRequestException(
-          'Las Constelaciones Familiares son un taller vivencial exclusivo que se celebra únicamente el domingo 27 de septiembre de 2026 de 10:00 a 14:00.',
+          'Las Constelaciones Familiares son un taller vivencial exclusivo que se celebra en domingo de 10:00 a 14:00.',
         );
       }
     }

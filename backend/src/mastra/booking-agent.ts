@@ -708,11 +708,19 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           svc.requiresApproval === true || /gestalt|bienestar/i.test(svc.name || '');
         const status = requiresApproval ? 'pending_approval' : 'scheduled';
         const isSinFecha = svc.sinfechadefinitiva === 'S';
+        const recurring = resolveNextRecurringEventDate(svc.name, new Date(), timezone);
+        let defaultEventDate = '2099-12-31T20:00:00.000Z';
+        if (recurring.hasRule && recurring.startsAtIso) {
+          defaultEventDate = recurring.startsAtIso;
+        } else if (svc.eventStartDate && new Date(svc.eventStartDate).getTime() > Date.now()) {
+          defaultEventDate = new Date(svc.eventStartDate).toISOString();
+        }
+
         const rawStartsAt = isSinFecha
           ? '2099-12-31T20:00:00.000Z'
-          : svc.serviceType === 'event' && svc.eventStartDate
-          ? new Date(svc.eventStartDate).toISOString()
-          : inputData.startsAt || '2099-12-31T20:00:00.000Z';
+          : inputData.startsAt && !isSinFecha
+          ? inputData.startsAt
+          : defaultEventDate;
 
         let targetDate = new Date();
         if (contactId && deps.listContactAppointments) {
@@ -1342,6 +1350,12 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           ? gongRecurring.dateText
           : getServiceDate(/baño.*gong|meditación sonora/i, 'Sábado 31 de Octubre de 2026 (18:00 a 20:00)');
 
+      const constelRecurring = resolveNextRecurringEventDate('Constelaciones Familiares', new Date(), timezone);
+      const constelDate =
+        constelRecurring.hasRule && constelRecurring.dateText
+          ? constelRecurring.dateText
+          : getServiceDate(/constelaci/i, 'Domingo 25 de Octubre de 2026 (de 10:00 a 14:00)');
+
       const pujaDate = getServiceDate(/puja/i, 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027');
       const mujeresDate = getServiceDate(/mujeres|femenino/i, 'próximamente');
 
@@ -1458,7 +1472,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     - NUNCA digas que no se puede reservar, ni que la fecha es pasada o no está confirmada, ni le preguntes si quiere esperar a que se confirme: tramita la reserva en el acto como plaza prioritaria y confírmale que se le avisará de la fecha definitiva.
 - CONSTELACIONES FAMILIARES (TALLER MENSUAL VIVENCIAL):
   * Modalidad: Taller vivencial presencial mensual de fin de mes (aforo: 25 personas).
-  * Próxima fecha oficial: Domingo 27 de Septiembre de 2026 (de 10:00 a 14:00).
+  * Próxima fecha oficial: ${constelDate}.
   * Dos opciones de participación (pregunta al cliente o asigna la que pida):
     1. **Constelar (Trabajar tema personal propio)**: ${constelarPrice}
     2. **Participar (Representante / Observador en el campo)**: ${participarPrice}

@@ -99,6 +99,11 @@ Bajo ninguna circunstancia reserves ni consultes citas ni des horarios.`;
       ? gongRecurring.dateText
       : 'Sábado 31 de Octubre de 2026 de 18:00 a 20:00';
   const gongPrice = getServicePrice(/baño.*gong|meditación sonora/i, '16€');
+  const constelRecurring = resolveNextRecurringEventDate('Constelaciones Familiares', new Date(), input.timezone);
+  const constelDateText =
+    constelRecurring.hasRule && constelRecurring.dateText
+      ? constelRecurring.dateText
+      : 'Domingo 25 de Octubre de 2026 de 10:00 a 14:00';
   const pujaPrice = 'El precio se determinará en función de las características del viaje y alojamiento.';
   const constelarPrice = getServicePrice(/constel.*(constelar|propio)/i, '60€');
   const participarPrice = getServicePrice(/constel.*(particip|represen)/i, '20€');
@@ -202,9 +207,9 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
   * Modalidad: ${bienestarModality}.${bienestarApprovalText}
   * Fechas y horarios: ${bienestarSchedule}. Reserva directa de plaza.
 - **Constelaciones Familiares** (Taller vivencial mensual de 4 horas, NO es sesión diaria individual):
-  * Próxima fecha oficial: **Domingo 27 de Septiembre de 2026 de 10:00 a 14:00**.
+  * Próxima fecha oficial: **${constelDateText}**.
   * Opciones: 1. Constelar / Asunto propio (${constelarPrice}) | 2. Participar / Representante (${participarPrice}).
-  * Si el cliente pide cita para hoy o cualquier otro día, explícale con total claridad que el taller es el domingo 27 de septiembre y ofrécele reservar su plaza para ese día.
+  * Si el cliente pide cita para hoy o cualquier otro día, explícale con total claridad que el taller es el ${constelDateText} y ofrécele reservar su plaza para ese día.
 - **Baños de Gong y Meditación Sonora** (Sesión vivencial mensual de 2 horas):
   * Regla de periodicidad: Un sábado al mes (el último sábado de cada mes).
   * Próxima fecha: **${gongDateText}** (${gongPrice}).
@@ -259,7 +264,7 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
 1. **SIEMPRE DI EL CALENDARIO OFICIAL**: Cuando el cliente pregunte por cualquier clase o servicio, o pida disponibilidad, infórmale en primer lugar de los días y horarios oficiales del calendario del centro.
    - Hatha Yoga Terapéutico: martes (09:45, 11:15, 17:00, 18:30 y 20:00), miércoles (20:15) y jueves (09:45, 11:15, 16:00, 17:30 y 19:00).
    - Meditaciones Guiadas: martes y jueves de 09:15 a 09:45.
-   - Constelaciones Familiares: exclusivamente el domingo 27 de septiembre de 2026 de 10:00 a 14:00.
+   - Constelaciones Familiares: ${constelDateText} (taller vivencial mensual de 10:00 a 14:00).
    - Baño de Gong: ${gongDateText} (último sábado de cada mes de 18:00 a 20:00; se aceptan reservas provisionales).
    - Puja de Gongs: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027 (El precio se determinará en función de las características del viaje y alojamiento. Se aceptan reservas provisionales).
    - Encuentro de Mujeres: próximamente (El precio se determinará en función de las características del viaje y alojamiento. Se aceptan reservas provisionales).

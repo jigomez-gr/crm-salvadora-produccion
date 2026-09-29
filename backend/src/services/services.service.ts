@@ -457,11 +457,12 @@ export class ServicesService implements OnModuleInit {
           this.serviceRepo.create({
             name: 'Constelaciones Familiares (Constelar / Asunto Propio)',
             description:
-              'Taller vivencial mensual de sanación de vínculos y patrones familiares. Modalidad para trabajar un asunto o síntoma personal propio. Próxima fecha: Domingo 27 de Septiembre de 2026 (10:00 a 14:00). Precio: 60€. Aforo: 25 personas. Pago en el centro.',
+              'Taller vivencial mensual de sanación de vínculos y patrones familiares. Modalidad para trabajar un asunto o síntoma personal propio. Próxima fecha: Domingo 25 de Octubre de 2026 (10:00 a 14:00). Precio: 60€. Aforo: 25 personas. Pago en el centro.',
             serviceType: ServiceType.EVENT,
-            eventDatesText: 'Domingo 27 de Septiembre de 2026 (10:00 a 14:00)',
-            eventStartDate: new Date('2026-09-27T10:00:00.000Z'),
-            eventEndDate: new Date('2026-09-27T14:00:00.000Z'),
+            eventDatesText: 'Domingo 25 de Octubre de 2026 (10:00 a 14:00)',
+            eventStartDate: new Date('2026-10-25T10:00:00.000Z'),
+            eventEndDate: new Date('2026-10-25T14:00:00.000Z'),
+            scheduleText: 'Domingos intensivos de 10:00 a 14:00',
             durationMinutes: 240,
             price: '60.00',
             maxCapacity: 25,
@@ -491,11 +492,12 @@ export class ServicesService implements OnModuleInit {
           this.serviceRepo.create({
             name: 'Constelaciones Familiares (Participante / Representante)',
             description:
-              'Taller vivencial mensual de sanación de vínculos familiares. Modalidad para participar como representante u observador en el campo de trabajo. Próxima fecha: Domingo 27 de Septiembre de 2026 (10:00 a 14:00). Precio: 20€. Aforo: 25 personas. Pago en el centro.',
+              'Taller vivencial mensual de sanación de vínculos familiares. Modalidad para participar como representante u observador en el campo de trabajo. Próxima fecha: Domingo 25 de Octubre de 2026 (10:00 a 14:00). Precio: 20€. Aforo: 25 personas. Pago en el centro.',
             serviceType: ServiceType.EVENT,
-            eventDatesText: 'Domingo 27 de Septiembre de 2026 (10:00 a 14:00)',
-            eventStartDate: new Date('2026-09-27T10:00:00.000Z'),
-            eventEndDate: new Date('2026-09-27T14:00:00.000Z'),
+            eventDatesText: 'Domingo 25 de Octubre de 2026 (10:00 a 14:00)',
+            eventStartDate: new Date('2026-10-25T10:00:00.000Z'),
+            eventEndDate: new Date('2026-10-25T14:00:00.000Z'),
+            scheduleText: 'Domingos intensivos de 10:00 a 14:00',
             durationMinutes: 240,
             price: '20.00',
             maxCapacity: 25,
@@ -574,11 +576,17 @@ export class ServicesService implements OnModuleInit {
             updated = true;
           }
         } else if (/constelaci/i.test(s.name)) {
-          if (!s.eventStartDate) {
-            s.eventStartDate = new Date('2026-09-27T08:00:00.000Z');
-            s.eventEndDate = new Date('2026-09-27T12:00:00.000Z');
-            s.eventDatesText = 'Domingo 27 de Septiembre de 2026 de 10:00 a 14:00';
-            updated = true;
+          if (!s.eventStartDate || s.eventStartDate.getTime() < Date.now()) {
+            const nextConstel = resolveNextRecurringEventDate(s.name);
+            if (nextConstel.hasRule && nextConstel.startsAtIso) {
+              s.eventStartDate = new Date(nextConstel.startsAtIso);
+              s.eventEndDate = nextConstel.endsAtIso
+                ? new Date(nextConstel.endsAtIso)
+                : new Date(s.eventStartDate.getTime() + 4 * 3600000);
+              s.eventDatesText = nextConstel.dateText || 'Domingo 25 de Octubre de 2026 (10:00 a 14:00)';
+              s.scheduleText = 'Domingos intensivos de 10:00 a 14:00';
+              updated = true;
+            }
           }
         } else if (/gestalt/i.test(s.name)) {
           if (!s.requiresApproval) {
@@ -1168,7 +1176,7 @@ export class ServicesService implements OnModuleInit {
       ? attendeesCount >= service.minQuorum
       : true;
 
-    if (/baño.*gong|meditación sonora/i.test(service.name)) {
+    if (/baño.*gong|meditación sonora|constelaci/i.test(service.name)) {
       const nextDate = resolveNextRecurringEventDate(service.name);
       if (nextDate.hasRule && nextDate.dateText) {
         service.eventDatesText = nextDate.dateText;
@@ -1248,7 +1256,7 @@ export class ServicesService implements OnModuleInit {
       for (const agent of agentConfigs) {
         agent.services = allServices.map((s) => {
           let eventDatesText = s.eventDatesText;
-          if (/baño.*gong|meditación sonora/i.test(s.name)) {
+          if (/baño.*gong|meditación sonora|constelaci/i.test(s.name)) {
             const nextDate = resolveNextRecurringEventDate(s.name);
             if (nextDate.hasRule && nextDate.dateText) {
               eventDatesText = nextDate.dateText;
