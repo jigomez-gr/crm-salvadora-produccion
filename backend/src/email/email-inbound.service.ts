@@ -99,54 +99,60 @@ export class EmailInboundService implements OnModuleInit {
       });
 
       await client.connect();
-      const lock = await client.getMailboxLock('INBOX');
 
-      try {
-        const total = (client.mailbox && typeof client.mailbox === 'object' && 'exists' in client.mailbox ? client.mailbox.exists : 0) || 0;
-        if (total === 0) {
-          return { processedCount: 0, details: [] };
-        }
+      const mailboxes = await client.list();
+      const folderPaths = mailboxes
+        .filter(
+          (m) =>
+            m.path === 'INBOX' ||
+            m.specialUse === '\\Inbox' ||
+            m.specialUse === '\\Junk' ||
+            /junk|spam/i.test(m.path),
+        )
+        .map((m) => m.path);
 
-        const centerEmail = (acc.fromAddress || acc.smtpUser || '').toLowerCase().trim();
+      const uniqueFolders = Array.from(
+        new Set(folderPaths.length > 0 ? folderPaths : ['INBOX', 'Junk']),
+      );
 
-        // Fetch recent messages by sequence number (safe 1..total, avoiding invalid messageset on UID ranges)
-        const searchRange = `${Math.max(1, total - 40)}:*`;
-        let maxSeenUid = acc.lastImapUid || 0;
+      const centerEmail = (acc.fromAddress || acc.smtpUser || '').toLowerCase().trim();
 
-        for await (const msg of client.fetch(searchRange, {
-          uid: true,
-          flags: true,
-          source: true,
-          envelope: true,
-        })) {
-          if (msg.uid > maxSeenUid) {
-            maxSeenUid = msg.uid;
-          }
+      for (const folder of uniqueFolders) {
+        let lock: any = null;
+        try {
+          lock = await client.getMailboxLock(folder);
+          const total = (client.mailbox && typeof client.mailbox === 'object' && 'exists' in client.mailbox ? client.mailbox.exists : 0) || 0;
+          if (total === 0) continue;
 
-          if (acc.lastImapUid && msg.uid <= acc.lastImapUid) {
-            continue;
-          }
+          // Fetch recent messages by sequence number (safe 1..total, avoiding invalid messageset on UID ranges)
+          const searchRange = `${Math.max(1, total - 40)}:*`;
 
-          try {
-            // Parse RFC822 raw message
-            const parsed = await simpleParser(msg.source);
-          const rawFrom = parsed.from?.value?.[0]?.address?.toLowerCase().trim();
-          const fromName = parsed.from?.value?.[0]?.name?.trim() || rawFrom || 'Cliente';
+          for await (const msg of client.fetch(searchRange, {
+            uid: true,
+            flags: true,
+            source: true,
+            envelope: true,
+          })) {
+            try {
+              // Parse RFC822 raw message
+              const parsed = await simpleParser(msg.source);
+              const rawFrom = parsed.from?.value?.[0]?.address?.toLowerCase().trim();
+              const fromName = parsed.from?.value?.[0]?.name?.trim() || rawFrom || 'Cliente';
 
-          // Skip emails sent from the center itself or empty senders
-          if (!rawFrom || rawFrom === centerEmail || rawFrom.includes('salvadoraconesa')) {
-            continue;
-          }
+              // Skip emails sent from the center itself or empty senders
+              if (!rawFrom || rawFrom === centerEmail || rawFrom.includes('salvadoraconesa')) {
+                continue;
+              }
 
-          // Generate unique external ID for deduplication
-          const messageIdHeader = parsed.messageId?.trim();
-          const externalId = messageIdHeader || `imap_uid_${msg.uid}`;
+              // Generate unique external ID for deduplication
+              const messageIdHeader = parsed.messageId?.trim();
+              const externalId = messageIdHeader || `imap_${folder}_uid_${msg.uid}`;
 
-          // Check if already processed
-          const alreadyExists = await this.messagesService.existsByExternalId(externalId);
-          if (alreadyExists) {
-            continue;
-          }
+              // Check if already processed
+              const alreadyExists = await this.messagesService.existsByExternalId(externalId);
+              if (alreadyExists) {
+                continue;
+              }
 
           const rawSubject = (parsed.subject || '').trim();
           const cleanSubject = rawSubject.replace(/^\[SPAM\]\s*/i, '').trim() || 'Consulta por correo';
@@ -321,17 +327,16 @@ export class EmailInboundService implements OnModuleInit {
               `Error processing inbound email UID ${msg.uid}: ${msgErr}`,
             );
           }
+          }
+        } finally {
+          if (lock) {
+            lock.release();
+          }
         }
-
-        // Save last processed UID
-        if (maxSeenUid > (acc.lastImapUid || 0)) {
-          acc.lastImapUid = maxSeenUid;
-          acc.lastImapCheckAt = new Date();
-          await this.accountRepo.save(acc);
-        }
-      } finally {
-        lock.release();
       }
+
+      acc.lastImapCheckAt = new Date();
+      await this.accountRepo.save(acc);
 
       await client.logout();
     } catch (err: any) {
