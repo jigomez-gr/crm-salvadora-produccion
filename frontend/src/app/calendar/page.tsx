@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -25,6 +25,7 @@ import {
   Scissors,
   Bot,
   CreditCard,
+  AlertCircle,
 } from "lucide-react";
 import { ImageCropModal, SPECIALTIES, SpecialtyType } from "@/components/ImageCropModal";
 import {
@@ -105,6 +106,7 @@ function AppointmentModal({
   contacts,
   services,
   defaultStart,
+  defaultServiceId,
   onSave,
   onAccept,
   onReject,
@@ -117,6 +119,7 @@ function AppointmentModal({
   contacts: Contact[];
   services: Service[];
   defaultStart?: Date;
+  defaultServiceId?: string;
   onSave: (data: ApptFormData) => Promise<void>;
   onAccept?: (id: string) => Promise<void>;
   onReject?: (
@@ -141,22 +144,37 @@ function AppointmentModal({
       )
     : "";
 
+  const contactRef = useRef<HTMLDivElement>(null);
+  const contactSelectRef = useRef<HTMLSelectElement>(null);
+  const serviceRef = useRef<HTMLDivElement>(null);
+  const serviceSelectRef = useRef<HTMLSelectElement>(null);
+  const startsAtRef = useRef<HTMLDivElement>(null);
+  const errorBannerRef = useRef<HTMLDivElement>(null);
+
+  const initialSvc = !initial && defaultServiceId ? services.find((s) => s.id === defaultServiceId) : undefined;
+
   const [form, setForm] = useState<ApptFormData>({
-    contactId: initial?.contactId ?? "",
-    service: initial?.service ?? "",
-    serviceId: initial?.serviceId ?? "",
-    calendarId: initial?.calendarId ?? "default",
+    contactId: initial?.contactId ?? (contacts.length === 1 ? contacts[0].id : ""),
+    service: initial?.service ?? initialSvc?.name ?? "",
+    serviceId: initial?.serviceId ?? initialSvc?.id ?? "",
+    calendarId: initial?.calendarId ?? initialSvc?.calendarId ?? "default",
     startsAt: initial ? toLocal(initial.startsAt) : defaultStartStr,
-    endsAt: initial ? toLocal(initial.endsAt) : defaultEndStr,
-    status: initial?.status ?? "scheduled",
+    endsAt: initial
+      ? toLocal(initial.endsAt)
+      : initialSvc && defaultStart
+      ? format(new Date(defaultStart.getTime() + initialSvc.durationMinutes * 60000), "yyyy-MM-dd'T'HH:mm")
+      : defaultEndStr,
+    status: initial?.status ?? (initialSvc?.requiresApproval ? "pending_approval" : "scheduled"),
     modality: initial?.modality ?? "in_person",
     reason: initial?.reason ?? "",
-    price: initial?.price ?? "",
+    price: initial?.price ?? initialSvc?.price ?? "",
     isRecovery: initial?.isRecovery ?? false,
     allowCustomSchedule: false,
   });
   const [saving, setSaving] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
+  const [slotFeedback, setSlotFeedback] = useState<string>("");
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [attachmentSuccess, setAttachmentSuccess] = useState("");
   const [aiSpecialty, setAiSpecialty] = useState<SpecialtyType>(
@@ -168,6 +186,13 @@ function AppointmentModal({
     initial?.aiAnalysisResult || null
   );
   const [aiCropThumbnail, setAiCropThumbnail] = useState<string | null>(null);
+
+  // Auto-select single contact if contacts load after modal is mounted
+  useEffect(() => {
+    if (!initial && !form.contactId && contacts.length === 1) {
+      setForm((f) => ({ ...f, contactId: contacts[0].id }));
+    }
+  }, [contacts, initial, form.contactId]);
 
   // Available slots for the selected service
   const [availableSlots, setAvailableSlots] = useState<
@@ -220,12 +245,18 @@ function AppointmentModal({
     }
   }, [open, form.serviceId, form.service, fetchUpcomingSlots]);
 
-  function handlePickSlot(slot: { startsAt: string; endsAt: string }) {
+  function handlePickSlot(slot: { startsAt: string; endsAt: string; dateLabel?: string; timeLabel?: string }) {
     setForm((f) => ({
       ...f,
       startsAt: toLocal(slot.startsAt),
       endsAt: toLocal(slot.endsAt),
     }));
+    if (slot.dateLabel && slot.timeLabel) {
+      setSlotFeedback(`${slot.dateLabel} de ${slot.timeLabel}`);
+    }
+    if (error && (error.includes("inicio") || error.includes("fin") || error.includes("fecha"))) {
+      setError("");
+    }
   }
 
   async function handleSelectNextSlot() {
@@ -239,7 +270,7 @@ function AppointmentModal({
         else if (form.service) params.set("serviceName", form.service);
         params.set("daysAhead", "28");
         const res = await apiFetch<{
-          slots: Array<{ startsAt: string; endsAt: string }>;
+          slots: Array<{ startsAt: string; endsAt: string; dateLabel?: string; timeLabel?: string }>;
         }>(`/api/appointments/next-available-slots?${params.toString()}`);
         if (res?.slots && res.slots.length > 0) {
           setAvailableSlots(res.slots as any);
@@ -297,10 +328,45 @@ function AppointmentModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.contactId || !form.service || !form.startsAt || !form.endsAt) {
-      setError("Todos los campos obligatorios deben estar rellenos.");
+    setSubmitted(true);
+
+    const errors: string[] = [];
+    if (!form.contactId) {
+      errors.push("Debes seleccionar un Contacto (alumno o paciente) en el primer campo");
+    }
+    if (!form.service && !form.serviceId) {
+      errors.push("Debes seleccionar un Servicio");
+    }
+    if (!form.startsAt) {
+      errors.push("Debes indicar la fecha y hora de inicio");
+    }
+    if (!form.endsAt) {
+      errors.push("Debes indicar la fecha y hora de finalización");
+    }
+    if (selectedService?.requiresReason && !form.reason?.trim()) {
+      errors.push("Este servicio requiere indicar el motivo de la cita");
+    }
+    if (form.startsAt && form.endsAt && new Date(form.startsAt) >= new Date(form.endsAt)) {
+      errors.push("La hora de fin debe ser posterior a la hora de inicio");
+    }
+
+    if (errors.length > 0) {
+      setError(errors.join(". "));
+      // Focus and scroll to first missing input
+      if (!form.contactId) {
+        contactRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        contactSelectRef.current?.focus();
+      } else if (!form.service && !form.serviceId) {
+        serviceRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        serviceSelectRef.current?.focus();
+      } else if (!form.startsAt) {
+        startsAtRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      } else {
+        errorBannerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
       return;
     }
+
     setSaving(true);
     try {
       await onSave({
@@ -313,6 +379,7 @@ function AppointmentModal({
       setError(
         err instanceof ApiError ? err.message : "No se pudo guardar la cita.",
       );
+      errorBannerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     } finally {
       setSaving(false);
     }
@@ -456,33 +523,72 @@ function AppointmentModal({
           </div>
         )}
 
-        <div>
-          <label className="mb-1 block text-xs font-medium text-neutral-700">
-            Contacto <span className="text-red-500">*</span>
-          </label>
+        <div ref={contactRef}>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-xs font-semibold text-neutral-800">
+              Contacto (Alumno / Paciente) <span className="text-red-500">*</span>
+            </label>
+            {submitted && !form.contactId && (
+              <span className="text-[11px] font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-200 flex items-center gap-1">
+                <AlertCircle className="h-3 w-3 text-red-600" />
+                Campo obligatorio
+              </span>
+            )}
+          </div>
           <select
-            className="block w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+            ref={contactSelectRef}
+            className={cn(
+              "block w-full rounded-lg bg-white px-3 py-2 text-sm focus:outline-none transition-colors",
+              submitted && !form.contactId
+                ? "border-2 border-red-500 bg-red-50/40 text-red-950 focus:border-red-600 focus:ring-2 focus:ring-red-200"
+                : "border border-neutral-300 focus:border-indigo-500"
+            )}
             value={form.contactId}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, contactId: e.target.value }))
-            }
+            onChange={(e) => {
+              setForm((f) => ({ ...f, contactId: e.target.value }));
+              if (error && error.includes("Contacto")) setError("");
+            }}
           >
-            <option value="">Selecciona un contacto…</option>
+            <option value="">-- Selecciona el alumno o paciente para la cita --</option>
             {contacts.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name} ({c.phone})
+                {c.name} {c.phone ? `(${c.phone})` : c.email ? `(${c.email})` : ""}
               </option>
             ))}
           </select>
+          {submitted && !form.contactId ? (
+            <p className="mt-1 text-xs text-red-600 font-medium flex items-center gap-1">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+              Por favor, selecciona para qué persona es la cita en el menú desplegable.
+            </p>
+          ) : contacts.length === 0 ? (
+            <p className="mt-1 text-xs text-amber-700 italic">
+              No hay contactos cargados. Crea un contacto primero en la sección de Contactos.
+            </p>
+          ) : null}
         </div>
 
-        <div>
-          <label className="mb-1 block text-xs font-medium text-neutral-700">
-            Servicio <span className="text-red-500">*</span>
-          </label>
+        <div ref={serviceRef}>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-xs font-semibold text-neutral-800">
+              Servicio <span className="text-red-500">*</span>
+            </label>
+            {submitted && !form.service && !form.serviceId && (
+              <span className="text-[11px] font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-200 flex items-center gap-1">
+                <AlertCircle className="h-3 w-3 text-red-600" />
+                Campo obligatorio
+              </span>
+            )}
+          </div>
           {services.length > 0 ? (
             <select
-              className="block w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              ref={serviceSelectRef}
+              className={cn(
+                "block w-full rounded-lg bg-white px-3 py-2 text-sm focus:outline-none transition-colors",
+                submitted && !form.service && !form.serviceId
+                  ? "border-2 border-red-500 bg-red-50/40 text-red-950 focus:border-red-600 focus:ring-2 focus:ring-red-200"
+                  : "border border-neutral-300 focus:border-indigo-500"
+              )}
               value={form.serviceId || ""}
               onChange={(e) => {
                 const sid = e.target.value;
@@ -502,9 +608,10 @@ function AppointmentModal({
                 } else {
                   setForm((f) => ({ ...f, serviceId: "", service: "" }));
                 }
+                if (error && error.includes("Servicio")) setError("");
               }}
             >
-              <option value="">Selecciona un servicio…</option>
+              <option value="">-- Selecciona el servicio o clase --</option>
               {services.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name} ({s.durationMinutes} min{s.price ? ` · ${s.price}€` : ""})
@@ -514,11 +621,19 @@ function AppointmentModal({
           ) : (
             <Input
               value={form.service}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, service: e.target.value }))
-              }
+              onChange={(e) => {
+                setForm((f) => ({ ...f, service: e.target.value }));
+                if (error && error.includes("Servicio")) setError("");
+              }}
               placeholder="ej. Clase de Yoga"
             />
+          )}
+
+          {submitted && !form.service && !form.serviceId && (
+            <p className="mt-1 text-xs text-red-600 font-medium flex items-center gap-1">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+              Por favor, selecciona qué servicio o clase se impartirá en esta cita.
+            </p>
           )}
 
           {selectedService && (
@@ -590,13 +705,28 @@ function AppointmentModal({
 
         {/* Motivo de la Cita */}
         <div>
-          <label className="mb-1 block text-xs font-medium text-neutral-700">
-            Motivo de la Cita / Razón de Consulta
-            {selectedService?.requiresReason && <span className="text-red-500"> *</span>}
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-xs font-medium text-neutral-700">
+              Motivo de la Cita / Razón de Consulta
+              {selectedService?.requiresReason && <span className="text-red-500"> *</span>}
+            </label>
+            {submitted && selectedService?.requiresReason && !form.reason?.trim() && (
+              <span className="text-[10px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
+                Obligatorio para este servicio
+              </span>
+            )}
+          </div>
           <Input
             value={form.reason}
-            onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
+            className={cn(
+              submitted && selectedService?.requiresReason && !form.reason?.trim()
+                ? "border-2 border-red-500 bg-red-50/30"
+                : ""
+            )}
+            onChange={(e) => {
+              setForm((f) => ({ ...f, reason: e.target.value }));
+              if (error && error.includes("motivo")) setError("");
+            }}
             placeholder="ej. Consulta por dolor de espalda / Iniciación al yoga"
           />
         </div>
@@ -721,6 +851,32 @@ function AppointmentModal({
             </div>
           )}
 
+          {/* Feedback de turno oficial seleccionado */}
+          {slotFeedback && (
+            <div className="rounded-lg bg-emerald-50 border border-emerald-300 p-2.5 text-xs text-emerald-900 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 shadow-2xs">
+              <div className="flex items-center gap-1.5 font-medium">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                <span>Turno seleccionado: <strong>{slotFeedback}</strong></span>
+              </div>
+              {!form.contactId ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    contactRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    contactSelectRef.current?.focus();
+                  }}
+                  className="text-[11px] text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-2 py-0.5 rounded font-semibold self-start sm:self-auto cursor-pointer"
+                >
+                  ⚠️ Falta seleccionar el Contacto arriba ↑
+                </button>
+              ) : (
+                <span className="text-[11px] text-emerald-700 font-semibold">
+                  ✓ Fecha y hora cargadas
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Toggle para permitir horario libre / especial */}
           <div className="pt-2 border-t border-indigo-100/80 flex items-center justify-between text-[11px]">
             <label className="flex items-center gap-2 cursor-pointer text-neutral-700 hover:text-neutral-900 select-none">
@@ -739,14 +895,24 @@ function AppointmentModal({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div ref={startsAtRef} className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-neutral-700">
-              Inicio <span className="text-red-500">*</span>
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-neutral-700">
+                Inicio <span className="text-red-500">*</span>
+              </label>
+              {submitted && !form.startsAt && (
+                <span className="text-[10px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
+                  Obligatorio
+                </span>
+              )}
+            </div>
             <Input
               type="datetime-local"
               value={form.startsAt}
+              className={cn(
+                submitted && !form.startsAt ? "border-2 border-red-500 bg-red-50/30" : ""
+              )}
               onChange={(e) => {
                 const newStartStr = e.target.value;
                 const newStart = new Date(newStartStr);
@@ -757,19 +923,33 @@ function AppointmentModal({
                   startsAt: newStartStr,
                   endsAt: !isNaN(newEnd.getTime()) ? format(newEnd, "yyyy-MM-dd'T'HH:mm") : f.endsAt,
                 }));
+                if (error && (error.includes("inicio") || error.includes("fin"))) setError("");
               }}
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-neutral-700">
-              Fin <span className="text-red-500">*</span>
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-neutral-700">
+                Fin <span className="text-red-500">*</span>
+              </label>
+              {submitted && !form.endsAt && (
+                <span className="text-[10px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
+                  Obligatorio
+                </span>
+              )}
+            </div>
             <Input
               type="datetime-local"
               value={form.endsAt}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, endsAt: e.target.value }))
-              }
+              className={cn(
+                submitted && (!form.endsAt || (form.startsAt && form.endsAt && new Date(form.startsAt) >= new Date(form.endsAt)))
+                  ? "border-2 border-red-500 bg-red-50/30"
+                  : ""
+              )}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, endsAt: e.target.value }));
+                if (error && (error.includes("inicio") || error.includes("fin"))) setError("");
+              }}
             />
           </div>
         </div>
@@ -1090,7 +1270,48 @@ function AppointmentModal({
           </div>
         )}
 
-        {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
+        {error && (
+          <div
+            ref={errorBannerRef}
+            className="rounded-xl border border-red-300 bg-red-50/95 p-3.5 text-xs text-red-800 shadow-sm space-y-2"
+          >
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+              <div className="space-y-1 min-w-0 flex-1">
+                <p className="font-bold text-red-950 text-sm">Faltan campos obligatorios para guardar la cita</p>
+                <p className="text-red-800 leading-relaxed font-medium">{error}</p>
+              </div>
+            </div>
+            <div className="pt-1.5 border-t border-red-200/80 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11px] text-red-700 font-medium">
+                💡 Revisa los campos resaltados en rojo arriba para poder confirmar.
+              </span>
+              {!form.contactId ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    contactRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    contactSelectRef.current?.focus();
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-red-600 text-white font-semibold text-[11px] hover:bg-red-700 transition-colors shadow-xs"
+                >
+                  Ir al campo de Contacto ↑
+                </button>
+              ) : !form.service && !form.serviceId ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    serviceRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    serviceSelectRef.current?.focus();
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-red-600 text-white font-semibold text-[11px] hover:bg-red-700 transition-colors shadow-xs"
+                >
+                  Ir al campo de Servicio ↑
+                </button>
+              ) : null}
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-neutral-100">
           <Button type="button" variant="secondary" onClick={onClose}>
@@ -2294,6 +2515,7 @@ function CalendarPageInner() {
         contacts={contacts}
         services={services}
         defaultStart={defaultStart}
+        defaultServiceId={selectedServiceId || undefined}
         onSave={handleSave}
         onAccept={handleAccept}
         onReject={handleReject}
