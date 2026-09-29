@@ -1362,10 +1362,11 @@ export default function SettingsPage() {
         deletedContacts: number;
         deletedAppointments: number;
         deletedMessages: number;
+        deletedCalls?: number;
       }>("/api/settings/delete-demo-data", { method: "POST" });
       setDeleteDemoOpen(false);
       toast.success(
-        `✅ Datos de prueba eliminados (${res.deletedContacts} contactos y ${res.deletedAppointments} citas de prueba). Los clientes reales se conservan intactos.`
+        `✅ Datos de prueba eliminados (${res.deletedContacts} contactos, ${res.deletedAppointments} citas y ${res.deletedCalls ?? 0} llamadas de prueba). Los clientes reales se conservan intactos.`
       );
     } catch (err) {
       toast.error(
@@ -1650,7 +1651,8 @@ export default function SettingsPage() {
           <ul className="list-disc list-inside text-xs text-neutral-600 space-y-1">
             <li>Contactos con etiqueta <em>&quot;demo&quot;</em> o correos <em>@example.com</em>.</li>
             <li>Citas, recordatorios y chats asociados a esos contactos de prueba.</li>
-            <li><strong>Tus clientes y citas reales NO se borrarán.</strong></li>
+            <li>Llamadas telefónicas y transcripciones de prueba de VAPI.</li>
+            <li><strong>Tus clientes, citas y llamadas reales NO se borrarán.</strong></li>
           </ul>
           <p className="pt-2 text-xs font-semibold text-indigo-900">
             ¿Deseas proceder con la eliminación de los datos de prueba?

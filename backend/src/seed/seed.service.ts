@@ -567,6 +567,8 @@ export class SeedService implements OnModuleInit {
     // up in the inbox (which reads from `conversations`).
     await this.messagesService.rebuildAllConversations();
 
+    await this.seedDemoCalls(contacts);
+
     this.logger.log(
       `Demo data seeded: ${contacts.length} contacts, ${appts.length} appointments, ${seededServices.length} services, ${messages.length} messages`,
     );
@@ -574,11 +576,11 @@ export class SeedService implements OnModuleInit {
 
   private async ensureVapiDemo() {
     try {
-      // 1. Ensure default VapiAccount with the user's keys and phone
+      // Ensure default VapiAccount with the user's configured keys and phone
       const [existingVapi] = await this.vapiAccountRepo.find({ take: 1 });
       if (!existingVapi) {
         const vapi = this.vapiAccountRepo.create({
-          apiKey: '68c4794-d264-4891-9d7e-b3fe5f33f2a1',
+          apiKey: '868c4794-d264-4891-9d7e-b3fe5f33f2a1',
           webhookToken: 'c2e1406a-8991-474e-9279-6283be7c02dd',
           phoneNumber: '+34919933764',
           phoneNumberId: '+34919933764@sip.vapi.ai',
@@ -606,17 +608,19 @@ export class SeedService implements OnModuleInit {
         await this.vapiAccountRepo.save(existingVapi);
         this.logger.log('Updated VapiAccount with configured API key and phone number.');
       }
+    } catch (err) {
+      this.logger.warn(`Could not ensure VAPI credentials: ${(err as Error)?.message}`);
+    }
+  }
 
-      // 2. Ensure demo Call records if none exist
-      const existingCallsCount = await this.callsRepo.count();
-      if (existingCallsCount === 0) {
-        this.logger.log('Seeding realistic demo calls for VAPI voice channel...');
-        const contacts = await this.contactsRepo.find();
-        const maria = contacts.find((c) => c.name.includes('María')) || contacts[0];
-        const david = contacts.find((c) => c.name.includes('David')) || contacts[1] || maria;
-        const lucia = contacts.find((c) => c.name.includes('Lucía')) || contacts[2] || maria;
-        const carlos = contacts.find((c) => c.name.includes('Carlos')) || contacts[3] || maria;
-        const elena = contacts.find((c) => c.name.includes('Elena')) || contacts[4] || maria;
+  private async seedDemoCalls(contacts: Contact[]) {
+    try {
+      this.logger.log('Seeding realistic demo calls for VAPI voice channel...');
+      const maria = contacts.find((c) => c.name.includes('María')) || contacts[0];
+      const david = contacts.find((c) => c.name.includes('David')) || contacts[1] || maria;
+      const lucia = contacts.find((c) => c.name.includes('Lucía')) || contacts[2] || maria;
+      const carlos = contacts.find((c) => c.name.includes('Carlos')) || contacts[3] || maria;
+      const elena = contacts.find((c) => c.name.includes('Elena')) || contacts[4] || maria;
 
         const demoCalls: Partial<Call>[] = [
           {
@@ -741,14 +745,13 @@ export class SeedService implements OnModuleInit {
           },
         ];
 
-        for (const callData of demoCalls) {
-          const call = this.callsRepo.create(callData);
-          await this.callsRepo.save(call);
-        }
-        this.logger.log('Successfully seeded 5 realistic demo calls with transcripts and summaries.');
+      for (const callData of demoCalls) {
+        const call = this.callsRepo.create(callData);
+        await this.callsRepo.save(call);
       }
+      this.logger.log('Successfully seeded 5 realistic demo calls with transcripts and summaries.');
     } catch (err) {
-      this.logger.warn(`Could not ensure VAPI demo data: ${(err as Error)?.message}`);
+      this.logger.warn(`Could not seed demo calls: ${(err as Error)?.message}`);
     }
   }
 }

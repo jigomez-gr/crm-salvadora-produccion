@@ -134,6 +134,7 @@ export class SettingsService implements OnModuleInit {
       await m.query('DELETE FROM messages');
       await m.query('DELETE FROM conversations');
       await m.query('DELETE FROM appointments');
+      await m.query('DELETE FROM calls');
       await m.query('DELETE FROM contacts');
     });
     return { ok: true };
@@ -141,7 +142,7 @@ export class SettingsService implements OnModuleInit {
 
   /**
    * Delete ONLY test/demo data (contacts tagged with 'demo' or created as demo seeds,
-   * along with their associated appointments, conversations, messages and reminders).
+   * along with their associated appointments, conversations, messages, calls and reminders).
    * Real business contacts, real clients and real appointments are strictly preserved.
    */
   async deleteDemoData(): Promise<{
@@ -149,6 +150,7 @@ export class SettingsService implements OnModuleInit {
     deletedContacts: number;
     deletedAppointments: number;
     deletedMessages: number;
+    deletedCalls: number;
   }> {
     return await this.dataSource.transaction(async (m) => {
       // 1. Identify demo contact IDs
@@ -183,19 +185,34 @@ export class SettingsService implements OnModuleInit {
           [ids],
         );
 
-        // 4. Delete calls for these demo contacts
-        await m.query(
-          `DELETE FROM calls 
-           WHERE "contactId" = ANY($1)`,
-          [ids],
-        );
-
-        // 5. Delete the demo contacts themselves
+        // 4. Delete the demo contacts themselves
         delContacts = await m.query(
           `DELETE FROM contacts 
            WHERE id = ANY($1)
            RETURNING id`,
           [ids],
+        );
+      }
+
+      // 5. Delete calls for these demo contacts AND any standalone demo VAPI calls
+      let delCalls: any[] = [];
+      if (ids.length > 0) {
+        delCalls = await m.query(
+          `DELETE FROM calls 
+           WHERE "contactId" = ANY($1)
+              OR "vapiCallId" LIKE 'demo-call-%'
+              OR "fromNumber" LIKE '+346112003%'
+              OR "fromNumber" IN ('+34612345678', '+34623456789', '+34645678901', '+34656789012')
+           RETURNING id`,
+          [ids],
+        );
+      } else {
+        delCalls = await m.query(
+          `DELETE FROM calls 
+           WHERE "vapiCallId" LIKE 'demo-call-%'
+              OR "fromNumber" LIKE '+346112003%'
+              OR "fromNumber" IN ('+34612345678', '+34623456789', '+34645678901', '+34656789012')
+           RETURNING id`,
         );
       }
 
@@ -242,6 +259,7 @@ export class SettingsService implements OnModuleInit {
         deletedContacts: delContacts.length,
         deletedAppointments: delAppts.length,
         deletedMessages: delMsgs.length,
+        deletedCalls: delCalls.length,
       };
     });
   }
