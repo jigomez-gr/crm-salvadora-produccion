@@ -184,6 +184,11 @@ export class AppointmentsService implements OnModuleInit {
       if (contact?.bloqueado === 'S') {
         throw new BadRequestException(BLOCKED_USER_MESSAGE);
       }
+      if (contact?.emailerroneo === 'S') {
+        throw new BadRequestException(
+          'El contacto tiene una incidencia registrada en su dirección de correo electrónico (emailerroneo=S). Debe verificar su correo mediante el código de 7 minutos antes de formalizar una reserva.',
+        );
+      }
     }
 
     if (dto.replacesAppointmentId) {
@@ -1729,6 +1734,13 @@ export class AppointmentsService implements OnModuleInit {
               return { ok: false, error: String(err) };
             });
           this.logger.log(`[Email] Result for ${contact.email}: ${JSON.stringify(res)}`);
+          if (res?.ok === false) {
+            this.logger.warn(`[Email] Error detected sending email to contact ${contact.id} (${contact.email}). Setting emailerroneo='S'.`);
+            contact.emailerroneo = 'S';
+            await this.contactsRepo.save(contact).catch((e) => {
+              this.logger.warn(`Failed to save contact emailerroneo flag: ${e}`);
+            });
+          }
         } else {
           this.logger.warn(`[Email] Contact ${contact.id} (${contact.name}) has NO email. Cannot send ${decision} notification.`);
         }

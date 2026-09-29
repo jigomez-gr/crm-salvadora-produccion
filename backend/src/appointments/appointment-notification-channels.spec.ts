@@ -361,4 +361,64 @@ describe('Appointments Multi-Channel Notifications (Service Level)', () => {
     const smsPayload = zadarmaSmsMock.sendSms.mock.calls[0][0];
     expect(smsPayload.message).toContain('https://meet.jit.si/salvadora-terapia-gestalt-provisional');
   });
+
+  it('marks contact emailerroneo = S when emailService.sendNotification fails', async () => {
+    servicesRepoMock.findOne.mockResolvedValue({
+      id: 'svc-gestalt',
+      name: 'Terapia Gestalt (Sesión Individual)',
+      notifyByEmail: true,
+      notifyByWhatsapp: false,
+      notifyBySms: false,
+    });
+
+    emailServiceMock.sendNotification.mockResolvedValueOnce({
+      ok: false,
+      error: 'SMTP 550 Mailbox unavailable',
+    });
+
+    const contactToFail = {
+      id: 'contact-err-1',
+      name: 'Test Failure',
+      email: 'bad-email@salvadora.com',
+      emailerroneo: 'N',
+    };
+    contactsRepoMock.save = jest.fn().mockImplementation((c) => Promise.resolve(c));
+
+    const testAppt: any = {
+      id: 'appt-err-test',
+      service: 'Terapia Gestalt (Sesión Individual)',
+      serviceId: 'svc-gestalt',
+      contactId: 'contact-err-1',
+      startsAt: new Date('2026-09-25T10:00:00.000Z'),
+      endsAt: new Date('2026-09-25T11:00:00.000Z'),
+      status: AppointmentStatus.SCHEDULED,
+      contact: contactToFail,
+    };
+
+    await (service as any).notifyStudentDecision(testAppt, 'accepted', 'Salvadora Conesa');
+
+    expect(contactToFail.emailerroneo).toBe('S');
+    expect(contactsRepoMock.save).toHaveBeenCalledWith(
+      expect.objectContaining({ emailerroneo: 'S' }),
+    );
+  });
+
+  it('blocks appointment creation with BadRequestException when contact has emailerroneo = S', async () => {
+    contactsRepoMock.findOne.mockResolvedValueOnce({
+      id: 'contact-blocked-email',
+      name: 'Email Bloqueado',
+      email: 'erroneo@test.com',
+      bloqueado: 'N',
+      emailerroneo: 'S',
+    });
+
+    await expect(
+      service.create({
+        contactId: 'contact-blocked-email',
+        service: 'Hatha Yoga Terapéutico',
+        startsAt: '2026-09-29T20:00:00.000Z',
+        endsAt: '2026-09-29T21:30:00.000Z',
+      }),
+    ).rejects.toThrow('emailerroneo=S');
+  });
 });

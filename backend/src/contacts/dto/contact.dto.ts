@@ -68,6 +68,11 @@ export class CreateContactDto {
   @IsString()
   @MaxLength(1)
   bloqueado?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1)
+  emailerroneo?: string;
 }
 
 export class UpdateContactDto {
@@ -138,6 +143,11 @@ export class UpdateContactDto {
   @IsString()
   @MaxLength(1)
   bloqueado?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1)
+  emailerroneo?: string;
 }
 
 export class ConvertToStudentDto {

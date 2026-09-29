@@ -31,6 +31,7 @@ export interface ContactFormData {
   isStudent: boolean;
   studentModality: string;
   bloqueado: string;
+  emailerroneo: string;
 }
 
 export function toForm(c?: Partial<Contact>): ContactFormData {
@@ -49,6 +50,7 @@ export function toForm(c?: Partial<Contact>): ContactFormData {
     isStudent: c?.isStudent ?? false,
     studentModality: c?.studentModality ?? "1_clase_semanal",
     bloqueado: c?.bloqueado === "S" ? "S" : "N",
+    emailerroneo: c?.emailerroneo === "S" ? "S" : "N",
   };
 }
 
@@ -229,6 +231,26 @@ export function ContactModal({
           {form.bloqueado === "S" && (
             <p className="text-[11px] leading-relaxed text-red-700">
               🚫 <strong>Atención:</strong> Cualquier intento de cita o interacción vía WhatsApp, burbuja web o VAPI será rechazado con el mensaje oficial de apelación a jigomezjub@gmail.com.
+            </p>
+          )}
+        </div>
+        <div className={`rounded-lg border p-3 space-y-2 ${form.emailerroneo === "S" ? "border-amber-300 bg-amber-50/70" : "border-neutral-200 bg-neutral-50/70"}`}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-neutral-800">
+              Incidencia de Correo (emailerroneo)
+            </span>
+            <select
+              className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs font-medium focus:border-amber-500 focus:outline-none"
+              value={form.emailerroneo}
+              onChange={(e) => setField("emailerroneo", e.target.value)}
+            >
+              <option value="N">N (Válido / Verificado)</option>
+              <option value="S">S (Erróneo / Bloquea reservas)</option>
+            </select>
+          </div>
+          {form.emailerroneo === "S" && (
+            <p className="text-[11px] leading-relaxed text-amber-800">
+              ⚠️ <strong>Atención:</strong> Este contacto tiene bloqueada la formalización de reservas hasta que valide su correo con un código OTP de 7 minutos.
             </p>
           )}
         </div>

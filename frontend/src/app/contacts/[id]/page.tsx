@@ -20,6 +20,10 @@ import {
   GraduationCap,
   Pencil,
   ShieldAlert,
+  KeyRound,
+  CheckCircle2,
+  AlertTriangle,
+  History,
 } from "lucide-react";
 import Link from "next/link";
 import { apiFetch, ApiError, apiUrl } from "@/lib/api";
@@ -29,6 +33,7 @@ import {
   Appointment,
   EmailMessage,
   EmailStatus,
+  ContactIdentityChange,
 } from "@/lib/types";
 import { CONTACT_STATUS_META } from "@/lib/contacts";
 import { useToast } from "@/contexts/ToastContext";
@@ -111,6 +116,17 @@ export default function ContactDetailPage({
   const [emailInputVal, setEmailInputVal] = useState("");
   const [savingEmail, setSavingEmail] = useState(false);
 
+  // OTP Verification & Identity History States
+  const [identityHistory, setIdentityHistory] = useState<ContactIdentityChange[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [otpModalOpen, setOtpModalOpen] = useState(false);
+  const [otpChannel, setOtpChannel] = useState<"email" | "sms" | "whatsapp">("email");
+  const [otpDestination, setOtpDestination] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpVerifying, setOtpVerifying] = useState(false);
+  const [otpSentAt, setOtpSentAt] = useState<Date | null>(null);
+
   async function handleConvertToStudent() {
     setStudentSaving(true);
     try {
@@ -170,6 +186,9 @@ export default function ContactDetailPage({
     apiFetch<any[]>(`/api/sms/contact/${id}`)
       .then(setSmsList)
       .catch(() => {});
+    apiFetch<ContactIdentityChange[]>(`/api/contacts/${id}/identity-history`)
+      .then(setIdentityHistory)
+      .catch(() => {});
   }, [id]);
 
   async function sendSms() {
@@ -221,6 +240,91 @@ export default function ContactDetailPage({
     }
   }
 
+  async function loadIdentityHistory() {
+    setHistoryLoading(true);
+    try {
+      const data = await apiFetch<ContactIdentityChange[]>(`/api/contacts/${id}/identity-history`);
+      setIdentityHistory(data);
+    } catch {
+      // non-fatal
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function handleSendOtp() {
+    if (!otpDestination.trim()) {
+      toast.error("Indica un destino (email o teléfono) para enviar el código.");
+      return;
+    }
+    setOtpSending(true);
+    try {
+      const res = await apiFetch<any>("/api/contacts/verification/request", {
+        method: "POST",
+        body: JSON.stringify({
+          contactId: id,
+          destination: otpDestination.trim(),
+          channel: otpChannel,
+          changeType: "email_error_recovery",
+        }),
+      });
+      setOtpSentAt(new Date());
+      toast.success(res.message || "Código OTP de 6 dígitos enviado. Válido durante 7 minutos.");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Error al enviar código de verificación.");
+    } finally {
+      setOtpSending(false);
+    }
+  }
+
+  async function handleConfirmOtp() {
+    if (!otpCode.trim() || otpCode.trim().length < 6) {
+      toast.error("Introduce el código de verificación de 6 dígitos.");
+      return;
+    }
+    setOtpVerifying(true);
+    try {
+      const res = await apiFetch<any>("/api/contacts/verification/confirm", {
+        method: "POST",
+        body: JSON.stringify({
+          destination: otpDestination.trim(),
+          code: otpCode.trim(),
+        }),
+      });
+      toast.success("✅ " + (res.message || "Código verificado con éxito. Incidencia resuelta."));
+      setOtpModalOpen(false);
+      setOtpCode("");
+      await refresh();
+      loadIdentityHistory();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Código erróneo o caducado (máx 7 min).");
+    } finally {
+      setOtpVerifying(false);
+    }
+  }
+
+  async function handleToggleEmailErroneo() {
+    if (!contact) return;
+    const newStatus = contact.emailerroneo === "S" ? "N" : "S";
+    setBusy(true);
+    try {
+      await apiFetch(`/api/contacts/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ emailerroneo: newStatus }),
+      });
+      await refresh();
+      toast.success(
+        newStatus === "S"
+          ? "⚠️ Contacto marcado con correo erróneo (reservas bloqueadas)."
+          : "✅ Incidencia de correo resuelta (reservas habilitadas)."
+      );
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Error al actualizar estado de correo.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function refresh() {
     const fresh = await apiFetch<ContactWithAppointments>(
       `/api/contacts/${id}`
@@ -233,6 +337,7 @@ export default function ContactDetailPage({
           .catch(() => null);
       }
     }
+    loadIdentityHistory();
   }
 
   async function handleSaveContact(data: ContactFormData) {
@@ -419,6 +524,11 @@ export default function ContactDetailPage({
             {contact.optedOut && (
               <Badge variant="warning">Baja (opt-out)</Badge>
             )}
+            {contact.emailerroneo === "S" && (
+              <Badge variant="danger" className="bg-amber-600 text-white font-semibold animate-pulse">
+                ⚠️ Email Erróneo (Bloqueante)
+              </Badge>
+            )}
             {contact.bloqueado === "S" && (
               <Badge variant="danger" className="bg-red-600 text-white font-semibold">
                 🚫 Bloqueado (Restricción técnica)
@@ -510,6 +620,21 @@ export default function ContactDetailPage({
               variant="secondary"
               size="sm"
               disabled={busy}
+              onClick={() => {
+                setOtpDestination(contact.email || contact.phone);
+                setOtpChannel(contact.email ? "email" : "sms");
+                setOtpModalOpen(true);
+              }}
+              title="Acreditar posesión o verificar correo con código OTP (7 min)"
+              className={contact.emailerroneo === "S" ? "bg-amber-600 text-white hover:bg-amber-700" : ""}
+            >
+              <KeyRound className="h-3.5 w-3.5" />
+              {contact.emailerroneo === "S" ? "Verificar Email OTP (7 min)" : "Validar OTP"}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={busy}
               onClick={toggleOptOut}
             >
               {contact.optedOut ? (
@@ -566,6 +691,41 @@ export default function ContactDetailPage({
         </div>
       )}
 
+      {contact.emailerroneo === "S" && (
+        <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-900 shadow-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 font-bold text-sm text-amber-800">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              Incidencia de Correo Erróneo (emailerroneo = 'S')
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleToggleEmailErroneo}
+                className="rounded-lg border border-amber-400 bg-white px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
+              >
+                Marcar como válido (N)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOtpDestination(contact.email || contact.phone);
+                  setOtpChannel(contact.email ? "email" : "sms");
+                  setOtpModalOpen(true);
+                }}
+                className="rounded-lg bg-amber-600 px-3 py-1 text-xs font-semibold text-white shadow-xs hover:bg-amber-700 flex items-center gap-1"
+              >
+                <KeyRound className="h-3.5 w-3.5" />
+                Verificar con OTP (7 min)
+              </button>
+            </div>
+          </div>
+          <p className="mt-1.5 text-xs text-amber-800">
+            Se ha detectado un fallo en la entrega de correo para este contacto o datos contradictorios. <strong>Cualquier intento de formalizar una reserva está bloqueado</strong> hasta que el contacto acredite su buzón con un código numérico de 6 dígitos con validez máxima de 7 minutos.
+          </p>
+        </div>
+      )}
+
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-neutral-200 bg-white p-4">
           <div className="flex items-center gap-2 text-xs font-medium text-neutral-500">
@@ -595,7 +755,14 @@ export default function ContactDetailPage({
               </button>
             </div>
             {contact.email ? (
-              <p className="mt-1 text-sm font-medium text-neutral-900 break-all">{contact.email}</p>
+              <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                <span className="text-sm font-medium text-neutral-900 break-all">{contact.email}</span>
+                {contact.emailerroneo === "S" && (
+                  <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 border border-amber-300">
+                    ⚠️ Erróneo
+                  </span>
+                )}
+              </div>
             ) : (
               <p className="mt-1 text-xs text-neutral-400 italic">Sin correo registrado</p>
             )}
@@ -795,6 +962,90 @@ export default function ContactDetailPage({
                 <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-neutral-700">
                   {s.message || s.mensaje}
                 </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Historial de Verificaciones OTP y Acreditación */}
+      <div className="mt-6">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <KeyRound className="h-4 w-4 text-amber-600" />
+            <h2 className="text-sm font-semibold text-neutral-700">
+              Historial de Verificaciones OTP y Acreditación ({identityHistory.length})
+            </h2>
+          </div>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              setOtpDestination(contact.email || contact.phone);
+              setOtpChannel(contact.email ? "email" : "sms");
+              setOtpModalOpen(true);
+            }}
+          >
+            <KeyRound className="h-3.5 w-3.5 text-amber-600" />
+            Nueva verificación (7 min)
+          </Button>
+        </div>
+        {identityHistory.length === 0 ? (
+          <div className="rounded-xl border border-neutral-200 bg-white p-6 text-center text-sm text-neutral-400">
+            Sin solicitudes de verificación registradas para este contacto
+          </div>
+        ) : (
+          <div className="divide-y divide-neutral-100 overflow-hidden rounded-xl border border-neutral-200 bg-white">
+            {identityHistory.map((item) => (
+              <div key={item.id} className="px-4 py-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-neutral-900">
+                      {item.changeType === "email_error_recovery"
+                        ? "Recuperación de Correo Erróneo"
+                        : item.changeType === "new_contact_email_verify"
+                        ? "Verificación inicial de Correo"
+                        : item.changeType === "device_ownership_verify"
+                        ? "Acreditación de Dispositivo"
+                        : "Resolución de Conflicto de Identidad"}
+                    </span>
+                    <span className="text-xs text-neutral-500">
+                      via <strong className="uppercase">{item.targetChannel}</strong> ({item.destination})
+                    </span>
+                  </div>
+                  <Badge
+                    variant={
+                      item.status === "verified"
+                        ? "success"
+                        : item.status === "pending"
+                        ? "warning"
+                        : "danger"
+                    }
+                  >
+                    {item.status === "verified"
+                      ? "Verificado"
+                      : item.status === "pending"
+                      ? "Pendiente (7 min)"
+                      : item.status === "expired"
+                      ? "Caducado"
+                      : "Fallido"}
+                  </Badge>
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-x-4 text-xs text-neutral-500">
+                  <span>
+                    Solicitado: {format(parseISO(item.createdAt), "d 'de' MMM, HH:mm", { locale: es })}
+                  </span>
+                  <span>
+                    Caducidad: {format(parseISO(item.expiresAt), "d 'de' MMM, HH:mm", { locale: es })}
+                  </span>
+                  {item.verifiedAt && (
+                    <span className="text-emerald-700 font-medium">
+                      ✓ Confirmado: {format(parseISO(item.verifiedAt), "d 'de' MMM, HH:mm", { locale: es })}
+                    </span>
+                  )}
+                  {item.attempts > 0 && <span>Intentos: {item.attempts}</span>}
+                  <span>Origen: {item.source}</span>
+                </div>
               </div>
             ))}
           </div>
@@ -1128,6 +1379,129 @@ export default function ContactDetailPage({
         initial={contact}
         onSave={handleSaveContact}
       />
+
+      {/* OTP Verification Modal */}
+      <Modal
+        open={otpModalOpen}
+        onClose={() => setOtpModalOpen(false)}
+        title="Verificación con Código OTP (Válido 7 minutos)"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-neutral-600">
+            Envía un código de 6 dígitos al usuario para verificar su buzón de correo o acreditar la titularidad de su línea. El código tiene una validez estricta de <strong>7 minutos</strong>.
+          </p>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              Canal de envío del código
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setOtpChannel("email");
+                  if (contact.email) setOtpDestination(contact.email);
+                }}
+                className={`rounded-lg border p-2 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
+                  otpChannel === "email"
+                    ? "border-amber-500 bg-amber-50 text-amber-900 font-semibold"
+                    : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
+                }`}
+              >
+                <Mail className="h-3.5 w-3.5" />
+                Email
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOtpChannel("sms");
+                  if (contact.phone) setOtpDestination(contact.phone);
+                }}
+                className={`rounded-lg border p-2 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
+                  otpChannel === "sms"
+                    ? "border-amber-500 bg-amber-50 text-amber-900 font-semibold"
+                    : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
+                }`}
+              >
+                <Phone className="h-3.5 w-3.5" />
+                SMS (Zadarma)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOtpChannel("whatsapp");
+                  if (contact.phone) setOtpDestination(contact.phone);
+                }}
+                className={`rounded-lg border p-2 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
+                  otpChannel === "whatsapp"
+                    ? "border-amber-500 bg-amber-50 text-amber-900 font-semibold"
+                    : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
+                }`}
+              >
+                <Send className="h-3.5 w-3.5" />
+                WhatsApp
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              Destino ({otpChannel === "email" ? "Correo electrónico" : "Teléfono móvil"})
+            </label>
+            <div className="flex gap-2">
+              <Input
+                type="text"
+                value={otpDestination}
+                onChange={(e) => setOtpDestination(e.target.value)}
+                placeholder={otpChannel === "email" ? "correo@ejemplo.com" : "+34600000000"}
+              />
+              <Button
+                type="button"
+                onClick={handleSendOtp}
+                disabled={otpSending}
+                variant="secondary"
+                size="sm"
+                className="whitespace-nowrap"
+              >
+                {otpSending ? "Enviando…" : "Enviar código (7 min)"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="border-t border-neutral-100 pt-3">
+            <label className="mb-1 block text-xs font-semibold text-neutral-800">
+              Código recibido por el cliente (6 dígitos)
+            </label>
+            <div className="flex gap-2">
+              <Input
+                type="text"
+                maxLength={6}
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                placeholder="123456"
+                className="font-mono text-center text-lg tracking-widest"
+              />
+              <Button
+                type="button"
+                onClick={handleConfirmOtp}
+                disabled={otpVerifying || otpCode.length < 6}
+                className="bg-emerald-600 text-white hover:bg-emerald-700 whitespace-nowrap"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                {otpVerifying ? "Verificando…" : "Confirmar y Desbloquear"}
+              </Button>
+            </div>
+            <p className="mt-1.5 text-xs text-neutral-500 text-center">
+              ⏱️ El código es válido durante un máximo de 7 minutos desde su emisión.
+            </p>
+          </div>
+
+          <div className="flex justify-end pt-2 border-t border-neutral-100">
+            <Button variant="secondary" onClick={() => setOtpModalOpen(false)}>
+              Cerrar
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

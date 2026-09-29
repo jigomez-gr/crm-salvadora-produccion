@@ -102,6 +102,10 @@ export class Contact {
   @Column({ type: 'varchar', length: 1, default: 'N' })
   bloqueado: string;
 
+  // Email status flag: 'S' = delivery failure/error detected, 'N' = valid/verified (default)
+  @Column({ type: 'varchar', length: 1, default: 'N' })
+  emailerroneo: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

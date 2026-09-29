@@ -34,6 +34,7 @@ export interface BookingAgentDeps {
   ) => Promise<any>;
   findContact?: (phone?: string, email?: string) => Promise<any>;
   isContactBlocked?: (phoneOrEmailOrId: string) => Promise<boolean>;
+  isContactEmailErroneous?: (phoneOrEmailOrId: string) => Promise<boolean>;
   getAvailableSlots: (
     date: string,
     durationMinutes: number,
@@ -643,6 +644,30 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           return {
             error: BLOCKED_USER_MESSAGE,
             message: BLOCKED_USER_MESSAGE,
+          };
+        }
+      }
+
+      // Check emailerroneo flag: if S, customer must verify with 7-min OTP
+      if (contactId && deps.isContactEmailErroneous) {
+        const isErroneous = await deps.isContactEmailErroneous(contactId).catch(() => false);
+        if (isErroneous) {
+          return {
+            error:
+              'El contacto tiene una incidencia registrada en su correo electrónico (emailerroneo=S). Debe verificar su correo mediante el código de 7 minutos antes de formalizar una reserva.',
+            message:
+              'Consta una incidencia previa con la entrega a tu correo electrónico. Por seguridad, debes verificar tu correo con el código de 7 minutos antes de formalizar una reserva.',
+          };
+        }
+      }
+      if (phoneToUse && deps.isContactEmailErroneous) {
+        const isErroneous = await deps.isContactEmailErroneous(phoneToUse).catch(() => false);
+        if (isErroneous) {
+          return {
+            error:
+              'El contacto tiene una incidencia registrada en su correo electrónico (emailerroneo=S). Debe verificar su correo mediante el código de 7 minutos antes de formalizar una reserva.',
+            message:
+              'Consta una incidencia previa con la entrega a tu correo electrónico. Por seguridad, debes verificar tu correo con el código de 7 minutos antes de formalizar una reserva.',
           };
         }
       }

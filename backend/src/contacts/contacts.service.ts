@@ -124,6 +124,25 @@ export class ContactsService {
         ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "studentSchedule" jsonb;
         ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "studentEnrolledAt" timestamptz;
         ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "bloqueado" character varying(1) DEFAULT 'N';
+        ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "emailerroneo" character varying(1) NOT NULL DEFAULT 'N';
+        CREATE TABLE IF NOT EXISTS "contact_identity_changes" (
+          "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+          "contactId" uuid REFERENCES contacts(id) ON DELETE CASCADE,
+          "changeType" character varying NOT NULL,
+          "targetChannel" character varying NOT NULL,
+          "destination" character varying NOT NULL,
+          "codeHash" character varying NOT NULL,
+          "oldValues" jsonb,
+          "newValues" jsonb,
+          "status" character varying NOT NULL DEFAULT 'pending',
+          "attempts" integer NOT NULL DEFAULT 0,
+          "expiresAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+          "verifiedAt" TIMESTAMP WITH TIME ZONE,
+          "source" character varying NOT NULL DEFAULT 'web',
+          "ipAddress" character varying,
+          "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+          CONSTRAINT "PK_contact_identity_changes_id" PRIMARY KEY ("id")
+        );
       `);
     } catch {
       // Non-fatal schema migration
@@ -415,6 +434,7 @@ export class ContactsService {
       tags: dto.tags ?? [],
       source: dto.source ?? 'manual',
       bloqueado: dto.bloqueado?.toUpperCase() === 'S' ? 'S' : 'N',
+      emailerroneo: dto.emailerroneo?.toUpperCase() === 'S' ? 'S' : 'N',
       // New contacts land at the top of their column (newest first).
       boardPosition: Date.now(),
     });
@@ -442,12 +462,13 @@ export class ContactsService {
       'studentModality',
       'studentSchedule',
       'bloqueado',
+      'emailerroneo',
     ] as const;
     const target = contact as unknown as Record<string, unknown>;
     for (const key of simpleFields) {
       if (dto[key] !== undefined) {
-        if (key === 'bloqueado') {
-          target[key] = dto.bloqueado?.toUpperCase() === 'S' ? 'S' : 'N';
+        if (key === 'bloqueado' || key === 'emailerroneo') {
+          target[key] = dto[key]?.toUpperCase() === 'S' ? 'S' : 'N';
         } else {
           target[key] = dto[key];
         }
@@ -491,6 +512,19 @@ export class ContactsService {
       contact = await this.findByPhoneOrEmail(clean, clean).catch(() => null);
     }
     return contact?.bloqueado === 'S';
+  }
+
+  async isContactEmailErroneous(phoneOrEmailOrId?: string | null): Promise<boolean> {
+    if (!phoneOrEmailOrId) return false;
+    const clean = phoneOrEmailOrId.trim();
+    let contact: Contact | null = null;
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean)) {
+      contact = await this.findById(clean).catch(() => null);
+    }
+    if (!contact) {
+      contact = await this.findByPhoneOrEmail(clean, clean).catch(() => null);
+    }
+    return contact?.emailerroneo === 'S';
   }
 
   /**

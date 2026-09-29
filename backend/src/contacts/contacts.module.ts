@@ -2,17 +2,29 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Contact } from '../common/entities/contact.entity';
 import { Appointment } from '../common/entities/appointment.entity';
+import { ContactIdentityChange } from './entities/contact-identity-change.entity';
 import { ContactsService } from './contacts.service';
 import { ContactsController } from './contacts.controller';
+import { ContactVerificationService } from './contact-verification.service';
+import { ContactVerificationController } from './contact-verification.controller';
 import { AuthModule } from '../auth/auth.module';
+import { EmailModule } from '../email/email.module';
+import { ZadarmaSmsModule } from '../sms/zadarma-sms.module';
+import { YCloudModule } from '../whatsapp/ycloud.module';
+import { AgentsConfigModule } from '../agents/agents-config.module';
 
 @Module({
-  // Appointment repo is read-only here — the board enriches cards with each
-  // contact's next appointment. No dependency on AppointmentsModule (the
-  // auto-advance-on-booking hook is wired via the 'appointment.created' event).
-  imports: [TypeOrmModule.forFeature([Contact, Appointment]), AuthModule],
-  providers: [ContactsService],
-  controllers: [ContactsController],
-  exports: [ContactsService],
+  imports: [
+    TypeOrmModule.forFeature([Contact, Appointment, ContactIdentityChange]),
+    AuthModule,
+    EmailModule,
+    ZadarmaSmsModule,
+    YCloudModule,
+    AgentsConfigModule,
+  ],
+  providers: [ContactsService, ContactVerificationService],
+  controllers: [ContactsController, ContactVerificationController],
+  exports: [ContactsService, ContactVerificationService],
 })
 export class ContactsModule {}
+

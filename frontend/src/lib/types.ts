@@ -126,6 +126,7 @@ export interface Contact {
   boardPosition?: number;
   // Consent / GDPR.
   bloqueado?: string;
+  emailerroneo?: string;
   optedOut: boolean;
   optedOutAt?: string | null;
   anonymizedAt?: string | null;
@@ -134,6 +135,20 @@ export interface Contact {
   studentModality?: "1_clase_semanal" | "2_clases_semanales" | string | null;
   studentSchedule?: Array<{ day: number; time: string }> | null;
   studentEnrolledAt?: string | null;
+  createdAt: string;
+}
+
+export interface ContactIdentityChange {
+  id: string;
+  contactId: string | null;
+  changeType: string;
+  targetChannel: 'email' | 'sms' | 'whatsapp';
+  destination: string;
+  status: 'pending' | 'verified' | 'expired' | 'failed';
+  attempts: number;
+  expiresAt: string;
+  verifiedAt?: string | null;
+  source: string;
   createdAt: string;
 }
 

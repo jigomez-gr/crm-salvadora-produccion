@@ -1046,6 +1046,42 @@ export class VapiWebhookService {
     if (contact?.bloqueado === 'S') {
       return BLOCKED_USER_MESSAGE;
     }
+    if (contact?.emailerroneo === 'S') {
+      return 'Consta una incidencia previa con la entrega a tu correo electrónico. Por seguridad, debes verificar tu correo con el código de 7 minutos antes de formalizar una reserva.';
+    }
+
+    if (contact) {
+      // Check contradiction: existing contact with different email or conflicting name
+      let contradictionReason = '';
+      if (
+        providedEmail &&
+        contact.email &&
+        contact.email.trim().toLowerCase() !== providedEmail.trim().toLowerCase()
+      ) {
+        contradictionReason = `el correo facilitado (${providedEmail}) no coincide con el registrado (${contact.email})`;
+      } else if (
+        customerName &&
+        customerName !== 'Alumno' &&
+        contact.name &&
+        contact.name !== 'Cliente Telefónico' &&
+        contact.name !== 'Alumno'
+      ) {
+        const normExisting = contact.name.trim().toLowerCase();
+        const normGiven = customerName.trim().toLowerCase();
+        if (
+          !normExisting.includes(normGiven) &&
+          !normGiven.includes(normExisting) &&
+          normExisting.split(' ')[0] !== normGiven.split(' ')[0]
+        ) {
+          contradictionReason = `el nombre facilitado (${customerName}) no coincide con el titular registrado (${contact.name})`;
+        }
+      }
+
+      if (contradictionReason) {
+        return `Por seguridad no puedo formalizar la reserva automáticamente porque ${contradictionReason}. Es necesario verificar la titularidad mediante código de verificación antes de continuar.`;
+      }
+    }
+
     if (!contact) {
       contact = this.contactsRepo.create({
         name: customerName,
@@ -1053,6 +1089,7 @@ export class VapiWebhookService {
         email: providedEmail || undefined,
         source: 'agente_voz',
         status: ContactStatus.ACTIVE,
+        emailerroneo: 'N',
       });
       contact = await this.contactsRepo.save(contact);
     } else {
@@ -1061,7 +1098,7 @@ export class VapiWebhookService {
         contact.name = customerName;
         contactNeedsSave = true;
       }
-      if (providedEmail && contact.email !== providedEmail) {
+      if (providedEmail && !contact.email) {
         contact.email = providedEmail;
         contactNeedsSave = true;
       }

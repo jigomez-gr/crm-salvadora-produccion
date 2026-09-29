@@ -149,7 +149,7 @@ describe('AppointmentsService - rescheduleAppointment', () => {
       null as any, // analizaIa
       {
         sendAppointmentDecisionEmail: jest.fn().mockResolvedValue({}),
-        sendNotification: jest.fn().mockResolvedValue({}),
+        sendNotification: jest.fn().mockResolvedValue({ ok: true }),
       } as any, // emailService
       null as any, // ycloudClient
       null as any, // agentsConfigService
