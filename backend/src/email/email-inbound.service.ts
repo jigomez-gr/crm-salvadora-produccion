@@ -58,10 +58,10 @@ export class EmailInboundService implements OnModuleInit {
    * Connect to IMAP, inspect unseen / new emails, reflect them in CRM threads,
    * qualify them with AI, and auto-reply or trigger human handoff.
    */
-  async syncNow(): Promise<{ processedCount: number; details: any[] }> {
+  async syncNow(): Promise<{ processedCount: number; details: any[]; error?: string }> {
     if (this.isPolling) {
       this.logger.log('Email sync is already running in background. Skipping duplicate run.');
-      return { processedCount: 0, details: [] };
+      return { processedCount: 0, details: [], error: 'SYNC_ALREADY_IN_PROGRESS' };
     }
 
     this.isPolling = true;
@@ -92,6 +92,10 @@ export class EmailInboundService implements OnModuleInit {
         secure,
         auth: { user, pass },
         logger: false,
+        tls: { rejectUnauthorized: false },
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 30000,
       });
 
       await client.connect();
@@ -322,8 +326,10 @@ export class EmailInboundService implements OnModuleInit {
       }
 
       await client.logout();
-    } catch (err) {
-      this.logger.error(`Error syncing inbound emails via IMAP: ${err}`);
+    } catch (err: any) {
+      const errMsg = err?.message || String(err);
+      this.logger.error(`Error syncing inbound emails via IMAP: ${errMsg}`);
+      return { processedCount, details, error: errMsg };
     } finally {
       this.isPolling = false;
     }
@@ -351,8 +357,8 @@ export class EmailInboundService implements OnModuleInit {
         /^From:\s+/i.test(trimmed) ||
         /^Enviado el:\s+/i.test(trimmed) ||
         /^Sent:\s+/i.test(trimmed) ||
-        /^El\s+.+,\s+.+\s+escribi[oó]:/i.test(trimmed) ||
-        /^El\s+.+\s+a las\s+[0-9]{1,2}:[0-9]{2}/i.test(trimmed) ||
+        /^El(\s+El)?\s+.+,\s+.+\s+escribi[oó]:/i.test(trimmed) ||
+        /^El(\s+El)?\s+.+\s+a las\s+[0-9]{1,2}:[0-9]{2}/i.test(trimmed) ||
         /^On\s+.+,\s+.+\s+wrote:/i.test(trimmed) ||
         /^On\s+.+at\s+[0-9]{1,2}:[0-9]{2}/i.test(trimmed) ||
         trimmed.startsWith('>')
