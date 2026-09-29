@@ -245,13 +245,16 @@ export class EmailInboundService implements OnModuleInit {
             this.logger.log(`Thread ${threadId} is in human handoff. Suppressing automated AI reply.`);
             processResult.actionTaken = 'handoff_active_notified_operator';
 
+            const isUrgent = this.detectUrgency(cleanedBody || cleanSubject);
+
             this.eventEmitter.emit('human_handoff.requested', {
               channel: 'email',
               customerName: contact.name,
               customerEmail: rawFrom,
               customerPhone: contact.phone,
               threadId,
-              reason: `Nuevo correo de ${contact.name} en hilo con atención humana activa:\n"${cleanedBody}"`,
+              isUrgent,
+              reason: `Nuevo correo de ${contact.name} en hilo con atención humana activa${isUrgent ? ' [URGENTE]' : ''}:\n"${cleanedBody}"`,
             });
           } else {
             // 5. Intelligent AI Qualification & Reply
@@ -289,6 +292,8 @@ export class EmailInboundService implements OnModuleInit {
               await this.messagesService.setHandoff(threadId, true);
               this.eventEmitter.emit('conversation.updated', { threadId });
 
+              const isUrgent = Boolean(evaluation.isUrgent) || this.detectUrgency(cleanedBody || cleanSubject);
+
               // Notify operators via decoupled event
               this.eventEmitter.emit('human_handoff.requested', {
                 channel: 'email',
@@ -296,7 +301,8 @@ export class EmailInboundService implements OnModuleInit {
                 customerEmail: rawFrom,
                 customerPhone: contact.phone,
                 threadId,
-                reason: `Atención personalizada requerida (${evaluation.reasoning}):\n"${cleanedBody}"`,
+                isUrgent,
+                reason: `Atención personalizada requerida${isUrgent ? ' [URGENTE]' : ''} (${evaluation.reasoning}):\n"${cleanedBody}"`,
               });
 
               // Send polite acknowledgment informing that Salvadora will respond
@@ -557,5 +563,27 @@ export class EmailInboundService implements OnModuleInit {
     }
 
     return { isCorporate: false };
+  }
+
+  /**
+   * Check if email text explicitly conveys urgent medical or critical need.
+   */
+  private detectUrgency(text: string): boolean {
+    if (!text) return false;
+    const lower = text.toLowerCase();
+    const urgentKeywords = [
+      'urgente',
+      'urgencia',
+      'emergencia',
+      'muy grave',
+      'grave',
+      'crisis',
+      'dolor agudo',
+      'accidente',
+      'hospital',
+      'ambulancia',
+      'hemorragia',
+    ];
+    return urgentKeywords.some((k) => lower.includes(k));
   }
 }

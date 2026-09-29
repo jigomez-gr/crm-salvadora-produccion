@@ -27,6 +27,7 @@ export interface EmailDialogueInput {
 export interface EmailDialogueEvaluation {
   intent: 'AUTO_BOOKING' | 'AUTO_INFO' | 'HUMAN_HANDOFF' | 'IGNORE';
   reasoning: string;
+  isUrgent?: boolean;
   handoffReason?: string;
   extractedBooking?: {
     serviceName?: string;
@@ -140,6 +141,9 @@ CATEGORÍAS DE INTENCIÓN:
 4. "HUMAN_HANDOFF":
    - Solo aplicable a personas físicas que plantean una situación personal/médica compleja (lesión de columna, embarazo de riesgo, cirugía reciente, consulta profunda de psicoterapia/Gestalt), expresan una queja, o solicitan hablar personalmente con Salvadora ("quiero que me llame Salvadora", "necesito hablar con ella").
    - Acción: Marcar pase a humano.
+   - Evaluación de Urgencia ("isUrgent"):
+     * Pon "isUrgent": true ÚNICAMENTE si el mensaje describe una urgencia real inaplazable: dolor agudo severo o incapacitante sobrevenido, crisis médica o psicológica aguda, accidente reciente, o cancelación urgente de última hora de una cita inminente hoy mismo, o pide auxilio con palabras explícitas de urgencia ("por favor es urgente", "emergencia").
+     * En cualquier otro caso habitual (consultas sobre dolencias crónicas pasadas, embarazo, querer hablar tranquilamente con Salvadora para consultar su caso, etc.), "isUrgent" DEBE SER false.
    - Redacta un correo cordial ('replyBody') avisando de que hemos transferido su mensaje directamente a Salvadora para que lo revise personalmente.
 
 REGLAS DE RESPUESTA:
@@ -161,6 +165,7 @@ RESPONDE EXCLUSIVAMENTE UN OBJETO JSON VÁLIDO CON ESTA ESTRUCTURA:
 {
   "intent": "AUTO_BOOKING" | "AUTO_INFO" | "HUMAN_HANDOFF" | "IGNORE",
   "reasoning": "Breve explicación de la decisión tomada",
+  "isUrgent": true | false,
   "handoffReason": "Razón para el equipo humano si es HUMAN_HANDOFF o null",
   "extractedBooking": {
     "serviceName": "Nombre exacto del servicio del catálogo (ej: 'Hatha Yoga Terapéutico', 'Baño de Gong y Meditación Sonora') o null",
@@ -206,6 +211,7 @@ Mensaje:
           return {
             intent: parsed.intent,
             reasoning: parsed.reasoning || 'Evaluado con IA',
+            isUrgent: Boolean(parsed.isUrgent),
             handoffReason: parsed.handoffReason || undefined,
             extractedBooking: parsed.extractedBooking || undefined,
             replySubject:
@@ -267,6 +273,16 @@ Mensaje:
       };
     }
 
+    const isUrgent =
+      text.includes('urgente') ||
+      text.includes('urgencia') ||
+      text.includes('emergencia') ||
+      text.includes('grave') ||
+      text.includes('crisis') ||
+      text.includes('dolor agudo') ||
+      text.includes('accidente') ||
+      text.includes('hospital');
+
     const wantsHuman =
       text.includes('salvadora') &&
       (text.includes('hablar') || text.includes('llame') || text.includes('personal') || text.includes('directo')) ||
@@ -274,12 +290,14 @@ Mensaje:
       text.includes('reclamacion') ||
       text.includes('operacion') ||
       text.includes('embarazada') ||
-      text.includes('lesion');
+      text.includes('lesion') ||
+      isUrgent;
 
     if (wantsHuman) {
       return {
         intent: 'HUMAN_HANDOFF',
         reasoning: 'Petición de contacto directo con Salvadora o situación particular detectada.',
+        isUrgent,
         handoffReason: 'El cliente solicita atención personalizada o refiere una situación particular.',
         replySubject: input.latestInbound.subject.startsWith('Re:')
           ? input.latestInbound.subject

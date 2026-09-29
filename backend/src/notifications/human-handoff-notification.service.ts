@@ -15,6 +15,7 @@ export interface HumanNoticePayload {
   reason?: string | null;
   threadId?: string | null;
   extraNotes?: string | null;
+  isUrgent?: boolean;
 }
 
 export interface HumanNoticeResult {
@@ -80,6 +81,7 @@ export class HumanHandoffNotificationService {
     const clientPhone = payload.customerPhone?.trim() || 'No facilitado';
     const clientEmail = payload.customerEmail?.trim() || 'No facilitado';
     const reasonText = payload.reason?.trim() || 'Desea atención directa por una persona del equipo';
+    const isUrgent = Boolean(payload.isUrgent);
 
     const nowFormatted = new Date().toLocaleString('es-ES', {
       timeZone: 'Europe/Madrid',
@@ -88,13 +90,15 @@ export class HumanHandoffNotificationService {
     });
 
     this.logger.log(
-      `🔔 Disparando aviso de atención humana desde [${channelLabel}] para ${clientName} (${clientPhone})`,
+      `🔔 Disparando aviso de atención humana desde [${channelLabel}] para ${clientName} (${clientPhone}) - Urgente: ${isUrgent}`,
     );
 
     // 1. Envío por Correo Electrónico (Email)
     if (settings.humanNoticeEmailEnabled && settings.humanNoticeEmail) {
       try {
-        const subject = `🚨 Solicitud de atención humana urgente (${channelLabel}) - ${clientName}`;
+        const subject = isUrgent
+          ? `🚨 Solicitud de atención humana URGENTE (${channelLabel}) - ${clientName}`
+          : `📋 Solicitud de atención humana (${channelLabel}) - ${clientName}`;
         const html = `
 <!DOCTYPE html>
 <html>
@@ -104,7 +108,7 @@ export class HumanHandoffNotificationService {
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 20px; }
     .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
     .header { background: #4f46e5; color: #ffffff; padding: 24px 28px; text-align: left; }
-    .badge { display: inline-block; background: #ef4444; color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 8px; border-radius: 4px; margin-bottom: 8px; }
+    .badge { display: inline-block; background: ${isUrgent ? '#ef4444' : '#4f46e5'}; color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 8px; border-radius: 4px; margin-bottom: 8px; }
     .title { margin: 0; font-size: 20px; font-weight: 700; color: #ffffff; }
     .body-content { padding: 28px; }
     .info-card { background: #f1f5f9; border-radius: 8px; padding: 18px; margin: 18px 0; border-left: 4px solid #4f46e5; }
@@ -119,12 +123,12 @@ export class HumanHandoffNotificationService {
 <body>
   <div class="container">
     <div class="header">
-      <div class="badge">Atención Requerida</div>
-      <h1 class="title">Solicitud de Atención Humana</h1>
+      <div class="badge">${isUrgent ? 'Urgencia Requerida' : 'Atención Requerida'}</div>
+      <h1 class="title">${isUrgent ? 'Solicitud de Atención Humana URGENTE' : 'Solicitud de Atención Humana'}</h1>
     </div>
     <div class="body-content">
       <p style="margin-top: 0; font-size: 15px;">
-        Un usuario ha solicitado expresamente hablar con una persona del centro y ha confirmado su petición:
+        Un usuario ha solicitado hablar con una persona del centro:
       </p>
 
       <div class="info-card">
@@ -170,45 +174,59 @@ export class HumanHandoffNotificationService {
     }
 
     // 2. Envío por SMS (Zadarma)
+    // Para canal email: NUNCA enviar SMS salvo que el correo requiera atención urgente
     if (settings.humanNoticeSmsEnabled && settings.humanNoticePhone) {
-      try {
-        const smsText = `[CRM Salvadora] AVISO: El cliente ${clientName} (${clientPhone}) solicita hablar con un humano por ${channelLabel}. Motivo: ${reasonText.slice(0, 75)}`;
-        const smsRes = await this.zadarmaSmsService.sendSms({
-          number: settings.humanNoticePhone.trim(),
-          message: smsText,
-        });
-        if (smsRes.success) {
-          result.smsSent = true;
-          this.logger.log(`✅ SMS de aviso de escalado enviado a ${settings.humanNoticePhone}`);
-        } else {
-          result.errors.push(`SMS error: ${smsRes.error || smsRes.status}`);
+      if (payload.channel === 'email' && !isUrgent) {
+        this.logger.log(
+          `ℹ️ SMS de escalado omitido para ${clientName} (${payload.channel}): el correo no requiere atención urgente.`,
+        );
+      } else {
+        try {
+          const smsText = `[CRM Salvadora] AVISO${isUrgent ? ' URGENTE' : ''}: El cliente ${clientName} (${clientPhone}) solicita hablar con un humano por ${channelLabel}. Motivo: ${reasonText.slice(0, 75)}`;
+          const smsRes = await this.zadarmaSmsService.sendSms({
+            number: settings.humanNoticePhone.trim(),
+            message: smsText,
+          });
+          if (smsRes.success) {
+            result.smsSent = true;
+            this.logger.log(`✅ SMS de aviso de escalado enviado a ${settings.humanNoticePhone}`);
+          } else {
+            result.errors.push(`SMS error: ${smsRes.error || smsRes.status}`);
+          }
+        } catch (err: any) {
+          this.logger.error(`Error enviando SMS de aviso: ${err.message}`);
+          result.errors.push(`SMS exception: ${err.message}`);
         }
-      } catch (err: any) {
-        this.logger.error(`Error enviando SMS de aviso: ${err.message}`);
-        result.errors.push(`SMS exception: ${err.message}`);
       }
     }
 
     // 3. Llamada de Voz Saliente (VAPI Outbound)
+    // Para canal email: NUNCA llamar por teléfono salvo que el correo requiera atención urgente
     if (settings.humanNoticeVapiEnabled && settings.humanNoticePhone) {
-      try {
-        const voiceMsg = `Hola, te llamamos del Centro Salvadora Conesa para avisarte de que un usuario ha solicitado hablar con un humano a través de ${channelLabel}. El cliente es ${clientName}${payload.customerPhone ? `, con teléfono ${payload.customerPhone}` : ''}. Motivo de su solicitud: ${reasonText}. Por favor revisa el CRM para ponerte en contacto con él. Gracias.`;
-        const callRes = await this.vapiService.startOutboundCall(
-          settings.humanNoticePhone.trim(),
-          undefined,
-          voiceMsg,
+      if (payload.channel === 'email' && !isUrgent) {
+        this.logger.log(
+          `ℹ️ Llamada saliente VAPI omitida para ${clientName} (${payload.channel}): el correo no requiere atención urgente.`,
         );
-        if (callRes.ok) {
-          result.vapiSent = true;
-          this.logger.log(
-            `✅ Llamada saliente VAPI de aviso iniciada a ${settings.humanNoticePhone} (Call ID: ${callRes.callId})`,
+      } else {
+        try {
+          const voiceMsg = `Hola, te llamamos del Centro Salvadora Conesa para avisarte de que un usuario ha solicitado hablar con un humano a través de ${channelLabel}. El cliente es ${clientName}${payload.customerPhone ? `, con teléfono ${payload.customerPhone}` : ''}. Motivo de su solicitud: ${reasonText}. Por favor revisa el CRM para ponerte en contacto con él. Gracias.`;
+          const callRes = await this.vapiService.startOutboundCall(
+            settings.humanNoticePhone.trim(),
+            undefined,
+            voiceMsg,
           );
-        } else {
-          result.errors.push(`VAPI call error: ${callRes.error}`);
+          if (callRes.ok) {
+            result.vapiSent = true;
+            this.logger.log(
+              `✅ Llamada saliente VAPI de aviso iniciada a ${settings.humanNoticePhone} (Call ID: ${callRes.callId})`,
+            );
+          } else {
+            result.errors.push(`VAPI call error: ${callRes.error}`);
+          }
+        } catch (err: any) {
+          this.logger.error(`Error iniciando llamada VAPI de aviso: ${err.message}`);
+          result.errors.push(`VAPI call exception: ${err.message}`);
         }
-      } catch (err: any) {
-        this.logger.error(`Error iniciando llamada VAPI de aviso: ${err.message}`);
-        result.errors.push(`VAPI call exception: ${err.message}`);
       }
     }
 
