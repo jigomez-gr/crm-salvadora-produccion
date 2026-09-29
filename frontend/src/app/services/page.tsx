@@ -1033,7 +1033,7 @@ export default function ServicesPage() {
                       <Tag className="h-3.5 w-3.5 text-neutral-400" />
                       Precio:
                     </span>
-                    <span className="font-semibold text-neutral-800">
+                    <span className="font-semibold text-neutral-800 text-right break-words max-w-[65%]">
                       {s.sinpreciodefinitivo === "S"
                         ? s.textosinpreciodefinitivo || "Precio por confirmar"
                         : s.price
