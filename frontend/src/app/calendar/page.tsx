@@ -97,6 +97,8 @@ interface ApptFormData {
   price: string;
   isRecovery?: boolean;
   allowCustomSchedule?: boolean;
+  editionId?: string;
+  isProvisional?: boolean;
 }
 
 function AppointmentModal({
@@ -170,6 +172,8 @@ function AppointmentModal({
     price: initial?.price ?? initialSvc?.price ?? "",
     isRecovery: initial?.isRecovery ?? false,
     allowCustomSchedule: false,
+    editionId: initial?.editionId ?? "",
+    isProvisional: initial?.isProvisional ?? false,
   });
   const [saving, setSaving] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -203,6 +207,11 @@ function AppointmentModal({
       timeLabel: string;
       dayName: string;
       isNext: boolean;
+      editionId?: string;
+      isProvisional?: boolean;
+      minParticipants?: number;
+      enrolledCount?: number;
+      quorumReached?: boolean;
     }>
   >([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -227,6 +236,11 @@ function AppointmentModal({
           timeLabel: string;
           dayName: string;
           isNext: boolean;
+          editionId?: string;
+          isProvisional?: boolean;
+          minParticipants?: number;
+          enrolledCount?: number;
+          quorumReached?: boolean;
         }>;
       }>(`/api/appointments/next-available-slots?${params.toString()}`);
       if (res?.slots) {
@@ -245,14 +259,27 @@ function AppointmentModal({
     }
   }, [open, form.serviceId, form.service, fetchUpcomingSlots]);
 
-  function handlePickSlot(slot: { startsAt: string; endsAt: string; dateLabel?: string; timeLabel?: string }) {
+  function handlePickSlot(slot: {
+    startsAt: string;
+    endsAt: string;
+    dateLabel?: string;
+    timeLabel?: string;
+    editionId?: string;
+    isProvisional?: boolean;
+  }) {
     setForm((f) => ({
       ...f,
       startsAt: toLocal(slot.startsAt),
       endsAt: toLocal(slot.endsAt),
+      editionId: slot.editionId ?? f.editionId,
+      isProvisional: slot.isProvisional !== undefined ? slot.isProvisional : f.isProvisional,
     }));
     if (slot.dateLabel && slot.timeLabel) {
-      setSlotFeedback(`${slot.dateLabel} de ${slot.timeLabel}`);
+      setSlotFeedback(
+        `${slot.dateLabel} de ${slot.timeLabel}${
+          slot.isProvisional ? " (⏳ Convocatoria Provisional)" : ""
+        }`
+      );
     }
     if (error && (error.includes("inicio") || error.includes("fin") || error.includes("fecha"))) {
       setError("");
@@ -833,11 +860,17 @@ function AppointmentModal({
                               {slot.timeLabel}
                             </span>
                           </div>
-                          {slot.isNext && (
-                            <Badge variant={isSelected ? "success" : "info"} className="text-[10px] px-1.5 py-0 shrink-0">
-                              Próxima
-                            </Badge>
-                          )}
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            {slot.isProvisional ? (
+                              <Badge variant="warning" className="text-[10px] px-1.5 py-0 shrink-0 bg-purple-100 text-purple-900 border-purple-300 font-semibold">
+                                ⏳ Provisional {slot.minParticipants ? `(${slot.enrolledCount ?? 0}/${slot.minParticipants})` : ""}
+                              </Badge>
+                            ) : slot.isNext ? (
+                              <Badge variant={isSelected ? "success" : "info"} className="text-[10px] px-1.5 py-0 shrink-0">
+                                Próxima
+                              </Badge>
+                            ) : null}
+                          </div>
                         </button>
                       );
                     })}
@@ -1011,6 +1044,32 @@ function AppointmentModal({
           </label>
           <p className="mt-1 text-[11px] text-sky-700">
             Permite agendar una clase adicional para un alumno regular que haya perdido o cancelado una clase previa dentro de los últimos 90 días.
+          </p>
+        </div>
+
+        {/* Checkbox para Reserva Provisional vinculada a Convocatoria / Quórum */}
+        <div className={cn(
+          "rounded-lg border p-3 transition-colors",
+          form.isProvisional ? "border-purple-300 bg-purple-50/70" : "border-neutral-200 bg-neutral-50/50"
+        )}>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={Boolean(form.isProvisional)}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  isProvisional: e.target.checked,
+                }))
+              }
+              className="h-4 w-4 rounded border-neutral-300 text-purple-600 focus:ring-purple-500"
+            />
+            <span className="text-xs font-semibold text-purple-950 flex items-center gap-1.5">
+              ⏳ Reserva Provisional (sujeta a confirmación de fecha / quórum mínimo)
+            </span>
+          </label>
+          <p className="mt-1 text-[11px] text-purple-800 leading-snug">
+            Si la fecha definitiva o el precio aún no están cerrados, o el servicio requiere quórum de asistentes, la cita se registra como <strong>provisional</strong>. Al confirmarse la convocatoria desde Servicios se volverá <strong>definitiva</strong> notificando al alumno por Email y WhatsApp.
           </p>
         </div>
 
@@ -1589,7 +1648,7 @@ function MonthView({
                       STATUS_COLORS[a.status]
                     )}
                   >
-                    {format(parseISO(a.startsAt), "HH:mm")} {a.modality === "virtual" ? "💻 " : a.modality === "phone" ? "📞 " : ""}{a.service}
+                    {format(parseISO(a.startsAt), "HH:mm")} {a.isProvisional ? "⏳ " : ""}{a.modality === "virtual" ? "💻 " : a.modality === "phone" ? "📞 " : ""}{a.service}
                   </div>
                 ))}
                 {dayAppts.length > 3 && (
@@ -1674,7 +1733,15 @@ function WeekView({
                       <span className="font-medium">
                         {format(parseISO(a.startsAt), "HH:mm")}
                       </span>
-                      <span className="flex-1 truncate">{a.service}</span>
+                      <span className="flex-1 truncate">
+                        {a.isProvisional && <span className="mr-1 text-purple-700 font-bold">⏳</span>}
+                        {a.service}
+                      </span>
+                      {a.isProvisional && (
+                        <Badge variant="warning" className="rounded-sm text-[10px] bg-purple-100 text-purple-900 border-purple-300 font-semibold">
+                          ⏳ Provisional
+                        </Badge>
+                      )}
                       <Badge
                         variant={statusVariant(a.status)}
                         className="rounded-sm text-[10px]"
@@ -1782,6 +1849,7 @@ function WeekView({
                       style={{ top, height }}
                     >
                       <div className="font-semibold truncate">
+                        {a.isProvisional && "⏳ "}
                         {a.modality === "virtual" ? "💻 " : a.modality === "phone" ? "📞 " : ""}{a.service}
                       </div>
                       <div className="truncate opacity-75">
@@ -1948,6 +2016,11 @@ function AppointmentListView({
                     <Badge variant={statusVariant(a.status)}>
                       {statusLabel(a.status)}
                     </Badge>
+                    {a.isProvisional && (
+                      <Badge variant="warning" className="text-[10px] bg-purple-100 text-purple-900 border-purple-300 font-semibold">
+                        ⏳ Reserva Provisional (Quórum)
+                      </Badge>
+                    )}
                     {a.isFirstClass && (
                       <Badge variant="info" className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">
                         ⭐ Primera cita
@@ -2227,6 +2300,8 @@ function CalendarPageInner() {
       price,
       isRecovery: data.isRecovery ?? false,
       allowCustomSchedule: data.allowCustomSchedule ?? false,
+      editionId: data.editionId || undefined,
+      isProvisional: data.isProvisional ?? false,
     };
     if (editingAppt) {
       await apiFetch(`/api/appointments/${editingAppt.id}`, {

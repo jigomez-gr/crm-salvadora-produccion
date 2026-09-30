@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Service } from '../common/entities/service.entity';
+import { EventEdition } from '../common/entities/event-edition.entity';
 import { ServiceCategory } from '../common/entities/service-category.entity';
 import { User } from '../common/entities/user.entity';
 import { Appointment } from '../common/entities/appointment.entity';
@@ -9,6 +10,8 @@ import { KnowledgeDocument } from '../common/entities/knowledge-document.entity'
 import { KnowledgeChunk } from '../common/entities/knowledge-chunk.entity';
 import { ServicesService } from './services.service';
 import { ServicesController } from './services.controller';
+import { EventEditionsService } from './event-editions.service';
+import { EventEditionsController } from './event-editions.controller';
 import { AuthModule } from '../auth/auth.module';
 import { EmailModule } from '../email/email.module';
 import { YCloudModule } from '../whatsapp/ycloud.module';
@@ -17,6 +20,7 @@ import { YCloudModule } from '../whatsapp/ycloud.module';
   imports: [
     TypeOrmModule.forFeature([
       Service,
+      EventEdition,
       ServiceCategory,
       User,
       Appointment,
@@ -28,8 +32,8 @@ import { YCloudModule } from '../whatsapp/ycloud.module';
     EmailModule,
     YCloudModule,
   ],
-  controllers: [ServicesController],
-  providers: [ServicesService],
-  exports: [ServicesService],
+  controllers: [ServicesController, EventEditionsController],
+  providers: [ServicesService, EventEditionsService],
+  exports: [ServicesService, EventEditionsService],
 })
 export class ServicesModule {}

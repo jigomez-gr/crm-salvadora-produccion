@@ -25,6 +25,8 @@ function makeAppt(
     service: 'Test',
     serviceId: null,
     calendarId: 'default',
+    editionId: null,
+    isProvisional: false,
     startsAt: new Date(startsAt),
     endsAt: new Date(endsAt),
     status,

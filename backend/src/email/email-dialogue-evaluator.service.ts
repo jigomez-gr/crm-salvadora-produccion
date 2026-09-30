@@ -89,11 +89,12 @@ export class EmailDialogueEvaluatorService {
             priceStr = 'El precio se determinará en función de las características del viaje y alojamiento.';
           }
 
+          let spec = s.textoespecifico ? `\n  Texto específico / condiciones: ${s.textoespecifico}` : '';
           return `- Servicio: ${s.name}\n  Precio: ${priceStr}\n  Horario/Fechas: ${
             dates || 'Consultar programación'
           }\n  Modalidad: ${s.allowedModalities?.join(', ') || 'presencial'}\n  Descripción: ${
             s.description || 'Sin descripción adicional'
-          }\n  Reservas provisionales: Se admiten reservas provisionales de plaza.`;
+          }${spec}\n  Reservas provisionales: Se admiten reservas provisionales de plaza.`;
         })
         .join('\n\n');
 

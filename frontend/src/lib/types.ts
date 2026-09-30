@@ -53,14 +53,18 @@ export interface Service {
   flyerPath?: string | null;
   flyerParticularUrl?: string | null;
   flyerParticularPath?: string | null;
+  videoUrl?: string | null;
+  videoPath?: string | null;
   videoParticularUrl?: string | null;
   videoParticularPath?: string | null;
+  textoespecifico?: string | null;
   fechaDesde?: string | null;
   fechaHasta?: string | null;
   sinfechadefinitiva?: string;
   textosinfechadefinitiva?: string | null;
   sinpreciodefinitivo?: string;
   textosinpreciodefinitivo?: string | null;
+  editions?: EventEdition[];
   categoryId?: string | null;
   category?: ServiceCategory | null;
   displayOrder?: number;
@@ -98,6 +102,33 @@ export interface Service {
   reminderMinutes?: number;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export type EventEditionStatus = "provisional" | "confirmed" | "cancelled" | "completed";
+
+export interface EventEdition {
+  id: string;
+  serviceId: string;
+  title: string;
+  isDateDefinite: boolean;
+  tentativeDateText?: string | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  isPriceDefinite: boolean;
+  tentativePriceText?: string | null;
+  price?: string | null;
+  minParticipants: number;
+  maxCapacity: number;
+  enrolledCount?: number;
+  quorumReached?: boolean;
+  quorumDeadline?: string | null;
+  conditionsText?: string | null;
+  status: EventEditionStatus;
+  flyerParticularUrl?: string | null;
+  videoParticularUrl?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type ContactStatus = "lead" | "active" | "inactive";
@@ -213,6 +244,8 @@ export interface Appointment {
   contact?: Contact;
   service: string;
   serviceId?: string | null;
+  editionId?: string | null;
+  isProvisional?: boolean;
   calendarId?: string;
   startsAt: string;
   endsAt: string;

@@ -9,6 +9,7 @@ import {
   NotFoundException,
   BadRequestException,
   Header,
+  Headers,
   HttpCode,
   HttpStatus,
   Optional,
@@ -21,6 +22,7 @@ import { ContactsService } from '../contacts/contacts.service';
 import { HumanHandoffNotificationService } from '../notifications/human-handoff-notification.service';
 import { SettingsService } from '../settings/settings.service';
 import { ServicesService } from '../services/services.service';
+import { EventEditionsService } from '../services/event-editions.service';
 import { CategoriesService } from '../categories/categories.service';
 import { AnalizaIaService } from '../appointments/analiza-ia.service';
 import { EmailService } from '../email/email.service';
@@ -100,6 +102,7 @@ export class WidgetController {
     private readonly vapiService: VapiService,
     private readonly vapiWebhookService: VapiWebhookService,
     private readonly contactQueryEvaluator: ContactQueryEvaluatorService,
+    @Optional() private readonly eventEditionsService?: EventEditionsService,
     @Optional() private readonly humanHandoffNoticeService?: HumanHandoffNotificationService,
     @Optional() private readonly eventEmitter?: EventEmitter2,
   ) {}
@@ -183,6 +186,15 @@ export class WidgetController {
   ) {
     const dbServices = await this.servicesService.findAll(true, categoryFilter, typeFilter).catch(() => []);
     const dbCategories = await this.categoriesService.findAll(true).catch(() => []);
+    const editionsMap: Record<string, any[]> = {};
+    if (this.eventEditionsService) {
+      for (const s of dbServices) {
+        try {
+          const eds = await this.eventEditionsService.findByService(s.id);
+          editionsMap[s.id] = eds || [];
+        } catch {}
+      }
+    }
     const [agentConfig] = await this.agentsConfigService.findAll().catch(() => []);
     const branding = await this.settingsService.getBranding().catch(() => null);
     const whatsappPhone = agentConfig?.whatsappNumber || '34695172625';
@@ -254,6 +266,9 @@ export class WidgetController {
           flyerParticularUrl: s.flyerParticularUrl || null,
           videoParticularPath: s.videoParticularPath || null,
           videoParticularUrl: s.videoParticularUrl || null,
+          videoPath: s.videoPath || null,
+          videoUrl: s.videoUrl || null,
+          textoespecifico: s.textoespecifico || null,
           fechaDesde: s.fechaDesde || '2000-01-01',
           fechaHasta: s.fechaHasta || '2099-12-31',
           sinfechadefinitiva: s.sinfechadefinitiva || 'N',
@@ -265,9 +280,25 @@ export class WidgetController {
           whatsappBookingUrl: `https://wa.me/${cleanWaPhone}?text=${encodeURIComponent(
             `Hola, me gustaría información y disponibilidad para ${s.name}.`,
           )}`,
+          editions: editionsMap[s.id] || [],
         };
       }),
     };
+  }
+
+  
+  /**
+   * Public streaming of service media assets (flyers, mp4 videos).
+   * Supports HTTP 206 Range requests for HTML5 video playback.
+   */
+  @Get('services/:id/media/:slot')
+  async streamServiceMedia(
+    @Param('id') id: string,
+    @Param('slot') slot: string,
+    @Headers('range') range: string | undefined,
+    @Res() res: Response,
+  ) {
+    return this.servicesService.streamServiceMedia(id, slot, range, res);
   }
 
   @Get('history/:agentKey/:sessionId')
@@ -974,74 +1005,125 @@ export class WidgetController {
     };
   }
 
-  @Get('demo')
+    @Get('demo')
   @Header('Content-Type', 'text/html; charset=utf-8')
-  getDemoLandingPage(@Res() res: Response) {
+  async getDemoLandingPage(@Res() res: Response) {
+    const dbServices = await this.servicesService.findAll(true).catch(() => []);
+    const [agentConfig] = await this.agentsConfigService.findAll().catch(() => []);
+    const branding = await this.settingsService.getBranding().catch(() => null);
+    const businessName = agentConfig?.businessName || branding?.businessName || 'Centro de Yoga y Bienestar Salvadora';
+    const waPhone = (agentConfig?.whatsappNumber || '34695172625').replace(/[^0-9]/g, '');
+
+    let editionsMap: Record<string, any[]> = {};
+    if (this.eventEditionsService) {
+      for (const s of dbServices) {
+        try {
+          const eds = await this.eventEditionsService.findByService(s.id);
+          editionsMap[s.id] = eds || [];
+        } catch {}
+      }
+    }
+
+    const cardsHtml = dbServices.map((s) => {
+      const eds = editionsMap[s.id] || [];
+      const hasProvisional = eds.some((e: any) => e.status === 'provisional');
+      const activeEd = eds[0];
+
+      let priceLabel = s.price ? `${s.price} €` : 'Consultar tarifa';
+      if (s.sinpreciodefinitivo === 'S') {
+        priceLabel = s.textosinpreciodefinitivo || 'Precio por determinar';
+      }
+
+      let dateLabel = s.scheduleText || s.eventDatesText || '';
+      if (s.sinfechadefinitiva === 'S') {
+        dateLabel = s.textosinfechadefinitiva || 'Próxima convocatoria';
+      }
+
+      const videoPlayerHtml = s.videoUrl ? `
+        <div style="margin: 12px 0;">
+          <div style="font-size: 11px; font-weight: bold; color: #800020; margin-bottom: 4px; text-transform: uppercase;">🎥 Vídeo del Servicio:</div>
+          <video controls preload="metadata" style="width: 100%; max-height: 220px; border-radius: 8px; background: #000; box-shadow: 0 2px 8px rgba(0,0,0,0.15);" src="${s.videoUrl}"></video>
+        </div>
+      ` : '';
+
+      const flyerHtml = s.flyerUrl ? `
+        <div style="margin: 10px 0;">
+          <img src="${s.flyerUrl}" alt="${s.name}" style="max-height: 180px; width: 100%; object-fit: cover; border-radius: 8px; border: 1px solid #ddd;" />
+        </div>
+      ` : '';
+
+      const textoEspecificoHtml = s.textoespecifico ? `
+        <div style="background: #FFFBEB; border-left: 4px solid #F59E0B; padding: 10px 14px; border-radius: 4px; margin: 10px 0; font-size: 13px; color: #92400E; line-height: 1.5;">
+          <strong>ℹ️ Información Específica:</strong> ${s.textoespecifico}
+        </div>
+      ` : '';
+
+      const editionBadgeHtml = hasProvisional ? `
+        <div style="background: #EFF6FF; border: 1px solid #BFDBFE; padding: 8px 12px; border-radius: 6px; margin: 8px 0; font-size: 12px; color: #1E40AF;">
+          ⏳ <strong>Convocatoria Abierta · Reserva Provisional:</strong> Se requieren mínimo ${activeEd?.minParticipants || 10} participantes (${activeEd?.enrolledCount || 0} pre-inscritos actualmente).
+        </div>
+      ` : '';
+
+      return `
+      <div class="card" style="display: block; margin-bottom: 24px; padding: 20px; background: white; border-radius: 10px; border: 1px solid #E5E0D8; box-shadow: 0 2px 10px rgba(0,0,0,0.04);">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px;">
+          <div>
+            <h3 style="margin: 0; font-size: 18px; color: #800020; font-weight: 700;">${s.name}</h3>
+            <div style="font-size: 12px; color: #666; margin-top: 2px;">${s.serviceType === 'event' ? '📅 Evento / Taller' : '🧘 Actividad Regular'} • ${s.durationMinutes} min</div>
+          </div>
+          <span style="font-size: 15px; font-weight: 700; color: #111; background: #FAF9F6; padding: 4px 10px; border-radius: 20px; border: 1px solid #eee; white-space: nowrap;">${priceLabel}</span>
+        </div>
+
+        <p style="margin: 6px 0; font-size: 14px; color: #444; line-height: 1.5;">${s.description || ''}</p>
+
+        ${textoEspecificoHtml}
+        ${editionBadgeHtml}
+        ${flyerHtml}
+        ${videoPlayerHtml}
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; pt: 10px; border-top: 1px solid #F0ECE1; padding-top: 12px;">
+          <span style="font-size: 12.5px; color: #777;">🗓️ ${dateLabel || 'Consultar disponibilidad'}</span>
+          <div style="display: flex; gap: 8px;">
+            <a href="https://wa.me/${waPhone}?text=${encodeURIComponent('Hola, me gustaría información o reservar para: ' + s.name)}" target="_blank" class="btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: #25D366; color: white;">💬 WhatsApp</a>
+            <button class="btn" data-crm-service="${s.name}">${hasProvisional ? 'Reserva Provisional' : 'Reservar Cita'}</button>
+          </div>
+        </div>
+      </div>
+      `;
+    }).join('');
+
     const html = `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Centro de Yoga Salvadora Conesa - Demo Widget</title>
+  <title>${businessName} — Catálogo Oficial y Reservas</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #FAF9F6; margin: 0; padding: 20px; color: #333; }
-    .container { max-width: 800px; margin: 40px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: 1px solid #E5E0D8; }
-    h1 { color: #800020; margin-top: 0; font-size: 26px; }
+    .container { max-width: 860px; margin: 30px auto; background: transparent; padding: 10px; }
+    h1 { color: #800020; margin-top: 0; font-size: 28px; }
     .subtitle { color: #888; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; margin-bottom: 20px; }
-    .card { background: #fdfdfd; border: 1px solid #eee; border-radius: 8px; padding: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
-    .card h3 { margin: 0 0 6px 0; font-size: 16px; color: #222; }
-    .card p { margin: 0; font-size: 13px; color: #666; }
-    .btn { background: #800020; color: white; border: none; padding: 10px 16px; border-radius: 6px; font-weight: bold; font-size: 13px; cursor: pointer; transition: background 0.2s; }
+    .btn { background: #800020; color: white; border: none; padding: 9px 15px; border-radius: 6px; font-weight: bold; font-size: 13px; cursor: pointer; transition: background 0.2s; }
     .btn:hover { background: #600018; }
-    .banner { background: #e6f4ea; border: 1px solid #ceead6; padding: 12px 16px; border-radius: 8px; font-size: 13px; color: #137333; margin-bottom: 24px; }
+    .banner { background: #F3E8FF; border: 1px solid #D8B4FE; padding: 14px 18px; border-radius: 8px; font-size: 13px; color: #581C87; margin-bottom: 24px; line-height: 1.5; }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="subtitle">Centro de Yoga Fuenlabrada</div>
-    <h1>Salvadora Conesa — Vista Previa del Widget</h1>
+    <div class="subtitle">Centro de Yoga, Terapias y Bienestar</div>
+    <h1>${businessName}</h1>
     <div class="banner">
-      ✨ <strong>Burbuja cargada con &lt;script src="/api/widget/embed.js"&gt;:</strong> Observa la burbuja flotante granate en la esquina inferior derecha. Pulsa sobre ella o en los botones para abrir el chat con el agente de IA.
+      ✨ <strong>Catálogo en Vivo Sincronizado:</strong> Los servicios, horarios, precios, vídeos y textos específicos se leen directamente desde el CRM en tiempo real. Pulsa en <em>"Reservar"</em> o abre la burbuja flotante para hablar con el asistente de IA.
     </div>
 
-    <div class="card">
-      <div>
-        <h3>Clase de Yoga (Hatha / Vinyasa)</h3>
-        <p>Práctica de posturas, respiración consciente y relajación (75 min).</p>
-      </div>
-      <button class="btn" data-crm-service="Clase de Yoga (Hatha / Vinyasa)">Reservar</button>
-    </div>
+    ${cardsHtml}
 
-    <div class="card">
+    <div style="background: white; border: 1px solid #E5E0D8; border-radius: 10px; padding: 20px; margin-top: 24px; display: flex; justify-content: space-between; align-items: center;">
       <div>
-        <h3>Baño de Gong (Sonoterapia)</h3>
-        <p>Inmersión en frecuencias armónicas y vibración de gongs (60 min).</p>
+        <h3 style="color: #4338ca; margin: 0 0 6px 0;">Pedir por Teléfono (Asistente de Voz VAPI)</h3>
+        <p style="margin: 0; font-size: 13px; color: #666;">Lanzar llamada inmediata a tu móvil para hablar con la recepción inteligente.</p>
       </div>
-      <button class="btn" data-crm-service="Baño de Gong (Sonoterapia)">Reservar</button>
-    </div>
-
-    <div class="card">
-      <div>
-        <h3>Terapia Gestalt (Individual)</h3>
-        <p>Sesión individualizada presencial o videollamada Cal.com (60 min).</p>
-      </div>
-      <button class="btn" data-crm-service="Terapia Gestalt (Individual)">Reservar</button>
-    </div>
-
-    <div class="card">
-      <div>
-        <h3>Ayuno Terapéutico & Retiro Detox</h3>
-        <p>Retiro de fin de semana para depuración física y bienestar integral.</p>
-      </div>
-      <button class="btn" data-crm-service="Ayuno Terapéutico & Retiro Detox">Reservar</button>
-    </div>
-
-    <div class="card" style="border: 1.5px solid #818cf8; background: #f5f3ff;">
-      <div>
-        <h3 style="color: #4338ca;">Pedir por Teléfono (VAPI Voice AI)</h3>
-        <p>Lanzar llamada saliente inmediata desde la web para hablar con el asistente de voz.</p>
-      </div>
-      <button class="btn" style="background: #4f46e5;" data-crm-vapi-call="true" data-crm-service="Clase de Yoga (Hatha / Vinyasa)">Pedir por Teléfono (VAPI)</button>
+      <button class="btn" style="background: #4f46e5;" data-crm-vapi-call="true" data-crm-service="Clase de Yoga">Llamar Ahora (VAPI)</button>
     </div>
   </div>
 

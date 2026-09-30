@@ -52,6 +52,26 @@ interface ServiceItem {
   calendarId: string;
   modalities?: string[];
   tags?: string[];
+  flyerUrl?: string | null;
+  flyerParticularUrl?: string | null;
+  videoUrl?: string | null;
+  videoParticularUrl?: string | null;
+  textoespecifico?: string | null;
+  editions?: Array<{
+    id: string;
+    title?: string;
+    isDateDefinite: boolean;
+    scheduledAt?: string;
+    tentativeDateText?: string;
+    isPriceDefinite: boolean;
+    price?: string;
+    tentativePriceText?: string;
+    minParticipants?: number;
+    maxCapacity?: number;
+    enrolledCount?: number;
+    quorumReached?: boolean;
+    status: string;
+  }>;
 }
 
 export default function DemoLandingPage() {
@@ -63,6 +83,29 @@ export default function DemoLandingPage() {
   const [sessionId, setSessionId] = useState("");
   const [businessName, setBusinessName] = useState("Centro de Yoga y Bienestar Salvadora");
   const [selectedService, setSelectedService] = useState<string | null>(null);
+  const [customServices, setCustomServices] = useState<ServiceItem[]>([]);
+
+  // Helper para combinar datos de la DB (vídeos, flyers, textos específicos y convocatorias) con la landing
+  const mergeWithDb = (item: ServiceItem): ServiceItem => {
+    const dbMatch = customServices.find(
+      (c) =>
+        c.id === item.id ||
+        c.serviceName?.toLowerCase() === item.serviceName?.toLowerCase() ||
+        c.title?.toLowerCase() === item.title?.toLowerCase()
+    );
+    if (!dbMatch) return item;
+    return {
+      ...item,
+      desc: dbMatch.desc || item.desc,
+      textoespecifico: dbMatch.textoespecifico || item.textoespecifico,
+      flyerUrl: dbMatch.flyerUrl || item.flyerUrl,
+      flyerParticularUrl: dbMatch.flyerParticularUrl || item.flyerParticularUrl,
+      videoUrl: dbMatch.videoUrl || item.videoUrl,
+      videoParticularUrl: dbMatch.videoParticularUrl || item.videoParticularUrl,
+      editions: dbMatch.editions && dbMatch.editions.length > 0 ? dbMatch.editions : item.editions,
+      priceTag: dbMatch.priceTag && dbMatch.priceTag !== "Consultar" ? dbMatch.priceTag : item.priceTag,
+    };
+  };
 
   // WhatsApp Handoff Form State
   const [waModalOpen, setWaModalOpen] = useState(false);
@@ -342,6 +385,36 @@ export default function DemoLandingPage() {
           },
         ]);
       });
+
+    fetch("/api/widget/services")
+      .then((r) => r.json())
+      .then((data: any[]) => {
+        if (!Array.isArray(data)) return;
+        setCustomServices(
+          data.map((s) => ({
+            id: s.id,
+            title: s.name,
+            category: s.serviceType === "event" ? "Taller / Retiro" : "Actividad Regular",
+            categoryIcon: s.serviceType === "event" ? "📅" : "🧘",
+            desc: s.description || "",
+            duration: `${s.durationMinutes || 60} min`,
+            priceTag: s.price ? `${s.price} €` : "Consultar",
+            isFreeTrial: false,
+            serviceName: s.name,
+            calendarId: s.calendarId || s.id,
+            textoespecifico: s.textoespecifico,
+            flyerUrl: s.flyerUrl,
+            flyerParticularUrl: s.flyerParticularUrl,
+            videoUrl: s.videoUrl,
+            videoParticularUrl: s.videoParticularUrl,
+            editions: s.editions || [],
+            schedules: {
+              note: s.scheduleText || s.eventDatesText,
+            },
+          }))
+        );
+      })
+      .catch((err) => console.log("Could not fetch dynamic services:", err));
   }, []);
 
   useEffect(() => {
@@ -803,37 +876,75 @@ export default function DemoLandingPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {regularYogaServices.map((svc) => (
-            <div
-              key={svc.id}
-              className="bg-white rounded-2xl border border-stone-200 p-5 shadow-xs hover:shadow-md transition flex flex-col justify-between hover:border-[#800020]/40"
-            >
-              <div>
-                <div className="flex items-center justify-between gap-1 mb-2.5">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 flex items-center gap-1">
-                    <span>{svc.categoryIcon}</span> {svc.category}
-                  </span>
-                  <span className="text-[11px] font-extrabold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                    {svc.priceTag}
-                  </span>
-                </div>
-
-                {svc.badge && (
-                  <div className="mb-2">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 inline-block">
-                      ⭐ {svc.badge}
+          {regularYogaServices.map((rawSvc) => {
+            const svc = mergeWithDb(rawSvc);
+            return (
+              <div
+                key={svc.id}
+                className="bg-white rounded-2xl border border-stone-200 p-5 shadow-xs hover:shadow-md transition flex flex-col justify-between hover:border-[#800020]/40"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-1 mb-2.5">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 flex items-center gap-1">
+                      <span>{svc.categoryIcon}</span> {svc.category}
+                    </span>
+                    <span className="text-[11px] font-extrabold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      {svc.priceTag}
                     </span>
                   </div>
-                )}
 
-                <h4 className="font-serif text-base font-bold text-stone-900 mb-1.5 leading-snug">
-                  {svc.title}
-                </h4>
-                <p className="text-xs text-stone-600 leading-relaxed mb-3">
-                  {svc.desc}
-                </p>
+                  {svc.badge && (
+                    <div className="mb-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 inline-block">
+                        ⭐ {svc.badge}
+                      </span>
+                    </div>
+                  )}
 
-                {svc.schedules && (
+                  <h4 className="font-serif text-base font-bold text-stone-900 mb-1.5 leading-snug">
+                    {svc.title}
+                  </h4>
+                  <p className="text-xs text-stone-600 leading-relaxed mb-3">
+                    {svc.desc}
+                  </p>
+
+                  {/* Vídeo del Servicio si existe */}
+                  {(svc.videoUrl || svc.videoParticularUrl) && (
+                    <div className="mb-3 overflow-hidden rounded-xl border border-stone-200 bg-black shadow-inner">
+                      <video
+                        controls
+                        playsInline
+                        preload="metadata"
+                        className="w-full max-h-40 object-contain bg-black"
+                        src={svc.videoUrl || svc.videoParticularUrl || undefined}
+                      >
+                        Tu navegador no soporta el reproductor de vídeo MP4.
+                      </video>
+                    </div>
+                  )}
+
+                  {/* Flyer del Servicio si existe */}
+                  {(svc.flyerUrl || svc.flyerParticularUrl) && !svc.videoUrl && (
+                    <div className="mb-3 overflow-hidden rounded-xl border border-stone-200">
+                      <img
+                        src={svc.flyerUrl || svc.flyerParticularUrl || ""}
+                        alt={svc.title}
+                        className="w-full h-32 object-cover hover:scale-105 transition-transform duration-300"
+                      />
+                    </div>
+                  )}
+
+                  {/* Texto Específico configurado desde el CRM */}
+                  {svc.textoespecifico && (
+                    <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50/70 p-2.5 text-xs text-amber-950 leading-relaxed whitespace-pre-line">
+                      <span className="block text-[10px] font-extrabold uppercase tracking-wider text-amber-800 mb-0.5">
+                        📌 Detalle Específico:
+                      </span>
+                      {svc.textoespecifico}
+                    </div>
+                  )}
+
+                  {svc.schedules && (
                   <div className="bg-[#FAF9F6] rounded-xl p-3 border border-stone-200 text-xs space-y-1 mb-3">
                     <div className="font-bold text-[#800020] text-[11px] uppercase">Horarios:</div>
                     {svc.schedules.morning && (
@@ -892,63 +1003,141 @@ export default function DemoLandingPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {eventServices.map((ev) => (
-            <div
-              key={ev.id}
-              className="bg-white rounded-3xl border border-purple-200/80 p-5 shadow-xs hover:shadow-lg transition flex flex-col justify-between hover:border-purple-600"
-            >
-              <div>
-                <div className="flex items-center justify-between gap-1 mb-2.5">
-                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-900 border border-purple-200 flex items-center gap-1">
-                    <span>{ev.categoryIcon}</span> {ev.category}
-                  </span>
-                  <span className="text-xs font-extrabold text-stone-900 bg-amber-100 px-2.5 py-0.5 rounded-md">
-                    {ev.priceTag}
-                  </span>
+          {eventServices.map((rawEv) => {
+            const ev = mergeWithDb(rawEv);
+            return (
+              <div
+                key={ev.id}
+                className="bg-white rounded-3xl border border-purple-200/80 p-5 shadow-xs hover:shadow-lg transition flex flex-col justify-between hover:border-purple-600"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-1 mb-2.5">
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-900 border border-purple-200 flex items-center gap-1">
+                      <span>{ev.categoryIcon}</span> {ev.category}
+                    </span>
+                    <span className="text-xs font-extrabold text-stone-900 bg-amber-100 px-2.5 py-0.5 rounded-md">
+                      {ev.priceTag}
+                    </span>
+                  </div>
+
+                  {ev.badge && (
+                    <div className="inline-block bg-purple-100 text-purple-950 font-bold text-[11px] px-2.5 py-0.5 rounded-md mb-2">
+                      🗓️ {ev.badge}
+                    </div>
+                  )}
+
+                  <h4 className="font-serif text-lg font-bold text-stone-900 mb-1.5 leading-snug">
+                    {ev.title}
+                  </h4>
+                  <p className="text-xs text-stone-600 leading-relaxed mb-3">
+                    {ev.desc}
+                  </p>
+
+                  {/* Vídeo del Servicio (General o Particular subido desde el CRM) */}
+                  {(ev.videoUrl || ev.videoParticularUrl) && (
+                    <div className="mb-3 overflow-hidden rounded-2xl border border-stone-200 bg-black shadow-inner">
+                      <video
+                        controls
+                        playsInline
+                        preload="metadata"
+                        className="w-full max-h-48 object-contain bg-black"
+                        src={ev.videoUrl || ev.videoParticularUrl || undefined}
+                      >
+                        Tu navegador no soporta el reproductor de vídeo MP4.
+                      </video>
+                    </div>
+                  )}
+
+                  {/* Flyer del Servicio (General o Particular subido desde el CRM) */}
+                  {(ev.flyerUrl || ev.flyerParticularUrl) && !ev.videoUrl && (
+                    <div className="mb-3 overflow-hidden rounded-2xl border border-stone-200">
+                      <img
+                        src={ev.flyerUrl || ev.flyerParticularUrl || ""}
+                        alt={ev.title}
+                        className="w-full h-40 object-cover hover:scale-105 transition-transform duration-300"
+                      />
+                    </div>
+                  )}
+
+                  {/* Texto Específico configurado desde el CRM */}
+                  {ev.textoespecifico && (
+                    <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-950 leading-relaxed whitespace-pre-line">
+                      <span className="block text-[10px] font-extrabold uppercase tracking-wider text-amber-800 mb-0.5">
+                        📌 Detalle Específico del Servicio:
+                      </span>
+                      {ev.textoespecifico}
+                    </div>
+                  )}
+
+                  {/* Convocatorias / Ediciones con Quórum y Reservas Provisionales */}
+                  {ev.editions && ev.editions.length > 0 && (
+                    <div className="mb-3 space-y-2 rounded-xl border border-purple-200 bg-purple-50/40 p-3">
+                      <div className="text-[11px] font-bold text-purple-950 flex items-center justify-between">
+                        <span>📢 Próximas Convocatorias:</span>
+                        <span className="text-[10px] font-normal text-purple-700">{ev.editions.length} disponible(s)</span>
+                      </div>
+                      {ev.editions.map((ed) => (
+                        <div key={ed.id} className="rounded-lg bg-white p-2.5 border border-purple-100 shadow-2xs space-y-1.5 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-stone-900">
+                              {ed.title || (ed.isDateDefinite && ed.scheduledAt ? new Date(ed.scheduledAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : (ed.tentativeDateText || "Fecha por confirmar"))}
+                            </span>
+                            <span className="text-[11px] font-bold text-purple-900 bg-purple-100 px-2 py-0.5 rounded">
+                              {ed.isPriceDefinite && ed.price ? `${ed.price} €` : (ed.tentativePriceText || "Precio a determinar")}
+                            </span>
+                          </div>
+                          {ed.minParticipants && (
+                            <div className="text-[11px] text-stone-600 flex items-center justify-between">
+                              <span>Quórum: <strong>{ed.enrolledCount ?? 0} / {ed.minParticipants} plazas mínimas</strong></span>
+                              {ed.quorumReached ? (
+                                <span className="text-emerald-700 font-bold text-[10px]">✅ Quórum alcanzado</span>
+                              ) : (
+                                <span className="text-amber-700 font-medium text-[10px]">⏳ Sujeto a quórum</span>
+                              )}
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleServiceSelect({ ...ev, title: `${ev.title} (${ed.title || ed.tentativeDateText || "Convocatoria"})` })}
+                            className="w-full py-1.5 px-2 bg-purple-700 hover:bg-purple-800 text-white rounded-md text-[11px] font-bold tracking-wide transition flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            <Calendar className="w-3 h-3" /> Solicitar Reserva Provisional
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {ev.schedules?.note && (
+                    <div className="bg-stone-50 rounded-xl p-2.5 border border-stone-200 text-[11px] text-stone-600 mb-3 italic">
+                      ℹ️ {ev.schedules.note}
+                    </div>
+                  )}
                 </div>
 
-                {ev.badge && (
-                  <div className="inline-block bg-purple-100 text-purple-950 font-bold text-[11px] px-2.5 py-0.5 rounded-md mb-2">
-                    🗓️ {ev.badge}
-                  </div>
-                )}
-
-                <h4 className="font-serif text-lg font-bold text-stone-900 mb-1.5 leading-snug">
-                  {ev.title}
-                </h4>
-                <p className="text-xs text-stone-600 leading-relaxed mb-3">
-                  {ev.desc}
-                </p>
-
-                {ev.schedules?.note && (
-                  <div className="bg-stone-50 rounded-xl p-2.5 border border-stone-200 text-[11px] text-stone-600 mb-3 italic">
-                    ℹ️ {ev.schedules.note}
-                  </div>
-                )}
-              </div>
-
-              <div className="pt-2 border-t border-stone-100 space-y-2">
-                <button
-                  onClick={() => handleServiceSelect(ev)}
-                  className="w-full py-2.5 px-4 bg-purple-900 hover:bg-purple-800 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition flex items-center justify-center gap-1.5"
-                >
-                  <Calendar className="w-3.5 h-3.5" /> Solicitar Reserva
-                </button>
-                <div className="flex items-center justify-between text-[11px] text-stone-500">
-                  <span>Duración: {ev.duration}</span>
+                <div className="pt-2 border-t border-stone-100 space-y-2">
                   <button
-                    onClick={() => {
-                      setSelectedService(ev.serviceName);
-                      setWaModalOpen(true);
-                    }}
-                    className="text-emerald-700 font-bold hover:underline"
+                    onClick={() => handleServiceSelect(ev)}
+                    className="w-full py-2.5 px-4 bg-purple-900 hover:bg-purple-800 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition flex items-center justify-center gap-1.5"
                   >
-                    WhatsApp
+                    <Calendar className="w-3.5 h-3.5" /> Solicitar Reserva
                   </button>
+                  <div className="flex items-center justify-between text-[11px] text-stone-500">
+                    <span>Duración: {ev.duration}</span>
+                    <button
+                      onClick={() => {
+                        setSelectedService(ev.serviceName);
+                        setWaModalOpen(true);
+                      }}
+                      className="text-emerald-700 font-bold hover:underline"
+                    >
+                      WhatsApp
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 

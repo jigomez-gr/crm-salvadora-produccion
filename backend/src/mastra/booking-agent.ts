@@ -125,6 +125,7 @@ function findMatchingService(
     textosinfechadefinitiva?: string | null;
     sinpreciodefinitivo?: string | null;
     textosinpreciodefinitivo?: string | null;
+    textoespecifico?: string | null;
   }[],
   query?: string,
 ) {
@@ -1697,6 +1698,7 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
             textosinfechadefinitiva?: string;
             sinpreciodefinitivo?: string;
             textosinpreciodefinitivo?: string;
+            textoespecifico?: string | null;
           }) => {
             const hasNoFixedDate = s.sinfechadefinitiva === 'S';
             const hasNoFixedPrice = s.sinpreciodefinitivo === 'S';
@@ -1723,6 +1725,9 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
               if (s.maxCapacity && s.maxCapacity > 1) details += `, aforo máximo: ${s.maxCapacity} personas por turno`;
               if (dateStr) details += `, Horarios oficiales: ${dateStr}`;
               else if (s.scheduleText) details += `, Horarios oficiales: ${s.scheduleText}`;
+            }
+            if (s.textoespecifico) {
+              details += `\n  * Información específica: ${s.textoespecifico}`;
             }
             if (s.description) {
               let desc = s.description;

@@ -67,6 +67,14 @@ export class CreateServiceDto {
 
   @IsString()
   @IsOptional()
+  videoUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  videoPath?: string;
+
+  @IsString()
+  @IsOptional()
   flyerParticularUrl?: string;
 
   @IsString()
@@ -80,6 +88,10 @@ export class CreateServiceDto {
   @IsString()
   @IsOptional()
   videoParticularPath?: string;
+
+  @IsString()
+  @IsOptional()
+  textoespecifico?: string;
 
   @IsString()
   @IsOptional()
@@ -227,6 +239,14 @@ export class UpdateServiceDto {
 
   @IsString()
   @IsOptional()
+  videoUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  videoPath?: string;
+
+  @IsString()
+  @IsOptional()
   flyerParticularUrl?: string;
 
   @IsString()
@@ -240,6 +260,10 @@ export class UpdateServiceDto {
   @IsString()
   @IsOptional()
   videoParticularPath?: string;
+
+  @IsString()
+  @IsOptional()
+  textoespecifico?: string;
 
   @IsString()
   @IsOptional()

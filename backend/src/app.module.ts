@@ -22,6 +22,7 @@ import { EmailMessage } from './common/entities/email-message.entity';
 import { PaymentAccount } from './common/entities/payment-account.entity';
 import { CalcomAccount } from './common/entities/calcom-account.entity';
 import { Service } from './common/entities/service.entity';
+import { EventEdition } from './common/entities/event-edition.entity';
 import { ServiceCategory } from './common/entities/service-category.entity';
 import { MediaAsset } from './common/entities/media-asset.entity';
 import { CategoriesModule } from './categories/categories.module';
@@ -69,6 +70,7 @@ import { AgentsModule } from './agents/agents.module';
         ContactIdentityChange,
         Appointment,
         Service,
+        EventEdition,
         ServiceCategory,
         MediaAsset,
         AgentConfig,

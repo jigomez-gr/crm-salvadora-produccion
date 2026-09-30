@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useMemo } from "react";
-import { Plus, Edit2, Sparkles, Calendar, UserCheck, Clock, Tag, AlertCircle, ExternalLink, CreditCard, Compass, Users, CheckCircle2, Trash2, FolderTree, Image as ImageIcon, Layers, AlertTriangle, Copy, Video, BellRing, Send, CheckCircle, Mail, MessageSquare } from "lucide-react";
+import { Plus, Edit2, Sparkles, Calendar, UserCheck, Clock, Tag, AlertCircle, ExternalLink, CreditCard, Compass, Users, CheckCircle2, Trash2, FolderTree, Image as ImageIcon, Layers, AlertTriangle, Copy, Video, BellRing, Send, CheckCircle, Mail, MessageSquare, Upload, Loader2, Play } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { Service, ServiceCategory, User } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
@@ -31,6 +31,9 @@ interface ServiceFormData {
   flyerUrl: string;
   flyerParticularPath: string;
   flyerParticularUrl: string;
+  videoPath: string;
+  videoUrl: string;
+  textoespecifico: string;
   videoParticularPath: string;
   videoParticularUrl: string;
   fechaDesde: string;
@@ -105,6 +108,9 @@ export default function ServicesPage() {
     flyerUrl: "",
     flyerParticularPath: "",
     flyerParticularUrl: "",
+    videoPath: "",
+    videoUrl: "",
+    textoespecifico: "",
     videoParticularPath: "",
     videoParticularUrl: "",
     fechaDesde: "2000-01-01",
@@ -249,6 +255,9 @@ export default function ServicesPage() {
       flyerUrl: "",
       flyerParticularPath: "",
       flyerParticularUrl: "",
+      videoPath: "",
+      videoUrl: "",
+      textoespecifico: "",
       videoParticularPath: "",
       videoParticularUrl: "",
       fechaDesde: "2000-01-01",
@@ -301,6 +310,9 @@ export default function ServicesPage() {
       flyerUrl: svc.flyerUrl ?? "",
       flyerParticularPath: svc.flyerParticularPath ?? "",
       flyerParticularUrl: svc.flyerParticularUrl ?? "",
+      videoPath: svc.videoPath ?? "",
+      videoUrl: svc.videoUrl ?? "",
+      textoespecifico: svc.textoespecifico ?? "",
       videoParticularPath: svc.videoParticularPath ?? "",
       videoParticularUrl: svc.videoParticularUrl ?? "",
       fechaDesde: svc.fechaDesde ? svc.fechaDesde.slice(0, 10) : "2000-01-01",
@@ -614,6 +626,193 @@ export default function ServicesPage() {
     return groups;
   }, [sortedCategories, filteredServices, selectedCategoryFilter]);
 
+  
+  // Media upload & editions state
+  const [uploadingSlot, setUploadingSlot] = useState<string | null>(null);
+  const [serviceEditions, setServiceEditions] = useState<any[]>([]);
+  const [loadingEditions, setLoadingEditions] = useState<boolean>(false);
+  const [editionModalOpen, setEditionModalOpen] = useState(false);
+  const [confirmEditionModalOpen, setConfirmEditionModalOpen] = useState(false);
+  const [selectedEdition, setSelectedEdition] = useState<any | null>(null);
+  const [confirmEditionForm, setConfirmEditionForm] = useState({
+    startsAt: '',
+    endsAt: '',
+    price: '',
+    customMessage: '',
+    sendEmail: true,
+    sendWhatsapp: true,
+  });
+  const [newEditionForm, setNewEditionForm] = useState({
+    title: '',
+    isDateDefinite: false,
+    tentativeDateText: '',
+    startsAt: '',
+    endsAt: '',
+    isPriceDefinite: false,
+    tentativePriceText: '',
+    price: '',
+    minParticipants: 10,
+    maxCapacity: 30,
+    conditionsText: '',
+  });
+
+  const loadServiceEditions = useCallback(async (serviceId: string) => {
+    if (!serviceId) return;
+    setLoadingEditions(true);
+    try {
+      const eds = await apiFetch<any[]>(`/api/services/${serviceId}/editions`);
+      setServiceEditions(eds || []);
+    } catch {
+      setServiceEditions([]);
+    } finally {
+      setLoadingEditions(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (editingService?.id && modalOpen) {
+      loadServiceEditions(editingService.id);
+    } else {
+      setServiceEditions([]);
+    }
+  }, [editingService, modalOpen, loadServiceEditions]);
+
+  async function handleMediaUpload(
+    slot: "flyer-general" | "video-general" | "flyer-particular" | "video-particular",
+    file: File
+  ) {
+    if (!editingService?.id) {
+      toast.error("Guarda primero el servicio para subir archivos de vídeo o imágenes.");
+      return;
+    }
+
+    setUploadingSlot(slot);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const updatedSvc = await apiFetch<Service>(`/api/services/${editingService.id}/media/${slot}`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (slot === "flyer-general") {
+        setForm((f) => ({ ...f, flyerUrl: updatedSvc.flyerUrl || "", flyerPath: updatedSvc.flyerPath || "" }));
+      } else if (slot === "video-general") {
+        setForm((f) => ({ ...f, videoUrl: updatedSvc.videoUrl || "", videoPath: updatedSvc.videoPath || "" }));
+      } else if (slot === "flyer-particular") {
+        setForm((f) => ({ ...f, flyerParticularUrl: updatedSvc.flyerParticularUrl || "", flyerParticularPath: updatedSvc.flyerParticularPath || "" }));
+      } else if (slot === "video-particular") {
+        setForm((f) => ({ ...f, videoParticularUrl: updatedSvc.videoParticularUrl || "", videoParticularPath: updatedSvc.videoParticularPath || "" }));
+      }
+
+      toast.success("Archivo subido y asignado al servicio correctamente.");
+      await refreshData();
+    } catch (err: any) {
+      toast.error(err instanceof ApiError ? err.message : "Error al subir el archivo multimedia");
+    } finally {
+      setUploadingSlot(null);
+    }
+  }
+
+  async function handleMediaDelete(
+    slot: "flyer-general" | "video-general" | "flyer-particular" | "video-particular"
+  ) {
+    if (!editingService?.id) {
+      if (slot === "flyer-general") setForm((f) => ({ ...f, flyerUrl: "", flyerPath: "" }));
+      else if (slot === "video-general") setForm((f) => ({ ...f, videoUrl: "", videoPath: "" }));
+      else if (slot === "flyer-particular") setForm((f) => ({ ...f, flyerParticularUrl: "", flyerParticularPath: "" }));
+      else if (slot === "video-particular") setForm((f) => ({ ...f, videoParticularUrl: "", videoParticularPath: "" }));
+      return;
+    }
+
+    if (!confirm("¿Eliminar este archivo multimedia del servicio?")) return;
+
+    try {
+      await apiFetch(`/api/services/${editingService.id}/media/${slot}`, {
+        method: "DELETE",
+      });
+
+      if (slot === "flyer-general") {
+        setForm((f) => ({ ...f, flyerUrl: "", flyerPath: "" }));
+      } else if (slot === "video-general") {
+        setForm((f) => ({ ...f, videoUrl: "", videoPath: "" }));
+      } else if (slot === "flyer-particular") {
+        setForm((f) => ({ ...f, flyerParticularUrl: "", flyerParticularPath: "" }));
+      } else if (slot === "video-particular") {
+        setForm((f) => ({ ...f, videoParticularUrl: "", videoParticularPath: "" }));
+      }
+
+      toast.success("Archivo multimedia eliminado.");
+      await refreshData();
+    } catch (err: any) {
+      toast.error(err instanceof ApiError ? err.message : "Error al eliminar el archivo multimedia");
+    }
+  }
+
+  async function handleCreateEdition(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingService?.id) return;
+    try {
+      await apiFetch(`/api/services/${editingService.id}/editions`, {
+        method: "POST",
+        body: JSON.stringify(newEditionForm),
+      });
+      toast.success("Convocatoria creada con éxito.");
+      setEditionModalOpen(false);
+      setNewEditionForm({
+        title: '',
+        isDateDefinite: false,
+        tentativeDateText: '',
+        startsAt: '',
+        endsAt: '',
+        isPriceDefinite: false,
+        tentativePriceText: '',
+        price: '',
+        minParticipants: 10,
+        maxCapacity: 30,
+        conditionsText: '',
+      });
+      await loadServiceEditions(editingService.id);
+    } catch (err: any) {
+      toast.error(err instanceof ApiError ? err.message : "Error al crear convocatoria");
+    }
+  }
+
+  async function handleConfirmEditionSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedEdition?.id) return;
+    try {
+      const res = await apiFetch<any>(`/api/event-editions/${selectedEdition.id}/confirm`, {
+        method: "POST",
+        body: JSON.stringify(confirmEditionForm),
+      });
+      toast.success(res.message || "Convocatoria confirmada y alumnos notificados.");
+      setConfirmEditionModalOpen(false);
+      setSelectedEdition(null);
+      if (editingService?.id) await loadServiceEditions(editingService.id);
+      await refreshData();
+    } catch (err: any) {
+      toast.error(err instanceof ApiError ? err.message : "Error al confirmar convocatoria");
+    }
+  }
+
+  async function handleCancelEdition(editionId: string) {
+    const reason = prompt("Motivo de la cancelación para notificar a los alumnos:");
+    if (!reason) return;
+    try {
+      await apiFetch(`/api/event-editions/${editionId}/cancel`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      });
+      toast.success("Convocatoria cancelada y reservas provisionales anuladas.");
+      if (editingService?.id) await loadServiceEditions(editingService.id);
+      await refreshData();
+    } catch (err: any) {
+      toast.error(err instanceof ApiError ? err.message : "Error al cancelar convocatoria");
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name.trim()) {
@@ -651,6 +850,9 @@ export default function ServicesPage() {
       flyerUrl: form.flyerUrl.trim() || undefined,
       flyerParticularPath: form.flyerParticularPath.trim() || undefined,
       flyerParticularUrl: form.flyerParticularUrl.trim() || undefined,
+      videoPath: form.videoPath.trim() || undefined,
+      videoUrl: form.videoUrl.trim() || undefined,
+      textoespecifico: form.textoespecifico.trim() || undefined,
       videoParticularPath: form.videoParticularPath.trim() || undefined,
       videoParticularUrl: form.videoParticularUrl.trim() || undefined,
       fechaDesde: form.fechaDesde.trim() || "2000-01-01",
@@ -1467,85 +1669,427 @@ export default function ServicesPage() {
             </p>
           </div>
 
-          {/* Flyer / Gráfica del Servicio */}
-          <div className="rounded-lg border border-neutral-200 bg-neutral-50/60 p-3 space-y-3">
+                    {/* Texto Específico del Servicio */}
+          <div className="rounded-lg border border-amber-300 bg-amber-50/60 p-3.5 space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-neutral-800 flex items-center gap-1.5">
-                <ImageIcon className="h-3.5 w-3.5 text-indigo-600" />
-                Flyer del Servicio (Ruta física y visualización)
+              <label className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                <Sparkles className="h-4 w-4 text-amber-600" />
+                Texto Específico del Servicio (Omnicanal)
               </label>
+              <span className="text-[10px] text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded font-semibold border border-amber-200">
+                Landing • Consultas • Email • WhatsApp • VAPI
+              </span>
+            </div>
+            <textarea
+              rows={3}
+              value={form.textoespecifico}
+              onChange={(e) => setForm((f) => ({ ...f, textoespecifico: e.target.value }))}
+              placeholder="Escribe aquí información específica, condiciones particulares, requisitos de asistencia o textos personalizados que se transmitirán directamente a la landing page, el widget web, las consultas por correo, el agente de WhatsApp y la atención por voz de VAPI..."
+              className="w-full rounded-md border border-amber-300 bg-white p-2.5 text-xs text-neutral-900 placeholder:text-amber-900/40 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 leading-relaxed"
+            />
+            <p className="text-[11px] text-amber-800">
+              Cualquier cambio guardado aquí se sincroniza al instante en todos los canales interactivos y agentes inteligentes.
+            </p>
+          </div>
+
+          {/* ─── MATERIAL MULTIMEDIA DEL SERVICIO (4 BOTONES & PREVIEWS) ─── */}
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50/30 p-4 space-y-4">
+            <div className="flex items-center justify-between border-b border-indigo-100 pb-2.5">
+              <div>
+                <h4 className="text-sm font-bold text-indigo-950 flex items-center gap-2">
+                  <ImageIcon className="h-4 w-4 text-indigo-600" />
+                  Material Multimedia Oficial del Servicio
+                </h4>
+                <p className="text-[11px] text-indigo-700 mt-0.5">
+                  Cambia flyers y vídeos MP4 directamente desde el CRM. Se sincronizan en vivo en la landing y el widget.
+                </p>
+              </div>
+            </div>
+
+            {/* 1. Flyer General del Servicio */}
+            <div className="rounded-lg border border-neutral-200 bg-white p-3 space-y-2.5 shadow-sm">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <label className="text-xs font-semibold text-neutral-800 flex items-center gap-1.5">
+                  <ImageIcon className="h-3.5 w-3.5 text-indigo-600" />
+                  1. Flyer General del Servicio
+                </label>
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-900 text-white rounded text-xs font-medium shadow-sm transition">
+                    {uploadingSlot === "flyer-general" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="h-3.5 w-3.5" />
+                    )}
+                    <span>Cambiar Flyer General</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={uploadingSlot !== null}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleMediaUpload("flyer-general", file);
+                      }}
+                    />
+                  </label>
+                  {(form.flyerUrl || form.flyerPath) && (
+                    <button
+                      type="button"
+                      onClick={() => handleMediaDelete("flyer-general")}
+                      className="px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded text-xs font-medium transition"
+                    >
+                      Eliminar
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {(form.flyerUrl || form.flyerPath) && (
-                <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 font-medium">
-                  Flyer asignado
-                </span>
+                <div className="rounded-md border border-neutral-200 bg-neutral-50 p-2.5 flex items-center gap-3">
+                  <div className="relative h-16 w-20 overflow-hidden rounded border border-neutral-300 bg-black/5 shrink-0 flex items-center justify-center">
+                    <img
+                      src={form.flyerUrl || form.flyerPath}
+                      alt="Flyer General"
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = "none";
+                      }}
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1 text-xs">
+                    <p className="font-semibold text-neutral-800">Vista Previa Flyer General</p>
+                    <p className="text-[11px] text-neutral-500 font-mono truncate">{form.flyerUrl || form.flyerPath}</p>
+                  </div>
+                </div>
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-neutral-700">
-                  Path físico del archivo en servidor
-                </label>
-                <Input
-                  value={form.flyerPath}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setForm((f) => ({
-                      ...f,
-                      flyerPath: val,
-                      flyerUrl: f.flyerUrl || (val.startsWith("public/") ? val.replace(/^public/, "") : f.flyerUrl),
-                    }));
-                  }}
-                  placeholder="ej. public/flyers/yoga.jpeg o /var/media/flyers/yoga.jpeg"
-                  className="text-xs font-mono"
-                />
-                <p className="mt-0.5 text-[10px] text-neutral-400">
-                  Ruta física en disco donde se encuentra el archivo fuera de Git.
-                </p>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-neutral-700">
-                  URL servida / visualización del flyer
-                </label>
-                <Input
-                  value={form.flyerUrl}
-                  onChange={(e) => setForm((f) => ({ ...f, flyerUrl: e.target.value }))}
-                  placeholder="ej. /flyers/yoga.jpeg o https://..."
-                  className="text-xs"
-                />
-                <p className="mt-0.5 text-[10px] text-neutral-400">
-                  Ruta pública para renderizar en la web y catálogo sincronizado.
-                </p>
-              </div>
-            </div>
-
-            {/* Visualizador / Preview del Flyer */}
-            {(form.flyerUrl || form.flyerPath) && (
-              <div className="rounded-md border border-neutral-200 bg-white p-2 flex items-center gap-3">
-                <div className="relative h-16 w-16 overflow-hidden rounded border border-neutral-200 bg-neutral-100 shrink-0 flex items-center justify-center">
-                  <img
-                    src={form.flyerUrl || form.flyerPath}
-                    alt="Previsualización flyer"
-                    className="h-full w-full object-cover z-10"
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = "none";
-                    }}
-                  />
-                  <ImageIcon className="h-6 w-6 text-neutral-300 absolute" />
-                </div>
-                <div className="min-w-0 text-xs">
-                  <p className="font-medium text-neutral-800">Previsualización de Gráfica / Flyer General</p>
-                  <p className="text-[11px] text-neutral-500 truncate max-w-xs">{form.flyerUrl || form.flyerPath}</p>
-                  <p className="text-[10px] text-neutral-400 mt-0.5">
-                    Se mostrará en la ficha del servicio y en el catálogo web sincronizado si no hay flyer o video particular.
+            {/* 2. Línea Completa: Vídeo General MP4 del Servicio */}
+            <div className="rounded-lg border border-purple-200 bg-white p-3 space-y-2.5 shadow-sm">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <label className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                    <Video className="h-4 w-4 text-purple-600" />
+                    2. Vídeo General MP4 del Servicio (Línea Completa)
+                  </label>
+                  <p className="text-[11px] text-neutral-500 mt-0.5">
+                    Reproductor interactivo MP4 con streaming fluido HTTP 206
                   </p>
                 </div>
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded text-xs font-medium shadow-sm transition">
+                    {uploadingSlot === "video-general" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Video className="h-3.5 w-3.5" />
+                    )}
+                    <span>Cambiar Vídeo General MP4</span>
+                    <input
+                      type="file"
+                      accept="video/mp4,video/*"
+                      className="hidden"
+                      disabled={uploadingSlot !== null}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleMediaUpload("video-general", file);
+                      }}
+                    />
+                  </label>
+                  {(form.videoUrl || form.videoPath) && (
+                    <button
+                      type="button"
+                      onClick={() => handleMediaDelete("video-general")}
+                      className="px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded text-xs font-medium transition"
+                    >
+                      Eliminar Vídeo
+                    </button>
+                  )}
+                </div>
               </div>
-            )}
+
+              {(form.videoUrl || form.videoPath) ? (
+                <div className="rounded-md border border-purple-200 bg-neutral-950 p-2">
+                  <video
+                    src={form.videoUrl || form.videoPath}
+                    controls
+                    preload="metadata"
+                    playsInline
+                    className="w-full max-h-52 rounded bg-black object-contain"
+                  />
+                  <div className="mt-1 px-1 flex justify-between items-center text-[10px] text-neutral-400 font-mono truncate">
+                    <span>{form.videoUrl || form.videoPath}</span>
+                    <span className="text-emerald-400 font-sans">✓ Vídeo Activo</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded border border-dashed border-neutral-300 p-3 text-center text-xs text-neutral-400 bg-neutral-50/50">
+                  Ningún vídeo MP4 general cargado todavía. Pulsa en "Cambiar Vídeo General MP4" para subir uno.
+                </div>
+              )}
+            </div>
+
+            {/* 3. Flyer Particular del Servicio */}
+            <div className="rounded-lg border border-neutral-200 bg-white p-3 space-y-2.5 shadow-sm">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <label className="text-xs font-semibold text-neutral-800 flex items-center gap-1.5">
+                  <ImageIcon className="h-3.5 w-3.5 text-pink-600" />
+                  3. Flyer Particular del Servicio
+                </label>
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-900 text-white rounded text-xs font-medium shadow-sm transition">
+                    {uploadingSlot === "flyer-particular" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="h-3.5 w-3.5" />
+                    )}
+                    <span>Cambiar Flyer Particular</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={uploadingSlot !== null}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleMediaUpload("flyer-particular", file);
+                      }}
+                    />
+                  </label>
+                  {(form.flyerParticularUrl || form.flyerParticularPath) && (
+                    <button
+                      type="button"
+                      onClick={() => handleMediaDelete("flyer-particular")}
+                      className="px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded text-xs font-medium transition"
+                    >
+                      Eliminar
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {(form.flyerParticularUrl || form.flyerParticularPath) && (
+                <div className="rounded-md border border-neutral-200 bg-neutral-50 p-2.5 flex items-center gap-3">
+                  <div className="relative h-16 w-20 overflow-hidden rounded border border-neutral-300 bg-black/5 shrink-0 flex items-center justify-center">
+                    <img
+                      src={form.flyerParticularUrl || form.flyerParticularPath}
+                      alt="Flyer Particular"
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = "none";
+                      }}
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1 text-xs">
+                    <p className="font-semibold text-neutral-800">Vista Previa Flyer Particular</p>
+                    <p className="text-[11px] text-neutral-500 font-mono truncate">{form.flyerParticularUrl || form.flyerParticularPath}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 4. Línea Completa: Vídeo Particular MP4 del Servicio */}
+            <div className="rounded-lg border border-purple-200 bg-white p-3 space-y-2.5 shadow-sm">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <label className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                    <Video className="h-4 w-4 text-purple-600" />
+                    4. Vídeo Particular MP4 del Servicio (Línea Completa)
+                  </label>
+                  <p className="text-[11px] text-neutral-500 mt-0.5">
+                    Vídeo exclusivo de la actividad con máxima prioridad en catálogo
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded text-xs font-medium shadow-sm transition">
+                    {uploadingSlot === "video-particular" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Video className="h-3.5 w-3.5" />
+                    )}
+                    <span>Cambiar Vídeo Particular MP4</span>
+                    <input
+                      type="file"
+                      accept="video/mp4,video/*"
+                      className="hidden"
+                      disabled={uploadingSlot !== null}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleMediaUpload("video-particular", file);
+                      }}
+                    />
+                  </label>
+                  {(form.videoParticularUrl || form.videoParticularPath) && (
+                    <button
+                      type="button"
+                      onClick={() => handleMediaDelete("video-particular")}
+                      className="px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded text-xs font-medium transition"
+                    >
+                      Eliminar Vídeo
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {(form.videoParticularUrl || form.videoParticularPath) ? (
+                <div className="rounded-md border border-purple-200 bg-neutral-950 p-2">
+                  <video
+                    src={form.videoParticularUrl || form.videoParticularPath}
+                    controls
+                    preload="metadata"
+                    playsInline
+                    className="w-full max-h-52 rounded bg-black object-contain"
+                  />
+                  <div className="mt-1 px-1 flex justify-between items-center text-[10px] text-neutral-400 font-mono truncate">
+                    <span>{form.videoParticularUrl || form.videoParticularPath}</span>
+                    <span className="text-purple-400 font-sans">✓ Vídeo Particular Activo</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded border border-dashed border-neutral-300 p-3 text-center text-xs text-neutral-400 bg-neutral-50/50">
+                  Ningún vídeo particular cargado todavía.
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Fechas de Vigencia / Visualización */}
+          {/* ─── CONVOCATORIAS Y EDICIONES (RESERVAS PROVISIONALES Y QUÓRUM) ─── */}
+          {editingService?.id && (
+            <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-4 space-y-3.5">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <h4 className="text-sm font-bold text-sky-950 flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-sky-600" />
+                    Convocatorias / Ediciones (Quórum y Fechas Provisionales)
+                  </h4>
+                  <p className="text-[11px] text-sky-800 mt-0.5">
+                    Permite fijar fechas o precios que aún no se saben. Los alumnos reservan provisionalmente y se confirman al alcanzar el quórum.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditionModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-700 hover:bg-sky-800 text-white rounded text-xs font-bold shadow-sm transition"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Nueva Convocatoria
+                </button>
+              </div>
+
+              {loadingEditions ? (
+                <div className="py-4 text-center text-xs text-sky-700 flex items-center justify-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Cargando convocatorias...
+                </div>
+              ) : serviceEditions.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-sky-300 p-4 text-center text-xs text-sky-700 bg-white/60">
+                  No hay convocatorias activas para este evento. Pulsa en "+ Nueva Convocatoria" para habilitar reservas provisionales con fecha o precio por determinar.
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {serviceEditions.map((ed) => {
+                    const isProvisional = ed.status === "provisional";
+                    const isConfirmed = ed.status === "confirmed";
+                    const enrolled = ed.enrolledCount || 0;
+                    const minP = ed.minParticipants || 10;
+                    const percent = Math.min(100, Math.round((enrolled / minP) * 100));
+
+                    return (
+                      <div
+                        key={ed.id}
+                        className="rounded-lg border border-sky-200 bg-white p-3.5 shadow-sm space-y-2"
+                      >
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-sm text-neutral-900">{ed.title}</span>
+                              <Badge
+                                variant={isConfirmed ? "success" : isProvisional ? "warning" : "default"}
+                                className="text-[10px]"
+                              >
+                                {isConfirmed ? "OFICIALMENTE CONFIRMADA" : isProvisional ? "RESERVA PROVISIONAL (PENDIENTE DE QUÓRUM)" : ed.status.toUpperCase()}
+                              </Badge>
+                            </div>
+                            <div className="text-xs text-neutral-600 mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                              <span>
+                                <strong>Fecha:</strong>{" "}
+                                {ed.isDateDefinite && ed.startsAt
+                                  ? new Date(ed.startsAt).toLocaleString("es-ES", { dateStyle: "medium", timeStyle: "short" })
+                                  : ed.tentativeDateText || "Por determinar"}
+                              </span>
+                              <span>
+                                <strong>Tarifa:</strong>{" "}
+                                {ed.isPriceDefinite && ed.price ? `${ed.price} €` : ed.tentativePriceText || "Por determinar"}
+                              </span>
+                              <span>
+                                <strong>Aforo máx:</strong> {ed.maxCapacity || 30}
+                              </span>
+                            </div>
+                            {ed.conditionsText && (
+                              <p className="text-[11px] text-amber-800 bg-amber-50 rounded px-2 py-0.5 mt-1 border border-amber-200">
+                                <strong>Condición:</strong> {ed.conditionsText}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            {isProvisional && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedEdition(ed);
+                                  setConfirmEditionForm({
+                                    startsAt: ed.startsAt ? new Date(ed.startsAt).toISOString().slice(0, 16) : '',
+                                    endsAt: ed.endsAt ? new Date(ed.endsAt).toISOString().slice(0, 16) : '',
+                                    price: ed.price || '',
+                                    customMessage: '',
+                                    sendEmail: true,
+                                    sendWhatsapp: true,
+                                  });
+                                  setConfirmEditionModalOpen(true);
+                                }}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold transition shadow-sm"
+                              >
+                                <CheckCircle className="h-3.5 w-3.5" />
+                                Confirmar y Hacer Definitivas
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleCancelEdition(ed.id)}
+                              className="px-2.5 py-1.5 bg-neutral-100 hover:bg-red-50 text-neutral-600 hover:text-red-700 rounded text-xs transition border border-neutral-200"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Barra de progreso de Quórum */}
+                        <div className="pt-1.5 border-t border-neutral-100">
+                          <div className="flex justify-between text-[11px] mb-1">
+                            <span className="font-semibold text-neutral-700">
+                              Quórum de viabilidad: {enrolled} de {minP} inscritos mínimos ({percent}%)
+                            </span>
+                            <span className={enrolled >= minP ? "text-emerald-600 font-bold" : "text-amber-600 font-medium"}>
+                              {enrolled >= minP ? "¡Quórum alcanzado!" : `Faltan ${Math.max(0, minP - enrolled)} para viabilidad`}
+                            </span>
+                          </div>
+                          <div className="h-2 w-full bg-neutral-100 rounded-full overflow-hidden">
+                            <div
+                              className={cn(
+                                "h-full transition-all duration-500",
+                                enrolled >= minP ? "bg-emerald-500" : "bg-amber-500"
+                              )}
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+{/* Fechas de Vigencia / Visualización */}
           <div className="rounded-lg border border-neutral-200 bg-neutral-50/60 p-3 space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold text-neutral-800 flex items-center gap-1.5">
@@ -2660,6 +3204,229 @@ export default function ServicesPage() {
             </div>
           )}
         </div>
+      </Modal>
+
+      {/* Modal Nueva Convocatoria / Edición */}
+      <Modal
+        open={editionModalOpen}
+        onClose={() => setEditionModalOpen(false)}
+        title="Crear Nueva Convocatoria / Edición"
+      >
+        <form onSubmit={handleCreateEdition} className="space-y-3.5">
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-neutral-700">
+              Título de la Convocatoria <span className="text-red-500">*</span>
+            </label>
+            <Input
+              value={newEditionForm.title}
+              onChange={(e) => setNewEditionForm(f => ({ ...f, title: e.target.value }))}
+              placeholder="ej. Convocatoria Primavera 2027 o Grupo Sábado Mañana"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="rounded border border-neutral-200 p-2.5 bg-neutral-50/50">
+              <label className="flex items-center gap-2 text-xs font-semibold text-neutral-800 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={newEditionForm.isDateDefinite}
+                  onChange={(e) => setNewEditionForm(f => ({ ...f, isDateDefinite: e.target.checked }))}
+                  className="rounded text-indigo-600"
+                />
+                <span>¿Tiene fecha definitiva fija?</span>
+              </label>
+              {newEditionForm.isDateDefinite ? (
+                <div className="mt-2 space-y-1.5">
+                  <Input
+                    type="datetime-local"
+                    value={newEditionForm.startsAt}
+                    onChange={(e) => setNewEditionForm(f => ({ ...f, startsAt: e.target.value }))}
+                    className="text-xs"
+                    required
+                  />
+                </div>
+              ) : (
+                <div className="mt-2">
+                  <Input
+                    value={newEditionForm.tentativeDateText}
+                    onChange={(e) => setNewEditionForm(f => ({ ...f, tentativeDateText: e.target.value }))}
+                    placeholder="ej. Sábado a determinar o Fechas por confirmar"
+                    className="text-xs"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="rounded border border-neutral-200 p-2.5 bg-neutral-50/50">
+              <label className="flex items-center gap-2 text-xs font-semibold text-neutral-800 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={newEditionForm.isPriceDefinite}
+                  onChange={(e) => setNewEditionForm(f => ({ ...f, isPriceDefinite: e.target.checked }))}
+                  className="rounded text-indigo-600"
+                />
+                <span>¿Tiene precio definitivo fijo?</span>
+              </label>
+              {newEditionForm.isPriceDefinite ? (
+                <div className="mt-2">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={newEditionForm.price}
+                    onChange={(e) => setNewEditionForm(f => ({ ...f, price: e.target.value }))}
+                    placeholder="40.00"
+                    className="text-xs"
+                    required
+                  />
+                </div>
+              ) : (
+                <div className="mt-2">
+                  <Input
+                    value={newEditionForm.tentativePriceText}
+                    onChange={(e) => setNewEditionForm(f => ({ ...f, tentativePriceText: e.target.value }))}
+                    placeholder="ej. Según viaje y alojamiento"
+                    className="text-xs"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-neutral-700">
+                Quórum Mínimo Requerido <span className="text-red-500">*</span>
+              </label>
+              <Input
+                type="number"
+                min="1"
+                value={newEditionForm.minParticipants}
+                onChange={(e) => setNewEditionForm(f => ({ ...f, minParticipants: Number(e.target.value) || 1 }))}
+                className="text-xs"
+                required
+              />
+              <p className="mt-0.5 text-[10px] text-neutral-400">Si no se alcanza este número, no se realiza.</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-neutral-700">
+                Plazas Máximas (Aforo)
+              </label>
+              <Input
+                type="number"
+                min="1"
+                value={newEditionForm.maxCapacity}
+                onChange={(e) => setNewEditionForm(f => ({ ...f, maxCapacity: Number(e.target.value) || 1 }))}
+                className="text-xs"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-neutral-700">
+              Condición o Nota de la Convocatoria
+            </label>
+            <Input
+              value={newEditionForm.conditionsText}
+              onChange={(e) => setNewEditionForm(f => ({ ...f, conditionsText: e.target.value }))}
+              placeholder="ej. Sujeto a completar mínimo 10 participantes antes del 15 de Octubre"
+              className="text-xs"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t">
+            <Button type="button" variant="secondary" size="sm" onClick={() => setEditionModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" size="sm">
+              Crear Convocatoria
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal Confirmar Edición y Hacer Definitivas */}
+      <Modal
+        open={confirmEditionModalOpen}
+        onClose={() => setConfirmEditionModalOpen(false)}
+        title="Confirmar Convocatoria y Hacer Definitivas las Reservas"
+      >
+        <form onSubmit={handleConfirmEditionSubmit} className="space-y-3.5">
+          <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800 leading-relaxed">
+            ✨ Al confirmar, todas las reservas provisionales registradas para <strong>{selectedEdition?.title}</strong> pasarán automáticamente a estado <strong>SCHEDULED (Confirmada)</strong> y se despachará la notificación oficial a sus correos y teléfonos.
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-neutral-700">
+                Fecha Definitiva de Inicio <span className="text-red-500">*</span>
+              </label>
+              <Input
+                type="datetime-local"
+                value={confirmEditionForm.startsAt}
+                onChange={(e) => setConfirmEditionForm(f => ({ ...f, startsAt: e.target.value }))}
+                className="text-xs"
+                required
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-neutral-700">
+                Precio Definitivo (€)
+              </label>
+              <Input
+                type="number"
+                step="0.01"
+                value={confirmEditionForm.price}
+                onChange={(e) => setConfirmEditionForm(f => ({ ...f, price: e.target.value }))}
+                placeholder="ej. 40.00"
+                className="text-xs"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-neutral-700">
+              Mensaje Personalizado para los Alumnos (Opcional)
+            </label>
+            <textarea
+              rows={2}
+              value={confirmEditionForm.customMessage}
+              onChange={(e) => setConfirmEditionForm(f => ({ ...f, customMessage: e.target.value }))}
+              placeholder="ej. ¡Hemos alcanzado el quórum mínimo! Os esperamos con muchas ganas en la sala principal."
+              className="w-full rounded border border-neutral-300 p-2 text-xs"
+            />
+          </div>
+
+          <div className="space-y-1.5 pt-1">
+            <label className="flex items-center gap-2 text-xs text-neutral-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={confirmEditionForm.sendEmail}
+                onChange={(e) => setConfirmEditionForm(f => ({ ...f, sendEmail: e.target.checked }))}
+                className="rounded text-emerald-600"
+              />
+              <span>Enviar confirmación oficial por Correo Electrónico</span>
+            </label>
+            <label className="flex items-center gap-2 text-xs text-neutral-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={confirmEditionForm.sendWhatsapp}
+                onChange={(e) => setConfirmEditionForm(f => ({ ...f, sendWhatsapp: e.target.checked }))}
+                className="rounded text-emerald-600"
+              />
+              <span>Enviar confirmación oficial por WhatsApp</span>
+            </label>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t">
+            <Button type="button" variant="secondary" size="sm" onClick={() => setConfirmEditionModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary" size="sm" className="bg-emerald-600 hover:bg-emerald-700">
+              Confirmar y Notificar
+            </Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Appointment } from '../common/entities/appointment.entity';
 import { Service } from '../common/entities/service.entity';
+import { EventEdition } from '../common/entities/event-edition.entity';
 import { Contact } from '../common/entities/contact.entity';
 import { Conversation } from '../common/entities/conversation.entity';
 import { Message } from '../common/entities/message.entity';
@@ -19,7 +20,7 @@ import { ZadarmaSmsModule } from '../sms/zadarma-sms.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Appointment, Service, Contact, Conversation, Message, AppSettings]),
+    TypeOrmModule.forFeature([Appointment, Service, EventEdition, Contact, Conversation, Message, AppSettings]),
     AuthModule,
     CalcomModule,
     forwardRef(() => EmailModule),

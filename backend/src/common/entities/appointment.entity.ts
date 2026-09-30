@@ -88,6 +88,15 @@ export class Appointment {
   @Column({ default: false })
   isFirstClass?: boolean;
 
+  // Event edition linkage (for event/workshop convocatorias)
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  editionId: string | null;
+
+  // Provisional booking indicator (pre-inscripción sujeta a quórum / confirmación de fecha)
+  @Column({ default: false })
+  isProvisional: boolean;
+
   // Yoga class recovery indicator (class can be recovered starting next week for up to 3 months)
   @Column({ default: false })
   isRecovery?: boolean;

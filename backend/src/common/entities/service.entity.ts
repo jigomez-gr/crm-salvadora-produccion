@@ -61,6 +61,13 @@ export class Service {
   @Column({ type: 'text', nullable: true })
   flyerPath: string | null;
 
+  // Video General (MP4 URL / storage path)
+  @Column({ type: 'text', nullable: true })
+  videoUrl: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  videoPath: string | null;
+
   // Flyer Particular (distinct from the general/itinerary flyer)
   @Column({ type: 'text', nullable: true })
   flyerParticularUrl: string | null;
@@ -74,6 +81,10 @@ export class Service {
 
   @Column({ type: 'text', nullable: true })
   videoParticularPath: string | null;
+
+  // Texto Específico para advertencias, condiciones o información particular del servicio
+  @Column({ type: 'text', nullable: true })
+  textoespecifico: string | null;
 
   // Date visibility range (fechaDesde and fechaHasta)
   @Column({ type: 'date', default: '2000-01-01' })

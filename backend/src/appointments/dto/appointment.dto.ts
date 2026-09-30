@@ -92,6 +92,14 @@ export class CreateAppointmentDto {
   @IsOptional()
   @IsBoolean()
   allowCustomSchedule?: boolean;
+
+  @IsOptional()
+  @IsUUID()
+  editionId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isProvisional?: boolean;
 }
 
 export class UpdateAppointmentDto {
@@ -161,6 +169,14 @@ export class UpdateAppointmentDto {
   @IsOptional()
   @IsUUID()
   recoveredFromAppointmentId?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  editionId?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  isProvisional?: boolean;
 }
 
 export class UploadPatientAttachmentDto {

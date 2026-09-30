@@ -86,11 +86,12 @@ export class ContactQueryEvaluatorService {
             priceStr = 'El precio se determinará en función de las características del viaje y alojamiento.';
           }
 
+          let spec = s.textoespecifico ? `\n  Texto específico / condiciones: ${s.textoespecifico}` : '';
           return `- Servicio: ${s.name}\n  Precio: ${priceStr}\n  Horario/Fechas: ${
             dates || 'Consultar programación'
           }\n  Modalidad: ${s.allowedModalities?.join(', ') || 'presencial'}\n  Descripción: ${
             s.description || 'Sin descripción adicional'
-          }\n  Reservas provisionales: Se aceptan reservas provisionales de plaza de inmediato.`;
+          }${spec}\n  Reservas provisionales: Se aceptan reservas provisionales de plaza de inmediato.`;
         })
         .join('\n\n');
 

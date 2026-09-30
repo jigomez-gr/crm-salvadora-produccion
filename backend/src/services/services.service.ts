@@ -1,4 +1,7 @@
-import { Injectable, NotFoundException, ConflictException, OnModuleInit, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, OnModuleInit, Optional } from '@nestjs/common';
+import * as fs from 'fs';
+import * as path from 'path';
+import type { Response } from 'express';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository, ILike } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
@@ -19,6 +22,7 @@ import { resolveNextRecurringEventDate } from '../common/time';
 
 @Injectable()
 export class ServicesService implements OnModuleInit {
+  private readonly mediaStorageDir = path.resolve(process.cwd(), 'media_storage', 'services');
   constructor(
     @InjectRepository(Service)
     private readonly serviceRepo: Repository<Service>,
@@ -41,6 +45,13 @@ export class ServicesService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
+    try {
+      if (!fs.existsSync(this.mediaStorageDir)) {
+        fs.mkdirSync(this.mediaStorageDir, { recursive: true });
+      }
+    } catch (e) {
+      console.warn('Could not create mediaStorageDir:', e);
+    }
     try {
       // 0. Ensure schema columns exist in services table (safe auto-migration)
       try {
@@ -76,6 +87,9 @@ export class ServicesService implements OnModuleInit {
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "flyerPath" text;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "flyerParticularUrl" text;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "flyerParticularPath" text;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "videoUrl" text;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "videoPath" text;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "textoespecifico" text;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "videoParticularUrl" text;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "videoParticularPath" text;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "fechaDesde" date DEFAULT '2000-01-01';
@@ -1292,6 +1306,11 @@ export class ServicesService implements OnModuleInit {
             textosinfechadefinitiva: s.textosinfechadefinitiva,
             sinpreciodefinitivo: s.sinpreciodefinitivo,
             textosinpreciodefinitivo: s.textosinpreciodefinitivo,
+            flyerUrl: s.flyerUrl,
+            flyerParticularUrl: s.flyerParticularUrl,
+            videoUrl: s.videoUrl,
+            videoParticularUrl: s.videoParticularUrl,
+            textoespecifico: s.textoespecifico,
           };
         });
         await this.agentConfigRepo.save(agent);
@@ -1355,6 +1374,9 @@ export class ServicesService implements OnModuleInit {
       flyerParticularUrl: dto.flyerParticularUrl || null,
       videoParticularPath: dto.videoParticularPath || null,
       videoParticularUrl: dto.videoParticularUrl || null,
+      videoPath: dto.videoPath || null,
+      videoUrl: dto.videoUrl || null,
+      textoespecifico: dto.textoespecifico || null,
       fechaDesde: dto.fechaDesde || '2000-01-01',
       fechaHasta: dto.fechaHasta || '2099-12-31',
       sinfechadefinitiva: dto.sinfechadefinitiva || 'N',
@@ -1436,6 +1458,9 @@ export class ServicesService implements OnModuleInit {
     if (dto.flyerParticularUrl !== undefined) service.flyerParticularUrl = dto.flyerParticularUrl || null;
     if (dto.videoParticularPath !== undefined) service.videoParticularPath = dto.videoParticularPath || null;
     if (dto.videoParticularUrl !== undefined) service.videoParticularUrl = dto.videoParticularUrl || null;
+    if (dto.videoPath !== undefined) service.videoPath = dto.videoPath || null;
+    if (dto.videoUrl !== undefined) service.videoUrl = dto.videoUrl || null;
+    if (dto.textoespecifico !== undefined) service.textoespecifico = dto.textoespecifico || null;
     if (dto.fechaDesde !== undefined) service.fechaDesde = dto.fechaDesde || '2000-01-01';
     if (dto.fechaHasta !== undefined) service.fechaHasta = dto.fechaHasta || '2099-12-31';
     if (dto.sinfechadefinitiva !== undefined) service.sinfechadefinitiva = dto.sinfechadefinitiva;
@@ -1477,6 +1502,9 @@ export class ServicesService implements OnModuleInit {
       flyerParticularUrl: source.flyerParticularUrl,
       flyerParticularPath: source.flyerParticularPath,
       videoParticularUrl: source.videoParticularUrl,
+      videoPath: source.videoPath,
+      videoUrl: source.videoUrl,
+      textoespecifico: source.textoespecifico,
       videoParticularPath: source.videoParticularPath,
       fechaDesde: source.fechaDesde || '2000-01-01',
       fechaHasta: source.fechaHasta || '2099-12-31',
@@ -1864,4 +1892,205 @@ export class ServicesService implements OnModuleInit {
       notifiedWhatsapp,
     };
   }
+
+  async saveServiceMedia(
+    serviceId: string,
+    slot: string,
+    file: { originalname: string; buffer?: Buffer; path?: string; mimetype?: string },
+  ): Promise<Service> {
+    const service = await this.findOne(serviceId);
+    if (!service) {
+      throw new NotFoundException(`Servicio ${serviceId} no encontrado`);
+    }
+
+    const normalizedSlot = slot.trim().toLowerCase();
+    const validSlots = ['flyer-general', 'video-general', 'flyer-particular', 'video-particular'];
+    if (!validSlots.includes(normalizedSlot)) {
+      throw new BadRequestException(`Ranura de medio inválida: "${slot}". Debe ser una de: ${validSlots.join(', ')}`);
+    }
+
+    if (!fs.existsSync(this.mediaStorageDir)) {
+      fs.mkdirSync(this.mediaStorageDir, { recursive: true });
+    }
+
+    const ext = path.extname(file.originalname) || (normalizedSlot.includes('video') ? '.mp4' : '.jpg');
+    const filename = `${service.id}_${normalizedSlot}_${Date.now()}${ext}`;
+    const destinationPath = path.join(this.mediaStorageDir, filename);
+
+    if (file.buffer) {
+      fs.writeFileSync(destinationPath, file.buffer);
+    } else if (file.path && fs.existsSync(file.path)) {
+      fs.copyFileSync(file.path, destinationPath);
+    } else {
+      throw new BadRequestException('No se han proporcionado datos binarios del archivo');
+    }
+
+    const publicUrl = `/api/services/${service.id}/media/${normalizedSlot}`;
+
+    if (normalizedSlot === 'flyer-general') {
+      service.flyerPath = destinationPath;
+      service.flyerUrl = publicUrl;
+    } else if (normalizedSlot === 'video-general') {
+      service.videoPath = destinationPath;
+      service.videoUrl = publicUrl;
+    } else if (normalizedSlot === 'flyer-particular') {
+      service.flyerParticularPath = destinationPath;
+      service.flyerParticularUrl = publicUrl;
+    } else if (normalizedSlot === 'video-particular') {
+      service.videoParticularPath = destinationPath;
+      service.videoParticularUrl = publicUrl;
+    }
+
+    const saved = await this.serviceRepo.save(service);
+    await this.syncAgentConfigServices();
+    this.eventEmitter.emit('service.changed', saved);
+    return this.enrichService(saved);
+  }
+
+  async removeServiceMedia(serviceId: string, slot: string): Promise<Service> {
+    const service = await this.findOne(serviceId);
+    if (!service) {
+      throw new NotFoundException(`Servicio ${serviceId} no encontrado`);
+    }
+
+    const normalizedSlot = slot.trim().toLowerCase();
+    let filePathToDelete: string | null = null;
+
+    if (normalizedSlot === 'flyer-general') {
+      filePathToDelete = service.flyerPath;
+      service.flyerPath = null;
+      service.flyerUrl = null;
+    } else if (normalizedSlot === 'video-general') {
+      filePathToDelete = service.videoPath;
+      service.videoPath = null;
+      service.videoUrl = null;
+    } else if (normalizedSlot === 'flyer-particular') {
+      filePathToDelete = service.flyerParticularPath;
+      service.flyerParticularPath = null;
+      service.flyerParticularUrl = null;
+    } else if (normalizedSlot === 'video-particular') {
+      filePathToDelete = service.videoParticularPath;
+      service.videoParticularPath = null;
+      service.videoParticularUrl = null;
+    } else {
+      throw new BadRequestException(`Ranura de medio inválida: "${slot}"`);
+    }
+
+    if (filePathToDelete && fs.existsSync(filePathToDelete)) {
+      try {
+        fs.unlinkSync(filePathToDelete);
+      } catch (err) {
+        console.warn(`Error eliminando archivo físico ${filePathToDelete}:`, err);
+      }
+    }
+
+    const saved = await this.serviceRepo.save(service);
+    await this.syncAgentConfigServices();
+    this.eventEmitter.emit('service.changed', saved);
+    return this.enrichService(saved);
+  }
+
+  async streamServiceMedia(
+    serviceId: string,
+    slot: string,
+    rangeHeader: string | undefined,
+    res: Response,
+  ): Promise<void> {
+    const service = await this.serviceRepo.findOne({ where: { id: serviceId } });
+    if (!service) {
+      throw new NotFoundException(`Servicio ${serviceId} no encontrado`);
+    }
+
+    const normalizedSlot = slot.trim().toLowerCase();
+    let filePath: string | null = null;
+    let fallbackUrl: string | null = null;
+    let defaultMime = 'application/octet-stream';
+
+    if (normalizedSlot === 'flyer-general') {
+      filePath = service.flyerPath;
+      fallbackUrl = service.flyerUrl;
+      defaultMime = 'image/jpeg';
+    } else if (normalizedSlot === 'video-general') {
+      filePath = service.videoPath;
+      fallbackUrl = service.videoUrl;
+      defaultMime = 'video/mp4';
+    } else if (normalizedSlot === 'flyer-particular') {
+      filePath = service.flyerParticularPath;
+      fallbackUrl = service.flyerParticularUrl;
+      defaultMime = 'image/jpeg';
+    } else if (normalizedSlot === 'video-particular') {
+      filePath = service.videoParticularPath;
+      fallbackUrl = service.videoParticularUrl;
+      defaultMime = 'video/mp4';
+    } else {
+      throw new NotFoundException(`Ranura de medio "${slot}" no válida`);
+    }
+
+    let resolvedPath = filePath;
+    if (resolvedPath && !path.isAbsolute(resolvedPath)) {
+      resolvedPath = path.resolve(process.cwd(), resolvedPath);
+    }
+
+    if (!resolvedPath || !fs.existsSync(resolvedPath)) {
+      if (fallbackUrl && fallbackUrl.startsWith('/')) {
+        const publicTry = path.resolve(process.cwd(), fallbackUrl.replace(/^\//, ''));
+        if (fs.existsSync(publicTry)) {
+          resolvedPath = publicTry;
+        } else {
+          const publicTry2 = path.resolve(process.cwd(), 'public', fallbackUrl.replace(/^\//, ''));
+          if (fs.existsSync(publicTry2)) {
+            resolvedPath = publicTry2;
+          }
+        }
+      }
+    }
+
+    if (!resolvedPath || !fs.existsSync(resolvedPath)) {
+      throw new NotFoundException(`Archivo físico no encontrado para ${slot} del servicio ${service.name}`);
+    }
+
+    const stat = fs.statSync(resolvedPath);
+    const fileSize = stat.size;
+
+    const ext = path.extname(resolvedPath).toLowerCase();
+    let mimeType = defaultMime;
+    if (ext === '.mp4') mimeType = 'video/mp4';
+    else if (ext === '.webm') mimeType = 'video/webm';
+    else if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
+    else if (ext === '.png') mimeType = 'image/png';
+    else if (ext === '.webp') mimeType = 'image/webp';
+    else if (ext === '.gif') mimeType = 'image/gif';
+
+    if (rangeHeader) {
+      const parts = rangeHeader.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+      if (start >= fileSize || end >= fileSize) {
+        res.status(416).setHeader('Content-Range', `bytes */${fileSize}`);
+        res.end();
+        return;
+      }
+
+      const chunksize = end - start + 1;
+      const fileStream = fs.createReadStream(resolvedPath, { start, end });
+
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunksize,
+        'Content-Type': mimeType,
+      });
+
+      fileStream.pipe(res);
+    } else {
+      res.writeHead(200, {
+        'Content-Length': fileSize,
+        'Content-Type': mimeType,
+        'Accept-Ranges': 'bytes',
+      });
+      fs.createReadStream(resolvedPath).pipe(res);
+    }
+  }
+
 }

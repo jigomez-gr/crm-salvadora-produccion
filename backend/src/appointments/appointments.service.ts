@@ -8,7 +8,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, ILike, In } from 'typeorm';
+import { Repository, Between, ILike, In, Not } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Contact } from '../common/entities/contact.entity';
 import {
@@ -17,11 +17,13 @@ import {
   PaymentStatus,
 } from '../common/entities/appointment.entity';
 import { Service } from '../common/entities/service.entity';
+import { EventEdition, EventEditionStatus } from '../common/entities/event-edition.entity';
 import { VapiAccount } from '../common/entities/vapi-account.entity';
 import { AppSettings } from '../common/entities/app-settings.entity';
 import { MAINTENANCE_MESSAGE, BLOCKED_USER_MESSAGE } from '../common/system-messages';
 import { CalcomService } from '../calcom/calcom.service';
 import { ZadarmaSmsService } from '../sms/zadarma-sms.service';
+import { parseWeeklyScheduleFromText } from '../services/schedule-parser';
 import { TZDate } from '@date-fns/tz';
 import { format, startOfWeek, endOfWeek, subMonths, addDays } from 'date-fns';
 import { Cron } from '@nestjs/schedule';
@@ -87,6 +89,9 @@ export class AppointmentsService implements OnModuleInit {
     @InjectRepository(AppSettings)
     private readonly settingsRepo: Repository<AppSettings>,
     private readonly zadarmaSms: ZadarmaSmsService,
+    @Optional()
+    @InjectRepository(EventEdition)
+    private readonly eventEditionsRepo?: Repository<EventEdition>,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -100,6 +105,8 @@ export class AppointmentsService implements OnModuleInit {
         ALTER TABLE "appointments" ADD COLUMN IF NOT EXISTS "isFirstClass" boolean DEFAULT false;
         ALTER TABLE "appointments" ADD COLUMN IF NOT EXISTS "isRecovery" boolean DEFAULT false;
         ALTER TABLE "appointments" ADD COLUMN IF NOT EXISTS "recoveredFromAppointmentId" character varying;
+        ALTER TABLE "appointments" ADD COLUMN IF NOT EXISTS "editionId" uuid;
+        ALTER TABLE "appointments" ADD COLUMN IF NOT EXISTS "isProvisional" boolean DEFAULT false;
       `);
       this.logger.log('Payment schema, isFirstClass, and isRecovery columns verified on appointments table.');
     } catch (err) {
@@ -2440,6 +2447,69 @@ export class AppointmentsService implements OnModuleInit {
       return slots;
     }
 
+    // If targetService is an event, handle event editions or specific schedule
+    if (targetService?.serviceType === 'event') {
+      const editions = this.eventEditionsRepo
+        ? await this.eventEditionsRepo.find({
+            where: {
+              serviceId: targetService.id,
+              status: In([EventEditionStatus.PROVISIONAL, EventEditionStatus.CONFIRMED]),
+            },
+            order: { createdAt: 'ASC' },
+          })
+        : [];
+
+      const slots: TimeSlot[] = [];
+      const targetDayYmd = format(zoned, 'yyyy-MM-dd');
+
+      for (const edition of editions) {
+        if (edition.isDateDefinite && edition.startsAt) {
+          const edZoned = new TZDate(edition.startsAt.getTime(), timezone);
+          const edYmd = format(edZoned, 'yyyy-MM-dd');
+          if (edYmd === targetDayYmd) {
+            const count = await this.appointmentsRepo.count({
+              where: {
+                editionId: edition.id,
+                status: Not(AppointmentStatus.CANCELLED),
+              },
+            });
+            const cap = edition.maxCapacity || targetService.maxCapacity || 30;
+            if (count < cap && edition.startsAt.getTime() > now.getTime()) {
+              slots.push({
+                startsAt: edition.startsAt,
+                endsAt: edition.endsAt || new Date(edition.startsAt.getTime() + durationMinutes * 60 * 1000),
+              });
+            }
+          }
+        }
+      }
+
+      if (editions.length > 0) {
+        return slots;
+      }
+
+      // If no editions configured yet, check if scheduleText indicates recurring days (e.g. Sábados 10:00 a 14:00)
+      if (targetService.scheduleText) {
+        const parsed = parseWeeklyScheduleFromText(targetService.scheduleText);
+        if (parsed && Object.keys(parsed).length > 0) {
+          const targetDay = zoned.getDay();
+          const allowed = parsed[targetDay] || [];
+          for (const timeStr of allowed) {
+            const [h, m] = timeStr.split(':').map(Number);
+            const slotStart = new TZDate(zoned.getFullYear(), zoned.getMonth(), zoned.getDate(), h, m, timezone);
+            const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60 * 1000);
+            if (slotStart.getTime() > now.getTime()) {
+              slots.push({ startsAt: new Date(slotStart.getTime()), endsAt: slotEnd });
+            }
+          }
+          return slots;
+        }
+      }
+
+      // For an event without fixed schedule or date, do NOT return random 15-minute weekday slots!
+      return [];
+    }
+
     const rawSlots = computeFreeSlots(date, durationMinutes, workingHours, existing, {
       timezone,
       now,
@@ -3022,6 +3092,83 @@ export class AppointmentsService implements OnModuleInit {
       'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
       'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
     ];
+
+    // If targetService is an event, check for active / provisional editions first
+    if (targetService && targetService.serviceType === 'event') {
+      const editions = this.eventEditionsRepo
+        ? await this.eventEditionsRepo.find({
+            where: {
+              serviceId: targetService.id,
+              status: In([EventEditionStatus.PROVISIONAL, EventEditionStatus.CONFIRMED]),
+            },
+            order: { createdAt: 'ASC' },
+          })
+        : [];
+
+      for (const edition of editions) {
+        const count = await this.appointmentsRepo.count({
+          where: {
+            editionId: edition.id,
+            status: Not(AppointmentStatus.CANCELLED),
+          },
+        });
+        const quorumReached = count >= (edition.minParticipants || 1);
+        const cap = edition.maxCapacity || targetService.maxCapacity || 30;
+
+        if (edition.isDateDefinite && edition.startsAt) {
+          const zonedSlot = new TZDate(edition.startsAt.getTime(), timezone);
+          const zonedEnd = edition.endsAt ? new TZDate(edition.endsAt.getTime(), timezone) : new TZDate(edition.startsAt.getTime() + durationMinutes * 60 * 1000, timezone);
+          const dayName = DAY_NAMES[zonedSlot.getDay()];
+          const dayNum = zonedSlot.getDate();
+          const monthName = MONTH_NAMES[zonedSlot.getMonth()];
+          const dateLabel = `${dayName}, ${dayNum} de ${monthName}`;
+          const timeLabel = `${format(zonedSlot, 'HH:mm')} - ${format(zonedEnd, 'HH:mm')}`;
+
+          resultSlots.push({
+            startsAt: edition.startsAt.toISOString(),
+            endsAt: (edition.endsAt || new Date(edition.startsAt.getTime() + durationMinutes * 60 * 1000)).toISOString(),
+            dateLabel,
+            timeLabel,
+            dayName,
+            isNext: resultSlots.length === 0,
+            isProvisional: edition.status === EventEditionStatus.PROVISIONAL,
+            editionId: edition.id,
+            minParticipants: edition.minParticipants,
+            enrolledCount: count,
+            quorumReached,
+            maxCapacity: cap,
+            price: edition.isPriceDefinite && edition.price ? `${edition.price} €` : (edition.tentativePriceText || targetService.price || 'A determinar'),
+            conditionsText: edition.conditionsText || null,
+          } as any);
+        } else {
+          resultSlots.push({
+            startsAt: edition.startsAt ? edition.startsAt.toISOString() : new Date(now.getTime() + 14 * 24 * 3600 * 1000).toISOString(),
+            endsAt: edition.endsAt ? edition.endsAt.toISOString() : new Date(now.getTime() + 14 * 24 * 3600 * 1000 + durationMinutes * 60 * 1000).toISOString(),
+            dateLabel: edition.tentativeDateText || 'Convocatoria Abierta (Fecha por determinar)',
+            timeLabel: edition.tentativePriceText ? `Tarifa estimada: ${edition.tentativePriceText}` : 'Horario a determinar',
+            dayName: 'Por determinar',
+            isNext: resultSlots.length === 0,
+            isProvisional: true,
+            editionId: edition.id,
+            minParticipants: edition.minParticipants,
+            enrolledCount: count,
+            quorumReached,
+            maxCapacity: cap,
+            price: edition.tentativePriceText || 'A determinar',
+            conditionsText: edition.conditionsText || `Mínimo ${edition.minParticipants} participantes para confirmar`,
+          } as any);
+        }
+      }
+
+      if (resultSlots.length > 0) {
+        return {
+          serviceName: effectiveSvcName,
+          scheduleText: targetService.scheduleText || (editions[0]?.tentativeDateText ?? ''),
+          durationMinutes,
+          slots: resultSlots,
+        };
+      }
+    }
 
     for (let i = 0; i < daysToScan && resultSlots.length < 25; i++) {
       const scanDate = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
