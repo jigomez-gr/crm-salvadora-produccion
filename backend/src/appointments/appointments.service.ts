@@ -2456,7 +2456,7 @@ export class AppointmentsService implements OnModuleInit {
               status: In([EventEditionStatus.PROVISIONAL, EventEditionStatus.CONFIRMED]),
             },
             order: { createdAt: 'ASC' },
-          })
+          }).catch(() => [])
         : [];
 
       const slots: TimeSlot[] = [];
@@ -3102,7 +3102,7 @@ export class AppointmentsService implements OnModuleInit {
               status: In([EventEditionStatus.PROVISIONAL, EventEditionStatus.CONFIRMED]),
             },
             order: { createdAt: 'ASC' },
-          })
+          }).catch(() => [])
         : [];
 
       for (const edition of editions) {

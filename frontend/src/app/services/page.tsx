@@ -1332,6 +1332,13 @@ export default function ServicesPage() {
                     </div>
                   )}
 
+                  {s.textoespecifico && (
+                    <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-amber-50/90 p-2 text-xs text-amber-950 border border-amber-300 shadow-2xs">
+                      <span className="font-bold text-amber-900 shrink-0">📌 Texto Específico:</span>
+                      <span className="line-clamp-3 font-medium whitespace-pre-line">{s.textoespecifico}</span>
+                    </div>
+                  )}
+
                   {s.reminderNotes && (
                     <div className="mt-1.5 flex items-start gap-1.5 rounded bg-amber-50/80 p-1.5 text-[11px] text-amber-900 border border-amber-200/80">
                       <span className="font-semibold shrink-0">💡 Recordatorio:</span>

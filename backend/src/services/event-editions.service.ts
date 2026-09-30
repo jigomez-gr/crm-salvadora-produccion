@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Optional, OnModuleInit, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Not } from 'typeorm';
 import { EventEdition, EventEditionStatus } from '../common/entities/event-edition.entity';
@@ -17,7 +17,9 @@ import {
 const AUDIT_EVENT = 'audit.log';
 
 @Injectable()
-export class EventEditionsService {
+export class EventEditionsService implements OnModuleInit {
+  private readonly logger = new Logger(EventEditionsService.name);
+
   constructor(
     @InjectRepository(EventEdition)
     private readonly editionRepo: Repository<EventEdition>,
@@ -30,24 +32,67 @@ export class EventEditionsService {
     @Optional() private readonly ycloudClient?: YCloudClient,
   ) {}
 
-  async findByService(serviceId: string): Promise<EventEdition[]> {
-    const editions = await this.editionRepo.find({
-      where: { serviceId },
-      order: { createdAt: 'DESC' },
-    });
+  async onModuleInit(): Promise<void> {
+    try {
+      await this.editionRepo.query(`
+        CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
-    for (const ed of editions) {
-      const count = await this.apptRepo.count({
-        where: {
-          editionId: ed.id,
-          status: Not(AppointmentStatus.CANCELLED),
-        },
-      });
-      ed.enrolledCount = count;
-      ed.quorumReached = count >= (ed.minParticipants || 1);
+        CREATE TABLE IF NOT EXISTS "event_editions" (
+            "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+            "serviceId" uuid NOT NULL,
+            "title" character varying NOT NULL,
+            "isDateDefinite" boolean NOT NULL DEFAULT true,
+            "tentativeDateText" text,
+            "startsAt" TIMESTAMP WITH TIME ZONE,
+            "endsAt" TIMESTAMP WITH TIME ZONE,
+            "isPriceDefinite" boolean NOT NULL DEFAULT true,
+            "tentativePriceText" text,
+            "price" numeric(10,2),
+            "minParticipants" integer NOT NULL DEFAULT 1,
+            "maxCapacity" integer,
+            "quorumDeadline" TIMESTAMP WITH TIME ZONE,
+            "conditionsText" text,
+            "status" character varying NOT NULL DEFAULT 'provisional',
+            "flyerParticularUrl" character varying,
+            "videoParticularUrl" character varying,
+            "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+            "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+            CONSTRAINT "PK_event_editions" PRIMARY KEY ("id"),
+            CONSTRAINT "FK_event_editions_service" FOREIGN KEY ("serviceId") REFERENCES "services"("id") ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS "IDX_event_editions_serviceId" ON "event_editions" ("serviceId");
+        CREATE INDEX IF NOT EXISTS "IDX_event_editions_status" ON "event_editions" ("status");
+      `);
+      this.logger.log('event_editions schema successfully verified.');
+    } catch (err) {
+      this.logger.warn(`Could not verify event_editions schema: ${err}`);
     }
+  }
 
-    return editions;
+  async findByService(serviceId: string): Promise<EventEdition[]> {
+    try {
+      const editions = await this.editionRepo.find({
+        where: { serviceId },
+        order: { createdAt: 'DESC' },
+      });
+
+      for (const ed of editions) {
+        const count = await this.apptRepo.count({
+          where: {
+            editionId: ed.id,
+            status: Not(AppointmentStatus.CANCELLED),
+          },
+        }).catch(() => 0);
+        ed.enrolledCount = count;
+        ed.quorumReached = count >= (ed.minParticipants || 1);
+      }
+
+      return editions;
+    } catch (err) {
+      this.logger.warn(`Error finding editions for service ${serviceId}: ${err}`);
+      return [];
+    }
   }
 
   async findOne(id: string): Promise<{
