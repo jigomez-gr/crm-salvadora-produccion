@@ -21,6 +21,11 @@ export interface PromptInputData {
     maxCapacity?: number | null;
     requiresApproval?: boolean;
     allowedModalities?: string[];
+    textoespecifico?: string | null;
+    sinfechadefinitiva?: string | null;
+    textosinfechadefinitiva?: string | null;
+    sinpreciodefinitivo?: string | null;
+    textosinpreciodefinitivo?: string | null;
   }>;
   facts?: Array<{ question: string; answer: string }>;
 }
@@ -64,7 +69,8 @@ Bajo ninguna circunstancia reserves ni consultes citas ni des horarios.`;
             const priceStr = s.price ? `, precio: ${s.price}€` : '';
             const scheduleStr = s.scheduleText ? `, horarios oficiales: ${s.scheduleText}` : '';
             const descStr = s.description ? `. Detalles y condiciones: ${s.description}` : '';
-            return `- ${s.name}: duración ${s.durationMinutes} min${priceStr}${scheduleStr}${descStr}`;
+            const espStr = s.textoespecifico ? `. INFORMACIÓN ESPECÍFICA ACTUALIZADA QUE DEBES COMUNICAR POR VOZ: ${s.textoespecifico}` : '';
+            return `- ${s.name}: duración ${s.durationMinutes} min${priceStr}${scheduleStr}${descStr}${espStr}`;
           })
           .join('\n')
       : '- Consultas y servicios generales (duración estándar 45 min).';
@@ -109,6 +115,11 @@ Bajo ninguna circunstancia reserves ni consultes citas ni des horarios.`;
   const participarPrice = getServicePrice(/constel.*(particip|represen)/i, '20€');
   const mujeresPrice = 'fecha por confirmar';
   const ayunoPrice = getServicePrice(/ayuno/i, '250€');
+  const ayunoSvc = input.services?.find((s) => /ayuno/i.test(s.name || ''));
+  const ayunoTextoEspecifico = ayunoSvc?.textoespecifico || null;
+  const ayunoDateText = ayunoSvc?.sinfechadefinitiva === 'S'
+    ? (ayunoSvc.textosinfechadefinitiva || 'fechas por confirmar')
+    : (ayunoSvc?.scheduleText || 'Puente de Octubre (del 9 al 12 de Octubre de 2026)');
 
   const gestaltSvc = input.services?.find((s) => /gestalt/i.test(s.name || ''));
   const bienestarSvc = input.services?.find((s) => /bienestar/i.test(s.name || ''));
@@ -221,7 +232,8 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
   * Fecha: **próximamente**.
   * Precio: **El precio se determinará en función de las características del viaje y alojamiento.**.
 - **Retiro de Ayuno Terapéutico y Senderismo Consciente**:
-  * Fecha: **Puente de Octubre (del 9 al 12 de Octubre de 2026)** (${ayunoPrice}).
+  * Fecha: **${ayunoDateText}** (${ayunoPrice}).
+  ${ayunoTextoEspecifico ? `* INFORMACIÓN ESPECÍFICA ACTUALIZADA (OBLIGATORIO DECIR POR VOZ): "${ayunoTextoEspecifico}". Debes informar de esto de viva voz al llamante siempre que pregunte o quiera reservar.` : ''}
 
 # Servicios No Disponibles (Prohibición Estricta)
 - Si el llamante pregunta por artes marciales, Iaidō (esgrima japonesa), Ninjutsu, Taichí, Pilates, Entrenamiento Funcional, Consulta Médica o Fisioterapia, infórmale con total cercanía y amabilidad de que esas actividades ya no se imparten en el centro, y ofrécele las actividades activas del catálogo de Yoga, Meditación, Terapias y Retiros.
@@ -232,6 +244,7 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
 - Si la fecha de una actividad ha transcurrido y NO tiene regla periódica (o está por definir), responde que se celebrará "próximamente".
 - En relación al precio de servicios no fijos o dependientes de viaje/estancia: responde textualmente que "El precio se determinará en función de las características del viaje y alojamiento."
 - Acepta de inmediato RESERVAS PROVISIONALES para cualquiera de estas actividades y tramítalas en el acto con "reservar_cita".
+- REGLA DE INFORMACIÓN ESPECÍFICA ('textoespecifico'): Si un servicio tiene configurada información específica (por ejemplo en el Retiro de Ayuno: "${ayunoTextoEspecifico || 'estamos seleccionando ya el lugar del próximo retiro'}"), DEBES INFORMAR DE ELLA POR VOZ DE FORMA OBLIGATORIA Y DESTACADA cuando pregunten por el servicio o soliciten plaza.
 
 # Gestión de Citas y Uso de Herramientas
 1. **Identificación al inicio**: Al arrancar la llamada usa la herramienta "identificar_llamante" para saber si el cliente ya está registrado y si tiene citas próximas. Si está registrado, salúdale por su nombre.

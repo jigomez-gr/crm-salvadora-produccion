@@ -293,6 +293,8 @@ export class AgentRunnerService {
           textosinfechadefinitiva: s.textosinfechadefinitiva,
           sinpreciodefinitivo: s.sinpreciodefinitivo,
           textosinpreciodefinitivo: s.textosinpreciodefinitivo,
+          textoespecifico: s.textoespecifico || null,
+          editions: (s as any).editions || [],
         }));
       }
 

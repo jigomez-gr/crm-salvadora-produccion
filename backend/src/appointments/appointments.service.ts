@@ -1612,6 +1612,10 @@ export class AppointmentsService implements OnModuleInit {
           ? `<p style="margin: 8px 0; font-size: 13px; color: #4b5563; line-height: 1.4;"><strong>Detalles de la sesión / actividad:</strong> ${serviceEntity.description}</p>`
           : '';
 
+        const textoEspecificoHtml = serviceEntity?.textoespecifico
+          ? `<div style="margin: 12px 0; background-color: #fefce8; border: 1px solid #fde047; padding: 12px 16px; border-radius: 8px; font-size: 13px; color: #713f12; line-height: 1.5;"><strong style="display: block; text-transform: uppercase; font-size: 11px; margin-bottom: 4px; color: #854d0e;">📌 Información Específica del Servicio:</strong>${serviceEntity.textoespecifico}</div>`
+          : '';
+
         emailHtml = `
           <div style="font-family: Arial, sans-serif; color: #1f2937; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 10px; padding: 24px; background-color: #ffffff;">
             <div style="text-align: center; margin-bottom: 20px; border-bottom: 1px solid #f3f4f6; padding-bottom: 16px;">
@@ -1625,6 +1629,7 @@ export class AppointmentsService implements OnModuleInit {
             <div style="background-color: #f9fafb; border: 1px solid #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0;">
               <p style="margin: 6px 0;">📌 <strong>Servicio / Actividad:</strong> ${appt.service}</p>
               ${serviceDescHtml}
+              ${textoEspecificoHtml}
               <p style="margin: 6px 0;">📅 <strong>Fecha:</strong> ${formattedDate}</p>
               ${isSinFecha ? '' : `<p style="margin: 6px 0;">⏰ <strong>Horario:</strong> ${formattedTime}</p>`}
               ${locationHtml}
@@ -1648,6 +1653,9 @@ export class AppointmentsService implements OnModuleInit {
         const reminderWhatsApp = serviceEntity?.reminderNotes
           ? `\n\n💡 *Recordatorio y preparación:* ${serviceEntity.reminderNotes}`
           : '';
+        const textoEspecificoWhatsApp = serviceEntity?.textoespecifico
+          ? `\n\n📌 *Información específica:* ${serviceEntity.textoespecifico}`
+          : '';
         const locationWhatsApp = isVirtual
           ? `Online por Videollamada${appt.calMeetingUrl ? `\n🔗 *Enlace directo:* ${appt.calMeetingUrl}` : ''}`
           : 'Presencial en Club Social Parque Granada (C/ Holanda 1, Fuenlabrada)';
@@ -1659,8 +1667,8 @@ export class AppointmentsService implements OnModuleInit {
             : '';
 
         chatMessageText = isSinFecha
-          ? `¡Hola ${contact.name || ''}! Te confirmamos que tu cita para *${appt.service}* ha quedado formalizada.\n\n📅 *Fecha:* ${formattedDate}\n📍 *Modalidad:* ${locationWhatsApp}\n👤 *Responsable:* ${effectiveManager}${priceWhatsApp}${reminderWhatsApp}\n\n¡Muchas gracias y nos vemos pronto!`
-          : `¡Hola ${contact.name || ''}! Te confirmamos que tu cita para *${appt.service}* ha quedado formalizada.\n\n📅 *Fecha:* ${formattedDate}\n⏰ *Hora:* ${formattedTime}\n📍 *Modalidad:* ${locationWhatsApp}\n👤 *Responsable:* ${effectiveManager}${priceWhatsApp}${reminderWhatsApp}\n\n¡Muchas gracias y nos vemos pronto!`;
+          ? `¡Hola ${contact.name || ''}! Te confirmamos que tu cita para *${appt.service}* ha quedado formalizada.\n\n📅 *Fecha:* ${formattedDate}\n📍 *Modalidad:* ${locationWhatsApp}\n👤 *Responsable:* ${effectiveManager}${priceWhatsApp}${textoEspecificoWhatsApp}${reminderWhatsApp}\n\n¡Muchas gracias y nos vemos pronto!`
+          : `¡Hola ${contact.name || ''}! Te confirmamos que tu cita para *${appt.service}* ha quedado formalizada.\n\n📅 *Fecha:* ${formattedDate}\n⏰ *Hora:* ${formattedTime}\n📍 *Modalidad:* ${locationWhatsApp}\n👤 *Responsable:* ${effectiveManager}${priceWhatsApp}${textoEspecificoWhatsApp}${reminderWhatsApp}\n\n¡Muchas gracias y nos vemos pronto!`;
       } else if (decision === 'reschedule_requested') {
         const reasonText =
           rejectionReason ||

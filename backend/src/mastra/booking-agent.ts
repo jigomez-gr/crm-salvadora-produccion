@@ -1370,6 +1370,11 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       const participarPrice = getServicePrice(/constel.*(particip|represen)/i, '20€');
       const mujeresPrice = getServicePrice(/mujeres|femenino/i, 'El precio se determinará en función de las características del viaje y alojamiento.');
       const ayunoPrice = getServicePrice(/ayuno/i, '250€');
+      const ayunoSvc = (config?.services || []).find((s: any) => /ayuno/i.test(s.name || ''));
+      const ayunoTextoEspecifico = ayunoSvc?.textoespecifico || null;
+      const ayunoDate = ayunoSvc?.sinfechadefinitiva === 'S'
+        ? (ayunoSvc.textosinfechadefinitiva || 'fechas por confirmar')
+        : (ayunoSvc?.eventDatesText || 'Puente de Octubre (Del 9 al 12 de Octubre de 2026, 4 días / 3 noches)');
       const gongRecurring = resolveNextRecurringEventDate('Baño de Gong', new Date(), timezone);
       const gongDate =
         gongRecurring.hasRule && gongRecurring.dateText
@@ -1514,9 +1519,14 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
 - RETIRO DE AYUNO TERAPÉUTICO Y SENDERISMO CONSCIENTE:
   * Modalidad: Retiro presencial de fin de semana / puente en la naturaleza (aforo máximo: 20 personas).
   * Propósito y actividades: Depuración celular profunda, caldos y tisanas biológicas, caminatas conscientes en la naturaleza, descanso digestivo, charlas de nutrición y reconexión holística.
-  * Próxima edición: Puente de Octubre (Del 9 al 12 de Octubre de 2026, 4 días / 3 noches).
+  * Próxima edición / Fechas: ${ayunoDate}.
   * Precio: ${ayunoPrice} (o según tipo de hospedaje y habitación elegida).
-  * Cuando un cliente pregunte o pida inscribirse, informa de las fechas del puente de octubre y formaliza su plaza con 'bookAppointment'.
+  * INFORMACIÓN ESPECÍFICA ACTUALIZADA (OBLIGATORIA COMUNICAR SIEMPRE): ${ayunoTextoEspecifico ? `"${ayunoTextoEspecifico}" (DEBES comunicar este texto específico al usuario de forma prioritaria en tu respuesta)` : 'Sin notas adicionales'}.
+  * Cuando un cliente pregunte o pida inscribirse, informa de las fechas ("${ayunoDate}"), del precio y del texto específico ("${ayunoTextoEspecifico || ''}") y formaliza su plaza con 'bookAppointment'.
+- OBLIGACIÓN ESTRICTA DE COMUNICAR EL TEXTO ESPECÍFICO ('textoespecifico') DE CUALQUIER SERVICIO:
+  * Si un servicio tiene configurada información específica ('textoespecifico'), como en el Retiro de Ayuno Terapéutico: "${ayunoTextoEspecifico || 'estamos seleccionando ya el lugar del próximo retiro'}",
+  * DEBES COMUNICAR SIEMPRE Y DE FORMA OBLIGATORIA este texto específico al usuario de manera destacada y prioritaria en tu respuesta tanto al informar sobre el servicio como al tramitar su reserva.
+  * NUNCA omitas el texto específico si el servicio lo tiene asignado.
 - PREVALENCIA ABSOLUTA DE PRECIOS VIGENTES (OBLIGATORIA):
   Los precios oficiales de los servicios son EXCLUSIVAMENTE los definidos en las reglas anteriores y en la sección de Servicios de este prompt:
   * Bienestar Experience: ${bienestarPrice} por sesión de 1 hora.
@@ -1727,7 +1737,7 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
               else if (s.scheduleText) details += `, Horarios oficiales: ${s.scheduleText}`;
             }
             if (s.textoespecifico) {
-              details += `\n  * Información específica: ${s.textoespecifico}`;
+              details += `\n  * INFORMACIÓN ESPECÍFICA ACTUALIZADA (COMUNICAR SIEMPRE AL CLIENTE): ${s.textoespecifico}`;
             }
             if (s.description) {
               let desc = s.description;
