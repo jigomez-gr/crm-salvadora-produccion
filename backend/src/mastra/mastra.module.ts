@@ -83,7 +83,7 @@ export { NestMastraModule };
           },
           updateContact: async (
             contactId: string,
-            fields: { name?: string; email?: string; phone?: string },
+            fields: { name?: string; email?: string; phone?: string; emailerroneo?: 'S' | 'N' },
           ) => {
             return contactsService.update(contactId, fields);
           },

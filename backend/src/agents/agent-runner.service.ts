@@ -307,6 +307,7 @@ export class AgentRunnerService {
       }
     }
     requestContext.set('threadId', threadId);
+    requestContext.set('channel', channel);
 
     // Tell the agent who it is talking to so it never asks for the phone and
     // never has to handle the contact id itself (the booking/list tools read it
@@ -316,6 +317,7 @@ export class AgentRunnerService {
     let effectivePhone = phone;
     let effectiveName = contactName;
     let effectiveEmail: string | undefined;
+    let effectiveEmailerroneo: 'S' | 'N' = 'N';
 
     // If contact is not passed directly (e.g. Widget / Web), resolve from conversation
     if (!effectiveContactId) {
@@ -335,6 +337,7 @@ export class AgentRunnerService {
         effectivePhone = effectivePhone || c.phone;
         effectiveName = effectiveName || c.name;
         effectiveEmail = c.email || undefined;
+        effectiveEmailerroneo = c.emailerroneo === 'S' ? 'S' : 'N';
       }
     } else if (effectivePhone) {
       const c = await this.contactsService
@@ -344,6 +347,7 @@ export class AgentRunnerService {
         effectiveContactId = c.id;
         effectiveName = effectiveName || c.name;
         effectiveEmail = c.email || undefined;
+        effectiveEmailerroneo = c.emailerroneo === 'S' ? 'S' : 'N';
       }
     }
 
@@ -366,6 +370,7 @@ export class AgentRunnerService {
           effectivePhone = playgroundContact.phone;
           effectiveName = playgroundContact.name;
           effectiveEmail = playgroundContact.email || undefined;
+          effectiveEmailerroneo = playgroundContact.emailerroneo === 'S' ? 'S' : 'N';
         }
       } catch {
         // non-fatal playground fallback
@@ -379,6 +384,7 @@ export class AgentRunnerService {
         phone: effectivePhone,
         name: nameKnown ? effectiveName : undefined,
         email: effectiveEmail,
+        emailerroneo: effectiveEmailerroneo,
         nameKnown,
       });
     }

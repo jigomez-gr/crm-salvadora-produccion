@@ -479,6 +479,9 @@ export class ContactsService {
       contact.email = dto.email && typeof dto.email === 'string' && dto.email.trim()
         ? dto.email.trim().toLowerCase()
         : null;
+      if (dto.emailerroneo === undefined && contact.email) {
+        contact.emailerroneo = 'N';
+      }
     }
 
     if (dto.isStudent && !contact.studentEnrolledAt) {
