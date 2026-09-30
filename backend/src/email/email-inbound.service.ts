@@ -130,6 +130,7 @@ export class EmailInboundService implements OnModuleInit {
 
       for (const folder of uniqueFolders) {
         const rawMessages: Array<{ uid: number; parsed: any; externalId: string }> = [];
+        const alreadyProcessedUids: number[] = [];
         let lock: any = null;
         try {
           lock = await client.getMailboxLock(folder);
@@ -150,7 +151,13 @@ export class EmailInboundService implements OnModuleInit {
                 const rawFrom = parsed.from?.value?.[0]?.address?.toLowerCase().trim();
 
                 // Skip emails sent from the center itself or empty senders
-                if (!rawFrom || rawFrom === centerEmail || rawFrom.includes('salvadoraconesa')) {
+                const isFromCenter =
+                  !rawFrom ||
+                  rawFrom === centerEmail ||
+                  rawFrom === acc.fromAddress?.toLowerCase().trim() ||
+                  rawFrom === acc.smtpUser?.toLowerCase().trim();
+
+                if (isFromCenter) {
                   continue;
                 }
 
@@ -161,6 +168,7 @@ export class EmailInboundService implements OnModuleInit {
                 // Check if already processed
                 const alreadyExists = await this.messagesService.existsByExternalId(externalId);
                 if (alreadyExists) {
+                  alreadyProcessedUids.push(msg.uid);
                   continue;
                 }
 
@@ -176,6 +184,15 @@ export class EmailInboundService implements OnModuleInit {
           if (lock) {
             lock.release();
             lock = null;
+          }
+        }
+
+        // Archive messages that were already saved in CRM but still linger in this mailbox
+        for (const oldUid of alreadyProcessedUids) {
+          try {
+            await this.moveToProcessed(client, folder, oldUid, targetProcessedFolder);
+          } catch {
+            // Ignore single archive error
           }
         }
 
@@ -205,6 +222,9 @@ export class EmailInboundService implements OnModuleInit {
                   status: MessageStatus.RECEIVED,
                 })
                 .catch(() => null);
+
+              // Move to procesados folder so it doesn't clutter INBOX
+              await this.moveToProcessed(client, folder, uid, targetProcessedFolder);
               continue;
             }
 
@@ -281,6 +301,9 @@ export class EmailInboundService implements OnModuleInit {
               isUrgent,
               reason: `Nuevo correo de ${contact.name} en hilo con atención humana activa${isUrgent ? ' [URGENTE]' : ''}:\n"${cleanedBody}"`,
             });
+
+            // Archive to procesados folder so operator handles it from CRM
+            await this.moveToProcessed(client, folder, uid, targetProcessedFolder);
           } else {
             // 5. Intelligent AI Qualification & Reply
             const history = await this.messagesService.getThreadMessages(threadId);
@@ -309,8 +332,9 @@ export class EmailInboundService implements OnModuleInit {
 
             if (evaluation.intent === 'IGNORE') {
               this.logger.log(
-                `🚫 Mensaje ignorado (${rawFrom}): ${evaluation.reasoning}. No se responderá por política del centro.`,
+                `🚫 Mensaje ignorado (${rawFrom}): ${evaluation.reasoning}. Archivando en procesados.`,
               );
+              await this.moveToProcessed(client, folder, uid, targetProcessedFolder);
               processResult.actionTaken = 'ignored_non_yoga_or_corporate';
             } else if (evaluation.intent === 'HUMAN_HANDOFF') {
               // Mark conversation in handoff
@@ -330,12 +354,12 @@ export class EmailInboundService implements OnModuleInit {
                 reason: `Atención personalizada requerida${isUrgent ? ' [URGENTE]' : ''} (${evaluation.reasoning}):\n"${cleanedBody}"`,
               });
 
+              // Mover a la carpeta 'procesados'
+              await this.moveToProcessed(client, folder, uid, targetProcessedFolder);
+
               // Send polite acknowledgment informing that Salvadora will respond
               if (evaluation.replyBody) {
                 try {
-                  // Mover a la carpeta 'procesados' antes de responder
-                  await this.moveToProcessed(client, folder, uid, targetProcessedFolder);
-
                   await this.emailService.send(
                     contact.id,
                     evaluation.replySubject || cleanSubject,
@@ -402,12 +426,11 @@ export class EmailInboundService implements OnModuleInit {
                 }
               }
 
-              // 2. Send automated intelligent email reply
+              // 2. Mover a la carpeta 'procesados' y enviar respuesta inteligente automática
+              await this.moveToProcessed(client, folder, uid, targetProcessedFolder);
+
               if (evaluation.replyBody) {
                 try {
-                  // Mover a la carpeta 'procesados' antes de responder
-                  await this.moveToProcessed(client, folder, uid, targetProcessedFolder);
-
                   await this.emailService.send(
                     contact.id,
                     evaluation.replySubject || cleanSubject,

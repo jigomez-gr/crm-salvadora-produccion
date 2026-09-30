@@ -458,12 +458,24 @@ function ConversationsPageInner() {
   });
 
   const selectedThread = threads.find((t) => t.threadId === selected);
-  const isWhatsapp = selectedThread?.channel === "whatsapp";
+  const isEmail =
+    selectedThread?.channel === "email" ||
+    Boolean(selectedThread?.threadId?.includes(":email:"));
+  const isWhatsapp =
+    (selectedThread?.channel === "whatsapp" || !selectedThread?.channel) &&
+    !isEmail;
 
   const from = total === 0 ? 0 : offset + 1;
   const to = Math.min(offset + PAGE_SIZE, total);
 
-  function ChannelBadge({ channel }: { channel: string }) {
+  function ChannelBadge({ channel, threadId }: { channel: string; threadId?: string }) {
+    if (channel === "email" || threadId?.includes(":email:")) {
+      return (
+        <Badge variant="warning" className="gap-1 bg-amber-50 text-amber-800 border border-amber-200">
+          <Mail className="h-3 w-3 text-amber-600" /> Email
+        </Badge>
+      );
+    }
     if (channel === "whatsapp") {
       return (
         <Badge variant="success" className="gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -639,7 +651,7 @@ function ConversationsPageInner() {
                           <UserCog className="h-3 w-3" /> Tú
                         </Badge>
                       )}
-                      <ChannelBadge channel={t.channel} />
+                      <ChannelBadge channel={t.channel} threadId={t.threadId} />
                     </div>
                   </div>
                   <div className="mt-0.5 flex items-center justify-between gap-1">
@@ -766,7 +778,7 @@ function ConversationsPageInner() {
                   </Button>
                 )}
                 {selectedThread && (
-                  <ChannelBadge channel={selectedThread.channel} />
+                  <ChannelBadge channel={selectedThread.channel} threadId={selectedThread.threadId} />
                 )}
               </div>
             </div>
@@ -842,7 +854,7 @@ function ConversationsPageInner() {
             </div>
 
             {/* Email Composer & Action Bar */}
-            {selectedThread?.channel === "email" && (
+            {isEmail && (
               <div className="border-t border-neutral-200 bg-neutral-50/70 p-4 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200/80 pb-2.5">
                   <div className="flex items-center gap-2">
@@ -854,7 +866,7 @@ function ConversationsPageInner() {
                         Responder por Correo Electrónico
                       </h3>
                       <p className="text-[11px] text-neutral-500">
-                        Destinatario: <strong className="text-neutral-700">{selectedThread.contact?.email || selected}</strong>
+                        Destinatario: <strong className="text-neutral-700">{selectedThread?.contact?.email || selected}</strong>
                       </p>
                     </div>
                   </div>
@@ -918,7 +930,7 @@ function ConversationsPageInner() {
                   </span>
 
                   <div className="flex items-center gap-2">
-                    {selectedThread.contact?.email && (
+                    {selectedThread?.contact?.email && (
                       <a
                         href={`mailto:${selectedThread.contact.email}?subject=${encodeURIComponent(
                           emailSubject || "Re: Consulta - Escuela de Yoga Salvadora Conesa"

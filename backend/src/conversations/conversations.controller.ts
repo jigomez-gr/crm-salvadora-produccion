@@ -217,7 +217,13 @@ export class ConversationsController {
     const conv = await this.messagesService.getConversation(threadId);
     if (!conv) throw new NotFoundException('Conversación no encontrada');
 
-    if (conv.channel === MessageChannel.EMAIL) {
+    const isEmailThread =
+      conv.channel === MessageChannel.EMAIL ||
+      conv.channel === 'email' ||
+      threadId.includes(':email:') ||
+      threadId.startsWith('email:');
+
+    if (isEmailThread) {
       return this.replyEmail(threadId, { body: dto.body, subject: dto.subject });
     }
 
@@ -235,8 +241,15 @@ export class ConversationsController {
       .catch(() => null);
     const from = config?.whatsappNumber || process.env.YCLOUD_WHATSAPP_NUMBER;
     if (!from) {
+      // If contact has email, deliver by email instead of failing
+      const contact = conv.contactId
+        ? await this.contactsService.findById(conv.contactId).catch(() => null)
+        : null;
+      if (contact?.email) {
+        return this.replyEmail(threadId, { body: dto.body, subject: dto.subject });
+      }
       throw new BadRequestException(
-        'Este agente no tiene número de WhatsApp configurado',
+        'Este agente no tiene número de WhatsApp configurado (trámite en curso en Meta). Para responder a este contacto por correo, utiliza la opción de respuesta por email.',
       );
     }
 
@@ -324,10 +337,23 @@ export class ConversationsController {
       await this.messagesService.linkContact(threadId, contact.id);
     }
 
-    const subject = dto.subject?.trim() || 'Re: Consulta — Centro de Yoga Salvadora Conesa';
+    let subject = dto.subject?.trim();
+    let body = dto.body?.trim();
+
+    // If body contains ASUNTO: ... CUERPO: ..., parse it cleanly:
+    if (!subject && body.includes('ASUNTO:')) {
+      const match = body.match(/ASUNTO:\s*([^\n]+)/i);
+      if (match) {
+        subject = match[1].trim();
+      }
+      body = body.replace(/^ASUNTO:\s*[^\n]+\n*(CUERPO:\s*)?/i, '').trim();
+    }
+    if (!subject) {
+      subject = 'Re: Consulta — Centro de Yoga Salvadora Conesa';
+    }
 
     // Send email via EmailService (SMTP)
-    await this.emailService.send(contact.id, subject, dto.body, 'operador');
+    await this.emailService.send(contact.id, subject, body, 'operador');
 
     // Persist outbound message in MessagesService
     const message = await this.messagesService.saveMessage({
@@ -335,7 +361,7 @@ export class ConversationsController {
       threadId,
       direction: MessageDirection.OUTBOUND,
       channel: MessageChannel.EMAIL,
-      body: dto.body,
+      body: body,
       status: MessageStatus.SENT,
     });
 

@@ -380,6 +380,7 @@ export class MessagesService implements OnModuleInit {
       VALUES ($1, $2, $3, $4, false, $5, $6, $7, $8, $9, 1, now(), now())
       ON CONFLICT ("threadId") DO UPDATE SET
         "contactId" = COALESCE(EXCLUDED."contactId", conversations."contactId"),
+        "channel" = EXCLUDED."channel",
         "lastMessageAt" = EXCLUDED."lastMessageAt",
         "lastMessageBody" = EXCLUDED."lastMessageBody",
         "lastMessageDirection" = EXCLUDED."lastMessageDirection",
@@ -409,11 +410,16 @@ export class MessagesService implements OnModuleInit {
     const agentKey = threadId.includes(':')
       ? threadId.slice(0, threadId.indexOf(':'))
       : threadId;
+    const channel = threadId.includes(':email:')
+      ? MessageChannel.EMAIL
+      : threadId.includes(':widget')
+        ? 'widget'
+        : MessageChannel.WHATSAPP;
     await this.conversationsRepo.query(
       `INSERT INTO conversations ("threadId", "agentKey", channel, handoff, "unreadCount", "messageCount", "createdAt", "updatedAt")
        VALUES ($1, $2, $3, false, 0, 0, now(), now())
-       ON CONFLICT ("threadId") DO NOTHING`,
-      [threadId, agentKey, MessageChannel.WHATSAPP],
+       ON CONFLICT ("threadId") DO UPDATE SET channel = $3 WHERE conversations.channel != $3 AND $3 != 'whatsapp'`,
+      [threadId, agentKey, channel],
     );
   }
 }
