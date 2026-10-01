@@ -30,6 +30,7 @@ const selectClass =
   "block w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500";
 
 import { ContactModal, ContactFormData } from "@/components/ContactModal";
+import { GoogleImportModal } from "@/components/GoogleImportModal";
 
 const PAGE_SIZE = 50;
 
@@ -154,6 +155,7 @@ function ContactsPageInner() {
     () => searchParams.get("new") === "1",
   );
   const [importOpen, setImportOpen] = useState(false);
+  const [googleImportOpen, setGoogleImportOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | undefined>();
   const [deleteTarget, setDeleteTarget] = useState<Contact | undefined>();
   const [deleting, setDeleting] = useState(false);
@@ -300,6 +302,14 @@ function ContactsPageInner() {
           <Button variant="secondary" onClick={() => setImportOpen(true)}>
             <Upload className="h-4 w-4" />
             Importar
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => setGoogleImportOpen(true)}
+            className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+          >
+            <Upload className="h-4 w-4 text-emerald-600" />
+            Importar de Google
           </Button>
           <Button
             onClick={() => {
@@ -495,6 +505,13 @@ function ContactsPageInner() {
         key={importOpen ? "import-open" : "import-closed"}
         open={importOpen}
         onClose={() => setImportOpen(false)}
+        onImported={refreshContacts}
+      />
+
+      <GoogleImportModal
+        key={googleImportOpen ? "google-open" : "google-closed"}
+        open={googleImportOpen}
+        onClose={() => setGoogleImportOpen(false)}
         onImported={refreshContacts}
       />
 

@@ -20,6 +20,7 @@ import {
   UpdateContactDto,
   ConvertToStudentDto,
   ImportContactsDto,
+  ImportGoogleContactsDto,
   SetConsentDto,
   ReorderBoardDto,
 } from './dto/contact.dto';
@@ -103,6 +104,34 @@ export class ContactsController {
         created: result.created,
         updated: result.updated,
         skipped: result.skipped,
+      },
+    });
+    return result;
+  }
+
+  @Post('import-google')
+  async importGoogleContacts(
+    @Body() dto: ImportGoogleContactsDto,
+    @CurrentUser() actor: AuthUser,
+    @Ip() ip: string,
+  ) {
+    const result = await this.contactsService.importGoogleCsv({
+      filePath: dto.filePath,
+      csvContent: dto.csvContent,
+      openNotepad: dto.openNotepad,
+    });
+    this.audit({
+      actor: { id: actor.id, email: actor.email },
+      action: AuditAction.CONTACT_IMPORT,
+      summary: `Importó contactos de Google (${result.created} nuevos, ${result.existing} existentes, ${result.skipped} omitidos)`,
+      targetType: 'contact',
+      ip,
+      metadata: {
+        created: result.created,
+        existing: result.existing,
+        skipped: result.skipped,
+        total: result.total,
+        reportPath: result.reportPath,
       },
     });
     return result;

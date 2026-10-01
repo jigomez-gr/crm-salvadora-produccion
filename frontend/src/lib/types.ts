@@ -211,6 +211,20 @@ export interface ImportResult {
   errors: { row: number; message: string }[];
 }
 
+export interface GoogleImportResult {
+  total: number;
+  created: number;
+  existing: number;
+  skipped: number;
+  warningsCount: number;
+  reportPath?: string;
+  reportText: string;
+  openedNotepad: boolean;
+  contactsWithoutEmailCount: number;
+  contactsWithoutPhoneCount: number;
+  duplicatesOrSimilaritiesCount: number;
+}
+
 // Paginated contacts list (server-side: limit/offset + search/status filter).
 export interface ContactPage {
   items: Contact[];

@@ -185,3 +185,21 @@ export class SetConsentDto {
   @IsBoolean()
   optedOut: boolean;
 }
+
+/** Google Contacts CSV import payload. Can specify local filePath on server or direct csvContent. */
+export class ImportGoogleContactsDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  filePath?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(10_000_000)
+  csvContent?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  openNotepad?: boolean;
+}
+
