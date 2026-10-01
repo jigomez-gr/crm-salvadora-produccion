@@ -18,6 +18,9 @@ export interface PromptInputData {
     price?: string | number | null;
     scheduleText?: string | null;
     description?: string | null;
+    eventDatesText?: string | null;
+    eventStartDate?: string | Date | null;
+    eventEndDate?: string | Date | null;
     maxCapacity?: number | null;
     requiresApproval?: boolean;
     allowedModalities?: string[];
@@ -105,11 +108,11 @@ Bajo ninguna circunstancia reserves ni consultes citas ni des horarios.`;
       ? gongRecurring.dateText
       : 'Sábado 31 de Octubre de 2026 de 18:00 a 20:00';
   const gongPrice = getServicePrice(/baño.*gong|meditación sonora/i, '16€');
-  const constelRecurring = resolveNextRecurringEventDate('Constelaciones Familiares', new Date(), input.timezone);
+  const constelSvc = input.services?.find((s) => /constelaci/i.test(s.name || ''));
   const constelDateText =
-    constelRecurring.hasRule && constelRecurring.dateText
-      ? constelRecurring.dateText
-      : 'Domingo 25 de Octubre de 2026 de 10:00 a 14:00';
+    constelSvc?.sinfechadefinitiva === 'S'
+      ? (constelSvc.textosinfechadefinitiva || 'fecha provisional por confirmar')
+      : (constelSvc?.eventDatesText || constelSvc?.scheduleText || 'Domingo 25 de Octubre de 2026 de 10:00 a 14:00');
   const pujaPrice = 'El precio se determinará en función de las características del viaje y alojamiento.';
   const constelarPrice = getServicePrice(/constel.*(constelar|propio)/i, '60€');
   const participarPrice = getServicePrice(/constel.*(particip|represen)/i, '20€');
@@ -217,10 +220,11 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
 - **Bienestar Experience** (${bienestarPrice}):
   * Modalidad: ${bienestarModality}.${bienestarApprovalText}
   * Fechas y horarios: ${bienestarSchedule}. Reserva directa de plaza.
-- **Constelaciones Familiares** (Taller vivencial mensual de 4 horas, NO es sesión diaria individual):
-  * Próxima fecha oficial: **${constelDateText}**.
+- **Constelaciones Familiares** (Taller vivencial de 4 horas, NO es sesión diaria individual):
+  * Convocatoria y horario: **${constelDateText}**.
+  * Se admiten reservas y preinscripciones prioritarias en todo momento (tanto si la fecha es provisional como definitiva).
   * Opciones: 1. Constelar / Asunto propio (${constelarPrice}) | 2. Participar / Representante (${participarPrice}).
-  * Si el cliente pide cita para hoy o cualquier otro día, explícale con total claridad que el taller es el ${constelDateText} y ofrécele reservar su plaza para ese día.
+  * Informa al llamante de la convocatoria (${constelDateText}) y tramita su plaza con "reservar_cita".
 - **Baños de Gong y Meditación Sonora** (Sesión vivencial mensual de 2 horas):
   * Regla de periodicidad: Un sábado al mes (el último sábado de cada mes).
   * Próxima fecha: **${gongDateText}** (${gongPrice}).
@@ -277,7 +281,7 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
 1. **SIEMPRE DI EL CALENDARIO OFICIAL**: Cuando el cliente pregunte por cualquier clase o servicio, o pida disponibilidad, infórmale en primer lugar de los días y horarios oficiales del calendario del centro.
    - Hatha Yoga Terapéutico: martes (09:45, 11:15, 17:00, 18:30 y 20:00), miércoles (20:15) y jueves (09:45, 11:15, 16:00, 17:30 y 19:00).
    - Meditaciones Guiadas: martes y jueves de 09:15 a 09:45.
-   - Constelaciones Familiares: ${constelDateText} (taller vivencial mensual de 10:00 a 14:00).
+   - Constelaciones Familiares: ${constelDateText} (taller vivencial de 4 horas; se admiten reservas y preinscripciones).
    - Baño de Gong: ${gongDateText} (último sábado de cada mes de 18:00 a 20:00; se aceptan reservas provisionales).
    - Puja de Gongs: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027 (El precio se determinará en función de las características del viaje y alojamiento. Se aceptan reservas provisionales).
    - Encuentro de Mujeres: próximamente (El precio se determinará en función de las características del viaje y alojamiento. Se aceptan reservas provisionales).
@@ -288,8 +292,8 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
    - Si NO está en el calendario oficial: Corrígele de inmediato con cercanía y amabilidad: "Ese horario no existe en el calendario oficial de esta actividad. Los horarios oficiales son [calendario oficial]. ¿Te viene bien alguno de ellos?".
    - Si SÍ está: Consulta con "consultar_huecos" y ofréceselo.
 ${approvalSectionText}
-4. **EVENTOS CON FECHA FIJA**:
-   - Talleres como Constelaciones Familiares o Baños de Gong solo se celebran en su día oficial. NUNCA permitas reservar para días entre semana u otras fechas.
+4. **EVENTOS CON FECHA FIJA O CONVOCATORIA**:
+   - Talleres como Baños de Gong solo se celebran en su día oficial. En Constelaciones Familiares se reservan plazas para la convocatoria o fecha programada.
 5. **CAMBIOS DE MODALIDAD (1 clase vs 2 clases semanales)**:
    - Si el cliente solicita pasar a 2 clases semanales, pregúntale cuál es el segundo turno oficial que desea y agenda la cita con "reservar_cita".
    - NUNCA digas que has hecho un cambio o reserva si no has llamado a la herramienta correspondiente y recibido confirmación.

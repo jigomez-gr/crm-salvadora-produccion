@@ -763,11 +763,14 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           defaultEventDate = new Date(svc.eventStartDate).toISOString();
         }
 
-        const rawStartsAt = isSinFecha
-          ? '2099-12-31T20:00:00.000Z'
-          : inputData.startsAt && !isSinFecha
-          ? inputData.startsAt
-          : defaultEventDate;
+        const rawStartsAt =
+          inputData.startsAt && inputData.startsAt.trim() !== ''
+            ? inputData.startsAt
+            : isSinFecha
+            ? svc.eventStartDate && new Date(svc.eventStartDate).getTime() > Date.now()
+              ? new Date(svc.eventStartDate).toISOString()
+              : '2099-12-31T20:00:00.000Z'
+            : defaultEventDate;
 
         let targetDate = new Date();
         if (contactId && deps.listContactAppointments) {
@@ -1435,11 +1438,11 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           ? gongRecurring.dateText
           : getServiceDate(/baño.*gong|meditación sonora/i, 'Sábado 31 de Octubre de 2026 (18:00 a 20:00)');
 
-      const constelRecurring = resolveNextRecurringEventDate('Constelaciones Familiares', new Date(), timezone);
+      const constelSvc = (config?.services || []).find((s: any) => /constelaci/i.test(s.name || ''));
       const constelDate =
-        constelRecurring.hasRule && constelRecurring.dateText
-          ? constelRecurring.dateText
-          : getServiceDate(/constelaci/i, 'Domingo 25 de Octubre de 2026 (de 10:00 a 14:00)');
+        constelSvc?.sinfechadefinitiva === 'S'
+          ? (constelSvc.textosinfechadefinitiva || 'fecha provisional por confirmar')
+          : (constelSvc?.eventDatesText || constelSvc?.scheduleText || getServiceDate(/constelaci/i, 'Próxima convocatoria (fecha por confirmar)'));
 
       const pujaDate = getServiceDate(/puja/i, 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027');
       const mujeresDate = getServiceDate(/mujeres|femenino/i, 'próximamente');
@@ -1555,13 +1558,14 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     - Comunica SIEMPRE exactamente que las fechas son: "${pujaDate}" y que el precio es "${pujaPrice}". NUNCA digas que la fecha es el sábado 28 de noviembre de 2026 ni menciones 95€.
     - Cuando un cliente solicite plaza o pregunte por reservar la Puja de Gongs, FORMALIZA INMEDIATAMENTE la reserva con 'bookAppointment' (pasando startsAt="2099-12-31 20:00" y los datos del cliente).
     - NUNCA digas que no se puede reservar, ni que la fecha es pasada o no está confirmada, ni le preguntes si quiere esperar a que se confirme: tramita la reserva en el acto como plaza prioritaria y confírmale que se le avisará de la fecha definitiva.
-- CONSTELACIONES FAMILIARES (TALLER MENSUAL VIVENCIAL):
-  * Modalidad: Taller vivencial presencial mensual de fin de mes (aforo: 25 personas).
-  * Próxima fecha oficial: ${constelDate}.
+- CONSTELACIONES FAMILIARES (TALLER VIVENCIAL):
+  * Modalidad: Taller vivencial presencial (aforo: 25 personas).
+  * Convocatoria y horario: ${constelDate}.
+  * FUNCIONAMIENTO DE RESERVAS: Se admiten reservas y plazas prioritarias en todo momento (tanto si la fecha es provisional como si ya es definitiva). NUNCA rechaces una reserva por ser fecha provisional o tentativa: tramítala siempre de inmediato.
   * Dos opciones de participación (pregunta al cliente o asigna la que pida):
     1. **Constelar (Trabajar tema personal propio)**: ${constelarPrice}
     2. **Participar (Representante / Observador en el campo)**: ${participarPrice}
-  * Formaliza la plaza deseada con 'bookAppointment'.
+  * Formaliza la plaza deseada de inmediato con 'bookAppointment'. Confirma al cliente con cercanía que su plaza queda formalizada y que se le notificará personalmente por correo o WhatsApp con la confirmación de fecha.
 - ENCUENTRO DE MUJERES (PRIMAVERA - JORNADA VIVENCIAL):
   * Modalidad: Actividad grupal presencial (aforo máximo: 25 personas).
   * Propósito y temática: Jornada sagrada femenina de empoderamiento, arquetipos, sanación de memorias, meditación, danza y autocuidado.

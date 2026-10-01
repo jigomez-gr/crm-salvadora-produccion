@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException, OnModuleInit, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, OnModuleInit, Optional, Logger } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { Response } from 'express';
@@ -6,6 +6,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository, ILike } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { format } from 'date-fns';
+import { TZDate } from '@date-fns/tz';
 import { Service, ServiceType } from '../common/entities/service.entity';
 import { ServiceCategory } from '../common/entities/service-category.entity';
 import { User, UserRole } from '../common/entities/user.entity';
@@ -22,6 +24,7 @@ import { resolveNextRecurringEventDate } from '../common/time';
 
 @Injectable()
 export class ServicesService implements OnModuleInit {
+  private readonly logger = new Logger(ServicesService.name);
   private readonly mediaStorageDir = path.resolve(process.cwd(), 'media_storage', 'services');
   constructor(
     @InjectRepository(Service)
@@ -599,19 +602,6 @@ export class ServicesService implements OnModuleInit {
             };
             s.scheduleText = 'Lunes de 20:00 a 21:00 y Jueves de 20:30 a 22:00';
             updated = true;
-          }
-        } else if (/constelaci/i.test(s.name)) {
-          if (!s.eventStartDate || s.eventStartDate.getTime() < Date.now()) {
-            const nextConstel = resolveNextRecurringEventDate(s.name);
-            if (nextConstel.hasRule && nextConstel.startsAtIso) {
-              s.eventStartDate = new Date(nextConstel.startsAtIso);
-              s.eventEndDate = nextConstel.endsAtIso
-                ? new Date(nextConstel.endsAtIso)
-                : new Date(s.eventStartDate.getTime() + 4 * 3600000);
-              s.eventDatesText = nextConstel.dateText || 'Domingo 25 de Octubre de 2026 (10:00 a 14:00)';
-              s.scheduleText = 'Domingos intensivos de 10:00 a 14:00';
-              updated = true;
-            }
           }
         } else if (/gestalt/i.test(s.name)) {
           if (!s.requiresApproval) {
@@ -1201,7 +1191,7 @@ export class ServicesService implements OnModuleInit {
       ? attendeesCount >= service.minQuorum
       : true;
 
-    if (/baño.*gong|meditación sonora|constelaci/i.test(service.name)) {
+    if (/baño.*gong|meditación sonora/i.test(service.name)) {
       const nextDate = resolveNextRecurringEventDate(service.name);
       if (nextDate.hasRule && nextDate.dateText) {
         service.eventDatesText = nextDate.dateText;
@@ -1281,7 +1271,7 @@ export class ServicesService implements OnModuleInit {
       for (const agent of agentConfigs) {
         agent.services = allServices.map((s) => {
           let eventDatesText = s.eventDatesText;
-          if (/baño.*gong|meditación sonora|constelaci/i.test(s.name)) {
+          if (/baño.*gong|meditación sonora/i.test(s.name)) {
             const nextDate = resolveNextRecurringEventDate(s.name);
             if (nextDate.hasRule && nextDate.dateText) {
               eventDatesText = nextDate.dateText;
@@ -1393,6 +1383,9 @@ export class ServicesService implements OnModuleInit {
 
   async update(id: string, dto: UpdateServiceDto): Promise<Service> {
     const service = await this.findOne(id);
+    const oldSinFecha = service.sinfechadefinitiva;
+    const oldStartDate = service.eventStartDate ? new Date(service.eventStartDate).getTime() : null;
+    const oldEventDatesText = service.eventDatesText;
 
     if (dto.name && dto.name !== service.name) {
       const existing = await this.findByName(dto.name);
@@ -1471,7 +1464,120 @@ export class ServicesService implements OnModuleInit {
     const saved = await this.serviceRepo.save(service);
     await this.syncAgentConfigServices();
     this.eventEmitter.emit('service.changed', saved);
+
+    // If service previously had sinfechadefinitiva === 'S' (or had provisional pre-registered appointments),
+    // and now has a definitive date established (sinfechadefinitiva !== 'S' and eventStartDate or eventDatesText),
+    // or if the event dates were updated to a definitive date, notify pre-registered attendees and sync their agenda dates:
+    const isNowDefinitive = saved.sinfechadefinitiva !== 'S' && (saved.eventStartDate || saved.eventDatesText);
+    const dateChanged =
+      (saved.eventStartDate && (!oldStartDate || Math.abs(new Date(saved.eventStartDate).getTime() - oldStartDate) > 60000)) ||
+      (saved.eventDatesText && saved.eventDatesText !== oldEventDatesText);
+    const wasProvisional = oldSinFecha === 'S';
+
+    if (isNowDefinitive && (wasProvisional || dateChanged)) {
+      this.notifyPreRegisteredAttendees(saved).catch((err) => {
+        this.logger.error(
+          `Error al avisar a preinscritos tras fijar fecha definitiva para ${saved.name}: ${err?.message || err}`,
+        );
+      });
+    }
+
     return this.enrichService(saved);
+  }
+
+  /**
+   * Notifies all pre-registered / provisional attendees when a definitive date
+   * is established for an event/workshop, and updates their appointment dates in the agenda.
+   */
+  async notifyPreRegisteredAttendees(service: Service): Promise<number> {
+    const serviceName = service.name;
+    // Find all active appointments for this service (scheduled or pending_approval)
+    const candidates = await this.appointmentRepo.find({
+      where: [
+        { serviceId: service.id, status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.PENDING_APPROVAL]) },
+        { service: ILike(`%${serviceName}%`), status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.PENDING_APPROVAL]) },
+      ],
+      relations: ['contact'],
+    });
+
+    const uniqueMap = new Map<string, Appointment>();
+    for (const appt of candidates) {
+      uniqueMap.set(appt.id, appt);
+    }
+    const appts = Array.from(uniqueMap.values());
+    if (appts.length === 0) return 0;
+
+    const newStart = service.eventStartDate ? new Date(service.eventStartDate) : null;
+    const durationMs = (service.durationMinutes || 240) * 60000;
+    const newEnd = service.eventEndDate
+      ? new Date(service.eventEndDate)
+      : newStart
+      ? new Date(newStart.getTime() + durationMs)
+      : null;
+
+    const dateText =
+      service.eventDatesText ||
+      (newStart
+        ? format(new TZDate(newStart.getTime(), 'Europe/Madrid'), "yyyy-MM-dd HH:mm")
+        : 'fecha confirmada');
+
+    let notifiedCount = 0;
+    for (const appt of appts) {
+      // 1. Update appointment date if startsAt is in 2099 or was provisional
+      if (newStart && newEnd) {
+        appt.startsAt = newStart;
+        appt.endsAt = newEnd;
+        await this.appointmentRepo.save(appt);
+      }
+
+      // 2. Send notification to contact
+      const contact = appt.contact;
+      if (contact && contact.email && contact.emailerroneo !== 'S' && contact.optedOut !== true) {
+        const subject = `📅 Confirmación de fecha definitiva: ${service.name}`;
+        const emailHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 540px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 10px; padding: 24px; background: #ffffff;">
+            <div style="text-align: center; border-bottom: 1px solid #f3f4f6; padding-bottom: 16px; margin-bottom: 20px;">
+              <h2 style="color: #4338ca; margin: 0; font-size: 20px;">📅 Fecha Definitiva Confirmada</h2>
+              <p style="margin: 4px 0 0 0; color: #6b7280; font-size: 13px;">Centro de Yoga Salvadora Conesa</p>
+            </div>
+            <p style="font-size: 15px; color: #1f2937;">¡Hola <strong>${contact.name}</strong>!</p>
+            <p style="font-size: 14px; color: #374151; line-height: 1.5;">
+              Te informamos de que ya se ha fijado la <strong>fecha definitiva</strong> para la actividad en la que te habías preinscrito:
+            </p>
+            <div style="background-color: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 8px; padding: 16px; margin: 18px 0; font-size: 14px; color: #3730a3;">
+              <p style="margin: 4px 0;">✨ <strong>Actividad:</strong> ${service.name}</p>
+              <p style="margin: 4px 0;">🗓️ <strong>Fecha confirmada:</strong> ${dateText}</p>
+              ${service.price ? `<p style="margin: 4px 0;">💶 <strong>Precio:</strong> ${service.price} €</p>` : ''}
+            </div>
+            <p style="font-size: 14px; color: #374151; line-height: 1.5;">
+              Tu plaza preinscrita queda formalizada y reservada para este encuentro. Rogamos acudir con unos minutos de antelación.
+            </p>
+            <p style="font-size: 13px; color: #6b7280; margin-top: 20px;">
+              Si por cualquier motivo no pudieras asistir o necesitas modificar tu reserva, por favor avísanos respondiendo a este correo o por WhatsApp para poder liberar tu plaza. ¡Muchas gracias!
+            </p>
+          </div>
+        `;
+        const textFallback = `¡Hola ${contact.name}! Te informamos de que ya se ha fijado la fecha definitiva para ${service.name}: ${dateText}. Tu plaza preinscrita queda formalizada. Si no pudieras asistir, avísanos con antelación. ¡Muchas gracias!`;
+
+        await this.emailService
+          .sendNotification(
+            contact.email,
+            contact.name,
+            subject,
+            emailHtml,
+            textFallback,
+            undefined,
+            contact.id,
+          )
+          .catch((err) => {
+            this.logger.warn(`Could not send definitive date email to ${contact.email}: ${err}`);
+          });
+        notifiedCount++;
+      }
+    }
+
+    this.logger.log(`Avisados ${notifiedCount} preinscritos para el servicio "${service.name}" tras fijar la fecha definitiva.`);
+    return notifiedCount;
   }
 
   async duplicate(id: string, actor?: { id?: string | null; email?: string | null }): Promise<Service> {

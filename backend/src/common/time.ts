@@ -315,7 +315,6 @@ export function parseFlexibleStartsAt(
  * Resolves the next recurring event date when a service has a monthly recurrence rule.
  * Specifically handles:
  * - "último sábado de cada mes" (e.g. Baño de Gong y Meditación Sonora, 18:00 a 20:00)
- * - "último domingo de cada mes" (e.g. Constelaciones Familiares, 10:00 a 14:00)
  */
 export function resolveNextRecurringEventDate(
   serviceName: string,
@@ -329,17 +328,16 @@ export function resolveNextRecurringEventDate(
 } {
   const name = (serviceName || '').toLowerCase();
   const isGong = /baño.*gong|meditación sonora/i.test(name);
-  const isConstelaciones = /constelaci/i.test(name);
 
-  if (!isGong && !isConstelaciones) {
+  if (!isGong) {
     return { hasRule: false };
   }
 
   const zonedRef = new TZDate(referenceDate.getTime(), timezone);
-  const targetWeekday = isGong ? 6 : 0; // 6 = Saturday, 0 = Sunday
-  const startHour = isGong ? 18 : 10;
+  const targetWeekday = 6; // 6 = Saturday
+  const startHour = 18;
   const startMinute = 0;
-  const durationHours = isGong ? 2 : 4;
+  const durationHours = 2;
   const endHour = startHour + durationHours;
 
   const findLastWeekday = (year: number, month: number) => {

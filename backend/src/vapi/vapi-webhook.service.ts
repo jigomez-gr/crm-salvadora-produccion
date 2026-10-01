@@ -615,15 +615,27 @@ export class VapiWebhookService {
 
     // 1. TALLERES Y EVENTOS CON FECHA FIJA (Constelaciones, Gong, Puja, Retiro, Encuentro)
     if (officialSvc?.category === 'fixed_event') {
-      if (officialSvc.sinfechadefinitiva === 'S') {
-        const spoken = officialSvc.textosinfechadefinitiva || officialSvc.scheduleSummary;
-        return `Para «${officialSvc.name}», la fecha actual es: ${spoken} [${officialSvc.eventDateIso}]. Precio: ${officialSvc.priceInfo}. Hay plazas disponibles y lista de reserva abierta. Ofréceselo al cliente para registrar sus datos y plaza.`;
+      const isSinFecha = officialSvc.sinfechadefinitiva === 'S' || serviceEntity?.sinfechadefinitiva === 'S';
+      if (isSinFecha) {
+        const spoken =
+          serviceEntity?.textosinfechadefinitiva ||
+          officialSvc.textosinfechadefinitiva ||
+          serviceEntity?.eventDatesText ||
+          officialSvc.scheduleSummary;
+        const dateIso = serviceEntity?.eventStartDate
+          ? new Date(serviceEntity.eventStartDate).toISOString()
+          : officialSvc.eventDateIso;
+        return `Para «${officialSvc.name}», la fecha actual es: ${spoken} [${dateIso}]. Precio: ${officialSvc.priceInfo}. Hay plazas disponibles y lista de reserva abierta. Ofréceselo al cliente para registrar sus datos y plaza.`;
       }
+
+      const activeEventDate = serviceEntity?.eventStartDate ? new Date(serviceEntity.eventStartDate) : officialSvc.eventDate;
+      const activeSpokenDate = serviceEntity?.eventDatesText || officialSvc.eventSpokenDate;
+      const activeDateIso = activeEventDate ? activeEventDate.toISOString() : officialSvc.eventDateIso;
 
       // Check if user is asking for a day that genuinely conflicts with the event
       let isDifferentDate = false;
-      if (rawFecha && officialSvc.eventDate) {
-        const eventZoned = new TZDate(officialSvc.eventDate.getTime(), ctx.timezone);
+      if (rawFecha && activeEventDate) {
+        const eventZoned = new TZDate(activeEventDate.getTime(), ctx.timezone);
         const eventDayOfWeek = eventZoned.getDay(); // 6 for Sat, 0 for Sun
         const dayNames: Record<number, string[]> = {
           0: ['domingo'],
@@ -650,10 +662,10 @@ export class VapiWebhookService {
       }
 
       if (isDifferentDate) {
-        return `En el calendario oficial no hay sesiones de «${officialSvc.name}» para esa fecha. Es un evento exclusivo con fecha fijada en el calendario: se celebra el ${officialSvc.eventSpokenDate} [${officialSvc.eventDateIso}]. ${officialSvc.priceInfo}. Explícaselo al cliente y ofrécele reservar su plaza para ese día.`;
+        return `En el calendario oficial no hay sesiones de «${officialSvc.name}» para esa fecha. Es un evento exclusivo con fecha fijada en el calendario: se celebra el ${activeSpokenDate} [${activeDateIso}]. ${officialSvc.priceInfo}. Explícaselo al cliente y ofrécele reservar su plaza para ese día.`;
       }
 
-      return `El calendario oficial para «${officialSvc.name}» es el ${officialSvc.eventSpokenDate} [${officialSvc.eventDateIso}]. Hay disponibilidad de plazas. ${officialSvc.priceInfo}. Ofrece la fecha oficial al cliente para formalizar su plaza.`;
+      return `El calendario oficial para «${officialSvc.name}» es el ${activeSpokenDate} [${activeDateIso}]. Hay disponibilidad de plazas. ${officialSvc.priceInfo}. Ofrece la fecha oficial al cliente para formalizar su plaza.`;
     }
 
     // 2. SESIONES INDIVIDUALES (Gestalt, Bienestar)
