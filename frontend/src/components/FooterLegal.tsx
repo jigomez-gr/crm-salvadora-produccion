@@ -33,7 +33,7 @@ export function FooterLegal({ dark = true, className = "" }: FooterLegalProps) {
           </a>
 
           <a
-            href="https://www.facebook.com/share/1EhbRPtem8/"
+            href="https://www.facebook.com/salvadoraconesa?rdid=6uiPQDgBUxQ7KTQ3&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F1EhbRPtem8%2F#"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/15 text-blue-600 hover:text-blue-500 hover:bg-blue-500/25 border border-blue-500/30 transition shadow-2xs group"

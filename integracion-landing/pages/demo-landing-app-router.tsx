@@ -608,7 +608,7 @@ export default function DemoLandingPage() {
             </a>
 
             <a
-              href="https://www.facebook.com/share/1EhbRPtem8/"
+              href="https://www.facebook.com/salvadoraconesa?rdid=6uiPQDgBUxQ7KTQ3&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F1EhbRPtem8%2F#"
               target="_blank"
               rel="noopener noreferrer"
               title="Facebook Escuela Yoga Salvadora Conesa"
@@ -667,6 +667,50 @@ export default function DemoLandingPage() {
             >
               <Phone className="w-4 h-4" /> Traspasar Consulta a WhatsApp
             </button>
+          </div>
+
+          {/* Tarjeta destacada de Comunidad en Redes Sociales */}
+          <div className="pt-3">
+            <div className="bg-white/85 backdrop-blur-xs rounded-2xl p-4 sm:p-5 border border-amber-200/90 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5 text-left">
+                <div className="w-11 h-11 rounded-2xl bg-linear-to-tr from-amber-500 via-rose-500 to-purple-600 flex items-center justify-center text-white shadow-md shrink-0">
+                  <Sparkles className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-[#800020] flex items-center gap-2">
+                    <span>Comunidad y Novedades Diarias</span>
+                    <span className="bg-pink-100 text-pink-700 text-[10px] px-2 py-0.5 rounded-full font-bold">En Vivo</span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-stone-600 font-medium mt-0.5">
+                    Fotos de clases, retiros, baños de gong y actividades en Fuenlabrada
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 shrink-0 w-full md:w-auto justify-center">
+                <a
+                  href="https://www.instagram.com/escuelayogasalvadoraconesa/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 md:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-linear-to-r from-pink-600 via-rose-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 shadow-sm transition hover:scale-105 active:scale-95"
+                >
+                  <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+                  </svg>
+                  <span>Instagram</span>
+                </a>
+                <a
+                  href="https://www.facebook.com/salvadoraconesa?rdid=6uiPQDgBUxQ7KTQ3&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F1EhbRPtem8%2F#"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 md:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#1877F2] hover:bg-[#166fe5] shadow-sm transition hover:scale-105 active:scale-95"
+                >
+                  <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                  </svg>
+                  <span>Facebook</span>
+                </a>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -1143,14 +1187,41 @@ export default function DemoLandingPage() {
 
       {/* Footer */}
       <footer className="bg-stone-900 text-stone-400 text-xs py-10 border-t border-stone-800 space-y-5">
-        <div className="max-w-6xl mx-auto px-4 text-center space-y-2">
-          <p className="font-semibold text-stone-300">
+        <div className="max-w-6xl mx-auto px-4 text-center space-y-3">
+          <p className="font-semibold text-stone-200 text-sm">
             CENTRO DE YOGA & BIENESTAR SALVADORA CONESA · FUENLABRADA
           </p>
           <p>Actividades en Club Social Parque Granada (Cafetería Bar • Entrada Libre).</p>
           <p className="text-stone-400 text-[11px]">
             Consultas y reservas por WhatsApp: <strong>695 172 625</strong> · <strong>Pagos en el centro</strong> (pronto también disponibles con <strong>Stripe</strong> y <strong>Giglon</strong>).
           </p>
+
+          {/* Social Links en el Footer */}
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <a
+              href="https://www.instagram.com/escuelayogasalvadoraconesa/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-linear-to-r from-pink-500/20 via-rose-500/20 to-purple-500/20 text-pink-400 hover:text-white hover:from-pink-600 hover:to-purple-600 border border-pink-500/30 transition shadow-sm group"
+            >
+              <svg className="w-4 h-4 fill-current transition-transform group-hover:scale-110" viewBox="0 0 24 24">
+                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+              </svg>
+              <span>Instagram @escuelayogasalvadoraconesa</span>
+            </a>
+
+            <a
+              href="https://www.facebook.com/salvadoraconesa?rdid=6uiPQDgBUxQ7KTQ3&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F1EhbRPtem8%2F#"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400 hover:text-white hover:bg-blue-600 border border-blue-500/30 transition shadow-sm group"
+            >
+              <svg className="w-4 h-4 fill-current transition-transform group-hover:scale-110" viewBox="0 0 24 24">
+                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+              </svg>
+              <span>Facebook Yoga Fuenlabrada</span>
+            </a>
+          </div>
         </div>
 
         {/* Legal Links, Copyright and Webmaster */}
