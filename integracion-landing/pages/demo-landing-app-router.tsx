@@ -562,6 +562,44 @@ export default function DemoLandingPage() {
         </div>
       </div>
 
+      {/* Schema.org LocalBusiness JSON-LD */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "LocalBusiness",
+            name: "Centro de Yoga Salvadora Conesa",
+            alternateName: "Escuela de Yoga Salvadora Conesa",
+            url: "https://centrodeyogasalvadoraconesa.es",
+            logo: "https://centrodeyogasalvadoraconesa.es/imagenes/logo/logo.png",
+            image: "https://centrodeyogasalvadoraconesa.es/imagenes/salvadora/sobre_mi.jpg",
+            description:
+              "Clases de Hatha y Kundalini yoga, baños y puja de gong, meditación guiada y retiros de ayuno terapéutico en Fuenlabrada, dirigido por Salvadora Conesa.",
+            telephone: "+34695172625",
+            email: "salvadoraconesa@gmail.com",
+            address: {
+              "@type": "PostalAddress",
+              streetAddress: "Calle Holanda, 1 (Club Social Parque Granada)",
+              addressLocality: "Fuenlabrada",
+              postalCode: "28942",
+              addressRegion: "Madrid",
+              addressCountry: "ES",
+            },
+            geo: {
+              "@type": "GeoCoordinates",
+              latitude: 40.2858,
+              longitude: -3.7932,
+            },
+            sameAs: [
+              "https://www.facebook.com/salvadoraconesa",
+              "https://www.instagram.com/escuelayogasalvadoraconesa/",
+            ],
+            priceRange: "€",
+          }),
+        }}
+      />
+
       {/* Notice Header - Parque Granada & Centro */}
       <div className="bg-[#0B4A72] text-white px-3 sm:px-4 py-2 text-xs text-center font-bold tracking-wide flex items-center justify-center gap-3 sm:gap-4 flex-wrap shadow-inner">
         <span>📍 CLUB SOCIAL PARQUE GRANADA & CENTRO SALVADORA CONESA</span>
