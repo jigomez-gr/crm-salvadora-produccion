@@ -212,7 +212,7 @@ export function GoogleImportModal({
               </div>
               <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-2.5 text-center">
                 <div className="text-lg font-bold text-purple-700">{result.contactsWithoutEmailCount}</div>
-                <div className="text-[11px] font-medium text-purple-900">Sin Email</div>
+                <div className="text-[11px] font-medium text-purple-900">Sin Email / Erróneo</div>
               </div>
               <div className="rounded-lg border border-rose-200 bg-rose-50/50 p-2.5 text-center">
                 <div className="text-lg font-bold text-rose-700">{result.contactsWithoutPhoneCount}</div>
@@ -248,7 +248,7 @@ export function GoogleImportModal({
                         : "text-purple-700 hover:bg-purple-50"
                     }`}
                   >
-                    Sin Email ({result.contactsWithoutEmailCount})
+                    Sin Email / Erróneo ({result.contactsWithoutEmailCount})
                   </button>
                   <button
                     type="button"

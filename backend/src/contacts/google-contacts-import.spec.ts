@@ -223,6 +223,54 @@ Zeletis,,Zelerod,,,,,,,,,,,,,,* myContacts,,,,,Mobile,ZELERIS,,,,,,`;
 
     // Check that existing contact Salvadora Conesa was preserved and not duplicated
     expect(result.reportText).toContain('Coincidencia en CRM: Salvadora Conesa Martinez');
+
+    // Verify emailerroneo in created contacts
+    const abogado = inMemoryContacts.find((c) => c.phone === '+34919933403');
+    expect(abogado?.emailerroneo).toBe('S');
+    expect(abogado?.tags).toContain('emailerroneo');
+
+    const antonio = inMemoryContacts.find((c) => c.phone === '+34677639429');
+    expect(antonio?.emailerroneo).toBe('N');
+    expect(antonio?.tags).not.toContain('emailerroneo');
+  });
+
+  it('sets emailerroneo = S and emailerroneo tag when email is missing, invalid or fails', async () => {
+    const csvWithMixedEmails = `First Name,Last Name,E-mail 1 - Value,Phone 1 - Value
+Pedro,Valido,pedro@example.com,+34611111111
+Maria,SinEmail,,+34622222222
+Carlos,EmailInvalido,none,+34633333333
+Lucia,EmailRoto,no-email-format,+34644444444`;
+
+    const result = await service.importGoogleCsv({
+      csvContent: csvWithMixedEmails,
+      openNotepad: false,
+    });
+
+    expect(result.created).toBe(4);
+
+    const pedro = inMemoryContacts.find((c) => c.phone === '+34611111111');
+    expect(pedro?.email).toBe('pedro@example.com');
+    expect(pedro?.emailerroneo).toBe('N');
+    expect(pedro?.tags).not.toContain('emailerroneo');
+
+    const maria = inMemoryContacts.find((c) => c.phone === '+34622222222');
+    expect(maria?.email).toBeUndefined();
+    expect(maria?.emailerroneo).toBe('S');
+    expect(maria?.tags).toContain('emailerroneo');
+
+    const carlos = inMemoryContacts.find((c) => c.phone === '+34633333333');
+    expect(carlos?.email).toBeUndefined();
+    expect(carlos?.emailerroneo).toBe('S');
+    expect(carlos?.tags).toContain('emailerroneo');
+    expect(carlos?.notes).toContain('none');
+
+    const lucia = inMemoryContacts.find((c) => c.phone === '+34644444444');
+    expect(lucia?.email).toBeUndefined();
+    expect(lucia?.emailerroneo).toBe('S');
+    expect(lucia?.tags).toContain('emailerroneo');
+    expect(lucia?.notes).toContain('no-email-format');
+
+    expect(result.reportText).toContain("INCIDENCIA / ERRÓNEO (emailerroneo = 'S')");
   });
 
   it('rejects empty CSV with BadRequestException', async () => {

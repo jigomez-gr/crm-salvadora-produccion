@@ -836,7 +836,17 @@ export class ContactsService {
         const existing = await this.findByPhone(phone);
         if (existing) {
           existing.name = name;
-          if (email) existing.email = email;
+          if (email) {
+            existing.email = email;
+            existing.emailerroneo = 'N';
+            if (existing.tags) {
+              existing.tags = existing.tags.filter((t) => t !== 'emailerroneo');
+            }
+          } else if (!existing.email) {
+            existing.emailerroneo = 'S';
+            if (!existing.tags) existing.tags = [];
+            if (!existing.tags.includes('emailerroneo')) existing.tags.push('emailerroneo');
+          }
           if (status) existing.status = status;
           if (tags.length) existing.tags = tags;
           if (source) existing.source = source;
@@ -844,12 +854,19 @@ export class ContactsService {
           await this.contactsRepo.save(existing);
           result.updated++;
         } else {
+          const hasEmail = Boolean(email);
+          const emailerroneo = hasEmail ? 'N' : 'S';
+          const effectiveTags = hasEmail
+            ? tags
+            : Array.from(new Set([...tags, 'emailerroneo']));
+
           const contact = this.contactsRepo.create({
             name,
             phone,
             email: email || undefined,
+            emailerroneo,
             status: status ?? ContactStatus.LEAD,
-            tags,
+            tags: effectiveTags,
             source,
             notes: notes || undefined,
             boardPosition: importBase - i,
@@ -948,6 +965,7 @@ export class ContactsService {
       name: string;
       phone: string;
       email?: string;
+      emailerroneo?: string;
       notes?: string;
       secondaryPhones: string[];
     }> = [];
@@ -980,6 +998,7 @@ export class ContactsService {
       name: string;
       phone: string;
       status: 'NUEVO' | 'EXISTENTE';
+      reason?: string;
     }> = [];
 
     const contactsWithoutPhone: Array<{
@@ -999,6 +1018,7 @@ export class ContactsService {
       secondaryPhones: Array<{ label: string; raw: string; normalized: string }>;
       primaryEmail: string | null;
       allEmails: string[];
+      invalidEmails: string[];
       orgName: string;
       orgTitle: string;
       notes: string;
@@ -1073,13 +1093,16 @@ export class ContactsService {
       // Validate emails
       let primaryEmail: string | null = null;
       const validEmails: string[] = [];
+      const invalidEmails: string[] = [];
       for (const em of emailEntries) {
         const cleanEmail = em.trim().toLowerCase();
-        if (cleanEmail === 'none' || !EMAIL_RE.test(cleanEmail)) {
+        const isPlaceholder = ['none', 'no', 'ninguno', 'sin email', 'sin-email', 'null', 'n/a', 'na'].includes(cleanEmail);
+        if (isPlaceholder || !EMAIL_RE.test(cleanEmail)) {
+          invalidEmails.push(em);
           warningsList.push({
             row: lineNo,
             name: name || `Fila ${lineNo}`,
-            warning: `Email descartado por formato no válido: "${em}"`,
+            warning: `Email descartado por formato o valor no válido: "${em}"`,
           });
         } else {
           validEmails.push(cleanEmail);
@@ -1099,6 +1122,7 @@ export class ContactsService {
         secondaryPhones: validPhones.slice(1),
         primaryEmail,
         allEmails: validEmails,
+        invalidEmails,
         orgName,
         orgTitle,
         notes,
@@ -1176,7 +1200,31 @@ export class ContactsService {
         }
         if (!existing.email && c.primaryEmail) {
           existing.email = c.primaryEmail;
+          existing.emailerroneo = 'N';
+          if (existing.tags) {
+            existing.tags = existing.tags.filter((t) => t !== 'emailerroneo');
+          }
           enrichedParts.push(`Email añadido (${c.primaryEmail})`);
+        } else if (!existing.email) {
+          if (existing.emailerroneo !== 'S') {
+            existing.emailerroneo = 'S';
+            enrichedParts.push("Incidencia de correo registrada (emailerroneo = 'S')");
+          }
+          if (!existing.tags) existing.tags = [];
+          if (!existing.tags.includes('emailerroneo')) {
+            existing.tags.push('emailerroneo');
+          }
+        }
+        if (c.invalidEmails.length > 0) {
+          const invMsg = `Email(s) erróneos descartados: ${c.invalidEmails.join(', ')}`;
+          if (!existing.notes || !existing.notes.includes(c.invalidEmails[0])) {
+            existing.notes = (existing.notes ? existing.notes + ' | ' : '') + invMsg;
+            enrichedParts.push('Email(s) erróneos anotados');
+          }
+        }
+        if (c.notes && (!existing.notes || !existing.notes.includes(c.notes))) {
+          existing.notes = (existing.notes ? existing.notes + ' | ' : '') + c.notes;
+          enrichedParts.push('Notas ampliadas');
         }
         if (c.orgName && (!existing.notes || !existing.notes.includes(c.orgName))) {
           existing.notes = (existing.notes ? existing.notes + ' | ' : '') + `Empresa: ${c.orgName}`;
@@ -1201,6 +1249,9 @@ export class ContactsService {
             name: existing.name,
             phone,
             status: 'EXISTENTE',
+            reason: c.invalidEmails.length > 0
+              ? `Email erróneo descartado: ${c.invalidEmails.join(', ')}`
+              : 'Sin email en CRM ni en archivo de Google',
           });
         }
       } else {
@@ -1215,12 +1266,22 @@ export class ContactsService {
         if (c.invalidPhones.length > 0) {
           notesParts.push(`Otros valores descartados: ${c.invalidPhones.map((ip) => ip.raw).join(', ')}`);
         }
+        if (c.invalidEmails.length > 0) {
+          notesParts.push(`Email(s) erróneos descartados: ${c.invalidEmails.map((ie) => `"${ie}"`).join(', ')}`);
+        }
 
+        const hasValidEmail = Boolean(c.primaryEmail);
+        const emailerroneo = hasValidEmail ? 'N' : 'S';
         const tags = ['google', ...c.labels];
+        if (!hasValidEmail && !tags.includes('emailerroneo')) {
+          tags.push('emailerroneo');
+        }
+
         const newContact = this.contactsRepo.create({
           name: contactName,
           phone,
           email: c.primaryEmail || undefined,
+          emailerroneo,
           status: ContactStatus.LEAD,
           pipelineStage: PipelineStage.NEW,
           source: 'google_contacts',
@@ -1236,6 +1297,7 @@ export class ContactsService {
           name: contactName,
           phone,
           email: c.primaryEmail || undefined,
+          emailerroneo,
           notes: notesParts.join(' | '),
           secondaryPhones: c.secondaryPhones.map((sp) => `${sp.label}: ${sp.raw}`),
         });
@@ -1246,6 +1308,9 @@ export class ContactsService {
             name: contactName,
             phone,
             status: 'NUEVO',
+            reason: c.invalidEmails.length > 0
+              ? `Email erróneo descartado: ${c.invalidEmails.join(', ')}`
+              : 'Sin email en Google Contacts',
           });
         }
       }
@@ -1339,7 +1404,7 @@ export class ContactsService {
     report += `• Contactos NUEVOS incorporados al CRM:      ${createdList.length}\n`;
     report += `• Contactos YA EXISTENTES en el CRM:         ${existingList.length}\n`;
     report += `• Contactos OMITIDOS (discrepancias):        ${skippedList.length}\n`;
-    report += `• Contactos SIN EMAIL:                       ${contactsWithoutEmail.length}\n`;
+    report += `• Contactos SIN EMAIL / EMAIL ERRÓNEO:       ${contactsWithoutEmail.length} (marcados emailerroneo='S')\n`;
     report += `• Contactos SIN MÓVIL VÁLIDO:                ${contactsWithoutPhone.length}\n`;
     report += `• Posibles duplicidades o nombres similares: ${similarPairs.length}\n`;
     report += `${subSep}\n\n`;
@@ -1354,6 +1419,7 @@ export class ContactsService {
         report += `[Fila ${c.row}] ${c.name}\n`;
         report += `   Teléfono principal: ${c.phone}\n`;
         report += `   Email:              ${c.email || '(sin email)'}\n`;
+        report += `   Estado de Email:    ${c.emailerroneo === 'S' ? "INCIDENCIA / ERRÓNEO (emailerroneo = 'S')" : "VÁLIDO (emailerroneo = 'N')"}\n`;
         if (c.secondaryPhones.length > 0) {
           report += `   Tel. adicionales:   ${c.secondaryPhones.join(', ')}\n`;
         }
@@ -1381,13 +1447,14 @@ export class ContactsService {
     }
 
     // 3. CONTACTOS SIN EMAIL
-    report += `3. INFORME DE CONTACTOS SIN CORREO ELECTRÓNICO (${contactsWithoutEmail.length})\n`;
+    report += `3. INFORME DE CONTACTOS SIN CORREO ELECTRÓNICO O CON EMAIL ERRÓNEO (${contactsWithoutEmail.length})\n`;
     report += `${subSep}\n`;
     if (contactsWithoutEmail.length === 0) {
-      report += `Todos los contactos procesados disponen de dirección de email.\n\n`;
+      report += `Todos los contactos procesados disponen de dirección de email válida.\n\n`;
     } else {
       contactsWithoutEmail.forEach((ne) => {
         report += `• [Fila ${ne.row}] ${ne.name} | Tel: ${ne.phone} | Estado: ${ne.status}\n`;
+        report += `   Incidencia asignada: emailerroneo = 'S' | Detalle: ${ne.reason || 'Sin email registrado'}\n`;
       });
       report += `\n`;
     }
@@ -1472,9 +1539,9 @@ export class ContactsService {
 
     // E) Correos descartados por formato inválido
     if (warningsList.length > 0) {
-      report += `E) CORREOS ELECTRÓNICOS DESCARTADOS POR FORMATO INVÁLIDO:\n`;
+      report += `E) CORREOS ELECTRÓNICOS DESCARTADOS POR FORMATO O VALOR NO VÁLIDO:\n`;
       warningsList.forEach((w) => {
-        report += `• [Fila ${w.row}] ${w.name}: ${w.warning}\n`;
+        report += `• [Fila ${w.row}] ${w.name}: ${w.warning} -> Marcado con incidencia emailerroneo='S'\n`;
       });
       report += `\n`;
     }
