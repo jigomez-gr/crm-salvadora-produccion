@@ -1430,8 +1430,28 @@ export class AppointmentsService implements OnModuleInit {
       const effectiveManager =
         serviceEntity?.manager?.name || managerName || 'Salvadora Conesa Martinez';
 
-      const isSinFecha = serviceEntity?.sinfechadefinitiva === 'S';
+      const isSinFecha =
+        serviceEntity?.sinfechadefinitiva === 'S' ||
+        (appt.startsAt && new Date(appt.startsAt).getFullYear() >= 2099);
       const isSinPrecio = serviceEntity?.sinpreciodefinitivo === 'S';
+
+      const isProvisional =
+        isSinFecha ||
+        /tentativ|provisional|sin confirmar|por confirmar|pendiente de confirmaci|plaza prioritaria/i.test(serviceEntity?.textoespecifico || '') ||
+        /tentativ|provisional|sin confirmar|por confirmar|pendiente de confirmaci|plaza prioritaria/i.test(serviceEntity?.textosinfechadefinitiva || '') ||
+        /tentativ|provisional|sin confirmar|por confirmar|pendiente de confirmaci|plaza prioritaria/i.test(serviceEntity?.eventDatesText || '') ||
+        /tentativ|provisional|plaza prioritaria/i.test(appt.notes || '');
+
+      let effectiveTextoEspecifico = (serviceEntity?.textoespecifico || '').trim();
+      if (isProvisional) {
+        if (!effectiveTextoEspecifico) {
+          effectiveTextoEspecifico =
+            (serviceEntity?.textosinfechadefinitiva || '').trim() ||
+            'Sin confirmar la fecha y hora definitiva (convocatoria tentativa/provisional).';
+        } else if (!/sin confirmar/i.test(effectiveTextoEspecifico)) {
+          effectiveTextoEspecifico = `Sin confirmar la fecha y hora definitiva: ${effectiveTextoEspecifico}`;
+        }
+      }
 
       const startsAtDate = new Date(appt.startsAt);
       const endsAtDate = appt.endsAt ? new Date(appt.endsAt) : null;
@@ -1503,21 +1523,64 @@ export class AppointmentsService implements OnModuleInit {
         ? 'Online (Videollamada)'
         : 'Presencial en el centro';
 
+      const serviceDescHtml = serviceEntity?.description
+        ? `<p style="margin: 8px 0; font-size: 13px; color: #4b5563; line-height: 1.4;"><strong>Detalles de la sesión / actividad:</strong> ${serviceEntity.description}</p>`
+        : '';
+
+      const textoEspecificoHtml = effectiveTextoEspecifico
+        ? `<div style="margin: 14px 0; background-color: #fffbeb; border: 1.5px solid #f59e0b; padding: 14px 18px; border-radius: 8px; font-size: 13.5px; color: #92400e; line-height: 1.5;">
+             <strong style="display: block; text-transform: uppercase; font-size: 11px; margin-bottom: 5px; color: #b45309; letter-spacing: 0.5px;">📌 Información Específica del Servicio:</strong>
+             ${effectiveTextoEspecifico}
+           </div>`
+        : '';
+
+      const locationHtml = isVirtual
+        ? `
+          <p style="margin: 6px 0;">📍 <strong>Modalidad:</strong> Online (Videollamada)</p>
+          ${
+            appt.calMeetingUrl
+              ? `<div style="margin: 12px 0 8px 0;">
+                   <a href="${appt.calMeetingUrl}" style="background-color: #2563eb; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 14px;">🎥 Acceder a la Videollamada</a>
+                 </div>
+                 <p style="margin: 4px 0; font-size: 12px; color: #6b7280;">Enlace de acceso: <a href="${appt.calMeetingUrl}" style="color: #2563eb;">${appt.calMeetingUrl}</a></p>
+                 <p style="margin: 4px 0; font-size: 12px; color: #6b7280;">(Por favor, conéctate 5 minutos antes con cámara y micrófono activados).</p>`
+              : ''
+          }
+        `
+        : `
+          <p style="margin: 6px 0;">📍 <strong>Modalidad:</strong> Presencial en el centro</p>
+          <p style="margin: 6px 0;">🏢 <strong>Ubicación:</strong> Club Social Parque Granada (Escuela Salvadora Conesa), Calle Holanda 1, 28942 Fuenlabrada, Madrid</p>
+        `;
+
+      const dateHtml = isProvisional
+        ? `<p style="margin: 6px 0;">📅 <strong>Fecha provisional / tentativa:</strong> ${formattedDate} <span style="display: inline-block; background-color: #fef3c7; color: #92400e; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 4px; margin-left: 6px; border: 1px solid #fde68a;">(Pendiente de confirmación definitiva)</span></p>
+           ${isSinFecha ? '' : `<p style="margin: 6px 0;">⏰ <strong>Horario orientativo:</strong> ${formattedTime}</p>`}`
+        : `<p style="margin: 6px 0;">📅 <strong>Fecha:</strong> ${formattedDate}</p>
+           ${isSinFecha ? '' : `<p style="margin: 6px 0;">⏰ <strong>Horario:</strong> ${formattedTime}</p>`}`;
+
       let subject = '';
       let emailHtml = '';
       let chatMessageText = '';
 
       if (decision === 'pending_approval') {
         const isResched = isRescheduled || Boolean(appt.notes && /reprogramad/i.test(appt.notes));
-        subject = isResched
-          ? `🔄 Solicitud de cambio de cita recibida: ${appt.service} - ${formattedDate}`
-          : `📋 Solicitud de cita recibida: ${appt.service} - ${formattedDate}`;
-        const headerTitle = isResched
-          ? 'Solicitud de Cambio de Cita Recibida'
-          : 'Solicitud de Cita Recibida';
-        const headerSubtitle = isResched
-          ? `Hemos recibido correctamente tu solicitud de cambio de horario para <strong>${appt.service}</strong>.`
-          : `Hemos recibido correctamente tu solicitud de cita para <strong>${appt.service}</strong>.`;
+        if (isProvisional) {
+          subject = isResched
+            ? `🔄 Solicitud de plaza prioritaria recibida: ${appt.service} (fecha provisional)`
+            : `📋 Solicitud de plaza prioritaria recibida: ${appt.service} (fecha provisional)`;
+        } else {
+          subject = isResched
+            ? `🔄 Solicitud de cambio de cita recibida: ${appt.service} - ${formattedDate}`
+            : `📋 Solicitud de cita recibida: ${appt.service} - ${formattedDate}`;
+        }
+        const headerTitle = isProvisional
+          ? 'Solicitud de Plaza Prioritaria Recibida'
+          : (isResched ? 'Solicitud de Cambio de Cita Recibida' : 'Solicitud de Cita Recibida');
+        const headerSubtitle = isProvisional
+          ? `Hemos recibido correctamente tu solicitud de plaza prioritaria para <strong>${appt.service}</strong>.<br><span style="display:inline-block; margin-top: 8px; color: #92400e; background-color: #fef3c7; border: 1px solid #fde68a; padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: 13px;">⚠️ Convocatoria con fecha tentativa / provisional: te avisaremos personalmente en cuanto se confirme la fecha y hora definitivas.</span>`
+          : (isResched
+            ? `Hemos recibido correctamente tu solicitud de cambio de horario para <strong>${appt.service}</strong>.`
+            : `Hemos recibido correctamente tu solicitud de cita para <strong>${appt.service}</strong>.`);
 
         emailHtml = `
           <div style="font-family: Arial, sans-serif; color: #1f2937; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 10px; padding: 24px; background-color: #ffffff;">
@@ -1531,8 +1594,9 @@ export class AppointmentsService implements OnModuleInit {
             
             <div style="background-color: #eff6ff; border: 1px solid #dbeafe; padding: 16px; border-radius: 8px; margin: 16px 0;">
               <p style="margin: 6px 0; color: #1e40af;">📌 <strong>Servicio / Actividad:</strong> ${appt.service}</p>
-              <p style="margin: 6px 0; color: #1e40af;">📅 <strong>Fecha solicitada:</strong> ${formattedDate}</p>
-              ${isSinFecha ? '' : `<p style="margin: 6px 0; color: #1e40af;">⏰ <strong>Horario:</strong> ${formattedTime}</p>`}
+              ${serviceDescHtml}
+              ${textoEspecificoHtml}
+              ${dateHtml}
               <p style="margin: 6px 0; color: #1e40af;">📍 <strong>Modalidad:</strong> ${modalityText}</p>
               ${
                 isVirtual && appt.calMeetingUrl
@@ -1554,20 +1618,34 @@ export class AppointmentsService implements OnModuleInit {
           </div>
         `;
 
-        chatMessageText = isSinFecha
-          ? `¡Hola ${contact.name || ''}! Hemos recibido tu solicitud para *${appt.service}* (${formattedDate}). Se encuentra pendiente de confirmación por el responsable (${effectiveManager}). En cuanto se confirme recibirás los detalles.`
-          : (isResched
-            ? `¡Hola ${contact.name || ''}! Hemos recibido tu solicitud de cambio de horario para *${appt.service}* el *${formattedDate}* a las *${formattedTime}*. Se encuentra pendiente de confirmación por el profesor (${effectiveManager}). En cuanto se confirme recibirás los detalles.`
-            : `¡Hola ${contact.name || ''}! Hemos recibido tu solicitud para *${appt.service}* el *${formattedDate}* a las *${formattedTime}*. Se encuentra pendiente de confirmación por el profesor (${effectiveManager}). En cuanto se confirme recibirás los detalles.`);
+        if (isProvisional) {
+          chatMessageText = `¡Hola ${contact.name || ''}! Hemos recibido tu solicitud de plaza prioritaria para *${appt.service}* (${formattedDate}). Convocatoria con fecha tentativa/provisional: te avisaremos personalmente en cuanto se confirme la fecha y hora definitivas.`;
+        } else {
+          chatMessageText = isSinFecha
+            ? `¡Hola ${contact.name || ''}! Hemos recibido tu solicitud para *${appt.service}* (${formattedDate}). Se encuentra pendiente de confirmación por el responsable (${effectiveManager}). En cuanto se confirme recibirás los detalles.`
+            : (isResched
+              ? `¡Hola ${contact.name || ''}! Hemos recibido tu solicitud de cambio de horario para *${appt.service}* el *${formattedDate}* a las *${formattedTime}*. Se encuentra pendiente de confirmación por el profesor (${effectiveManager}). En cuanto se confirme recibirás los detalles.`
+              : `¡Hola ${contact.name || ''}! Hemos recibido tu solicitud para *${appt.service}* el *${formattedDate}* a las *${formattedTime}*. Se encuentra pendiente de confirmación por el profesor (${effectiveManager}). En cuanto se confirme recibirás los detalles.`);
+        }
       } else if (decision === 'accepted') {
         const isResched = isRescheduled || Boolean(appt.notes && /reprogramad/i.test(appt.notes));
-        subject = isResched
-          ? `🔄 Cita reprogramada: ${appt.service} - ${formattedDate}`
-          : `✅ Confirmación de tu cita: ${appt.service} - ${formattedDate}`;
-        const headerTitle = isResched ? '¡Cita reprogramada con éxito!' : '¡Tu cita está confirmada!';
-        const headerSubtitle = isResched
+
+        let headerTitle = isResched ? '¡Cita reprogramada con éxito!' : '¡Tu cita está confirmada!';
+        let headerSubtitle = isResched
           ? `Te confirmamos que el cambio de horario para tu cita de <strong>${appt.service}</strong> ha quedado registrado correctamente.`
           : `Nos complace confirmarte que tu reserva para <strong>${appt.service}</strong> ha quedado formalizada.`;
+
+        if (isProvisional) {
+          subject = isResched
+            ? `🔄 Reserva de plaza prioritaria actualizada: ${appt.service} (fecha provisional)`
+            : `📋 Reserva de plaza prioritaria: ${appt.service} (fecha provisional)`;
+          headerTitle = '¡Tu plaza prioritaria está reservada!';
+          headerSubtitle = `Nos complace confirmarte que tu reserva de plaza prioritaria para <strong>${appt.service}</strong> ha quedado registrada.<br><span style="display:inline-block; margin-top: 8px; color: #92400e; background-color: #fef3c7; border: 1px solid #fde68a; padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: 13px;">⚠️ Convocatoria con fecha tentativa / provisional: te avisaremos personalmente en cuanto se confirme la fecha y hora definitivas.</span>`;
+        } else {
+          subject = isResched
+            ? `🔄 Cita reprogramada: ${appt.service} - ${formattedDate}`
+            : `✅ Confirmación de tu cita: ${appt.service} - ${formattedDate}`;
+        }
 
         const reminderSectionHtml = serviceEntity?.reminderNotes
           ? `
@@ -1578,36 +1656,10 @@ export class AppointmentsService implements OnModuleInit {
           `
           : '';
 
-        const locationHtml = isVirtual
-          ? `
-            <p style="margin: 6px 0;">📍 <strong>Modalidad:</strong> Online (Videollamada)</p>
-            ${
-              appt.calMeetingUrl
-                ? `<div style="margin: 12px 0 8px 0;">
-                     <a href="${appt.calMeetingUrl}" style="background-color: #2563eb; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 14px;">🎥 Acceder a la Videollamada</a>
-                   </div>
-                   <p style="margin: 4px 0; font-size: 12px; color: #6b7280;">Enlace de acceso: <a href="${appt.calMeetingUrl}" style="color: #2563eb;">${appt.calMeetingUrl}</a></p>
-                   <p style="margin: 4px 0; font-size: 12px; color: #6b7280;">(Por favor, conéctate 5 minutos antes con cámara y micrófono activados).</p>`
-                : ''
-            }
-          `
-          : `
-            <p style="margin: 6px 0;">📍 <strong>Modalidad:</strong> Presencial en el centro</p>
-            <p style="margin: 6px 0;">🏢 <strong>Ubicación:</strong> Club Social Parque Granada (Escuela Salvadora Conesa), Calle Holanda 1, 28942 Fuenlabrada, Madrid</p>
-          `;
-
-        const serviceDescHtml = serviceEntity?.description
-          ? `<p style="margin: 8px 0; font-size: 13px; color: #4b5563; line-height: 1.4;"><strong>Detalles de la sesión / actividad:</strong> ${serviceEntity.description}</p>`
-          : '';
-
-        const textoEspecificoHtml = serviceEntity?.textoespecifico
-          ? `<div style="margin: 12px 0; background-color: #fefce8; border: 1px solid #fde047; padding: 12px 16px; border-radius: 8px; font-size: 13px; color: #713f12; line-height: 1.5;"><strong style="display: block; text-transform: uppercase; font-size: 11px; margin-bottom: 4px; color: #854d0e;">📌 Información Específica del Servicio:</strong>${serviceEntity.textoespecifico}</div>`
-          : '';
-
         emailHtml = `
           <div style="font-family: Arial, sans-serif; color: #1f2937; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 10px; padding: 24px; background-color: #ffffff;">
             <div style="text-align: center; margin-bottom: 20px; border-bottom: 1px solid #f3f4f6; padding-bottom: 16px;">
-              <h2 style="color: #10b981; margin: 0; font-size: 22px;">${headerTitle}</h2>
+              <h2 style="color: ${isProvisional ? '#d97706' : '#10b981'}; margin: 0; font-size: 22px;">${headerTitle}</h2>
               <p style="margin: 6px 0 0 0; color: #6b7280; font-size: 14px;">Centro de Yoga Salvadora Conesa & Club Social Parque Granada</p>
             </div>
             
@@ -1618,8 +1670,7 @@ export class AppointmentsService implements OnModuleInit {
               <p style="margin: 6px 0;">📌 <strong>Servicio / Actividad:</strong> ${appt.service}</p>
               ${serviceDescHtml}
               ${textoEspecificoHtml}
-              <p style="margin: 6px 0;">📅 <strong>Fecha:</strong> ${formattedDate}</p>
-              ${isSinFecha ? '' : `<p style="margin: 6px 0;">⏰ <strong>Horario:</strong> ${formattedTime}</p>`}
+              ${dateHtml}
               ${locationHtml}
               <p style="margin: 6px 0;">👤 <strong>Responsable / Terapeuta:</strong> ${effectiveManager}</p>
               ${
@@ -1634,15 +1685,15 @@ export class AppointmentsService implements OnModuleInit {
             ${reminderSectionHtml}
 
             <p style="font-size: 13px; color: #6b7280; margin-top: 20px; border-top: 1px solid #f3f4f6; padding-top: 14px;">Si necesitas consultar, cancelar o cambiar cualquier detalle, puedes responder directamente a este correo o escribirnos por WhatsApp al <strong>695 172 625</strong>.</p>
-            <p style="margin-top: 12px; font-weight: bold; color: #374151;">¡Te esperamos!</p>
+            <p style="margin-top: 12px; font-weight: bold; color: #374151;">${isProvisional ? '¡Tu plaza prioritaria queda asegurada y te avisaremos en cuanto se confirme la fecha definitiva!' : '¡Te esperamos!'}</p>
           </div>
         `;
 
         const reminderWhatsApp = serviceEntity?.reminderNotes
           ? `\n\n💡 *Recordatorio y preparación:* ${serviceEntity.reminderNotes}`
           : '';
-        const textoEspecificoWhatsApp = serviceEntity?.textoespecifico
-          ? `\n\n📌 *Información específica:* ${serviceEntity.textoespecifico}`
+        const textoEspecificoWhatsApp = effectiveTextoEspecifico
+          ? `\n\n📌 *Información específica:* ${effectiveTextoEspecifico}`
           : '';
         const locationWhatsApp = isVirtual
           ? `Online por Videollamada${appt.calMeetingUrl ? `\n🔗 *Enlace directo:* ${appt.calMeetingUrl}` : ''}`
@@ -1654,9 +1705,15 @@ export class AppointmentsService implements OnModuleInit {
             ? `\n💶 *Importe:* ${appt.price} €`
             : '';
 
-        chatMessageText = isSinFecha
-          ? `¡Hola ${contact.name || ''}! Te confirmamos que tu cita para *${appt.service}* ha quedado formalizada.\n\n📅 *Fecha:* ${formattedDate}\n📍 *Modalidad:* ${locationWhatsApp}\n👤 *Responsable:* ${effectiveManager}${priceWhatsApp}${textoEspecificoWhatsApp}${reminderWhatsApp}\n\n¡Muchas gracias y nos vemos pronto!`
-          : `¡Hola ${contact.name || ''}! Te confirmamos que tu cita para *${appt.service}* ha quedado formalizada.\n\n📅 *Fecha:* ${formattedDate}\n⏰ *Hora:* ${formattedTime}\n📍 *Modalidad:* ${locationWhatsApp}\n👤 *Responsable:* ${effectiveManager}${priceWhatsApp}${textoEspecificoWhatsApp}${reminderWhatsApp}\n\n¡Muchas gracias y nos vemos pronto!`;
+        if (isProvisional) {
+          chatMessageText = isSinFecha
+            ? `¡Hola ${contact.name || ''}! Te confirmamos que tu *reserva de plaza prioritaria* para *${appt.service}* ha quedado formalizada.\n\n⚠️ *Aviso importante:* Convocatoria con fecha tentativa/provisional. Te avisaremos personalmente en cuanto se confirme la fecha y hora definitivas.\n\n📅 *Fecha orientativa:* ${formattedDate}\n📍 *Modalidad:* ${locationWhatsApp}\n👤 *Responsable:* ${effectiveManager}${priceWhatsApp}${textoEspecificoWhatsApp}${reminderWhatsApp}\n\n¡Muchas gracias! Tu plaza prioritaria queda asegurada.`
+            : `¡Hola ${contact.name || ''}! Te confirmamos que tu *reserva de plaza prioritaria* para *${appt.service}* ha quedado formalizada.\n\n⚠️ *Aviso importante:* Convocatoria con fecha tentativa/provisional. Te avisaremos personalmente en cuanto se confirme la fecha y hora definitivas.\n\n📅 *Fecha provisional:* ${formattedDate}\n⏰ *Horario orientativo:* ${formattedTime}\n📍 *Modalidad:* ${locationWhatsApp}\n👤 *Responsable:* ${effectiveManager}${priceWhatsApp}${textoEspecificoWhatsApp}${reminderWhatsApp}\n\n¡Muchas gracias! Tu plaza prioritaria queda asegurada.`;
+        } else {
+          chatMessageText = isSinFecha
+            ? `¡Hola ${contact.name || ''}! Te confirmamos que tu cita para *${appt.service}* ha quedado formalizada.\n\n📅 *Fecha:* ${formattedDate}\n📍 *Modalidad:* ${locationWhatsApp}\n👤 *Responsable:* ${effectiveManager}${priceWhatsApp}${textoEspecificoWhatsApp}${reminderWhatsApp}\n\n¡Muchas gracias y nos vemos pronto!`
+            : `¡Hola ${contact.name || ''}! Te confirmamos que tu cita para *${appt.service}* ha quedado formalizada.\n\n📅 *Fecha:* ${formattedDate}\n⏰ *Hora:* ${formattedTime}\n📍 *Modalidad:* ${locationWhatsApp}\n👤 *Responsable:* ${effectiveManager}${priceWhatsApp}${textoEspecificoWhatsApp}${reminderWhatsApp}\n\n¡Muchas gracias y nos vemos pronto!`;
+        }
       } else if (decision === 'reschedule_requested') {
         const reasonText =
           rejectionReason ||
@@ -1860,17 +1917,29 @@ export class AppointmentsService implements OnModuleInit {
       let smsText = '';
       const isResched = isRescheduled || Boolean(appt.notes && /reprogramad/i.test(appt.notes));
       if (decision === 'pending_approval') {
-        smsText = (isVirtual && appt.calMeetingUrl)
-          ? `Hola ${contact.name || ''}, tu solicitud online para ${appt.service} el ${formattedDate} ha sido recibida y está pendiente de confirmación. Enlace videollamada: ${appt.calMeetingUrl}. Centro Salvadora.`
-          : `Hola ${contact.name || ''}, tu solicitud para ${appt.service} el ${formattedDate} ha sido recibida y está pendiente de confirmación del profesor. Centro de Yoga Salvadora Conesa.`;
+        if (isProvisional) {
+          smsText = `Hola ${contact.name || ''}, tu solicitud de plaza prioritaria para ${appt.service} (${formattedDate}) ha sido recibida (fecha provisional). Centro Salvadora.`;
+        } else {
+          smsText = (isVirtual && appt.calMeetingUrl)
+            ? `Hola ${contact.name || ''}, tu solicitud online para ${appt.service} el ${formattedDate} ha sido recibida y está pendiente de confirmación. Enlace videollamada: ${appt.calMeetingUrl}. Centro Salvadora.`
+            : `Hola ${contact.name || ''}, tu solicitud para ${appt.service} el ${formattedDate} ha sido recibida y está pendiente de confirmación del profesor. Centro de Yoga Salvadora Conesa.`;
+        }
       } else if (decision === 'accepted' && isResched) {
-        smsText = (isVirtual && appt.calMeetingUrl)
-          ? `Hola ${contact.name || ''}, confirmamos el cambio de tu cita online de ${appt.service}: tu nuevo horario es el ${formattedDate} a las ${formattedStartTime}. Enlace videollamada: ${appt.calMeetingUrl}. Centro Salvadora.`
-          : `Hola ${contact.name || ''}, confirmamos el cambio de tu cita para ${appt.service}: tu nuevo horario es el ${formattedDate} a las ${formattedStartTime}. Centro de Yoga Salvadora Conesa.`;
+        if (isProvisional) {
+          smsText = `Hola ${contact.name || ''}, cambio registrado: tu plaza prioritaria de ${appt.service} es para el ${formattedDate} (fecha provisional). Centro Salvadora.`;
+        } else {
+          smsText = (isVirtual && appt.calMeetingUrl)
+            ? `Hola ${contact.name || ''}, confirmamos el cambio de tu cita online de ${appt.service}: tu nuevo horario es el ${formattedDate} a las ${formattedStartTime}. Enlace videollamada: ${appt.calMeetingUrl}. Centro Salvadora.`
+            : `Hola ${contact.name || ''}, confirmamos el cambio de tu cita para ${appt.service}: tu nuevo horario es el ${formattedDate} a las ${formattedStartTime}. Centro de Yoga Salvadora Conesa.`;
+        }
       } else if (decision === 'accepted') {
-        smsText = (isVirtual && appt.calMeetingUrl)
-          ? `Hola ${contact.name || ''}, confirmamos tu cita online de ${appt.service} el ${formattedDate} a las ${formattedStartTime}. Enlace videollamada: ${appt.calMeetingUrl}. Centro Salvadora.`
-          : `Hola ${contact.name || ''}, tu cita para ${appt.service} el ${formattedDate} a las ${formattedStartTime} ha sido confirmada en Centro de Yoga Salvadora Conesa. ¡Te esperamos!`;
+        if (isProvisional) {
+          smsText = `Hola ${contact.name || ''}, tu plaza prioritaria para ${appt.service} (${formattedDate}) ha quedado reservada. Fecha provisional: te avisaremos al confirmarse la fecha definitiva. Centro Salvadora.`;
+        } else {
+          smsText = (isVirtual && appt.calMeetingUrl)
+            ? `Hola ${contact.name || ''}, confirmamos tu cita online de ${appt.service} el ${formattedDate} a las ${formattedStartTime}. Enlace videollamada: ${appt.calMeetingUrl}. Centro Salvadora.`
+            : `Hola ${contact.name || ''}, tu cita para ${appt.service} el ${formattedDate} a las ${formattedStartTime} ha sido confirmada en Centro de Yoga Salvadora Conesa. ¡Te esperamos!`;
+        }
       } else if (decision === 'reschedule_requested') {
         smsText = `Hola ${contact.name || ''}, para tu cita de ${appt.service} el ${formattedDate}, solicitamos cambiar de fecha u horario. Motivo: ${rejectionReason || 'No disponible'}`;
       } else if (decision === 'cancelled') {

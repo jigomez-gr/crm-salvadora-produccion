@@ -421,4 +421,56 @@ describe('Appointments Multi-Channel Notifications (Service Level)', () => {
       }),
     ).rejects.toThrow('emailerroneo=S');
   });
+
+  it('formats provisional/tentative service booking notifications with priority seat messaging and prominent specific info', async () => {
+    servicesRepoMock.findOne.mockResolvedValue({
+      id: 'svc-constelaciones',
+      name: 'Constelaciones Familiares',
+      textoespecifico: 'tentativamente el domingo 25 de octubre de 10 a 14:00',
+      description: 'Taller vivencial de constelaciones familiares.',
+      notifyByEmail: true,
+      notifyByWhatsapp: true,
+      notifyBySms: true,
+    });
+
+    const provisionalAppt: any = {
+      id: 'appt-prov-1',
+      service: 'Constelaciones Familiares (Participante / Representante)',
+      serviceId: 'svc-constelaciones',
+      contactId: 'contact-test-1',
+      startsAt: new Date('2026-10-25T08:00:00.000Z'),
+      endsAt: new Date('2026-10-25T12:00:00.000Z'),
+      status: AppointmentStatus.SCHEDULED,
+      price: 20,
+    };
+
+    await (service as any).notifyStudentDecision(provisionalAppt, 'accepted', 'Centro de Yoga Salvadora Conesa');
+
+    // 1. Email verification
+    expect(emailServiceMock.sendNotification).toHaveBeenCalledTimes(1);
+    const emailArgs = emailServiceMock.sendNotification.mock.calls[0];
+    const emailSubject = emailArgs[2];
+    const emailHtml = emailArgs[3];
+
+    expect(emailSubject).toContain('Reserva de plaza prioritaria');
+    expect(emailSubject).toContain('fecha provisional');
+    expect(emailHtml).toContain('¡Tu plaza prioritaria está reservada!');
+    expect(emailHtml).toContain('Sin confirmar la fecha y hora definitiva: tentativamente el domingo 25 de octubre de 10 a 14:00');
+    expect(emailHtml).toContain('Fecha provisional / tentativa');
+    expect(emailHtml).toContain('Pendiente de confirmación definitiva');
+
+    // 2. WhatsApp verification
+    expect(ycloudClientMock.sendTextMessage).toHaveBeenCalledTimes(1);
+    const whatsappText = ycloudClientMock.sendTextMessage.mock.calls[0][2];
+    expect(whatsappText).toContain('*reserva de plaza prioritaria*');
+    expect(whatsappText).toContain('Aviso importante:* Convocatoria con fecha tentativa/provisional');
+    expect(whatsappText).toContain('Sin confirmar la fecha y hora definitiva: tentativamente el domingo 25 de octubre de 10 a 14:00');
+
+    // 3. SMS verification
+    expect(zadarmaSmsMock.sendSms).toHaveBeenCalledTimes(1);
+    const smsMessage = zadarmaSmsMock.sendSms.mock.calls[0][0].message;
+    expect(smsMessage).toContain('plaza prioritaria');
+    expect(smsMessage).toContain('Fecha provisional');
+  });
 });
+
