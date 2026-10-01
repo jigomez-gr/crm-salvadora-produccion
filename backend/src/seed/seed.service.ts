@@ -156,6 +156,7 @@ export class SeedService implements OnModuleInit {
         managerId: salvadoraManager.id,
         requiresApproval: true,
         allowedModalities: ['in_person', 'virtual'],
+        calEventTypeId: 4252426,
       },
       {
         name: SVC.gong.name,

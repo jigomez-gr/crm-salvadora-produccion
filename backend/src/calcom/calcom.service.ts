@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CalcomAccount } from '../common/entities/calcom-account.entity';
@@ -34,26 +34,78 @@ export interface CalcomBookingResult {
 }
 
 @Injectable()
-export class CalcomService {
+export class CalcomService implements OnModuleInit {
   private readonly logger = new Logger(CalcomService.name);
+
+  // Default credentials provided for Cal.com v2 integration
+  public static readonly DEFAULT_API_KEY = 'cal_live_52d03181802548eb1270a90a738ca3ba';
+  public static readonly DEFAULT_BASE_URL = 'https://api.cal.com/v2';
+  public static readonly DEFAULT_EVENT_TYPE_ID = '4252426';
+  public static readonly CAL_API_VERSION = '2024-08-13';
 
   constructor(
     @InjectRepository(CalcomAccount)
     private readonly accountRepo: Repository<CalcomAccount>,
   ) {}
 
+  async onModuleInit() {
+    try {
+      await this.getAccount();
+      this.logger.log('Cal.com integration service initialized.');
+    } catch (err: any) {
+      this.logger.warn(`Could not initialize CalcomAccount on startup: ${err.message}`);
+    }
+  }
+
+  /** Normalizes any Cal.com base URL to API v2 */
+  public getV2BaseUrl(rawBaseUrl?: string | null): string {
+    let url = (rawBaseUrl || CalcomService.DEFAULT_BASE_URL).trim().replace(/\/+$/, '');
+    if (url.endsWith('/v1')) {
+      url = url.slice(0, -3) + '/v2';
+    } else if (!url.endsWith('/v2')) {
+      url = url + '/v2';
+    }
+    return url;
+  }
+
   private async getAccount(): Promise<CalcomAccount> {
     const [account] = await this.accountRepo.find({
       order: { createdAt: 'ASC' },
       take: 1,
     });
+    const defaultKey = process.env.CALCOM_API_KEY || CalcomService.DEFAULT_API_KEY;
+    const defaultEventType = process.env.CALCOM_DEFAULT_EVENT_TYPE_ID || CalcomService.DEFAULT_EVENT_TYPE_ID;
+    const defaultBaseUrl = this.getV2BaseUrl(process.env.CALCOM_BASE_URL || CalcomService.DEFAULT_BASE_URL);
+
     if (account) {
+      let changed = false;
+      if (!account.apiKey) {
+        account.apiKey = defaultKey;
+        changed = true;
+      }
+      if (!account.defaultEventTypeId) {
+        account.defaultEventTypeId = defaultEventType;
+        changed = true;
+      }
+      if (!account.baseUrl || account.baseUrl.includes('/v1')) {
+        account.baseUrl = defaultBaseUrl;
+        changed = true;
+      }
+      if (account.enabled === undefined || account.enabled === null) {
+        account.enabled = true;
+        changed = true;
+      }
+      if (changed) {
+        return this.accountRepo.save(account);
+      }
       return account;
     }
+
     const newAccount = this.accountRepo.create({
-      baseUrl: process.env.CALCOM_BASE_URL || 'https://api.cal.com/v1',
-      apiKey: process.env.CALCOM_API_KEY || null,
+      baseUrl: defaultBaseUrl,
+      apiKey: defaultKey,
       enabled: true,
+      defaultEventTypeId: defaultEventType,
     });
     return this.accountRepo.save(newAccount);
   }
@@ -61,8 +113,8 @@ export class CalcomService {
   /** Safe config response for frontend (masked secret) */
   async getConfig(): Promise<CalcomConfigResponseDto> {
     const account = await this.getAccount();
-    const hasApiKey = Boolean(account.apiKey || process.env.CALCOM_API_KEY);
-    const key = account.apiKey || process.env.CALCOM_API_KEY || '';
+    const hasApiKey = Boolean(account.apiKey);
+    const key = account.apiKey || '';
     const apiKeyPreview =
       hasApiKey && key.length > 8
         ? `${key.slice(0, 4)}••••${key.slice(-4)}`
@@ -73,7 +125,7 @@ export class CalcomService {
     return {
       hasApiKey,
       apiKeyPreview,
-      baseUrl: account.baseUrl,
+      baseUrl: this.getV2BaseUrl(account.baseUrl),
       enabled: account.enabled,
       defaultEventTypeId: account.defaultEventTypeId ? String(account.defaultEventTypeId) : null,
     };
@@ -87,7 +139,7 @@ export class CalcomService {
       account.apiKey = dto.apiKey.trim() === '' ? null : dto.apiKey.trim();
     }
     if (dto.baseUrl !== undefined) {
-      account.baseUrl = dto.baseUrl.trim() || 'https://api.cal.com/v1';
+      account.baseUrl = this.getV2BaseUrl(dto.baseUrl);
     }
     if (dto.enabled !== undefined) {
       account.enabled = dto.enabled;
@@ -101,14 +153,14 @@ export class CalcomService {
   }
 
   /**
-   * Create a virtual booking in Cal.com with the manager's email as host
+   * Create a virtual booking in Cal.com API v2 with the manager's email as host
    * and the contact's details (name, phone, email, reason).
    */
   async createBooking(
     params: CreateCalcomBookingParams,
   ): Promise<CalcomBookingResult> {
     const account = await this.getAccount();
-    const apiKey = account.apiKey || process.env.CALCOM_API_KEY;
+    const apiKey = account.apiKey || process.env.CALCOM_API_KEY || CalcomService.DEFAULT_API_KEY;
     const fullName =
       params.contact.name ||
       [params.contact.firstName, params.contact.lastName]
@@ -121,17 +173,7 @@ export class CalcomService {
     const clientEmail =
       params.contact.email && params.contact.email.includes('@')
         ? params.contact.email
-        : `client-${(params.contact.phone || 'crm').replace(/[^0-9]/g, '')}@crm.local`;
-
-    const notes = [
-      params.reason ? `Motivo de la consulta: ${params.reason}` : null,
-      params.contact.phone ? `Teléfono cliente: ${params.contact.phone}` : null,
-      params.managerEmail
-        ? `Responsable del servicio: ${params.managerEmail}`
-        : null,
-    ]
-      .filter(Boolean)
-      .join('\n');
+        : `client-${(params.contact.phone || 'crm').replace(/[^0-9]/g, '')}@salvadoraconesayoga.es`;
 
     const safeServiceName = (params.serviceName || 'sesion')
       .toLowerCase()
@@ -155,46 +197,46 @@ export class CalcomService {
 
     try {
       const eventTypeId =
-        params.eventTypeId || account.defaultEventTypeId || undefined;
-      const baseUrl = account.baseUrl.replace(/\/+$/, '');
-      const url = `${baseUrl}/bookings?apiKey=${encodeURIComponent(apiKey)}`;
+        params.eventTypeId || account.defaultEventTypeId || CalcomService.DEFAULT_EVENT_TYPE_ID;
+      const baseUrl = this.getV2BaseUrl(account.baseUrl);
+      const url = `${baseUrl}/bookings`;
+
+      let phoneToSend: string | undefined = undefined;
+      if (params.contact.phone) {
+        const cleaned = params.contact.phone.trim();
+        if (/^\+?[0-9\s-]{9,20}$/.test(cleaned)) {
+          phoneToSend = cleaned.startsWith('+') ? cleaned : `+34${cleaned.replace(/[^0-9]/g, '')}`;
+        }
+      }
 
       const payload: Record<string, any> = {
         start: params.startsAt.toISOString(),
-        end: params.endsAt.toISOString(),
-        title: `Cita Virtual: ${params.serviceName} - ${fullName}`,
-        description: notes,
-        timeZone: params.timezone || 'Europe/Madrid',
-        language: 'es',
-        responses: {
+        eventTypeId: Number(eventTypeId),
+        attendee: {
           name: fullName,
           email: clientEmail,
-          notes,
-          location: {
-            value: 'integrations:daily',
-            optionValue: '',
-          },
+          timeZone: params.timezone || 'Europe/Madrid',
+          language: 'es',
+          ...(phoneToSend ? { phoneNumber: phoneToSend } : {}),
         },
         metadata: {
-          phone: params.contact.phone,
-          managerEmail: params.managerEmail,
+          phone: params.contact.phone || undefined,
+          managerEmail: params.managerEmail || undefined,
           serviceName: params.serviceName,
-          reason: params.reason,
+          reason: params.reason || undefined,
         },
       };
 
-      if (eventTypeId) {
-        payload.eventTypeId = /^\d+$/.test(String(eventTypeId))
-          ? Number(eventTypeId)
-          : eventTypeId;
-      }
+      this.logger.log(
+        `Creating Cal.com v2 booking for ${fullName} (${clientEmail}) on eventTypeId=${eventTypeId} at ${params.startsAt.toISOString()}...`,
+      );
 
       const res = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`,
-          'x-api-key': apiKey,
+          'cal-api-version': CalcomService.CAL_API_VERSION,
         },
         body: JSON.stringify(payload),
       });
@@ -202,7 +244,7 @@ export class CalcomService {
       if (!res.ok) {
         const errorText = await res.text();
         this.logger.warn(
-          `Cal.com API returned ${res.status}: ${errorText}. Falling back to functional video room: ${fallbackMeetingUrl}`,
+          `Cal.com v2 API returned ${res.status}: ${errorText}. Falling back to functional video room: ${fallbackMeetingUrl}`,
         );
         return {
           bookingId: generatedUid,
@@ -213,26 +255,28 @@ export class CalcomService {
       }
 
       const data = await res.json();
-      const booking = data?.booking || data;
-      const uid = booking?.uid || generatedUid;
+      const booking = data?.data || data?.booking || data;
+      const uid = String(booking?.uid || generatedUid);
       const id = String(booking?.id || uid);
 
-      // Cal.com returns meeting URL in references or location
       let meetingUrl =
+        booking?.meetingUrl ||
         booking?.location ||
-        booking?.references?.find((r: any) => r.type === 'daily_video')
-          ?.meetingUrl ||
         `https://app.cal.com/video/${uid}`;
 
       if (meetingUrl === 'integrations:daily' || !meetingUrl.startsWith('http')) {
         meetingUrl = `https://app.cal.com/video/${uid}`;
       }
 
+      this.logger.log(
+        `Cal.com v2 booking successfully created: id=${id}, uid=${uid}, meetingUrl=${meetingUrl}`,
+      );
+
       return {
         bookingId: id,
         bookingUid: uid,
         meetingUrl,
-        status: booking?.status || 'ACCEPTED',
+        status: booking?.status || 'accepted',
       };
     } catch (err: any) {
       this.logger.error(`Error connecting to Cal.com API: ${err.message}`, err.stack);
@@ -245,29 +289,27 @@ export class CalcomService {
     }
   }
 
-  /** Cancel a booking in Cal.com */
+  /** Cancel a booking in Cal.com API v2 */
   async cancelBooking(bookingUid: string, reason?: string): Promise<boolean> {
     const account = await this.getAccount();
-    const apiKey = account.apiKey || process.env.CALCOM_API_KEY;
-    if (!account.enabled || !apiKey || bookingUid.startsWith('cal-')) {
+    const apiKey = account.apiKey || process.env.CALCOM_API_KEY || CalcomService.DEFAULT_API_KEY;
+    if (!account.enabled || !apiKey || bookingUid.startsWith('v-') || bookingUid.startsWith('cal-')) {
       return true;
     }
 
     try {
-      const baseUrl = account.baseUrl.replace(/\/+$/, '');
-      const url = `${baseUrl}/bookings/${encodeURIComponent(
-        bookingUid,
-      )}/cancel?apiKey=${encodeURIComponent(apiKey)}`;
+      const baseUrl = this.getV2BaseUrl(account.baseUrl);
+      const url = `${baseUrl}/bookings/${encodeURIComponent(bookingUid)}/cancel`;
 
       const res = await fetch(url, {
-        method: 'DELETE',
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`,
-          'x-api-key': apiKey,
+          'cal-api-version': CalcomService.CAL_API_VERSION,
         },
         body: JSON.stringify({
-          cancellationReason: reason || 'Cancelada desde el CRM',
+          cancellationReason: reason || 'Cancelada desde el CRM Salvadora',
         }),
       });
       return res.ok;
@@ -277,10 +319,10 @@ export class CalcomService {
     }
   }
 
-  /** Test connection / verify API Key */
+  /** Test connection / verify API Key via Cal.com v2 /me */
   async testConnection(): Promise<{ success: boolean; message: string }> {
     const account = await this.getAccount();
-    const apiKey = account.apiKey || process.env.CALCOM_API_KEY;
+    const apiKey = account.apiKey || process.env.CALCOM_API_KEY || CalcomService.DEFAULT_API_KEY;
     if (!apiKey) {
       return {
         success: false,
@@ -289,37 +331,29 @@ export class CalcomService {
     }
 
     try {
-      const baseUrl = account.baseUrl.replace(/\/+$/, '');
-      // Query /event-types or /users/me
-      let res = await fetch(
-        `${baseUrl}/event-types?apiKey=${encodeURIComponent(apiKey)}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'x-api-key': apiKey,
-          },
+      const baseUrl = this.getV2BaseUrl(account.baseUrl);
+      const res = await fetch(`${baseUrl}/me`, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'cal-api-version': CalcomService.CAL_API_VERSION,
         },
-      );
-      if (!res.ok) {
-        res = await fetch(
-          `${baseUrl}/users/me?apiKey=${encodeURIComponent(apiKey)}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${apiKey}`,
-              'x-api-key': apiKey,
-            },
-          },
-        );
-      }
+      });
+
       if (res.ok) {
+        const data = await res.json();
+        const user = data?.data;
+        const name = user?.name || user?.username || 'Usuario Cal.com';
+        const email = user?.email ? ` (${user.email})` : '';
         return {
           success: true,
-          message: 'Conexión con Cal.com establecida correctamente.',
+          message: `Conexión con Cal.com v2 establecida correctamente: ${name}${email}.`,
         };
       }
+
+      const errText = await res.text().catch(() => '');
       return {
         success: false,
-        message: `Cal.com devolvió el código HTTP ${res.status}: ${res.statusText}`,
+        message: `Cal.com devolvió el código HTTP ${res.status}: ${res.statusText}. ${errText}`.trim(),
       };
     } catch (err: any) {
       return {

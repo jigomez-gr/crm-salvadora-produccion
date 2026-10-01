@@ -20,8 +20,8 @@ export class CalcomAccount {
   @Column({ type: 'varchar', nullable: true })
   apiKey: string | null;
 
-  // Cal.com API Base URL (defaults to https://api.cal.com/v1)
-  @Column({ type: 'varchar', default: 'https://api.cal.com/v1' })
+  // Cal.com API Base URL (defaults to https://api.cal.com/v2)
+  @Column({ type: 'varchar', default: 'https://api.cal.com/v2' })
   baseUrl: string;
 
   // Whether Cal.com auto-sync is enabled

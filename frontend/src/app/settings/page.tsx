@@ -514,7 +514,7 @@ function CalcomCard() {
 
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [hasApiKey, setHasApiKey] = useState(false);
-  const [baseUrl, setBaseUrl] = useState("https://api.cal.com/v1");
+  const [baseUrl, setBaseUrl] = useState("https://api.cal.com/v2");
   const [enabled, setEnabled] = useState(true);
   const [defaultEventTypeId, setDefaultEventTypeId] = useState("");
 
@@ -524,7 +524,7 @@ function CalcomCard() {
       .then((data) => {
         if (cancelled) return;
         setHasApiKey(data.hasApiKey);
-        setBaseUrl(data.baseUrl || "https://api.cal.com/v1");
+        setBaseUrl(data.baseUrl || "https://api.cal.com/v2");
         setEnabled(data.enabled ?? true);
         setDefaultEventTypeId(data.defaultEventTypeId ? String(data.defaultEventTypeId) : "");
       })
@@ -541,7 +541,7 @@ function CalcomCard() {
     setSaving(true);
     try {
       const payload: Record<string, any> = {
-        baseUrl: baseUrl.trim() || "https://api.cal.com/v1",
+        baseUrl: baseUrl.trim() || "https://api.cal.com/v2",
         enabled,
         defaultEventTypeId: defaultEventTypeId.trim() || undefined,
       };
@@ -612,7 +612,7 @@ function CalcomCard() {
             <Input
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="https://api.cal.com/v1"
+              placeholder="https://api.cal.com/v2"
             />
           </div>
           <div>
@@ -621,7 +621,7 @@ function CalcomCard() {
               type="text"
               value={defaultEventTypeId}
               onChange={(e) => setDefaultEventTypeId(e.target.value)}
-              placeholder="ej. 129482 o UUID de evento"
+              placeholder="ej. 4252426 o ID de evento"
             />
           </div>
         </div>
