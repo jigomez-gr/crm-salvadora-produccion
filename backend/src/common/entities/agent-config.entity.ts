@@ -95,6 +95,22 @@ export class AgentConfig {
   @Column({ default: 'es' })
   reminderTemplateLanguage: string;
 
+  // ─── Presencia Digital, Redes y Personalización SEO ───
+  @Column({ type: 'text', nullable: true })
+  websiteUrl: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  instagramUrl: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  facebookUrl: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  googleReviewUrl: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  seoDescription: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }

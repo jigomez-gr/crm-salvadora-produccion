@@ -46,7 +46,22 @@ export class AgentsConfigService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    await this.ensureSchema();
     await this.seedDefaultIfMissing();
+  }
+
+  private async ensureSchema() {
+    try {
+      await this.configRepo.query(`
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "websiteUrl" text;
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "instagramUrl" text;
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "facebookUrl" text;
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "googleReviewUrl" text;
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "seoDescription" text;
+      `);
+    } catch (err: any) {
+      this.logger.warn(`Could not ensure agent_configs columns: ${err?.message || err}`);
+    }
   }
 
   private async seedDefaultIfMissing() {
@@ -98,9 +113,36 @@ export class AgentsConfigService implements OnModuleInit {
         model: DEFAULT_MODEL,
         whatsappNumber: process.env.YCLOUD_WHATSAPP_NUMBER || undefined,
         enabled: true,
+        websiteUrl: 'https://salvadora.jigretera.com',
+        instagramUrl: 'https://www.instagram.com/escuelayogasalvadoraconesa/',
+        facebookUrl: 'https://www.facebook.com/salvadoraconesa',
+        googleReviewUrl: 'https://search.google.com/local/writereview?placeid=TODO_GOOGLE_REVIEW',
+        seoDescription:
+          'Centro de Yoga y Bienestar Salvadora Conesa en Fuenlabrada (Madrid). Hatha Yoga Terapéutico, Baños de Gong, Pujas de Gong, Terapia Gestalt, Constelaciones Familiares y Retiros. Actividades en Club Social Parque Granada.',
       });
     } else {
       let updated = false;
+      if (!existing.websiteUrl) {
+        existing.websiteUrl = 'https://salvadora.jigretera.com';
+        updated = true;
+      }
+      if (!existing.instagramUrl) {
+        existing.instagramUrl = 'https://www.instagram.com/escuelayogasalvadoraconesa/';
+        updated = true;
+      }
+      if (!existing.facebookUrl) {
+        existing.facebookUrl = 'https://www.facebook.com/salvadoraconesa';
+        updated = true;
+      }
+      if (!existing.googleReviewUrl) {
+        existing.googleReviewUrl = 'https://search.google.com/local/writereview?placeid=TODO_GOOGLE_REVIEW';
+        updated = true;
+      }
+      if (!existing.seoDescription) {
+        existing.seoDescription =
+          'Centro de Yoga y Bienestar Salvadora Conesa en Fuenlabrada (Madrid). Hatha Yoga Terapéutico, Baños de Gong, Pujas de Gong, Terapia Gestalt, Constelaciones Familiares y Retiros. Actividades en Club Social Parque Granada.';
+        updated = true;
+      }
       if (!existing.whatsappNumber && process.env.YCLOUD_WHATSAPP_NUMBER) {
         existing.whatsappNumber = process.env.YCLOUD_WHATSAPP_NUMBER;
         updated = true;

@@ -1862,7 +1862,25 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
             .filter((d) => !openDays.has(d))
             .map((d) => `- ${dayNames[d]}: CERRADO (no hay citas ni horario disponible)`),
         )
-        .join('\n');
+      const onlinePresenceParts: string[] = [];
+      if (config?.websiteUrl) {
+        onlinePresenceParts.push(`- Web oficial / Reservas online: ${config.websiteUrl}`);
+      }
+      if (config?.instagramUrl) {
+        onlinePresenceParts.push(`- Instagram Oficial: ${config.instagramUrl} (Indícaselo si preguntan por redes sociales, fotos o comunidad en vivo)`);
+      }
+      if (config?.facebookUrl) {
+        onlinePresenceParts.push(`- Facebook Oficial: ${config.facebookUrl}`);
+      }
+      if (config?.googleReviewUrl) {
+        onlinePresenceParts.push(`- Enlace para Opiniones / Reseñas en Google: ${config.googleReviewUrl} (Si un cliente agradece la clase o pregunta dónde dejar una valoración/reseña, facilítale este enlace)`);
+      }
+      if (config?.seoDescription) {
+        onlinePresenceParts.push(`- Perfil y Especialidades del Centro (SEO / LocalBusiness): ${config.seoDescription}`);
+      }
+      const onlinePresenceBlock = onlinePresenceParts.length > 0
+        ? `\n== Presencia Digital Oficial, Redes Sociales y Enlaces SEO ==\n${onlinePresenceParts.join('\n')}\n`
+        : '';
 
       return `Eres el asistente virtual de citas de ${config.businessName}. Atiendes por WhatsApp a clientes y posibles clientes. Tono: ${config.tone || 'amable y profesional'}.
 
@@ -1874,7 +1892,7 @@ ${servicesList}
 
 Horarios de apertura del centro:
 ${hoursList}
-
+${onlinePresenceBlock}
 ${rules}${customInstructionsBlock}${knowledgeBlock}
 
 ${customerBlock}

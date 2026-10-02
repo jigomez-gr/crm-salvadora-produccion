@@ -17,6 +17,7 @@ import {
   Search,
   Star,
   PhoneCall,
+  Globe,
 } from "lucide-react";
 import Link from "next/link";
 import { apiFetch, apiUrl, ApiError } from "@/lib/api";
@@ -770,6 +771,80 @@ function ConfigTab({
               )}
             />
           </button>
+        </div>
+      </div>
+
+      {/* Presencia Digital, Redes Sociales y Enlaces SEO */}
+      <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <Globe className="h-4 w-4 text-indigo-600" />
+          <h2 className="text-sm font-semibold text-neutral-800">
+            Presencia Digital, Redes Sociales y Enlaces SEO
+          </h2>
+        </div>
+        <p className="text-xs text-neutral-500">
+          Configura las URLs oficiales de tu centro y las redes sociales. El agente de IA utilizará estos enlaces para informar a los clientes por WhatsApp (cuando pregunten por la web, redes o dónde dejar una reseña/opinión en Google).
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              🌐 Web oficial / Landing de reservas
+            </label>
+            <Input
+              placeholder="https://salvadora.jigretera.com"
+              value={form.websiteUrl ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, websiteUrl: e.target.value }))}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              📸 Instagram Oficial
+            </label>
+            <Input
+              placeholder="https://www.instagram.com/escuelayogasalvadoraconesa/"
+              value={form.instagramUrl ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, instagramUrl: e.target.value }))}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              📘 Facebook Oficial
+            </label>
+            <Input
+              placeholder="https://www.facebook.com/salvadoraconesa"
+              value={form.facebookUrl ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, facebookUrl: e.target.value }))}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              ⭐ Enlace de Reseñas / Opiniones en Google
+            </label>
+            <Input
+              placeholder="https://search.google.com/local/writereview?placeid=..."
+              value={form.googleReviewUrl ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, googleReviewUrl: e.target.value }))}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-neutral-700">
+            🏷️ Perfil y Especialidades SEO / LocalBusiness
+          </label>
+          <p className="mb-1.5 text-xs text-neutral-400">
+            Descripción optimizada con palabras clave, ubicación y especialidades que el agente tiene en cuenta al presentarse o explicar las disciplinas del centro.
+          </p>
+          <Textarea
+            rows={2}
+            value={form.seoDescription ?? ""}
+            placeholder="Centro de Yoga y Bienestar Salvadora Conesa en Fuenlabrada (Madrid). Hatha Yoga Terapéutico, Baños y Pujas de Gong, Terapia Gestalt, Constelaciones Familiares..."
+            onChange={(e) => setForm((f) => ({ ...f, seoDescription: e.target.value }))}
+          />
         </div>
       </div>
 

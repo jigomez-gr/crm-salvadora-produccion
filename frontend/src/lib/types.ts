@@ -360,6 +360,12 @@ export interface Agent {
   remindersEnabled: boolean;
   reminderTemplateName: string | null;
   reminderTemplateLanguage: string;
+  // Presencia Digital, Redes Sociales y Personalización SEO
+  websiteUrl?: string | null;
+  instagramUrl?: string | null;
+  facebookUrl?: string | null;
+  googleReviewUrl?: string | null;
+  seoDescription?: string | null;
   // Secrets are NEVER sent by the API. The browser only learns whether each one
   // is set; send a new value in these fields to change it, or leave blank to
   // keep the stored secret unchanged.

@@ -62,6 +62,31 @@ export class CreateAgentConfigDto {
   @IsString()
   @MaxLength(120)
   model?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  websiteUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  instagramUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  facebookUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  googleReviewUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  seoDescription?: string;
 }
 
 export class UpdateAgentConfigDto {
@@ -157,4 +182,30 @@ export class UpdateAgentConfigDto {
   @IsString()
   @MaxLength(16)
   reminderTemplateLanguage?: string;
+
+  // ─── Presencia Digital, Redes y Personalización SEO ───
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  websiteUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  instagramUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  facebookUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  googleReviewUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  seoDescription?: string;
 }
