@@ -1527,10 +1527,19 @@ export class AppointmentsService implements OnModuleInit {
         ? `<p style="margin: 8px 0; font-size: 13px; color: #4b5563; line-height: 1.4;"><strong>Detalles de la sesión / actividad:</strong> ${serviceEntity.description}</p>`
         : '';
 
+      const formatHtmlWithLinks = (raw: string) => {
+        if (!raw) return "";
+        const urlRegex = /(https?:\/\/[^\s<]+[^<.,:;"')\]\s]|www\.[^\s<]+[^<.,:;"')\]\s])/gi;
+        return raw.replace(urlRegex, (url) => {
+          const href = url.startsWith("http") ? url : `https://${url}`;
+          return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color: #b45309; font-weight: bold; text-decoration: underline;">${url} ↗</a>`;
+        });
+      };
+
       const textoEspecificoHtml = effectiveTextoEspecifico
         ? `<div style="margin: 14px 0; background-color: #fffbeb; border: 1.5px solid #f59e0b; padding: 14px 18px; border-radius: 8px; font-size: 13.5px; color: #92400e; line-height: 1.5;">
              <strong style="display: block; text-transform: uppercase; font-size: 11px; margin-bottom: 5px; color: #b45309; letter-spacing: 0.5px;">📌 Información Específica del Servicio:</strong>
-             ${effectiveTextoEspecifico}
+             ${formatHtmlWithLinks(effectiveTextoEspecifico)}
            </div>`
         : '';
 

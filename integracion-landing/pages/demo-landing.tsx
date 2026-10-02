@@ -74,6 +74,41 @@ interface ServiceItem {
   }>;
 }
 
+function renderFormattedTextWithLinks(text?: string | null) {
+  if (!text) return null;
+  const urlRegex = /(https?:\/\/[^\s<]+[^<.,:;"')\]\s]|www\.[^\s<]+[^<.,:;"')\]\s])/gi;
+  const elements: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = urlRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      elements.push(text.substring(lastIndex, match.index));
+    }
+    const rawUrl = match[0];
+    const href = rawUrl.startsWith("www.") ? `https://${rawUrl}` : rawUrl;
+    elements.push(
+      <a
+        key={match.index}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className="inline-flex items-center gap-1 font-bold text-[#800020] hover:text-[#5a0016] underline underline-offset-2 decoration-[#800020]/50 hover:decoration-[#800020] bg-white/90 hover:bg-white px-1.5 py-0.5 rounded-md border border-amber-300/80 shadow-2xs hover:shadow-xs transition duration-200 break-all cursor-pointer"
+        title={`Abrir enlace: ${href}`}
+      >
+        <span className="break-all">{rawUrl}</span>
+        <span className="text-[10px] text-amber-800 font-black opacity-80 select-none">↗</span>
+      </a>
+    );
+    lastIndex = match.index + rawUrl.length;
+  }
+  if (lastIndex < text.length) {
+    elements.push(text.substring(lastIndex));
+  }
+  return <span>{elements}</span>;
+}
+
 export default function DemoLandingPage() {
   const [isOpen, setIsOpen] = useState(false);
   const [simuladorOpen, setSimuladorOpen] = useState(false);
@@ -1025,7 +1060,7 @@ export default function DemoLandingPage() {
                       <span className="block text-[10px] font-extrabold uppercase tracking-wider text-amber-800 mb-0.5">
                         📌 Detalle Específico:
                       </span>
-                      {svc.textoespecifico}
+                      {renderFormattedTextWithLinks(svc.textoespecifico)}
                     </div>
                   )}
 
@@ -1150,7 +1185,7 @@ export default function DemoLandingPage() {
                       <span className="block text-[10px] font-extrabold uppercase tracking-wider text-amber-800 mb-0.5">
                         📌 Detalle Específico del Servicio:
                       </span>
-                      {ev.textoespecifico}
+                      {renderFormattedTextWithLinks(ev.textoespecifico)}
                     </div>
                   )}
 

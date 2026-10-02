@@ -1052,9 +1052,18 @@ export class WidgetController {
         </div>
       ` : '';
 
+      const formatHtmlWithLinks = (raw: string) => {
+        if (!raw) return "";
+        const urlRegex = /(https?:\/\/[^\s<]+[^<.,:;"')\]\s]|www\.[^\s<]+[^<.,:;"')\]\s])/gi;
+        return raw.replace(urlRegex, (url) => {
+          const href = url.startsWith("http") ? url : `https://${url}`;
+          return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color: #b45309; font-weight: bold; text-decoration: underline;">${url} ↗</a>`;
+        });
+      };
+
       const textoEspecificoHtml = s.textoespecifico ? `
         <div style="background: #FFFBEB; border-left: 4px solid #F59E0B; padding: 10px 14px; border-radius: 4px; margin: 10px 0; font-size: 13px; color: #92400E; line-height: 1.5;">
-          <strong>ℹ️ Información Específica:</strong> ${s.textoespecifico}
+          <strong>ℹ️ Información Específica:</strong> ${formatHtmlWithLinks(s.textoespecifico)}
         </div>
       ` : '';
 
