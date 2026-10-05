@@ -211,8 +211,12 @@ export class WidgetController {
     const toAbsoluteUrl = (url: string | null | undefined): string | null => {
       if (!url) return null;
       if (url.startsWith('http://') || url.startsWith('https://')) return url;
-      const cleanPath = url.startsWith('/') ? url : `/${url}`;
-      return `${crmBaseUrl}${cleanPath}`;
+      // Only internal /api/... routes served by CRM API should be made absolute to CRM domain:
+      if (url.startsWith('/api/')) {
+        return `${crmBaseUrl}${url}`;
+      }
+      // Relative paths like /videos/... or /flyers/... are static files on the landing site, keep relative:
+      return url.startsWith('/') ? url : `/${url}`;
     };
 
     const todayStr = new Date().toISOString().slice(0, 10);

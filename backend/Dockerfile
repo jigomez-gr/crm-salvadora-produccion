@@ -28,6 +28,8 @@ RUN pnpm install --frozen-lockfile --prod
 # Bring in the compiled output and static media from the build stage.
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
+# Ensure storage directory exists and is owned by node
+RUN mkdir -p /app/media_storage/services && chown -R node:node /app/media_storage
 
 # Drop root: run the app as the unprivileged 'node' user baked into the image.
 USER node

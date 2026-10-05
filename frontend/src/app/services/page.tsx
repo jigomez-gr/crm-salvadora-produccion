@@ -69,14 +69,20 @@ function getMediaDisplayUrl(
   serviceId?: string | null,
   slot?: string,
 ): string {
-  if (url && (url.startsWith("/") || url.startsWith("http://") || url.startsWith("https://"))) {
+  if (url && (url.startsWith("http://") || url.startsWith("https://"))) {
+    return url;
+  }
+  if (url && (url.startsWith("/videos/") || url.startsWith("/flyers/") || url.startsWith("/imagenes/"))) {
+    return `https://salvadora.jigretera.com${url}`;
+  }
+  if (url && url.startsWith("/")) {
     return url;
   }
   if (serviceId && slot) {
     return `/api/services/${serviceId}/media/${slot}`;
   }
   if (path && path.startsWith("public/")) {
-    return "/" + path.replace(/^public\//, "");
+    return `https://salvadora.jigretera.com/` + path.replace(/^public\//, "");
   }
   return url || path || "";
 }
@@ -1778,6 +1784,38 @@ export default function ServicesPage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-neutral-100">
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                    Path físico del flyer general en disco
+                  </label>
+                  <Input
+                    value={form.flyerPath}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setForm((f) => ({
+                        ...f,
+                        flyerPath: val,
+                        flyerUrl: f.flyerUrl || (val.startsWith("public/") ? val.replace(/^public/, "") : f.flyerUrl),
+                      }));
+                    }}
+                    placeholder="ej. public/flyers/ayuno.jpeg"
+                    className="text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                    URL servida / visualización del Flyer General
+                  </label>
+                  <Input
+                    value={form.flyerUrl}
+                    onChange={(e) => setForm((f) => ({ ...f, flyerUrl: e.target.value }))}
+                    placeholder="ej. /flyers/ayuno.jpeg o https://..."
+                    className="text-xs font-mono"
+                  />
+                </div>
+              </div>
+
               {Boolean(form.flyerUrl || form.flyerPath) && (
                 <div className="rounded-md border border-neutral-200 bg-neutral-50 p-2.5 flex items-center gap-3">
                   <div className="relative h-16 w-20 overflow-hidden rounded border border-neutral-300 bg-black/5 shrink-0 flex items-center justify-center">
@@ -1844,6 +1882,46 @@ export default function ServicesPage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-purple-100">
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                    Path físico del video MP4 en disco
+                  </label>
+                  <Input
+                    value={form.videoPath}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setForm((f) => ({
+                        ...f,
+                        videoPath: val,
+                        videoUrl: f.videoUrl || (val.startsWith("public/") ? val.replace(/^public/, "") : f.videoUrl),
+                      }));
+                    }}
+                    placeholder="ej. public/videos/itinerario-8.mp4"
+                    className="text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                    URL servida / visualización del Vídeo MP4
+                  </label>
+                  <Input
+                    value={form.videoUrl}
+                    onChange={(e) => {
+                      let val = e.target.value;
+                      // Smart normalize if user types "itinerario-8" or "itinerario8"
+                      if (val.trim() && !val.includes("/") && val.toLowerCase().includes("itinerario")) {
+                        const num = val.replace(/[^0-9]/g, "");
+                        val = `/videos/itinerario-${num || "8"}.mp4`;
+                      }
+                      setForm((f) => ({ ...f, videoUrl: val }));
+                    }}
+                    placeholder="ej. /videos/itinerario-8.mp4 o https://..."
+                    className="text-xs font-mono"
+                  />
+                </div>
+              </div>
+
               {Boolean(form.videoUrl || form.videoPath) ? (
                 <div className="rounded-md border border-purple-200 bg-neutral-950 p-2">
                   <video
@@ -1861,7 +1939,7 @@ export default function ServicesPage() {
                 </div>
               ) : (
                 <div className="rounded border border-dashed border-neutral-300 p-3 text-center text-xs text-neutral-400 bg-neutral-50/50">
-                  Ningún vídeo MP4 general cargado todavía. Pulsa en "Cambiar Vídeo General MP4" para subir uno.
+                  Ningún vídeo MP4 general cargado todavía. Pulsa en "Cambiar Vídeo General MP4" para subir uno, o escribe la URL en el campo superior.
                 </div>
               )}
             </div>

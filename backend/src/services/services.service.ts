@@ -2017,13 +2017,23 @@ export class ServicesService implements OnModuleInit {
       throw new BadRequestException(`Ranura de medio inválida: "${slot}". Debe ser una de: ${validSlots.join(', ')}`);
     }
 
-    if (!fs.existsSync(this.mediaStorageDir)) {
-      fs.mkdirSync(this.mediaStorageDir, { recursive: true });
+    let targetDir = this.mediaStorageDir;
+    try {
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      fs.accessSync(targetDir, fs.constants.W_OK);
+    } catch (dirErr) {
+      this.logger.warn(`Cannot write to ${targetDir} (${dirErr}), falling back to local media_storage`);
+      targetDir = path.resolve(process.cwd(), 'media_storage', 'services');
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
     }
 
     const ext = path.extname(file.originalname) || (normalizedSlot.includes('video') ? '.mp4' : '.jpg');
     const filename = `${service.id}_${normalizedSlot}_${Date.now()}${ext}`;
-    const destinationPath = path.join(this.mediaStorageDir, filename);
+    const destinationPath = path.join(targetDir, filename);
 
     if (file.buffer) {
       fs.writeFileSync(destinationPath, file.buffer);
@@ -2153,31 +2163,84 @@ export class ServicesService implements OnModuleInit {
     }
 
     if (!resolvedPath || !fs.existsSync(resolvedPath)) {
-      // 1. Check if the file exists by its basename in mediaStorageDir
-      if (filePath) {
-        const basename = path.basename(filePath);
-        const storageTry = path.resolve(this.mediaStorageDir, basename);
-        if (fs.existsSync(storageTry)) {
-          resolvedPath = storageTry;
+      const candidates: string[] = [];
+      const baseName = filePath ? path.basename(filePath) : null;
+      const urlBaseName = fallbackUrl && fallbackUrl.startsWith('/') ? path.basename(fallbackUrl) : null;
+
+      const searchDirs = [
+        this.mediaStorageDir,
+        process.env.MEDIA_VIDEOS_DIR,
+        process.env.MEDIA_STORAGE_ROOT,
+        process.env.MEDIA_DOCUMENTS_DIR,
+        process.env.MEDIA_FLYERS_DIR,
+        '/var/data/salvadora/media',
+        '/var/data/salvadora/media/videos',
+        '/var/data/salvadora/media/services',
+        '/var/data/salvadora/media/flyers',
+        path.resolve(process.cwd(), 'media_storage', 'services'),
+        path.resolve(process.cwd(), 'media_storage', 'videos'),
+        path.resolve(process.cwd(), 'media_storage'),
+        path.resolve(process.cwd(), 'public', 'videos'),
+        path.resolve(process.cwd(), 'public', 'flyers'),
+        path.resolve(process.cwd(), 'public'),
+      ].filter(Boolean) as string[];
+
+      for (const dir of searchDirs) {
+        if (baseName) candidates.push(path.resolve(dir, baseName));
+        if (urlBaseName) candidates.push(path.resolve(dir, urlBaseName));
+        if (service.name.toLowerCase().includes('ayuno') || (filePath && filePath.includes('itinerario-8'))) {
+          candidates.push(path.resolve(dir, 'itinerario-8.mp4'));
+          candidates.push(path.resolve(dir, 'itinerario8.mp4'));
+          candidates.push(path.resolve(dir, 'ayuno.jpeg'));
         }
       }
 
-      // 2. Check fallbackUrl under cwd or public/
-      if ((!resolvedPath || !fs.existsSync(resolvedPath)) && fallbackUrl && fallbackUrl.startsWith('/')) {
-        const cleanFallback = fallbackUrl.replace(/^\//, '');
-        const publicTry = path.resolve(process.cwd(), cleanFallback);
-        if (fs.existsSync(publicTry)) {
-          resolvedPath = publicTry;
-        } else {
-          const publicTry2 = path.resolve(process.cwd(), 'public', cleanFallback);
-          if (fs.existsSync(publicTry2)) {
-            resolvedPath = publicTry2;
-          }
+      for (const cand of candidates) {
+        if (fs.existsSync(cand)) {
+          resolvedPath = cand;
+          break;
         }
       }
     }
 
     if (!resolvedPath || !fs.existsSync(resolvedPath)) {
+      // Graceful fallback: If the file is hosted on the landing page, redirect so browser HTML5 player plays it seamlessly
+      if (normalizedSlot.includes('video')) {
+        if (fallbackUrl && (fallbackUrl.startsWith('http://') || fallbackUrl.startsWith('https://'))) {
+          res.redirect(302, fallbackUrl);
+          return;
+        }
+        if (fallbackUrl && fallbackUrl.startsWith('/videos/')) {
+          res.redirect(302, `https://salvadora.jigretera.com${fallbackUrl}`);
+          return;
+        }
+        if (service.name.toLowerCase().includes('ayuno') || (filePath && filePath.includes('itinerario-8'))) {
+          res.redirect(302, 'https://salvadora.jigretera.com/videos/itinerario-8.mp4');
+          return;
+        }
+        if (service.videoParticularUrl && service.videoParticularUrl.startsWith('http')) {
+          res.redirect(302, service.videoParticularUrl);
+          return;
+        }
+        if (service.videoParticularUrl && service.videoParticularUrl.startsWith('/')) {
+          res.redirect(302, `https://salvadora.jigretera.com${service.videoParticularUrl}`);
+          return;
+        }
+      } else if (normalizedSlot.includes('flyer')) {
+        if (fallbackUrl && (fallbackUrl.startsWith('http://') || fallbackUrl.startsWith('https://'))) {
+          res.redirect(302, fallbackUrl);
+          return;
+        }
+        if (fallbackUrl && fallbackUrl.startsWith('/flyers/')) {
+          res.redirect(302, `https://salvadora.jigretera.com${fallbackUrl}`);
+          return;
+        }
+        if (service.name.toLowerCase().includes('ayuno')) {
+          res.redirect(302, 'https://salvadora.jigretera.com/flyers/ayuno.jpeg');
+          return;
+        }
+      }
+
       throw new NotFoundException(`Archivo físico no encontrado para ${slot} del servicio ${service.name}`);
     }
 
