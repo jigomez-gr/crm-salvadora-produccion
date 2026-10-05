@@ -2194,27 +2194,63 @@ export class ServicesService implements OnModuleInit {
     else if (ext === '.gif') mimeType = 'image/gif';
 
     if (rangeHeader) {
-      const parts = rangeHeader.replace(/bytes=/, '').split('-');
-      const start = parseInt(parts[0], 10);
-
-      if (isNaN(start) || start >= fileSize) {
+      const match = rangeHeader.match(/bytes=(\d*)-(\d*)/);
+      if (!match) {
         res.status(416).setHeader('Content-Range', `bytes */${fileSize}`);
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Accept');
+        res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Accept, Origin');
         res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges');
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
         res.end();
         return;
       }
 
-      // Cap chunk size to 5MB for fast initial video playback & responsive scrubbing
-      const MAX_CHUNK_SIZE = 5 * 1024 * 1024;
-      let end = parts[1] ? parseInt(parts[1], 10) : start + MAX_CHUNK_SIZE - 1;
-      if (isNaN(end) || end >= fileSize) {
+      let start: number;
+      let end: number;
+
+      if (match[1] === '' && match[2] !== '') {
+        // Suffix range: bytes=-500 -> last 500 bytes of the file (essential for reading MOOV atom at end of MP4)
+        const suffix = parseInt(match[2], 10);
+        if (suffix <= 0) {
+          res.status(416).setHeader('Content-Range', `bytes */${fileSize}`);
+          res.end();
+          return;
+        }
+        start = Math.max(0, fileSize - suffix);
         end = fileSize - 1;
-      }
-      if (end - start + 1 > MAX_CHUNK_SIZE) {
-        end = start + MAX_CHUNK_SIZE - 1;
+      } else {
+        start = parseInt(match[1], 10);
+        if (isNaN(start) || start < 0 || start >= fileSize) {
+          res.status(416).setHeader('Content-Range', `bytes */${fileSize}`);
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+          res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Accept, Origin');
+          res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges');
+          res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+          res.end();
+          return;
+        }
+
+        if (match[2] !== '') {
+          end = parseInt(match[2], 10);
+          if (isNaN(end) || end < start) {
+            res.status(416).setHeader('Content-Range', `bytes */${fileSize}`);
+            res.end();
+            return;
+          }
+          if (end >= fileSize) {
+            end = fileSize - 1;
+          }
+        } else {
+          end = fileSize - 1;
+        }
+
+        // Cap chunk size to 5MB only on open-ended range requests (bytes=start-)
+        const MAX_CHUNK_SIZE = 5 * 1024 * 1024;
+        if (match[2] === '' && end - start + 1 > MAX_CHUNK_SIZE) {
+          end = start + MAX_CHUNK_SIZE - 1;
+        }
       }
 
       const chunksize = end - start + 1;
@@ -2230,8 +2266,9 @@ export class ServicesService implements OnModuleInit {
         'Content-Type': mimeType,
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-        'Access-Control-Allow-Headers': 'Range, Content-Type, Accept',
+        'Access-Control-Allow-Headers': 'Range, Content-Type, Accept, Origin',
         'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges',
+        'Cross-Origin-Resource-Policy': 'cross-origin',
       });
 
       fileStream.pipe(res);
@@ -2242,8 +2279,9 @@ export class ServicesService implements OnModuleInit {
         'Accept-Ranges': 'bytes',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-        'Access-Control-Allow-Headers': 'Range, Content-Type, Accept',
+        'Access-Control-Allow-Headers': 'Range, Content-Type, Accept, Origin',
         'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges',
+        'Cross-Origin-Resource-Policy': 'cross-origin',
       });
       const fileStream = fs.createReadStream(resolvedPath);
       fileStream.on('error', (err) => {

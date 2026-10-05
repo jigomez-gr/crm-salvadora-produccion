@@ -41,7 +41,12 @@ export function configureApp(app: NestExpressApplication): void {
   // Security HTTP headers (HSTS, no-sniff, frame protection, etc.). This is a
   // JSON API consumed by a separate frontend, so the default CSP is unneeded
   // and would only restrict this API's own (non-HTML) responses.
-  app.use(helmet({ contentSecurityPolicy: false }));
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
 
   // Parse cookies so the JWT auth guard can read the httpOnly session cookie.
   app.use(cookieParser());

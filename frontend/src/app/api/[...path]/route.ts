@@ -62,7 +62,9 @@ async function forwardRequest(req: NextRequest, { params }: { params: Promise<{ 
       resHeaders.set("Access-Control-Allow-Origin", origin);
       resHeaders.set("Access-Control-Allow-Credentials", "true");
       resHeaders.set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
-      resHeaders.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept");
+      resHeaders.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Range, Origin");
+      resHeaders.set("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges");
+      resHeaders.set("Cross-Origin-Resource-Policy", "cross-origin");
 
       // HTTP status 204 (No Content), 205 (Reset Content), and 304 (Not Modified)
       // MUST NOT include a response body in the Web API Response constructor,
