@@ -8,6 +8,7 @@ import {
   Pencil,
   Trash2,
   Phone,
+  Mail,
   Upload,
   Download,
   X,
@@ -143,24 +144,19 @@ function ContactsPageInner() {
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState(
-    () =>
-      searchParams.get("search") ??
-      searchParams.get("q") ??
-      searchParams.get("email") ??
-      searchParams.get("phone") ??
-      searchParams.get("name") ??
-      "",
+  const [nameSearch, setNameSearch] = useState(
+    () => searchParams.get("name") ?? searchParams.get("search") ?? "",
   );
-  const [debouncedSearch, setDebouncedSearch] = useState(
-    () =>
-      searchParams.get("search") ??
-      searchParams.get("q") ??
-      searchParams.get("email") ??
-      searchParams.get("phone") ??
-      searchParams.get("name") ??
-      "",
+  const [phoneSearch, setPhoneSearch] = useState(
+    () => searchParams.get("phone") ?? "",
   );
+  const [emailSearch, setEmailSearch] = useState(
+    () => searchParams.get("email") ?? "",
+  );
+  const [debouncedName, setDebouncedName] = useState(nameSearch);
+  const [debouncedPhone, setDebouncedPhone] = useState(phoneSearch);
+  const [debouncedEmail, setDebouncedEmail] = useState(emailSearch);
+
   const [statusFilter, setStatusFilter] = useState<ContactStatus | "">(() => {
     const s = searchParams.get("status");
     return s === "lead" || s === "active" || s === "inactive" ? s : "";
@@ -174,15 +170,17 @@ function ContactsPageInner() {
   const [deleteTarget, setDeleteTarget] = useState<Contact | undefined>();
   const [deleting, setDeleting] = useState(false);
 
-  // Debounce the search box (server-side now) so we don't fire a request per
-  // keystroke; jump back to the first page whenever the query changes.
+  // Debounce the search fields (server-side) so we don't fire a request per
+  // keystroke; jump back to the first page whenever any query changes.
   useEffect(() => {
     const t = setTimeout(() => {
-      setDebouncedSearch(search);
+      setDebouncedName(nameSearch);
+      setDebouncedPhone(phoneSearch);
+      setDebouncedEmail(emailSearch);
       setOffset(0);
     }, 300);
     return () => clearTimeout(t);
-  }, [search]);
+  }, [nameSearch, phoneSearch, emailSearch]);
 
   // Pure loader (no setState) — fetches one page with the active filters pushed
   // down to the server.
@@ -192,22 +190,15 @@ function ContactsPageInner() {
         limit: String(PAGE_SIZE),
         offset: String(offset),
       });
-      if (debouncedSearch.trim()) {
-        params.set("search", debouncedSearch.trim());
-      } else {
-        const emailParam = searchParams.get("email");
-        if (emailParam) params.set("email", emailParam);
-        const phoneParam = searchParams.get("phone");
-        if (phoneParam) params.set("phone", phoneParam);
-        const nameParam = searchParams.get("name");
-        if (nameParam) params.set("name", nameParam);
-      }
+      if (debouncedName.trim()) params.set("name", debouncedName.trim());
+      if (debouncedPhone.trim()) params.set("phone", debouncedPhone.trim());
+      if (debouncedEmail.trim()) params.set("email", debouncedEmail.trim());
       if (statusFilter) params.set("status", statusFilter);
       return await apiFetch<ContactPage>(`/api/contacts?${params.toString()}`);
     } catch {
       return null;
     }
-  }, [offset, debouncedSearch, statusFilter, searchParams]);
+  }, [offset, debouncedName, debouncedPhone, debouncedEmail, statusFilter]);
 
   const refreshContacts = useCallback(async () => {
     const page = await loadContacts();
@@ -346,31 +337,72 @@ function ContactsPageInner() {
         </div>
       </div>
 
-      <div className="mt-5 flex items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-neutral-400" />
-          <Input
-            className="pl-9"
-            placeholder="Buscar por nombre, teléfono, correo o etiqueta…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      {/* Panel de Búsqueda con campos específicos */}
+      <div className="mt-5 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 items-center">
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-neutral-400" />
+            <Input
+              className="pl-9"
+              placeholder="Buscar por nombre o trozos…"
+              value={nameSearch}
+              onChange={(e) => setNameSearch(e.target.value)}
+            />
+          </div>
+          <div className="relative">
+            <Phone className="absolute left-3 top-2.5 h-4 w-4 text-neutral-400" />
+            <Input
+              className="pl-9"
+              placeholder="Buscar por teléfono…"
+              value={phoneSearch}
+              onChange={(e) => setPhoneSearch(e.target.value)}
+            />
+          </div>
+          <div className="relative">
+            <Mail className="absolute left-3 top-2.5 h-4 w-4 text-neutral-400" />
+            <Input
+              className="pl-9"
+              placeholder="Buscar por email…"
+              value={emailSearch}
+              onChange={(e) => setEmailSearch(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              className="block w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              value={statusFilter}
+              onChange={(e) => {
+                setOffset(0);
+                setStatusFilter(e.target.value as ContactStatus | "");
+              }}
+            >
+              <option value="">Todos los estados</option>
+              {CONTACT_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {CONTACT_STATUS_META[s].label}
+                </option>
+              ))}
+            </select>
+            {(nameSearch || phoneSearch || emailSearch || statusFilter) && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setNameSearch("");
+                  setPhoneSearch("");
+                  setEmailSearch("");
+                  setStatusFilter("");
+                  setOffset(0);
+                }}
+                className="whitespace-nowrap text-xs text-neutral-600 hover:text-neutral-900"
+                title="Limpiar todos los filtros"
+              >
+                <X className="h-3.5 w-3.5 mr-1" />
+                Limpiar
+              </Button>
+            )}
+          </div>
         </div>
-        <select
-          className={`${selectClass} w-44`}
-          value={statusFilter}
-          onChange={(e) => {
-            setOffset(0);
-            setStatusFilter(e.target.value as ContactStatus | "");
-          }}
-        >
-          <option value="">Todos los estados</option>
-          {CONTACT_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {CONTACT_STATUS_META[s].label}
-            </option>
-          ))}
-        </select>
       </div>
 
       <div className="mt-4 overflow-x-auto rounded-xl border border-neutral-200 bg-white">
@@ -380,8 +412,8 @@ function ContactsPageInner() {
           </div>
         ) : contacts.length === 0 ? (
           <div className="p-8 text-center text-sm text-neutral-400">
-            {debouncedSearch || statusFilter
-              ? "Ningún contacto coincide con el filtro."
+            {debouncedName || debouncedPhone || debouncedEmail || statusFilter
+              ? "Ningún contacto coincide con los filtros aplicados."
               : "Aún no hay contactos. Crea el primero."}
           </div>
         ) : (
@@ -405,6 +437,11 @@ function ContactsPageInner() {
                     >
                       {c.name}
                     </Link>
+                    {c.email && (
+                      <div className="text-xs font-normal text-neutral-500">
+                        {c.email}
+                      </div>
+                    )}
                     {c.bloqueado === "S" && (
                       <span className="ml-2 inline-flex items-center gap-0.5 rounded-full bg-red-100 border border-red-300 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
                         🚫 Bloqueado
