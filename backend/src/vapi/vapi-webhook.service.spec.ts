@@ -462,6 +462,74 @@ describe('VapiWebhookService', () => {
       expect(response.results![0].result).toContain('ha sido cancelada correctamente');
       expect(response.results![0].result).toContain('dispones de 3 meses para recuperar esta clase');
     });
+
+    it('identificar_llamante recognizes existing valid email and tells bot not to ask for it', async () => {
+      contactsRepo.findOne.mockResolvedValue({
+        id: 'contact-oscar-1',
+        name: 'Óscar Gómez',
+        phone: '+34630680794',
+        email: 'oscar@example.com',
+        emailerroneo: 'N',
+      });
+      appointmentsRepo.findOne.mockResolvedValue(null);
+
+      const payload: any = {
+        message: {
+          type: 'tool-calls',
+          call: { id: 'vapi-call-ident-oscar', customer: { number: '+34630680794' } },
+          toolCallList: [
+            {
+              id: 'tc-ident-1',
+              name: 'identificar_llamante',
+              arguments: {},
+            },
+          ],
+        },
+      };
+
+      const response = await service.handleWebhook(payload);
+      expect(response.results![0].result).toContain('Óscar');
+      expect(response.results![0].result).toContain('oscar@example.com');
+      expect(response.results![0].result).toContain('NUNCA le preguntes ni le pidas el email');
+    });
+
+    it('reservar_cita automatically reuses existing valid email from contact profile without asking caller', async () => {
+      contactsRepo.findOne.mockResolvedValue({
+        id: 'contact-oscar-1',
+        name: 'Óscar Gómez',
+        phone: '+34630680794',
+        email: 'oscar@example.com',
+        emailerroneo: 'N',
+      });
+
+      const payload: any = {
+        message: {
+          type: 'tool-calls',
+          call: { id: 'vapi-call-res-oscar', customer: { number: '+34630680794' } },
+          toolCallList: [
+            {
+              id: 'tc-res-1',
+              name: 'reservar_cita',
+              arguments: {
+                inicioIso: '2026-09-08T07:45:00.000Z',
+                servicio: 'Hatha Yoga Terapéutico',
+                nombre: 'Óscar Gómez',
+                // Note: caller provides NO email
+              },
+            },
+          ],
+        },
+      };
+
+      const response = await service.handleWebhook(payload);
+      expect(appointmentsService.sendAppointmentConfirmationNotification).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ email: true }),
+        false,
+      );
+      expect(response.results![0].result).toContain('oscar@example.com');
+      expect(response.results![0].result).toContain('NUNCA le pidas su email');
+    });
   });
 
   describe('findOfficialService disambiguation', () => {

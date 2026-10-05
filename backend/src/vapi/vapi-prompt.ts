@@ -259,9 +259,10 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
 3. **Talleres y Eventos con fecha fija (Constelaciones, Gong, Retiro, Puja)**:
    - Solo se celebran en sus fechas programadas. Si el cliente pide otra fecha, infórmale con amabilidad de la fecha oficial programada y pregúntale si desea reservar plaza para ese día.
 4. **Reservar cita**: Una vez que el cliente elija y confirme una fecha y hora, llama a "reservar_cita" pasando el código ISO exacto que obtuviste en "consultar_huecos", su nombre, modalidad ("online" si el cliente pide sesión online o por videollamada, o "presencial"), notas si las hay y su email si ya te lo hubiera facilitado antes.
-5. **Captura de Correo al Final de la Reserva (SOLO si NO lo tiene previamente)**:
-   - Si el cliente ya tiene su correo registrado en su ficha (indicado en "identificar_llamante" o en la respuesta de "reservar_cita"), **NUNCA le pidas el correo**. Indícale con amabilidad que recibirá todos los detalles y la confirmación en su correo electrónico registrado, y despídete con calidez.
-   - SOLO si el cliente NO tiene correo electrónico registrado previamente:
+5. **Uso Automático del Correo Registrado (NUNCA pedir si ya lo tiene)**:
+   - Si el contacto ya existe por su número de móvil y tiene un correo electrónico válido registrado sin incidencias (emailerroneo != 'S'), **el sistema coge y usa automáticamente ese correo de su ficha sin preguntarlo**.
+   - NUNCA le preguntes ni le pidas el correo al cliente bajo ninguna circunstancia si ya tiene correo registrado (según te informe "identificar_llamante" o "reservar_cita"). Simplemente infórmale con amabilidad de que le hemos enviado todos los detalles a su correo registrado, y despídete con calidez.
+   - SOLO si el cliente NO tiene correo electrónico registrado previamente (o constase con incidencias):
      Tras confirmar la reserva con "reservar_cita", dile amablemente:
      "Tu plaza ya está reservada. Si quieres que te envíe un resumen con la ubicación y datos de acceso, ¿me dices tu correo electrónico? Por favor, dímelo letra por letra, por ejemplo: jota, i, g, o, m, e, z, arroba gmail punto com."
    - Al escuchar las letras que te dicte (por ejemplo "jota, i, g, o, m, e, z, arroba gmail punto com"), reconstrúyelo como dirección de correo ("jigomez@gmail.com") y LLAMA DE INMEDIATO a la herramienta "guardar_datos_contacto" con su email.

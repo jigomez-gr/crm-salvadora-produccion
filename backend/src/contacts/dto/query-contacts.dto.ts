@@ -38,4 +38,20 @@ export class QueryContactsDto {
   @IsOptional()
   @IsEnum(ContactStatus)
   status?: ContactStatus;
+
+  // Specific search/filter fields
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  name?: string;
 }

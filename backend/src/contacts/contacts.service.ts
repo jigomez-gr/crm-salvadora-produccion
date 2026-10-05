@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, Brackets } from 'typeorm';
 import { OnEvent } from '@nestjs/event-emitter';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as fs from 'fs';
@@ -55,6 +55,9 @@ export interface ContactsQuery {
   offset: number;
   search?: string;
   status?: ContactStatus;
+  email?: string;
+  phone?: string;
+  name?: string;
 }
 
 export interface ContactPage {
@@ -375,12 +378,120 @@ export class ContactsService {
     if (query.status) {
       qb.andWhere('c.status = :status', { status: query.status });
     }
+
+    if (query.email?.trim()) {
+      qb.andWhere('c.email ILIKE :emailFilter', {
+        emailFilter: `%${query.email.trim()}%`,
+      });
+    }
+
+    if (query.phone?.trim()) {
+      const phoneDigits = query.phone.replace(/\D/g, '');
+      if (phoneDigits.length >= 3) {
+        qb.andWhere(
+          '(c.phone ILIKE :phoneFilter OR regexp_replace(c.phone, \'[^0-9]\', \'\', \'g\') LIKE :phoneDigits)',
+          {
+            phoneFilter: `%${query.phone.trim()}%`,
+            phoneDigits: `%${phoneDigits}%`,
+          },
+        );
+      } else {
+        qb.andWhere('c.phone ILIKE :phoneFilter', {
+          phoneFilter: `%${query.phone.trim()}%`,
+        });
+      }
+    }
+
+    if (query.name?.trim()) {
+      const nameTokens = query.name.trim().split(/\s+/).filter(Boolean);
+      nameTokens.forEach((token, index) => {
+        const norm = token
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/ñ/g, 'n');
+        qb.andWhere(
+          `(translate(LOWER(c.name), 'áéíóúüñÁÉÍÓÚÜÑ', 'aeiouunAEIOUUN') LIKE :nameNorm_${index} OR c.name ILIKE :nameToken_${index})`,
+          {
+            [`nameNorm_${index}`]: `%${norm}%`,
+            [`nameToken_${index}`]: `%${token}%`,
+          },
+        );
+      });
+    }
+
     const search = query.search?.trim();
     if (search) {
+      const fullDigits = search.replace(/\D/g, '');
+      const fullNorm = search
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/ñ/g, 'n');
+
+      const tokens = search.split(/\s+/).filter(Boolean);
+
       qb.andWhere(
-        `(c.name ILIKE :q OR c.phone ILIKE :q OR c.email ILIKE :q
-          OR array_to_string(c.tags, ',') ILIKE :q)`,
-        { q: `%${search}%` },
+        new Brackets((subQb) => {
+          // 1. If search contains a phone-like digit sequence (>= 3 digits), match digits in phone
+          if (fullDigits.length >= 3) {
+            subQb.orWhere(
+              `regexp_replace(c.phone, '[^0-9]', '', 'g') LIKE :fullDigits`,
+              {
+                fullDigits: `%${fullDigits}%`,
+              },
+            );
+          }
+
+          // 2. Direct/full match on name (normalized accents), email, phone, tags
+          subQb.orWhere(
+            `(translate(LOWER(c.name), 'áéíóúüñÁÉÍÓÚÜÑ', 'aeiouunAEIOUUN') LIKE :fullNorm
+              OR c.name ILIKE :fullSearch
+              OR c.email ILIKE :fullSearch
+              OR c.phone ILIKE :fullSearch
+              OR array_to_string(c.tags, ',') ILIKE :fullSearch)`,
+            { fullNorm: `%${fullNorm}%`, fullSearch: `%${search}%` },
+          );
+
+          // 3. Multi-token match for name fragments / email / phone
+          // Each word in the query must match at least one attribute of the contact
+          if (tokens.length > 1) {
+            subQb.orWhere(
+              new Brackets((tokenQb) => {
+                tokens.forEach((token, index) => {
+                  const norm = token
+                    .toLowerCase()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .replace(/ñ/g, 'n');
+                  const digits = token.replace(/\D/g, '');
+
+                  const conds: string[] = [
+                    `translate(LOWER(c.name), 'áéíóúüñÁÉÍÓÚÜÑ', 'aeiouunAEIOUUN') LIKE :norm_${index}`,
+                    `c.name ILIKE :token_${index}`,
+                    `c.email ILIKE :token_${index}`,
+                    `c.phone ILIKE :token_${index}`,
+                    `array_to_string(c.tags, ',') ILIKE :token_${index}`,
+                  ];
+
+                  const params: Record<string, any> = {
+                    [`norm_${index}`]: `%${norm}%`,
+                    [`token_${index}`]: `%${token}%`,
+                  };
+
+                  if (digits.length >= 3) {
+                    conds.push(
+                      `regexp_replace(c.phone, '[^0-9]', '', 'g') LIKE :digits_${index}`,
+                    );
+                    params[`digits_${index}`] = `%${digits}%`;
+                  }
+
+                  tokenQb.andWhere(`(${conds.join(' OR ')})`, params);
+                });
+              }),
+            );
+          }
+        }),
       );
     }
 

@@ -143,9 +143,23 @@ function ContactsPageInner() {
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState(() => searchParams.get("search") ?? "");
+  const [search, setSearch] = useState(
+    () =>
+      searchParams.get("search") ??
+      searchParams.get("q") ??
+      searchParams.get("email") ??
+      searchParams.get("phone") ??
+      searchParams.get("name") ??
+      "",
+  );
   const [debouncedSearch, setDebouncedSearch] = useState(
-    () => searchParams.get("search") ?? "",
+    () =>
+      searchParams.get("search") ??
+      searchParams.get("q") ??
+      searchParams.get("email") ??
+      searchParams.get("phone") ??
+      searchParams.get("name") ??
+      "",
   );
   const [statusFilter, setStatusFilter] = useState<ContactStatus | "">(() => {
     const s = searchParams.get("status");
@@ -178,13 +192,22 @@ function ContactsPageInner() {
         limit: String(PAGE_SIZE),
         offset: String(offset),
       });
-      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
+      if (debouncedSearch.trim()) {
+        params.set("search", debouncedSearch.trim());
+      } else {
+        const emailParam = searchParams.get("email");
+        if (emailParam) params.set("email", emailParam);
+        const phoneParam = searchParams.get("phone");
+        if (phoneParam) params.set("phone", phoneParam);
+        const nameParam = searchParams.get("name");
+        if (nameParam) params.set("name", nameParam);
+      }
       if (statusFilter) params.set("status", statusFilter);
       return await apiFetch<ContactPage>(`/api/contacts?${params.toString()}`);
     } catch {
       return null;
     }
-  }, [offset, debouncedSearch, statusFilter]);
+  }, [offset, debouncedSearch, statusFilter, searchParams]);
 
   const refreshContacts = useCallback(async () => {
     const page = await loadContacts();

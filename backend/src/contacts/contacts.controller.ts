@@ -53,6 +53,9 @@ export class ContactsController {
       offset,
       search: query.search,
       status: query.status,
+      email: query.email,
+      phone: query.phone,
+      name: query.name,
     });
   }
 

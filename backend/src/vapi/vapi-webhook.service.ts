@@ -258,6 +258,12 @@ export function normalizeSpokenEmail(input: string): string {
   return match ? match[0].toLowerCase() : s;
 }
 
+export function isValidEmail(email?: string | null): boolean {
+  if (!email) return false;
+  const trimmed = email.trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+}
+
 @Injectable()
 export class VapiWebhookService {
   private readonly logger = new Logger(VapiWebhookService.name);
@@ -551,8 +557,13 @@ export class VapiWebhookService {
 
     const firstName = contact.name.split(' ')[0] || contact.name;
     const parts = [`El cliente registrado es ${contact.name}. Salúdale cordialmente por su nombre (${firstName}).`];
-    if (contact.email) {
-      parts.push(`Ya dispone de correo electrónico registrado (${contact.email}). Por tanto, NO debes pedirle su email.`);
+    const hasValidEmail = Boolean(contact.email && isValidEmail(contact.email) && contact.emailerroneo !== 'S');
+    if (hasValidEmail) {
+      parts.push(`El cliente ya tiene registrado y validado su correo electrónico (${contact.email}). NUNCA le preguntes ni le pidas el email durante la llamada: el sistema lo usará automáticamente para todas las gestiones y confirmaciones.`);
+    } else if (contact.emailerroneo === 'S') {
+      parts.push(`El correo registrado en su ficha constaba con incidencias. Al finalizar la reserva, deberás solicitarle amablemente su correo actual deletreado.`);
+    } else {
+      parts.push(`El cliente no dispone de correo electrónico registrado. Al finalizar la reserva, podrás solicitarle amablemente su correo deletreado si desea confirmación.`);
     }
 
     // Check next upcoming scheduled appointment
@@ -1062,14 +1073,14 @@ export class VapiWebhookService {
       return BLOCKED_USER_MESSAGE;
     }
     if (contact?.emailerroneo === 'S') {
-      if (providedEmail) {
+      if (providedEmail && isValidEmail(providedEmail)) {
         contact.email = providedEmail;
+        contact.emailerroneo = 'N';
+        if (contact.tags && contact.tags.includes('emailerroneo')) {
+          contact.tags = contact.tags.filter((t) => t !== 'emailerroneo');
+        }
+        await this.contactsRepo.save(contact);
       }
-      contact.emailerroneo = 'N';
-      if (contact.tags && contact.tags.includes('emailerroneo')) {
-        contact.tags = contact.tags.filter((t) => t !== 'emailerroneo');
-      }
-      await this.contactsRepo.save(contact);
     }
 
     if (contact) {
@@ -1077,7 +1088,9 @@ export class VapiWebhookService {
       let contradictionReason = '';
       if (
         providedEmail &&
+        isValidEmail(providedEmail) &&
         contact.email &&
+        contact.emailerroneo !== 'S' &&
         contact.email.trim().toLowerCase() !== providedEmail.trim().toLowerCase()
       ) {
         contradictionReason = `el correo facilitado (${providedEmail}) no coincide con el registrado (${contact.email})`;
@@ -1108,7 +1121,7 @@ export class VapiWebhookService {
       contact = this.contactsRepo.create({
         name: customerName,
         phone: effectivePhone,
-        email: providedEmail || undefined,
+        email: (providedEmail && isValidEmail(providedEmail)) ? providedEmail : undefined,
         source: 'agente_voz',
         status: ContactStatus.ACTIVE,
         emailerroneo: 'N',
@@ -1120,8 +1133,9 @@ export class VapiWebhookService {
         contact.name = customerName;
         contactNeedsSave = true;
       }
-      if (providedEmail && !contact.email) {
+      if (providedEmail && isValidEmail(providedEmail) && (!contact.email || contact.emailerroneo === 'S')) {
         contact.email = providedEmail;
+        contact.emailerroneo = 'N';
         contactNeedsSave = true;
       }
       if (effectivePhone && (!contact.phone || contact.phone.startsWith('+34600'))) {
@@ -1290,8 +1304,15 @@ export class VapiWebhookService {
         });
       }
 
-      const hasEmail = Boolean(contact.email || params?.email || params?.correo);
-      const emailAddress = contact.email || params?.email || params?.correo;
+      const isExistingEmailValid = Boolean(
+        contact.email &&
+        isValidEmail(contact.email) &&
+        contact.emailerroneo !== 'S',
+      );
+      const effectiveEmail = (providedEmail && isValidEmail(providedEmail))
+        ? providedEmail
+        : (isExistingEmailValid ? contact.email : null);
+      const hasEmail = Boolean(effectiveEmail);
 
       if (requiresApproval) {
         if (hasEmail) {
@@ -1304,7 +1325,7 @@ export class VapiWebhookService {
           } catch (mailErr: any) {
             this.logger.error(`[VAPI] Error enviando email de solicitud de cita: ${mailErr?.message || mailErr}`);
           }
-          return `¡Solicitud registrada con éxito! Tu cita para ${appt.service} el ${spokenDate} a nombre de ${customerName} ha quedado registrada pendiente de aprobación de la terapeuta Salvadora Conesa Martinez. Confírmaselo amablemente e infórmale de que le hemos enviado un correo a su dirección registrada (${emailAddress}) con el resumen de la solicitud, y que le avisaremos en cuanto se confirme. NO le pidas su email. Despídete con calidez.`;
+          return `¡Solicitud registrada con éxito! Tu cita para ${appt.service} el ${spokenDate} a nombre de ${customerName} ha quedado registrada pendiente de aprobación de la terapeuta Salvadora Conesa Martinez. Confírmaselo amablemente e infórmale de que le hemos enviado un correo a su dirección registrada (${effectiveEmail}) con el resumen de la solicitud, y que le avisaremos en cuanto se confirme. NUNCA le pidas su email ya que se ha tomado automáticamente de su ficha. Despídete con calidez.`;
         }
         return `¡Solicitud registrada con éxito! Tu cita para ${appt.service} el ${spokenDate} a nombre de ${customerName} ha quedado registrada pendiente de aprobación de la terapeuta Salvadora Conesa Martinez. Confírmaselo y pregúntale: "Si quieres que te envíe un resumen con los datos de acceso, ¿me dices tu correo electrónico? Por favor, dímelo letra por letra, por ejemplo: jota, i, g, o, m, e, z, arroba gmail punto com". Si prefiere no darlo o duda al deletrear, dile "No te preocupes, te lo dejo todo registrado con tu número de teléfono" y despídete.`;
       }
@@ -1319,7 +1340,7 @@ export class VapiWebhookService {
         } catch (mailErr: any) {
           this.logger.error(`[VAPI] Error enviando email de reserva: ${mailErr?.message || mailErr}`);
         }
-        return `¡Cita confirmada con éxito! Queda agendada para ${appt.service} el ${spokenDate} a nombre de ${customerName}. Confírmaselo amablemente al cliente e indícale que le hemos enviado todos los detalles y datos de acceso a su correo registrado (${emailAddress}). NO le pidas su email. Despídete con calidez.`;
+        return `¡Cita confirmada con éxito! Queda agendada para ${appt.service} el ${spokenDate} a nombre de ${customerName}. Confírmaselo amablemente al cliente e indícale que le hemos enviado todos los detalles y datos de acceso a su correo registrado (${effectiveEmail}). NUNCA le pidas su email ya que se ha tomado automáticamente de su ficha. Despídete con calidez.`;
       }
       return `¡Cita confirmada con éxito! Queda agendada para ${appt.service} el ${spokenDate} a nombre de ${customerName}. Confírmaselo amablemente al cliente y dile exactamente: "Tu plaza ya está reservada. Si quieres que te envíe un resumen con la ubicación y datos de acceso, ¿me dices tu correo electrónico? Por favor, dímelo letra por letra, por ejemplo: jota, i, g, o, m, e, z, arroba gmail punto com". Si el cliente no desea darlo o duda al deletrear, dile con amabilidad "No te preocupes, te lo dejo todo registrado con tu número de teléfono" y despídete con calidez.`;
     } catch (err: any) {
@@ -1487,12 +1508,23 @@ export class VapiWebhookService {
 
     const providedEmail = normalizeSpokenEmail(params?.email || params?.correo || '');
     const latestContact = await this.contactsRepo.findOne({ where: { id: appt.contactId } });
-    if (providedEmail && latestContact && !latestContact.email) {
+    if (providedEmail && isValidEmail(providedEmail) && latestContact && (!latestContact.email || latestContact.emailerroneo === 'S')) {
       latestContact.email = providedEmail;
+      latestContact.emailerroneo = 'N';
+      if (latestContact.tags && latestContact.tags.includes('emailerroneo')) {
+        latestContact.tags = latestContact.tags.filter((t) => t !== 'emailerroneo');
+      }
       await this.contactsRepo.save(latestContact);
     }
 
-    const targetEmail = providedEmail || latestContact?.email || contact.email;
+    const isContactEmailValid = Boolean(
+      latestContact?.email &&
+      isValidEmail(latestContact.email) &&
+      latestContact.emailerroneo !== 'S',
+    );
+    const targetEmail = (providedEmail && isValidEmail(providedEmail))
+      ? providedEmail
+      : (isContactEmailValid ? latestContact!.email : null);
 
     // Trigger Zadarma SMS confirmation for reschedule
     const customerPhone = contact.phone || ctx.callerNumber;
@@ -1535,7 +1567,7 @@ export class VapiWebhookService {
         this.logger.error(`[VAPI] Error enviando email de reprogramación: ${notifyErr?.message || notifyErr}`);
       }
 
-      return `Cita cambiada: tu cita de ${appt.service} ha sido movida al ${spokenNew}. Cita reprogramada con éxito. El hueco anterior ha quedado liberado y el nuevo confirmado. Confírmaselo amablemente al cliente e indícale que le hemos enviado la confirmación actualizada a su correo (${targetEmail}) y por SMS. Despídete con calidez.`;
+      return `Cita cambiada: tu cita de ${appt.service} ha sido movida al ${spokenNew}. Cita reprogramada con éxito. El hueco anterior ha quedado liberado y el nuevo confirmado. Confírmaselo amablemente al cliente e indícale que le hemos enviado la confirmación actualizada a su correo (${targetEmail}) y por SMS. NUNCA le pidas su email ya que se ha tomado automáticamente de su ficha. Despídete con calidez.`;
     }
 
     return `Cita cambiada: tu cita de ${appt.service} ha sido movida al ${spokenNew}. Cita reprogramada con éxito. El hueco anterior ha quedado liberado y el nuevo confirmado. Te hemos enviado un SMS de confirmación. Como aún no tenemos registrado tu correo electrónico para enviarte también la confirmación por email, pregúntale amablemente al cliente: "¿Me dices tu correo electrónico para enviarte la confirmación? Por favor, dímelo letra por letra, por ejemplo: jota, i, g, o, m, e, z, arroba gmail punto com".`;
