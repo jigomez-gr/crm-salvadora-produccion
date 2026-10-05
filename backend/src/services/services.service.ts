@@ -593,12 +593,11 @@ export class ServicesService implements OnModuleInit {
             updated = true;
           }
         } else if (/baño.*gong|gong/i.test(s.name)) {
-          if (!s.weeklySchedule || Object.keys(s.weeklySchedule).length === 0 || s.weeklySchedule[2]?.includes('09:15')) {
+          if (!s.weeklySchedule || Object.keys(s.weeklySchedule).length === 0) {
             s.weeklySchedule = {
-              5: ['18:00', '20:00'],
-              6: ['18:00', '20:00'],
+              6: ['18:00'],
             };
-            s.scheduleText = 'Viernes o Sábados a las 18:00 y 20:00';
+            s.scheduleText = s.scheduleText || 'Un sábado al mes (18:00 a 20:00)';
             updated = true;
           }
         } else if (/iaido|iaidō|esgrima/i.test(s.name)) {
@@ -1198,13 +1197,6 @@ export class ServicesService implements OnModuleInit {
       ? attendeesCount >= service.minQuorum
       : true;
 
-    if (/baño.*gong|meditación sonora/i.test(service.name)) {
-      const nextDate = resolveNextRecurringEventDate(service.name);
-      if (nextDate.hasRule && nextDate.dateText) {
-        service.eventDatesText = nextDate.dateText;
-      }
-    }
-
     return service;
   }
 
@@ -1278,12 +1270,6 @@ export class ServicesService implements OnModuleInit {
       for (const agent of agentConfigs) {
         agent.services = allServices.map((s) => {
           let eventDatesText = s.eventDatesText;
-          if (/baño.*gong|meditación sonora/i.test(s.name)) {
-            const nextDate = resolveNextRecurringEventDate(s.name);
-            if (nextDate.hasRule && nextDate.dateText) {
-              eventDatesText = nextDate.dateText;
-            }
-          }
           return {
             name: s.name,
             durationMinutes: s.durationMinutes,

@@ -74,12 +74,11 @@ export class EmailDialogueEvaluatorService {
       const dbServices = await this.serviceRepo.find({ where: { isActive: true } }).catch(() => []);
       const servicesCatalog = dbServices
         .map((s) => {
-          const recurring = resolveNextRecurringEventDate(s.name, new Date(), 'Europe/Madrid');
           let dates = s.scheduleText || s.eventDatesText;
-          if (recurring.hasRule && recurring.dateText) {
-            dates = `${recurring.dateText} (${/gong/i.test(s.name) ? 'último sábado de cada mes' : 'último domingo de cada mes'})`;
-          } else if (s.sinfechadefinitiva === 'S') {
+          if (s.sinfechadefinitiva === 'S') {
             dates = s.textosinfechadefinitiva || 'próximamente';
+          } else if (s.eventDatesText) {
+            dates = s.eventDatesText;
           } else if (s.eventStartDate && new Date(s.eventStartDate).getTime() <= Date.now()) {
             dates = 'próximamente (fechas por confirmar)';
           }

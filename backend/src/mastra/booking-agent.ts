@@ -1432,11 +1432,10 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       const ayunoDate = ayunoSvc?.sinfechadefinitiva === 'S'
         ? (ayunoSvc.textosinfechadefinitiva || 'fechas por confirmar')
         : (ayunoSvc?.eventDatesText || 'Puente de Octubre (Del 9 al 12 de Octubre de 2026, 4 días / 3 noches)');
-      const gongRecurring = resolveNextRecurringEventDate('Baño de Gong', new Date(), timezone);
-      const gongDate =
-        gongRecurring.hasRule && gongRecurring.dateText
-          ? gongRecurring.dateText
-          : getServiceDate(/baño.*gong|meditación sonora/i, 'Sábado 31 de Octubre de 2026 (18:00 a 20:00)');
+      const gongSvc = (config?.services || []).find((s: any) => /baño.*gong|meditación sonora|gong/i.test(s.name || ''));
+      const gongDate = gongSvc?.sinfechadefinitiva === 'S'
+        ? (gongSvc.textosinfechadefinitiva || 'fecha por confirmar')
+        : (gongSvc?.eventDatesText || gongSvc?.scheduleText || getServiceDate(/baño.*gong|meditación sonora/i, 'Un sábado al mes (18:00 a 20:00)'));
 
       const constelSvc = (config?.services || []).find((s: any) => /constelaci/i.test(s.name || ''));
       const constelDate =

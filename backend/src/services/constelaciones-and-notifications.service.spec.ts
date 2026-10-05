@@ -1,4 +1,4 @@
-﻿import { resolveNextRecurringEventDate } from '../common/time';
+import { resolveNextRecurringEventDate } from '../common/time';
 import { ServicesService } from './services.service';
 import { Service } from '../common/entities/service.entity';
 import { Appointment, AppointmentStatus } from '../common/entities/appointment.entity';
@@ -12,10 +12,10 @@ describe('Constelaciones & Pre-registered Attendee Notifications', () => {
       expect(res.dateText).toBeUndefined();
     });
 
-    it('still returns recurring rule for Baño de Gong (last Saturday of the month)', () => {
+    it('returns hasRule: false for Baño de Gong (scheduled directly by admin in CRM)', () => {
       const res = resolveNextRecurringEventDate('Baño de Gong y Meditación Sonora', new Date('2026-10-01'));
-      expect(res.hasRule).toBe(true);
-      expect(res.dateText).toContain('Sábado');
+      expect(res.hasRule).toBe(false);
+      expect(res.dateText).toBeUndefined();
     });
   });
 

@@ -102,11 +102,11 @@ Bajo ninguna circunstancia reserves ni consultes citas ni des horarios.`;
   const meditacionPrice = getServicePrice(/guiada/i, '15€');
   const gestaltPrice = getServicePrice(/gestalt/i, '35€');
   const bienestarPrice = getServicePrice(/bienestar/i, '19.99€');
-  const gongRecurring = resolveNextRecurringEventDate('Baño de Gong', new Date(), input.timezone);
+  const gongSvc = input.services?.find((s) => /baño.*gong|meditación sonora|gong/i.test(s.name || ''));
   const gongDateText =
-    gongRecurring.hasRule && gongRecurring.dateText
-      ? gongRecurring.dateText
-      : 'Sábado 31 de Octubre de 2026 de 18:00 a 20:00';
+    gongSvc?.sinfechadefinitiva === 'S'
+      ? (gongSvc.textosinfechadefinitiva || 'fecha por confirmar')
+      : (gongSvc?.eventDatesText || gongSvc?.scheduleText || 'Un sábado al mes de 18:00 a 20:00');
   const gongPrice = getServicePrice(/baño.*gong|meditación sonora/i, '16€');
   const constelSvc = input.services?.find((s) => /constelaci/i.test(s.name || ''));
   const constelDateText =
