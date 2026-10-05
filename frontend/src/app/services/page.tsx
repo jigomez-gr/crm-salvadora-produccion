@@ -1983,6 +1983,38 @@ export default function ServicesPage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-neutral-100">
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                    Path físico del flyer particular en disco
+                  </label>
+                  <Input
+                    value={form.flyerParticularPath}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setForm((f) => ({
+                        ...f,
+                        flyerParticularPath: val,
+                        flyerParticularUrl: f.flyerParticularUrl || (val.startsWith("public/") ? val.replace(/^public/, "") : f.flyerParticularUrl),
+                      }));
+                    }}
+                    placeholder="ej. public/flyers/ayuno_particular.jpg"
+                    className="text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                    URL servida / visualización del Flyer Particular
+                  </label>
+                  <Input
+                    value={form.flyerParticularUrl}
+                    onChange={(e) => setForm((f) => ({ ...f, flyerParticularUrl: e.target.value }))}
+                    placeholder="ej. /flyers/ayuno_particular.jpg o https://..."
+                    className="text-xs font-mono"
+                  />
+                </div>
+              </div>
+
               {Boolean(form.flyerParticularUrl || form.flyerParticularPath) && (
                 <div className="rounded-md border border-neutral-200 bg-neutral-50 p-2.5 flex items-center gap-3">
                   <div className="relative h-16 w-20 overflow-hidden rounded border border-neutral-300 bg-black/5 shrink-0 flex items-center justify-center">
@@ -2046,6 +2078,47 @@ export default function ServicesPage() {
                       Eliminar Vídeo
                     </button>
                   )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-purple-100">
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                    Path físico del video particular en disco
+                  </label>
+                  <Input
+                    value={form.videoParticularPath}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setForm((f) => ({
+                        ...f,
+                        videoParticularPath: val,
+                        videoParticularUrl: f.videoParticularUrl || (val.startsWith("public/") ? val.replace(/^public/, "") : f.videoParticularUrl),
+                      }));
+                    }}
+                    placeholder="ej. public/videos/ayunoterapeuticoparticular.mp4"
+                    className="text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-neutral-700">
+                    URL servida / visualización del Vídeo Particular
+                  </label>
+                  <Input
+                    value={form.videoParticularUrl}
+                    onChange={(e) => {
+                      let val = e.target.value;
+                      if (val.trim() && !val.includes("/") && val.toLowerCase().includes("ayuno")) {
+                        val = `/videos/ayunoterapeuticoparticular.mp4`;
+                      } else if (val.trim() && !val.includes("/") && val.toLowerCase().includes("itinerario")) {
+                        const num = val.replace(/[^0-9]/g, "");
+                        val = `/videos/itinerario-${num || "8"}.mp4`;
+                      }
+                      setForm((f) => ({ ...f, videoParticularUrl: val }));
+                    }}
+                    placeholder="ej. /videos/ayunoterapeuticoparticular.mp4 o https://..."
+                    className="text-xs font-mono"
+                  />
                 </div>
               </div>
 
@@ -2249,126 +2322,6 @@ export default function ServicesPage() {
                   className="text-xs"
                 />
               </div>
-            </div>
-          </div>
-
-          {/* Multimedia Particular del Servicio (Prioridad de Visualización) */}
-          <div className="rounded-lg border border-purple-200 bg-purple-50/40 p-3 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-purple-950 flex items-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5 text-purple-600" />
-                Multimedia Particular del Servicio (Prioridad de visualización)
-              </label>
-            </div>
-            <p className="text-[11px] text-purple-800">
-              En la web y catálogo interactivo se mostrará en orden de prioridad: <strong>1º Video MP4 Particular</strong>, si no hay <strong>2º Flyer Particular</strong>, y si no hay <strong>3º Flyer General de Itinerario</strong>.
-            </p>
-
-            {/* Video MP4 Particular */}
-            <div className="space-y-2 pt-1 border-t border-purple-200/60">
-              <label className="text-xs font-medium text-neutral-800 flex items-center gap-1">
-                <Video className="h-3.5 w-3.5 text-purple-600" />
-                Video Particular (MP4)
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-neutral-700">
-                    Path físico del video MP4 en disco
-                  </label>
-                  <Input
-                    value={form.videoParticularPath}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setForm((f) => ({
-                        ...f,
-                        videoParticularPath: val,
-                        videoParticularUrl: f.videoParticularUrl || (val.startsWith("public/") ? val.replace(/^public/, "") : f.videoParticularUrl),
-                      }));
-                    }}
-                    placeholder="ej. public/videos/asanas.mp4"
-                    className="text-xs font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-neutral-700">
-                    URL servida / visualización del Video MP4
-                  </label>
-                  <Input
-                    value={form.videoParticularUrl}
-                    onChange={(e) => setForm((f) => ({ ...f, videoParticularUrl: e.target.value }))}
-                    placeholder="ej. /videos/asanas.mp4 o https://..."
-                    className="text-xs"
-                  />
-                </div>
-              </div>
-              {(form.videoParticularUrl || form.videoParticularPath) && (
-                <div className="rounded-md border border-purple-200 bg-white p-2">
-                  <p className="text-[11px] font-medium text-neutral-700 mb-1.5">Previsualización de Video Particular:</p>
-                  <video
-                    src={form.videoParticularUrl || form.videoParticularPath}
-                    controls
-                    playsInline
-                    className="w-full max-h-48 rounded bg-black object-contain"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Flyer Particular */}
-            <div className="space-y-2 pt-2 border-t border-purple-200/60">
-              <label className="text-xs font-medium text-neutral-800 flex items-center gap-1">
-                <ImageIcon className="h-3.5 w-3.5 text-purple-600" />
-                Flyer Particular del Servicio
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-neutral-700">
-                    Path físico del flyer particular en disco
-                  </label>
-                  <Input
-                    value={form.flyerParticularPath}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setForm((f) => ({
-                        ...f,
-                        flyerParticularPath: val,
-                        flyerParticularUrl: f.flyerParticularUrl || (val.startsWith("public/") ? val.replace(/^public/, "") : f.flyerParticularUrl),
-                      }));
-                    }}
-                    placeholder="ej. public/flyers/particular.jpg"
-                    className="text-xs font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-neutral-700">
-                    URL servida del flyer particular
-                  </label>
-                  <Input
-                    value={form.flyerParticularUrl}
-                    onChange={(e) => setForm((f) => ({ ...f, flyerParticularUrl: e.target.value }))}
-                    placeholder="ej. /flyers/particular.jpg"
-                    className="text-xs"
-                  />
-                </div>
-              </div>
-              {(form.flyerParticularUrl || form.flyerParticularPath) && (
-                <div className="rounded-md border border-purple-200 bg-white p-2 flex items-center gap-3">
-                  <div className="relative h-16 w-16 overflow-hidden rounded border border-neutral-200 bg-neutral-100 shrink-0 flex items-center justify-center">
-                    <img
-                      src={form.flyerParticularUrl || form.flyerParticularPath}
-                      alt="Previsualización flyer particular"
-                      className="h-full w-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = "none";
-                      }}
-                    />
-                  </div>
-                  <div className="min-w-0 text-xs">
-                    <p className="font-medium text-neutral-800">Previsualización de Flyer Particular</p>
-                    <p className="text-[11px] text-neutral-500 truncate">{form.flyerParticularUrl || form.flyerParticularPath}</p>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
