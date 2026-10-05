@@ -687,6 +687,11 @@ export default function ServicesPage() {
       return;
     }
 
+    if (file.size > 250 * 1024 * 1024) {
+      toast.error("El archivo supera el tamaño máximo permitido (250 MB).");
+      return;
+    }
+
     setUploadingSlot(slot);
     try {
       const formData = new FormData();
@@ -1739,6 +1744,7 @@ export default function ServicesPage() {
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) handleMediaUpload("flyer-general", file);
+                        e.target.value = "";
                       }}
                     />
                   </label>
@@ -1802,6 +1808,7 @@ export default function ServicesPage() {
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) handleMediaUpload("video-general", file);
+                        e.target.value = "";
                       }}
                     />
                   </label>
@@ -1861,6 +1868,7 @@ export default function ServicesPage() {
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) handleMediaUpload("flyer-particular", file);
+                        e.target.value = "";
                       }}
                     />
                   </label>
@@ -1924,6 +1932,7 @@ export default function ServicesPage() {
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) handleMediaUpload("video-particular", file);
+                        e.target.value = "";
                       }}
                     />
                   </label>

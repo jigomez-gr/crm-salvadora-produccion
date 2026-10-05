@@ -18,11 +18,50 @@ export interface HumanNoticePayload {
   isUrgent?: boolean;
 }
 
+export interface ChannelNoticeDetail {
+  attempted: boolean;
+  success: boolean;
+  recipients: string[];
+  sentCount: number;
+  totalCount: number;
+  errors: string[];
+}
+
 export interface HumanNoticeResult {
+  ok?: boolean;
   emailSent: boolean;
   smsSent: boolean;
   vapiSent: boolean;
   errors: string[];
+  results?: {
+    email: ChannelNoticeDetail;
+    sms: ChannelNoticeDetail;
+    vapi: ChannelNoticeDetail;
+  };
+}
+
+/**
+ * Split and parse a list of recipient emails separated by semicolon, comma, or newline.
+ */
+export function parseRecipientEmails(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  const list = raw
+    .split(/[;,\n]+/)
+    .map((e) => e.trim())
+    .filter((e) => e.length > 0 && e.includes('@'));
+  return Array.from(new Set(list));
+}
+
+/**
+ * Split and parse a list of recipient phone numbers separated by semicolon, comma, or newline.
+ */
+export function parseRecipientPhones(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  const list = raw
+    .split(/[;,\n]+/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+  return Array.from(new Set(list));
 }
 
 @Injectable()
@@ -58,15 +97,52 @@ export class HumanHandoffNotificationService {
    */
   async notifyHumanRequest(payload: HumanNoticePayload): Promise<HumanNoticeResult> {
     const settings = await this.getSettings();
+    const recipientEmails = parseRecipientEmails(settings?.humanNoticeEmail);
+    const recipientPhones = parseRecipientPhones(settings?.humanNoticePhone);
+
+    const emailDetail: ChannelNoticeDetail = {
+      attempted: false,
+      success: false,
+      recipients: recipientEmails,
+      sentCount: 0,
+      totalCount: recipientEmails.length,
+      errors: [],
+    };
+
+    const smsDetail: ChannelNoticeDetail = {
+      attempted: false,
+      success: false,
+      recipients: recipientPhones,
+      sentCount: 0,
+      totalCount: recipientPhones.length,
+      errors: [],
+    };
+
+    const vapiDetail: ChannelNoticeDetail = {
+      attempted: false,
+      success: false,
+      recipients: recipientPhones,
+      sentCount: 0,
+      totalCount: recipientPhones.length,
+      errors: [],
+    };
+
     const result: HumanNoticeResult = {
+      ok: true,
       emailSent: false,
       smsSent: false,
       vapiSent: false,
       errors: [],
+      results: {
+        email: emailDetail,
+        sms: smsDetail,
+        vapi: vapiDetail,
+      },
     };
 
     if (!settings) {
       this.logger.warn('No se encontraron ajustes de la aplicación. Omitiendo avisos.');
+      result.ok = false;
       return result;
     }
 
@@ -93,8 +169,9 @@ export class HumanHandoffNotificationService {
       `🔔 Disparando aviso de atención humana desde [${channelLabel}] para ${clientName} (${clientPhone}) - Urgente: ${isUrgent}`,
     );
 
-    // 1. Envío por Correo Electrónico (Email)
-    if (settings.humanNoticeEmailEnabled && settings.humanNoticeEmail) {
+    // 1. Envío por Correo Electrónico (Email) a todos los destinatarios configurados
+    if (settings.humanNoticeEmailEnabled && recipientEmails.length > 0) {
+      emailDetail.attempted = true;
       try {
         const subject = isUrgent
           ? `🚨 Solicitud de atención humana URGENTE (${channelLabel}) - ${clientName}`
@@ -155,81 +232,121 @@ export class HumanHandoffNotificationService {
 </body>
 </html>
 `;
-        const emailRes = await this.emailService.sendNotification(
-          settings.humanNoticeEmail.trim(),
-          'Equipo Salvadora Conesa',
-          subject,
-          html,
-        );
-        if (emailRes.ok) {
+        for (const targetEmail of recipientEmails) {
+          try {
+            const emailRes = await this.emailService.sendNotification(
+              targetEmail,
+              'Equipo Salvadora Conesa',
+              subject,
+              html,
+            );
+            if (emailRes.ok) {
+              emailDetail.sentCount++;
+              this.logger.log(`✅ Correo de aviso de escalado enviado a ${targetEmail}`);
+            } else {
+              const err = `Email error (${targetEmail}): ${emailRes.error}`;
+              emailDetail.errors.push(err);
+              result.errors.push(err);
+            }
+          } catch (e: any) {
+            const err = `Email exception (${targetEmail}): ${e.message}`;
+            this.logger.error(err);
+            emailDetail.errors.push(err);
+            result.errors.push(err);
+          }
+        }
+        if (emailDetail.sentCount > 0) {
+          emailDetail.success = true;
           result.emailSent = true;
-          this.logger.log(`✅ Correo de aviso de escalado enviado a ${settings.humanNoticeEmail}`);
-        } else {
-          result.errors.push(`Email error: ${emailRes.error}`);
         }
       } catch (err: any) {
-        this.logger.error(`Error enviando email de aviso: ${err.message}`);
+        this.logger.error(`Error preparando emails de aviso: ${err.message}`);
         result.errors.push(`Email exception: ${err.message}`);
       }
     }
 
-    // 2. Envío por SMS (Zadarma)
+    // 2. Envío por SMS (Zadarma) a todos los teléfonos móviles configurados
     // NUNCA enviar SMS salvo que el aviso requiera atención urgente (política del centro para no interrumpir al responsable)
-    if (settings.humanNoticeSmsEnabled && settings.humanNoticePhone) {
+    if (settings.humanNoticeSmsEnabled && recipientPhones.length > 0) {
       if (!isUrgent) {
         this.logger.log(
           `ℹ️ SMS de escalado omitido para ${clientName} (${payload.channel}): la solicitud no requiere atención urgente.`,
         );
       } else {
-        try {
-          const smsText = `[CRM Salvadora] AVISO URGENTE: El cliente ${clientName} (${clientPhone}) solicita hablar con un humano por ${channelLabel}. Motivo: ${reasonText.slice(0, 75)}`;
-          const smsRes = await this.zadarmaSmsService.sendSms({
-            number: settings.humanNoticePhone.trim(),
-            message: smsText,
-          });
-          if (smsRes.success) {
-            result.smsSent = true;
-            this.logger.log(`✅ SMS de aviso de escalado enviado a ${settings.humanNoticePhone}`);
-          } else {
-            result.errors.push(`SMS error: ${smsRes.error || smsRes.status}`);
+        smsDetail.attempted = true;
+        const smsText = `[CRM Salvadora] AVISO URGENTE: El cliente ${clientName} (${clientPhone}) solicita hablar con un humano por ${channelLabel}. Motivo: ${reasonText.slice(0, 75)}`;
+
+        for (const targetPhone of recipientPhones) {
+          try {
+            const smsRes = await this.zadarmaSmsService.sendSms({
+              number: targetPhone,
+              message: smsText,
+            });
+            if (smsRes.success) {
+              smsDetail.sentCount++;
+              this.logger.log(`✅ SMS de aviso de escalado enviado a ${targetPhone}`);
+            } else {
+              const err = `SMS error (${targetPhone}): ${smsRes.error || smsRes.status}`;
+              smsDetail.errors.push(err);
+              result.errors.push(err);
+            }
+          } catch (err: any) {
+            const errLog = `Error enviando SMS de aviso a ${targetPhone}: ${err.message}`;
+            this.logger.error(errLog);
+            smsDetail.errors.push(errLog);
+            result.errors.push(errLog);
           }
-        } catch (err: any) {
-          this.logger.error(`Error enviando SMS de aviso: ${err.message}`);
-          result.errors.push(`SMS exception: ${err.message}`);
+        }
+        if (smsDetail.sentCount > 0) {
+          smsDetail.success = true;
+          result.smsSent = true;
         }
       }
     }
 
-    // 3. Llamada de Voz Saliente (VAPI Outbound)
+    // 3. Llamada de Voz Saliente (VAPI Outbound) a todos los teléfonos configurados
     // NUNCA llamar por teléfono salvo que la solicitud requiera atención urgente
-    if (settings.humanNoticeVapiEnabled && settings.humanNoticePhone) {
+    if (settings.humanNoticeVapiEnabled && recipientPhones.length > 0) {
       if (!isUrgent) {
         this.logger.log(
           `ℹ️ Llamada saliente VAPI omitida para ${clientName} (${payload.channel}): la solicitud no requiere atención urgente.`,
         );
       } else {
-        try {
-          const voiceMsg = `Hola, te llamamos del Centro Salvadora Conesa para avisarte de una solicitud URGENTE de atención humana a través de ${channelLabel}. El cliente es ${clientName}${payload.customerPhone ? `, con teléfono ${payload.customerPhone}` : ''}. Motivo de su solicitud: ${reasonText}. Por favor revisa el CRM lo antes posible. Gracias.`;
-          const callRes = await this.vapiService.startOutboundCall(
-            settings.humanNoticePhone.trim(),
-            undefined,
-            voiceMsg,
-          );
-          if (callRes.ok) {
-            result.vapiSent = true;
-            this.logger.log(
-              `✅ Llamada saliente VAPI de aviso iniciada a ${settings.humanNoticePhone} (Call ID: ${callRes.callId})`,
+        vapiDetail.attempted = true;
+        const voiceMsg = `Hola, te llamamos del Centro Salvadora Conesa para avisarte de una solicitud URGENTE de atención humana a través de ${channelLabel}. El cliente es ${clientName}${payload.customerPhone ? `, con teléfono ${payload.customerPhone}` : ''}. Motivo de su solicitud: ${reasonText}. Por favor revisa el CRM lo antes posible. Gracias.`;
+
+        for (const targetPhone of recipientPhones) {
+          try {
+            const callRes = await this.vapiService.startOutboundCall(
+              targetPhone,
+              undefined,
+              voiceMsg,
             );
-          } else {
-            result.errors.push(`VAPI call error: ${callRes.error}`);
+            if (callRes.ok) {
+              vapiDetail.sentCount++;
+              this.logger.log(
+                `✅ Llamada saliente VAPI de aviso iniciada a ${targetPhone} (Call ID: ${callRes.callId})`,
+              );
+            } else {
+              const err = `VAPI call error (${targetPhone}): ${callRes.error}`;
+              vapiDetail.errors.push(err);
+              result.errors.push(err);
+            }
+          } catch (err: any) {
+            const errLog = `Error iniciando llamada VAPI de aviso a ${targetPhone}: ${err.message}`;
+            this.logger.error(errLog);
+            vapiDetail.errors.push(errLog);
+            result.errors.push(errLog);
           }
-        } catch (err: any) {
-          this.logger.error(`Error iniciando llamada VAPI de aviso: ${err.message}`);
-          result.errors.push(`VAPI call exception: ${err.message}`);
+        }
+        if (vapiDetail.sentCount > 0) {
+          vapiDetail.success = true;
+          result.vapiSent = true;
         }
       }
     }
 
+    result.ok = result.errors.length === 0 || result.emailSent || result.smsSent || result.vapiSent;
     return result;
   }
 
@@ -243,6 +360,7 @@ export class HumanHandoffNotificationService {
       customerPhone: '+34600123456',
       customerEmail: 'prueba@ejemplo.com',
       reason: 'Esta es una prueba de verificación del sistema de avisos de atención humana desde el panel de Ajustes.',
+      isUrgent: true,
     });
   }
 }

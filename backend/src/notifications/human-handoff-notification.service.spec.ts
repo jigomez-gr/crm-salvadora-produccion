@@ -111,4 +111,86 @@ describe('HumanHandoffNotificationService', () => {
     expect(smsService.sendSms).not.toHaveBeenCalled();
     expect(vapiService.startOutboundCall).not.toHaveBeenCalled();
   });
+
+  it('notifies multiple email addresses and multiple phone numbers when configured with semicolon', async () => {
+    // Reconfigure settings mock with multiple emails and phones
+    const settingsRepo = (service as any).settingsRepo;
+    settingsRepo.find.mockResolvedValueOnce([
+      {
+        id: 'settings-1',
+        humanNoticeEmailEnabled: true,
+        humanNoticeEmail: 'primero@salvadora.com; segundo@salvadora.com ; tercero@salvadora.com',
+        humanNoticeSmsEnabled: true,
+        humanNoticePhone: '+34600112233; +34600445566',
+        humanNoticeVapiEnabled: true,
+      },
+    ]);
+
+    const result = await service.notifyHumanRequest({
+      channel: 'whatsapp',
+      customerName: 'Maria Garcia',
+      customerPhone: '+34611223344',
+      reason: 'Asunto urgente de salud en clase de yoga',
+      isUrgent: true,
+    });
+
+    expect(result.emailSent).toBe(true);
+    expect(result.smsSent).toBe(true);
+    expect(result.vapiSent).toBe(true);
+
+    // 3 separate emails sent
+    expect(emailService.sendNotification).toHaveBeenCalledTimes(3);
+    expect(emailService.sendNotification).toHaveBeenNthCalledWith(
+      1,
+      'primero@salvadora.com',
+      'Equipo Salvadora Conesa',
+      expect.stringContaining('URGENTE'),
+      expect.any(String),
+    );
+    expect(emailService.sendNotification).toHaveBeenNthCalledWith(
+      2,
+      'segundo@salvadora.com',
+      'Equipo Salvadora Conesa',
+      expect.stringContaining('URGENTE'),
+      expect.any(String),
+    );
+    expect(emailService.sendNotification).toHaveBeenNthCalledWith(
+      3,
+      'tercero@salvadora.com',
+      'Equipo Salvadora Conesa',
+      expect.stringContaining('URGENTE'),
+      expect.any(String),
+    );
+
+    // 2 separate SMS sent
+    expect(smsService.sendSms).toHaveBeenCalledTimes(2);
+    expect(smsService.sendSms).toHaveBeenNthCalledWith(1, {
+      number: '+34600112233',
+      message: expect.stringContaining('AVISO URGENTE'),
+    });
+    expect(smsService.sendSms).toHaveBeenNthCalledWith(2, {
+      number: '+34600445566',
+      message: expect.stringContaining('AVISO URGENTE'),
+    });
+
+    // 2 separate VAPI calls initiated
+    expect(vapiService.startOutboundCall).toHaveBeenCalledTimes(2);
+    expect(vapiService.startOutboundCall).toHaveBeenNthCalledWith(
+      1,
+      '+34600112233',
+      undefined,
+      expect.stringContaining('URGENTE'),
+    );
+    expect(vapiService.startOutboundCall).toHaveBeenNthCalledWith(
+      2,
+      '+34600445566',
+      undefined,
+      expect.stringContaining('URGENTE'),
+    );
+
+    // Details check
+    expect(result.results?.email.sentCount).toBe(3);
+    expect(result.results?.sms.sentCount).toBe(2);
+    expect(result.results?.vapi.sentCount).toBe(2);
+  });
 });

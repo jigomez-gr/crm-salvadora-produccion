@@ -34,11 +34,11 @@ export class AppSettings {
   @Column({ default: false })
   onboardingCompleted: boolean;
 
-  // Contact info and channel flags for human handoff alerts
-  @Column({ type: 'varchar', nullable: true })
+  // Contact info and channel flags for human handoff alerts (allows multiple separated by ;)
+  @Column({ type: 'text', nullable: true })
   humanNoticeEmail: string | null;
 
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ type: 'text', nullable: true })
   humanNoticePhone: string | null;
 
   @Column({ type: 'boolean', default: false })

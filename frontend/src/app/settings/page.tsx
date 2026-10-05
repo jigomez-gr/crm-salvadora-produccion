@@ -1065,25 +1065,46 @@ function HumanNoticeCard() {
     setTesting(true);
     try {
       const res = await apiFetch<{
-        ok: boolean;
-        results: {
-          email?: { attempted: boolean; success: boolean; error?: string };
-          sms?: { attempted: boolean; success: boolean; error?: string };
-          vapi?: { attempted: boolean; success: boolean; error?: string };
+        ok?: boolean;
+        emailSent?: boolean;
+        smsSent?: boolean;
+        vapiSent?: boolean;
+        errors?: string[];
+        results?: {
+          email?: { attempted: boolean; success: boolean; sentCount: number; totalCount: number; errors: string[] };
+          sms?: { attempted: boolean; success: boolean; sentCount: number; totalCount: number; errors: string[] };
+          vapi?: { attempted: boolean; success: boolean; sentCount: number; totalCount: number; errors: string[] };
         };
       }>("/api/notifications/test-human-notice", {
         method: "POST",
       });
 
       const parts: string[] = [];
-      if (res.results.email?.attempted) {
-        parts.push(`Email: ${res.results.email.success ? "✓ Enviado" : "✗ Falló"}`);
+      const emailDetail = res.results?.email;
+      if (emailDetail?.attempted) {
+        parts.push(
+          `Email: ${emailDetail.success ? `✓ Enviado (${emailDetail.sentCount}/${emailDetail.totalCount})` : "✗ Falló"}`
+        );
+      } else if (res.emailSent) {
+        parts.push("Email: ✓ Enviado");
       }
-      if (res.results.sms?.attempted) {
-        parts.push(`SMS: ${res.results.sms.success ? "✓ Enviado" : "✗ Falló"}`);
+
+      const smsDetail = res.results?.sms;
+      if (smsDetail?.attempted) {
+        parts.push(
+          `SMS: ${smsDetail.success ? `✓ Enviado (${smsDetail.sentCount}/${smsDetail.totalCount})` : "✗ Falló"}`
+        );
+      } else if (res.smsSent) {
+        parts.push("SMS: ✓ Enviado");
       }
-      if (res.results.vapi?.attempted) {
-        parts.push(`Llamada VAPI: ${res.results.vapi.success ? "✓ Iniciada" : "✗ Falló"}`);
+
+      const vapiDetail = res.results?.vapi;
+      if (vapiDetail?.attempted) {
+        parts.push(
+          `Llamada VAPI: ${vapiDetail.success ? `✓ Iniciada (${vapiDetail.sentCount}/${vapiDetail.totalCount})` : "✗ Falló"}`
+        );
+      } else if (res.vapiSent) {
+        parts.push("Llamada VAPI: ✓ Iniciada");
       }
 
       if (parts.length === 0) {
@@ -1119,31 +1140,31 @@ function HumanNoticeCard() {
       <div className="mt-4 space-y-4">
         <div>
           <label className="mb-1 block text-xs font-medium text-neutral-700">
-            Móvil de aviso (SMS y llamadas salientes VAPI)
+            Móviles de aviso (SMS y llamadas salientes VAPI)
           </label>
           <Input
-            type="tel"
+            type="text"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            placeholder="+34 695 17 26 25"
+            placeholder="+34 649453996; +34 600112233"
           />
           <p className="mt-1 text-[11px] text-neutral-400">
-            Número al que se enviará el SMS urgente y/o donde llamará la IA de VAPI al responsable.
+            Números a los que se enviará el SMS urgente y/o donde llamará la IA de VAPI al responsable (puedes indicar varios separados por punto y coma «;»).
           </p>
         </div>
 
         <div>
           <label className="mb-1 block text-xs font-medium text-neutral-700">
-            Email de aviso
+            Emails de aviso
           </label>
           <Input
-            type="email"
+            type="text"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="jigomez@hotmail.com"
+            placeholder="jigomez@hotmail.com; responsable2@empresa.com"
           />
           <p className="mt-1 text-[11px] text-neutral-400">
-            Dirección donde se enviará el correo con los datos del contacto y resumen.
+            Direcciones donde se enviará el correo con los datos del contacto y resumen (puedes indicar varias separadas por punto y coma «;»).
           </p>
         </div>
 

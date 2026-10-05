@@ -21,8 +21,10 @@ export class SettingsService implements OnModuleInit {
   async onModuleInit() {
     try {
       await this.repo.query(`
-        ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticeEmail" character varying;
-        ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticePhone" character varying;
+        ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticeEmail" text;
+        ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticePhone" text;
+        ALTER TABLE "app_settings" ALTER COLUMN "humanNoticeEmail" TYPE text;
+        ALTER TABLE "app_settings" ALTER COLUMN "humanNoticePhone" TYPE text;
         ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticeEmailEnabled" boolean DEFAULT false;
         ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticeSmsEnabled" boolean DEFAULT false;
         ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticeVapiEnabled" boolean DEFAULT false;

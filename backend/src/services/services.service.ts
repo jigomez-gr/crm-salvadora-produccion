@@ -25,7 +25,9 @@ import { resolveNextRecurringEventDate } from '../common/time';
 @Injectable()
 export class ServicesService implements OnModuleInit {
   private readonly logger = new Logger(ServicesService.name);
-  private readonly mediaStorageDir = path.resolve(process.cwd(), 'media_storage', 'services');
+  private readonly mediaStorageDir = process.env.MEDIA_STORAGE_ROOT
+    ? path.resolve(process.env.MEDIA_STORAGE_ROOT, 'services')
+    : path.resolve(process.cwd(), 'media_storage', 'services');
   constructor(
     @InjectRepository(Service)
     private readonly serviceRepo: Repository<Service>,
@@ -2033,18 +2035,31 @@ export class ServicesService implements OnModuleInit {
 
     const publicUrl = `/api/services/${service.id}/media/${normalizedSlot}`;
 
+    let oldFilePath: string | null = null;
     if (normalizedSlot === 'flyer-general') {
+      oldFilePath = service.flyerPath;
       service.flyerPath = destinationPath;
       service.flyerUrl = publicUrl;
     } else if (normalizedSlot === 'video-general') {
+      oldFilePath = service.videoPath;
       service.videoPath = destinationPath;
       service.videoUrl = publicUrl;
     } else if (normalizedSlot === 'flyer-particular') {
+      oldFilePath = service.flyerParticularPath;
       service.flyerParticularPath = destinationPath;
       service.flyerParticularUrl = publicUrl;
     } else if (normalizedSlot === 'video-particular') {
+      oldFilePath = service.videoParticularPath;
       service.videoParticularPath = destinationPath;
       service.videoParticularUrl = publicUrl;
+    }
+
+    if (oldFilePath && fs.existsSync(oldFilePath) && oldFilePath !== destinationPath) {
+      try {
+        fs.unlinkSync(oldFilePath);
+      } catch (err) {
+        this.logger.warn(`Could not delete old media file ${oldFilePath}: ${err}`);
+      }
     }
 
     const saved = await this.serviceRepo.save(service);

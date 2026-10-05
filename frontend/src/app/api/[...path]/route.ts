@@ -26,6 +26,7 @@ async function forwardRequest(req: NextRequest, { params }: { params: Promise<{ 
   const method = req.method;
   const headers = new Headers(req.headers);
   headers.delete("host");
+  headers.delete("content-length");
 
   let body: ArrayBuffer | undefined = undefined;
   if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {

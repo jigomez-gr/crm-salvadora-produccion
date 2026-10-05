@@ -42,12 +42,12 @@ export class UpdateSettingsDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(150)
+  @MaxLength(2000)
   humanNoticeEmail?: string | null;
 
   @IsOptional()
   @IsString()
-  @MaxLength(50)
+  @MaxLength(2000)
   humanNoticePhone?: string | null;
 
   @IsOptional()
