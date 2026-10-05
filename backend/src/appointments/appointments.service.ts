@@ -416,24 +416,18 @@ export class AppointmentsService implements OnModuleInit {
       /meditaci/i.test(cleanServiceName) && !/gong|sonor/i.test(cleanServiceName);
     if (isMeditacion && !dto.allowCustomSchedule) {
       const fallbackTimetable: Record<number, string[]> = {
-        1: ['14:00', '20:45'],
-        2: ['09:15', '14:00', '20:45'],
-        3: ['14:00', '20:45'],
-        4: ['09:15', '14:00', '20:45'],
+        1: ['09:15'],
+        4: ['09:15'],
       };
-      const effectiveTimetable =
-        serviceEntity?.weeklySchedule && Object.keys(serviceEntity.weeklySchedule).length > 0
-          ? serviceEntity.weeklySchedule
-          : fallbackTimetable;
+      const hasCustomSchedule =
+        serviceEntity?.weeklySchedule && Object.keys(serviceEntity.weeklySchedule).length > 0;
+      const effectiveTimetable = hasCustomSchedule
+        ? serviceEntity.weeklySchedule
+        : fallbackTimetable;
       let zoned = new TZDate(startsAt.getTime(), 'Europe/Madrid');
       let dayOfWeek = zoned.getDay();
       let timeStr = format(zoned, 'HH:mm');
-      let allowed = Array.from(
-        new Set([
-          ...(effectiveTimetable[dayOfWeek] || []),
-          ...(fallbackTimetable[dayOfWeek] || []),
-        ]),
-      );
+      let allowed = effectiveTimetable[dayOfWeek] || [];
       if (!allowed.includes(timeStr)) {
         const rawTimeMatch = dto.startsAt?.match(/[T ](\d{1,2}:\d{2})/);
         if (rawTimeMatch) {
@@ -718,22 +712,16 @@ export class AppointmentsService implements OnModuleInit {
         let dayOfWeek = zoned.getDay();
         let timeStr = format(zoned, 'HH:mm');
         const fallbackTimetable: Record<number, string[]> = {
-          1: ['14:00', '20:45'],
-          2: ['09:15', '14:00', '20:45'],
-          3: ['14:00', '20:45'],
-          4: ['09:15', '14:00', '20:45'],
+          1: ['09:15'],
+          4: ['09:15'],
         };
-        const effectiveTimetable =
+        const hasCustomSchedule =
           targetServiceEntity?.weeklySchedule &&
-          Object.keys(targetServiceEntity.weeklySchedule).length > 0
-            ? targetServiceEntity.weeklySchedule
-            : fallbackTimetable;
-        let allowed = Array.from(
-          new Set([
-            ...(effectiveTimetable[dayOfWeek] || []),
-            ...(fallbackTimetable[dayOfWeek] || []),
-          ]),
-        );
+          Object.keys(targetServiceEntity.weeklySchedule).length > 0;
+        const effectiveTimetable = hasCustomSchedule
+          ? targetServiceEntity.weeklySchedule
+          : fallbackTimetable;
+        let allowed = effectiveTimetable[dayOfWeek] || [];
         if (!allowed.includes(timeStr) && dto.startsAt) {
           const rawTimeMatch = dto.startsAt.match(/[T ](\d{1,2}:\d{2})/);
           if (rawTimeMatch) {
@@ -753,18 +741,13 @@ export class AppointmentsService implements OnModuleInit {
               zoned = correctedZoned;
               dayOfWeek = zoned.getDay();
               timeStr = format(zoned, 'HH:mm');
-              allowed = Array.from(
-                new Set([
-                  ...(effectiveTimetable[dayOfWeek] || []),
-                  ...(fallbackTimetable[dayOfWeek] || []),
-                ]),
-              );
+              allowed = effectiveTimetable[dayOfWeek] || [];
             }
           }
         }
         if (!allowed.includes(timeStr)) {
           const scheduleDisplay =
-            targetServiceEntity?.scheduleText || 'Lunes a Jueves a las 14:00 y 20:45';
+            targetServiceEntity?.scheduleText || 'Lunes y Jueves de 09:15 a 09:45';
           throw new BadRequestException(
             `Ese horario no corresponde a los turnos oficiales de Meditaciones Guiadas (${scheduleDisplay}).`,
           );
