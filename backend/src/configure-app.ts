@@ -46,11 +46,9 @@ export function configureApp(app: NestExpressApplication): void {
   // Parse cookies so the JWT auth guard can read the httpOnly session cookie.
   app.use(cookieParser());
 
-  // Raise the JSON body limit above the 100 kB default so a CSV contact import
-  // (the file's text posted in a JSON field) isn't rejected. Using
-  // useBodyParser (vs re-adding express.json) preserves the buffered rawBody
-  // that the YCloud webhook signature verification depends on.
-  app.useBodyParser('json', { limit: '6mb' });
+  // Raise the JSON and urlencoded body limit so large payloads and base64 fallbacks aren't rejected.
+  app.useBodyParser('json', { limit: '350mb' });
+  app.useBodyParser('urlencoded', { limit: '350mb', extended: true });
 
   // Validate and sanitise every request body against its DTO class.
   // - whitelist: strip properties not declared on the DTO (prevents mass

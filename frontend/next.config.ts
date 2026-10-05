@@ -7,6 +7,12 @@ const backendUrl =
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "350mb",
+    },
+    proxyTimeout: 300000,
+  },
 };
 
 export default nextConfig;

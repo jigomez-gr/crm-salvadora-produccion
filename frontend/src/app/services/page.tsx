@@ -687,8 +687,8 @@ export default function ServicesPage() {
       return;
     }
 
-    if (file.size > 250 * 1024 * 1024) {
-      toast.error("El archivo supera el tamaño máximo permitido (250 MB).");
+    if (file.size > 350 * 1024 * 1024) {
+      toast.error("El archivo supera el tamaño máximo permitido (350 MB).");
       return;
     }
 

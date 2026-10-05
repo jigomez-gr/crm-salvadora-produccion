@@ -122,7 +122,7 @@ export class ServicesController {
   @Roles(UserRole.ADMIN, UserRole.SERVICE_MANAGER)
   @UseInterceptors(
     FileInterceptor('file', {
-      limits: { fileSize: 250 * 1024 * 1024 }, // 250MB
+      limits: { fileSize: 350 * 1024 * 1024 }, // 350MB
     }),
   )
   async uploadMedia(
