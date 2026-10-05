@@ -458,6 +458,9 @@ export class VapiWebhookService {
       }
     } catch (err: any) {
       this.logger.error(`Error en herramienta ${name}: ${err?.message || err}`, err?.stack);
+      if (name === 'registrar_handoff') {
+        return 'He anotado tu solicitud para que un compañero del equipo te llame lo antes posible.';
+      }
       return 'He consultado la agenda y en este momento no puedo confirmar el hueco exacto. ¿Prefieres que te llamemos nosotros o consultar otra hora?';
     }
   }
@@ -1059,7 +1062,14 @@ export class VapiWebhookService {
       return BLOCKED_USER_MESSAGE;
     }
     if (contact?.emailerroneo === 'S') {
-      return 'Consta una incidencia previa con la entrega a tu correo electrónico. Por seguridad, debes verificar tu correo con el código de 7 minutos antes de formalizar una reserva.';
+      if (providedEmail) {
+        contact.email = providedEmail;
+      }
+      contact.emailerroneo = 'N';
+      if (contact.tags && contact.tags.includes('emailerroneo')) {
+        contact.tags = contact.tags.filter((t) => t !== 'emailerroneo');
+      }
+      await this.contactsRepo.save(contact);
     }
 
     if (contact) {
@@ -1090,7 +1100,7 @@ export class VapiWebhookService {
       }
 
       if (contradictionReason) {
-        return `Por seguridad no puedo formalizar la reserva automáticamente porque ${contradictionReason}. Es necesario verificar la titularidad mediante código de verificación antes de continuar.`;
+        return `Por seguridad no puedo formalizar la reserva automáticamente porque ${contradictionReason}. He dejado nota registrada para que el equipo revise tus datos y te contacte.`;
       }
     }
 
@@ -1662,7 +1672,7 @@ export class VapiWebhookService {
   // ─── 7. REGISTRAR HANDOFF ───
   private async toolRegistrarHandoff(params: any, ctx: ToolExecutionContext): Promise<string> {
     const motivo = params.motivo || 'Solicitud de atención por una persona';
-    const acc = await this.vapiAccountRepo.findOne({ order: { createdAt: 'ASC' } });
+    const acc = await this.vapiAccountRepo.findOne({ where: {}, order: { createdAt: 'ASC' } });
 
     if (ctx.vapiCallId) {
       await this.callsRepo.update({ vapiCallId: ctx.vapiCallId }, { needsReview: true, notes: `Handoff: ${motivo}` });
@@ -1724,9 +1734,14 @@ export class VapiWebhookService {
         email: rawEmail,
         source: 'agente_voz',
         status: ContactStatus.ACTIVE,
+        emailerroneo: 'N',
       });
     } else {
       contact.email = rawEmail;
+      contact.emailerroneo = 'N';
+      if (contact.tags && contact.tags.includes('emailerroneo')) {
+        contact.tags = contact.tags.filter((t) => t !== 'emailerroneo');
+      }
       if (params?.nombre && (!contact.name || contact.name === 'Alumno' || contact.name === 'Cliente Telefónico')) {
         contact.name = params.nombre;
       }
@@ -1761,11 +1776,11 @@ export class VapiWebhookService {
       this.logger.error(`[VAPI] Error enviando email de confirmación tras guardar datos contacto: ${notifyErr?.message || notifyErr}`);
     }
 
-    const confirmationNotice = apptFoundForEmail
-      ? ` y se ha enviado la confirmación de la cita con los datos de acceso y la ubicación a su correo.`
-      : '.';
+    if (apptFoundForEmail) {
+      return `El correo «${rawEmail}» ha quedado registrado con éxito y se ha enviado la confirmación de la cita con los datos de acceso y la ubicación a su correo. Confírmaselo con amabilidad al cliente ("Te acabo de enviar un correo a tu dirección con todos los datos y la ubicación del centro") y despídete con calidez.`;
+    }
 
-    return `El correo «${rawEmail}» ha quedado registrado con éxito${confirmationNotice} Confírmaselo con amabilidad al cliente ("Te acabo de enviar un correo a tu dirección con todos los datos y la ubicación del centro") y despídete con calidez.`;
+    return `El correo «${rawEmail}» ha quedado registrado con éxito en tu ficha. Si el cliente estaba en proceso de reservar una cita o clase, procede a agendarla con 'reservar_cita'. En caso contrario, confírmaselo amablemente y pregúntale en qué más puedes ayudarle.`;
   }
 
   // ─── EVENT: END OF CALL REPORT ───
