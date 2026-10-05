@@ -75,6 +75,24 @@ async function forwardRequest(req: NextRequest, { params }: { params: Promise<{ 
         });
       }
 
+      // For video streaming HTTP 206, audio/video streams, or SSE,
+      // stream res.body directly to the client without buffering hundreds of megabytes in memory.
+      const contentType = res.headers.get("content-type") || "";
+      const isMediaOrStream =
+        res.status === 206 ||
+        Boolean(res.headers.get("content-range")) ||
+        contentType.includes("video") ||
+        contentType.includes("audio") ||
+        contentType.includes("event-stream");
+
+      if (isMediaOrStream && res.body) {
+        return new NextResponse(res.body as any, {
+          status: res.status,
+          statusText: res.statusText,
+          headers: resHeaders,
+        });
+      }
+
       const resBody = await res.arrayBuffer();
 
       return new NextResponse(resBody, {

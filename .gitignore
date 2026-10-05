@@ -21,3 +21,5 @@ backups/
 bin/
 obj/
 *.mp4
+!frontend/public/videos/*.mp4
+!backend/public/videos/*.mp4

@@ -2153,12 +2153,23 @@ export class ServicesService implements OnModuleInit {
     }
 
     if (!resolvedPath || !fs.existsSync(resolvedPath)) {
-      if (fallbackUrl && fallbackUrl.startsWith('/')) {
-        const publicTry = path.resolve(process.cwd(), fallbackUrl.replace(/^\//, ''));
+      // 1. Check if the file exists by its basename in mediaStorageDir
+      if (filePath) {
+        const basename = path.basename(filePath);
+        const storageTry = path.resolve(this.mediaStorageDir, basename);
+        if (fs.existsSync(storageTry)) {
+          resolvedPath = storageTry;
+        }
+      }
+
+      // 2. Check fallbackUrl under cwd or public/
+      if ((!resolvedPath || !fs.existsSync(resolvedPath)) && fallbackUrl && fallbackUrl.startsWith('/')) {
+        const cleanFallback = fallbackUrl.replace(/^\//, '');
+        const publicTry = path.resolve(process.cwd(), cleanFallback);
         if (fs.existsSync(publicTry)) {
           resolvedPath = publicTry;
         } else {
-          const publicTry2 = path.resolve(process.cwd(), 'public', fallbackUrl.replace(/^\//, ''));
+          const publicTry2 = path.resolve(process.cwd(), 'public', cleanFallback);
           if (fs.existsSync(publicTry2)) {
             resolvedPath = publicTry2;
           }
@@ -2185,12 +2196,21 @@ export class ServicesService implements OnModuleInit {
     if (rangeHeader) {
       const parts = rangeHeader.replace(/bytes=/, '').split('-');
       const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
 
-      if (start >= fileSize || end >= fileSize) {
+      if (isNaN(start) || start >= fileSize) {
         res.status(416).setHeader('Content-Range', `bytes */${fileSize}`);
         res.end();
         return;
+      }
+
+      // Cap chunk size to 5MB for fast initial video playback & responsive scrubbing
+      const MAX_CHUNK_SIZE = 5 * 1024 * 1024;
+      let end = parts[1] ? parseInt(parts[1], 10) : start + MAX_CHUNK_SIZE - 1;
+      if (isNaN(end) || end >= fileSize) {
+        end = fileSize - 1;
+      }
+      if (end - start + 1 > MAX_CHUNK_SIZE) {
+        end = start + MAX_CHUNK_SIZE - 1;
       }
 
       const chunksize = end - start + 1;

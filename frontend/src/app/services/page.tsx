@@ -63,6 +63,24 @@ interface ServiceFormData {
   textosinpreciodefinitivo: string;
 }
 
+function getMediaDisplayUrl(
+  url?: string | null,
+  path?: string | null,
+  serviceId?: string | null,
+  slot?: string,
+): string {
+  if (url && (url.startsWith("/") || url.startsWith("http://") || url.startsWith("https://"))) {
+    return url;
+  }
+  if (serviceId && slot) {
+    return `/api/services/${serviceId}/media/${slot}`;
+  }
+  if (path && path.startsWith("public/")) {
+    return "/" + path.replace(/^public\//, "");
+  }
+  return url || path || "";
+}
+
 export default function ServicesPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [managers, setManagers] = useState<User[]>([]);
@@ -1760,11 +1778,11 @@ export default function ServicesPage() {
                 </div>
               </div>
 
-              {(form.flyerUrl || form.flyerPath) && (
+              {Boolean(form.flyerUrl || form.flyerPath) && (
                 <div className="rounded-md border border-neutral-200 bg-neutral-50 p-2.5 flex items-center gap-3">
                   <div className="relative h-16 w-20 overflow-hidden rounded border border-neutral-300 bg-black/5 shrink-0 flex items-center justify-center">
                     <img
-                      src={form.flyerUrl || form.flyerPath}
+                      src={getMediaDisplayUrl(form.flyerUrl, form.flyerPath, editingService?.id, "flyer-general")}
                       alt="Flyer General"
                       className="h-full w-full object-cover"
                       onError={(e) => {
@@ -1774,7 +1792,9 @@ export default function ServicesPage() {
                   </div>
                   <div className="min-w-0 flex-1 text-xs">
                     <p className="font-semibold text-neutral-800">Vista Previa Flyer General</p>
-                    <p className="text-[11px] text-neutral-500 font-mono truncate">{form.flyerUrl || form.flyerPath}</p>
+                    <p className="text-[11px] text-neutral-500 font-mono truncate">
+                      {getMediaDisplayUrl(form.flyerUrl, form.flyerPath, editingService?.id, "flyer-general")}
+                    </p>
                   </div>
                 </div>
               )}
@@ -1824,17 +1844,18 @@ export default function ServicesPage() {
                 </div>
               </div>
 
-              {(form.videoUrl || form.videoPath) ? (
+              {Boolean(form.videoUrl || form.videoPath) ? (
                 <div className="rounded-md border border-purple-200 bg-neutral-950 p-2">
                   <video
-                    src={form.videoUrl || form.videoPath}
+                    key={getMediaDisplayUrl(form.videoUrl, form.videoPath, editingService?.id, "video-general")}
+                    src={getMediaDisplayUrl(form.videoUrl, form.videoPath, editingService?.id, "video-general")}
                     controls
                     preload="metadata"
                     playsInline
                     className="w-full max-h-52 rounded bg-black object-contain"
                   />
                   <div className="mt-1 px-1 flex justify-between items-center text-[10px] text-neutral-400 font-mono truncate">
-                    <span>{form.videoUrl || form.videoPath}</span>
+                    <span>{getMediaDisplayUrl(form.videoUrl, form.videoPath, editingService?.id, "video-general")}</span>
                     <span className="text-emerald-400 font-sans">✓ Vídeo Activo</span>
                   </div>
                 </div>
@@ -1884,11 +1905,11 @@ export default function ServicesPage() {
                 </div>
               </div>
 
-              {(form.flyerParticularUrl || form.flyerParticularPath) && (
+              {Boolean(form.flyerParticularUrl || form.flyerParticularPath) && (
                 <div className="rounded-md border border-neutral-200 bg-neutral-50 p-2.5 flex items-center gap-3">
                   <div className="relative h-16 w-20 overflow-hidden rounded border border-neutral-300 bg-black/5 shrink-0 flex items-center justify-center">
                     <img
-                      src={form.flyerParticularUrl || form.flyerParticularPath}
+                      src={getMediaDisplayUrl(form.flyerParticularUrl, form.flyerParticularPath, editingService?.id, "flyer-particular")}
                       alt="Flyer Particular"
                       className="h-full w-full object-cover"
                       onError={(e) => {
@@ -1898,7 +1919,9 @@ export default function ServicesPage() {
                   </div>
                   <div className="min-w-0 flex-1 text-xs">
                     <p className="font-semibold text-neutral-800">Vista Previa Flyer Particular</p>
-                    <p className="text-[11px] text-neutral-500 font-mono truncate">{form.flyerParticularUrl || form.flyerParticularPath}</p>
+                    <p className="text-[11px] text-neutral-500 font-mono truncate">
+                      {getMediaDisplayUrl(form.flyerParticularUrl, form.flyerParticularPath, editingService?.id, "flyer-particular")}
+                    </p>
                   </div>
                 </div>
               )}
@@ -1948,17 +1971,18 @@ export default function ServicesPage() {
                 </div>
               </div>
 
-              {(form.videoParticularUrl || form.videoParticularPath) ? (
+              {Boolean(form.videoParticularUrl || form.videoParticularPath) ? (
                 <div className="rounded-md border border-purple-200 bg-neutral-950 p-2">
                   <video
-                    src={form.videoParticularUrl || form.videoParticularPath}
+                    key={getMediaDisplayUrl(form.videoParticularUrl, form.videoParticularPath, editingService?.id, "video-particular")}
+                    src={getMediaDisplayUrl(form.videoParticularUrl, form.videoParticularPath, editingService?.id, "video-particular")}
                     controls
                     preload="metadata"
                     playsInline
                     className="w-full max-h-52 rounded bg-black object-contain"
                   />
                   <div className="mt-1 px-1 flex justify-between items-center text-[10px] text-neutral-400 font-mono truncate">
-                    <span>{form.videoParticularUrl || form.videoParticularPath}</span>
+                    <span>{getMediaDisplayUrl(form.videoParticularUrl, form.videoParticularPath, editingService?.id, "video-particular")}</span>
                     <span className="text-purple-400 font-sans">✓ Vídeo Particular Activo</span>
                   </div>
                 </div>

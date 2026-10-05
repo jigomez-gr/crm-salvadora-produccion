@@ -25,8 +25,9 @@ RUN corepack enable
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 
-# Bring in the compiled output from the build stage.
+# Bring in the compiled output and static media from the build stage.
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/public ./public
 
 # Drop root: run the app as the unprivileged 'node' user baked into the image.
 USER node
