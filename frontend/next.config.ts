@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   experimental: {
     serverActions: {
-      bodySizeLimit: "350mb",
+      bodySizeLimit: "500mb",
     },
     proxyTimeout: 300000,
   },

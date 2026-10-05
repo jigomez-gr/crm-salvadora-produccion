@@ -47,8 +47,8 @@ export function configureApp(app: NestExpressApplication): void {
   app.use(cookieParser());
 
   // Raise the JSON and urlencoded body limit so large payloads and base64 fallbacks aren't rejected.
-  app.useBodyParser('json', { limit: '350mb' });
-  app.useBodyParser('urlencoded', { limit: '350mb', extended: true });
+  app.useBodyParser('json', { limit: '500mb' });
+  app.useBodyParser('urlencoded', { limit: '500mb', extended: true });
 
   // Validate and sanitise every request body against its DTO class.
   // - whitelist: strip properties not declared on the DTO (prevents mass

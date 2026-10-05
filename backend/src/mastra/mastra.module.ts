@@ -185,7 +185,13 @@ export { NestMastraModule };
           storage: store,
         });
 
-        return { mastra };
+        return {
+          mastra,
+          bodyLimitOptions: {
+            maxSize: 500 * 1024 * 1024, // 500MB to allow 350MB uploads + multipart overhead
+            maxFileSize: 500 * 1024 * 1024,
+          },
+        };
       },
       inject: [
         ContactsService,
