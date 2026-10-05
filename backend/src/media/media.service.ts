@@ -305,24 +305,44 @@ export class MediaService implements OnModuleInit {
       // Parse Range header e.g. "bytes=0-1024"
       const parts = rangeHeader.replace(/bytes=/, '').split('-');
       const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
 
-      if (start >= fileSize || end >= fileSize) {
+      if (isNaN(start) || start >= fileSize) {
         res.status(416).set({
           'Content-Range': `bytes */${fileSize}`,
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+          'Access-Control-Allow-Headers': 'Range, Content-Type, Accept',
+          'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges',
         });
         res.end();
         return;
       }
 
+      // Cap chunk size to 5MB for fast initial video playback & responsive scrubbing
+      const MAX_CHUNK_SIZE = 5 * 1024 * 1024;
+      let end = parts[1] ? parseInt(parts[1], 10) : start + MAX_CHUNK_SIZE - 1;
+      if (isNaN(end) || end >= fileSize) {
+        end = fileSize - 1;
+      }
+      if (end - start + 1 > MAX_CHUNK_SIZE) {
+        end = start + MAX_CHUNK_SIZE - 1;
+      }
+
       const chunkSize = end - start + 1;
       const fileStream = fs.createReadStream(filePath, { start, end });
+      fileStream.on('error', (err) => {
+        if (!res.headersSent) res.status(500).end();
+      });
 
       res.writeHead(206, {
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,
         'Accept-Ranges': 'bytes',
         'Content-Length': chunkSize,
         'Content-Type': contentType,
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+        'Access-Control-Allow-Headers': 'Range, Content-Type, Accept',
+        'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges',
       });
 
       fileStream.pipe(res);
@@ -331,8 +351,16 @@ export class MediaService implements OnModuleInit {
         'Content-Length': fileSize,
         'Content-Type': contentType,
         'Accept-Ranges': 'bytes',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+        'Access-Control-Allow-Headers': 'Range, Content-Type, Accept',
+        'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges',
       });
-      fs.createReadStream(filePath).pipe(res);
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.on('error', (err) => {
+        if (!res.headersSent) res.status(500).end();
+      });
+      fileStream.pipe(res);
     }
   }
 }

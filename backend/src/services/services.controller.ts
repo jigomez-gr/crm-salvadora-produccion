@@ -10,6 +10,7 @@ import {
   Req,
   Res,
   Headers,
+  Options,
   UseGuards,
   UseInterceptors,
   UploadedFile,
@@ -56,6 +57,16 @@ export class ServicesController {
     @Res() res: Response,
   ) {
     return this.servicesService.streamServiceMedia(id, slot, range, res);
+  }
+
+  @Options(':id/media/:slot')
+  optionsMedia(@Res() res: Response) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Accept');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    return res.status(204).end();
   }
 
   @Get(':id')

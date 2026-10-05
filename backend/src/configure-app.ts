@@ -95,8 +95,9 @@ export function configureApp(app: NestExpressApplication): void {
       // In production, allow configured origins or let widget endpoints be embeddable anywhere
       return callback(null, true);
     },
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Range', 'Origin'],
+    exposedHeaders: ['Content-Range', 'Accept-Ranges', 'Content-Length'],
     credentials: true,
   });
 }

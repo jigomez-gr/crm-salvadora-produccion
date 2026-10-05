@@ -2199,6 +2199,10 @@ export class ServicesService implements OnModuleInit {
 
       if (isNaN(start) || start >= fileSize) {
         res.status(416).setHeader('Content-Range', `bytes */${fileSize}`);
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Accept');
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges');
         res.end();
         return;
       }
@@ -2215,12 +2219,19 @@ export class ServicesService implements OnModuleInit {
 
       const chunksize = end - start + 1;
       const fileStream = fs.createReadStream(resolvedPath, { start, end });
+      fileStream.on('error', (err) => {
+        if (!res.headersSent) res.status(500).end();
+      });
 
       res.writeHead(206, {
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,
         'Accept-Ranges': 'bytes',
         'Content-Length': chunksize,
         'Content-Type': mimeType,
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+        'Access-Control-Allow-Headers': 'Range, Content-Type, Accept',
+        'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges',
       });
 
       fileStream.pipe(res);
@@ -2229,8 +2240,16 @@ export class ServicesService implements OnModuleInit {
         'Content-Length': fileSize,
         'Content-Type': mimeType,
         'Accept-Ranges': 'bytes',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+        'Access-Control-Allow-Headers': 'Range, Content-Type, Accept',
+        'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges',
       });
-      fs.createReadStream(resolvedPath).pipe(res);
+      const fileStream = fs.createReadStream(resolvedPath);
+      fileStream.on('error', (err) => {
+        if (!res.headersSent) res.status(500).end();
+      });
+      fileStream.pipe(res);
     }
   }
 

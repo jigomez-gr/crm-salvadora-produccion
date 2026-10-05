@@ -5,6 +5,7 @@ import {
   Param,
   Body,
   Query,
+  Req,
   Res,
   NotFoundException,
   BadRequestException,
@@ -183,6 +184,7 @@ export class WidgetController {
     @Query('category') categoryFilter?: string,
     @Query('type') typeFilter?: string,
     @Query('allDates') allDatesFilter?: string,
+    @Req() req?: any,
   ) {
     const dbServices = await this.servicesService.findAll(true, categoryFilter, typeFilter).catch(() => []);
     const dbCategories = await this.categoriesService.findAll(true).catch(() => []);
@@ -200,6 +202,19 @@ export class WidgetController {
     const whatsappPhone = agentConfig?.whatsappNumber || '34695172625';
     const cleanWaPhone = whatsappPhone.replace(/[^0-9]/g, '');
 
+    const hostHeader = req?.get?.('x-forwarded-host') || req?.get?.('host');
+    const protoHeader = req?.get?.('x-forwarded-proto') || req?.protocol || 'https';
+    const requestBase = hostHeader ? `${protoHeader}://${hostHeader}` : null;
+    const appBase = process.env.APP_URL || process.env.BACKEND_URL || requestBase || 'https://crm-salvadoraconesa.jigretera.com';
+    const crmBaseUrl = appBase.replace(/\/$/, '');
+
+    const toAbsoluteUrl = (url: string | null | undefined): string | null => {
+      if (!url) return null;
+      if (url.startsWith('http://') || url.startsWith('https://')) return url;
+      const cleanPath = url.startsWith('/') ? url : `/${url}`;
+      return `${crmBaseUrl}${cleanPath}`;
+    };
+
     const todayStr = new Date().toISOString().slice(0, 10);
     const isAllDates = allDatesFilter === 'true' || allDatesFilter === '1';
 
@@ -216,7 +231,7 @@ export class WidgetController {
       businessName: agentConfig?.businessName || branding?.businessName || 'Centro de Yoga y Bienestar Salvadora',
       businessDescription: agentConfig?.businessDescription || '',
       brandColor: branding?.brandColor || '#800020',
-      logoUrl: branding?.logoUrl || null,
+      logoUrl: toAbsoluteUrl(branding?.logoUrl) || null,
       serviciosEnMantenimiento: branding?.serviciosEnMantenimiento || 'N',
       mantenimientoMessage: branding?.serviciosEnMantenimiento === 'S' ? MAINTENANCE_MESSAGE : null,
       whatsappNumber: whatsappPhone,
@@ -261,13 +276,13 @@ export class WidgetController {
             : null,
           displayOrder: s.displayOrder ?? 0,
           flyerPath: s.flyerPath || null,
-          flyerUrl: s.flyerUrl || null,
+          flyerUrl: toAbsoluteUrl(s.flyerUrl),
           flyerParticularPath: s.flyerParticularPath || null,
-          flyerParticularUrl: s.flyerParticularUrl || null,
+          flyerParticularUrl: toAbsoluteUrl(s.flyerParticularUrl),
           videoParticularPath: s.videoParticularPath || null,
-          videoParticularUrl: s.videoParticularUrl || null,
+          videoParticularUrl: toAbsoluteUrl(s.videoParticularUrl),
           videoPath: s.videoPath || null,
-          videoUrl: s.videoUrl || null,
+          videoUrl: toAbsoluteUrl(s.videoUrl),
           textoespecifico: s.textoespecifico || null,
           fechaDesde: s.fechaDesde || '2000-01-01',
           fechaHasta: s.fechaHasta || '2099-12-31',

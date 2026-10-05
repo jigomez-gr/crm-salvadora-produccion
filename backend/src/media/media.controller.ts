@@ -9,6 +9,7 @@ import {
   Query,
   Headers,
   Res,
+  Options,
   UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
@@ -44,6 +45,16 @@ export class MediaController {
     @Res() res: Response,
   ) {
     return this.mediaService.streamMedia(key, range, res);
+  }
+
+  @Options('stream/:key')
+  optionsStream(@Res() res: Response) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Accept');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    return res.status(204).end();
   }
 
   @Get(':id')
