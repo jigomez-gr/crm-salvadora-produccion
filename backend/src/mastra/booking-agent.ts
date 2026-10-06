@@ -531,14 +531,20 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           hour: '2-digit',
           minute: '2-digit',
         });
+      const isGestalt = /gestalt/i.test(svc?.name || inputData.service);
+      let instruction =
+        'Para formalizar la reserva con bookAppointment, pasa preferiblemente la fecha y hora local (p. ej. "2026-09-24 19:00") o el startsAt exacto del slot.';
+      if (isGestalt) {
+        instruction +=
+          ' REGLA DE ORO PARA GESTALT: Horario oficial: Lunes de 9:00 a 14:00 y de 16:00 a 21:00, y Miércoles de 9:00 a 14:00 y de 16:00 a 21:00 (sin asegurar). Al solicitar un miércoles, las citas se ACEPTAN Y REGISTRAN PROVISIONALMENTE (pendientes de confirmación por Salvadora Conesa Martinez). SÍ se puede y se debe formalizar la reserva provisional llamando a bookAppointment. NUNCA digas al cliente que no se puede reservar o que no hay disponibilidad para un miércoles.';
+      }
       return {
         slots: slots.map((s) => ({
           startsAt: s.startsAt,
           endsAt: s.endsAt,
           localTime: `${fmt(s.startsAt)} - ${fmt(s.endsAt)}`,
         })),
-        instruction:
-          'Para formalizar la reserva con bookAppointment, pasa preferiblemente la fecha y hora local (p. ej. "2026-09-24 19:00") o el startsAt exacto del slot.',
+        instruction,
       };
     },
   });
@@ -1541,7 +1547,15 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Movilidad de horarios: Los asistentes se pueden mover por los horarios libremente (martes o jueves), siempre teniendo en cuenta evitar horarios que estén completos para no colapsar el aforo (aforo máximo 28 plazas).
   Cuando un cliente solicite meditación o pregunte por ella, ofrécele los martes o jueves a las 9:15 y formaliza su plaza con 'bookAppointment'.
 - TERAPIA GESTALT (SESIÓN INDIVIDUAL):
-  * DÍAS DISPONIBLES: Las sesiones de Terapia Gestalt se realizan EXCLUSIVAMENTE los LUNES y algún MIÉRCOLES (horario habitual entre las 10:00 y las 20:00 según disponibilidad). NO se ofrecen ni realizan los martes, jueves, viernes ni fines de semana. Si el cliente solicita otro día, indícale amablemente que solo se atiende los lunes y algún miércoles.
+  * DÍAS Y HORARIOS DISPONIBLES:
+    - **Lunes**: De 9:00 a 14:00 y de 16:00 a 21:00 (día habitual).
+    - **Miércoles**: De 9:00 a 14:00 y de 16:00 a 21:00 (horario provisional / sin asegurar).
+    - NO se ofrecen ni realizan los martes, jueves, viernes ni fines de semana. Si el cliente solicita un día distinto de lunes o miércoles, indícale amablemente que solo se atiende los lunes y los miércoles.
+  * ATENCIÓN OBLIGATORIA LOS MIÉRCOLES (SIN ASEGURAR / PROVISIONAL):
+    - Los miércoles son días de atención provisional y SIN ASEGURAR. ¡SÍ SE DEBEN ACEPTAR CITAS LOS MIÉRCOLES!
+    - Si el cliente solicita cita un miércoles dentro del horario (9:00 a 14:00 o 16:00 a 21:00), o insiste en que tiene que ser miércoles, NUNCA le digas que no se puede, ni que no hay hueco, ni que solo se atiende de forma excepcional despidiéndolo o dejándolo sin cita.
+    - DEBES ACEPTAR Y FORMALIZAR LA CITA PROVISIONALMENTE con 'bookAppointment'.
+    - Comunícale al cliente con calidez que su cita queda aceptada y registrada de forma **provisional**, pendiente de aprobación y confirmación definitiva por la terapeuta y responsable (**Salvadora Conesa Martinez**), y que ella se pondrá en contacto para confirmarla.
   * Modalidad: Puede ser Presencial u Online (videollamada). Pregúntale al alumno/cliente qué modalidad prefiere. Si el alumno te facilita sus datos sin especificar modalidad, tramita la reserva y confírmale amablemente que su solicitud queda registrada y pendiente de aprobación por la terapeuta y responsable (**Salvadora Conesa Martinez**).
   * Duración: 60 minutos (1 hora).
   * Precio: ${gestaltPrice} por sesión (pago en el centro o previa confirmación).

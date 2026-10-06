@@ -214,8 +214,9 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
 - **Meditaciones Guiadas** (Sesión grupal de 30 min, aforo de hasta 28 personas):
   * REGLA DE AFORO GRUPAL: Actividad grupal de centramiento y meditación. NUNCA se ve limitada porque el profesor tenga otra cita a esa hora, sino únicamente por el aforo máximo de 28 plazas.
   * Horarios: Martes y Jueves de 09:15 a 09:45.
-  * Precios: ${meditacionPrice}/mes o 3€ meditación suelta (¡Gratis para alumnos de Yoga!). Se pueden mover libremente entre martes y jueves evitando horarios llenos para no colapsar el aforo.
 - **Terapia Gestalt** (Sesión individual de 60 min, ${gestaltPrice}):
+  * Días y horarios oficiales: Lunes (de 9:00 a 14:00 y de 16:00 a 21:00) y Miércoles (de 9:00 a 14:00 y de 16:00 a 21:00, horario provisional / sin asegurar).
+  * Los miércoles las citas se aceptan y agendan PROVISIONALMENTE (pendientes de confirmación por Salvadora Conesa Martinez). ¡SÍ se aceptan citas los miércoles, nunca digas que no se puede agendar!
   * Modalidad: ${gestaltModality}.${gestaltApprovalText}
 - **Bienestar Experience** (${bienestarPrice}):
   * Modalidad: ${bienestarModality}.${bienestarApprovalText}

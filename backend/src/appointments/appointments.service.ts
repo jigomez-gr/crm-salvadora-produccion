@@ -2397,6 +2397,7 @@ export class AppointmentsService implements OnModuleInit {
     const isYoga = /yoga/i.test(effectiveSvcName);
     const isMeditacion = /meditaci/i.test(effectiveSvcName) && !/gong|sonor/i.test(effectiveSvcName);
     const isGongOrPuja = /gong|puja/i.test(effectiveSvcName);
+    const isGestalt = /gestalt/i.test(effectiveSvcName);
     const isYogaOrGroup =
       isYoga ||
       isMeditacion ||
@@ -2473,6 +2474,11 @@ export class AppointmentsService implements OnModuleInit {
           svcName: `%${serviceName}%`,
         });
       }
+    } else if (isGestalt) {
+      qb.andWhere('(a.calendarId = :calendarId OR a.service ILIKE :gestaltPattern)', {
+        calendarId,
+        gestaltPattern: '%gestalt%',
+      });
     } else if (managerServiceIds.length > 0) {
       qb.andWhere(
         '(a.calendarId = :calendarId OR a.serviceId IN (:...managerServiceIds))',
@@ -2586,6 +2592,7 @@ export class AppointmentsService implements OnModuleInit {
     const isYoga = /yoga/i.test(effectiveSvcName);
     const isMeditacion = /meditaci/i.test(effectiveSvcName) && !/gong|sonor/i.test(effectiveSvcName);
     const isGongOrPuja = /gong|puja/i.test(effectiveSvcName);
+    const isGestalt = /gestalt/i.test(effectiveSvcName);
     const isYogaOrGroup =
       isYoga ||
       isMeditacion ||
@@ -2643,6 +2650,11 @@ export class AppointmentsService implements OnModuleInit {
           serviceName: `%${effectiveSvcName}%`,
         },
       );
+    } else if (isGestalt) {
+      qb.andWhere('(a.calendarId = :calendarId OR a.service ILIKE :gestaltPattern)', {
+        calendarId,
+        gestaltPattern: '%gestalt%',
+      });
     } else if (managerServiceIds.length > 0) {
       qb.andWhere(
         '(a.calendarId = :calendarId OR a.serviceId IN (:...managerServiceIds))',
@@ -2718,17 +2730,22 @@ export class AppointmentsService implements OnModuleInit {
       return slots;
     }
 
-    const isGestalt = /gestalt/i.test(effectiveSvcName);
     if (isGestalt) {
       const targetDay = zoned.getDay();
       if (targetDay !== 1 && targetDay !== 3) {
         return [];
       }
       const gestaltWorkingHours: WorkingHourSlot[] = [
-        { day: 1, open: '10:00', close: '20:00' },
-        { day: 3, open: '10:00', close: '20:00' },
+        { day: 1, open: '09:00', close: '14:00' },
+        { day: 1, open: '16:00', close: '21:00' },
+        { day: 3, open: '09:00', close: '14:00' },
+        { day: 3, open: '16:00', close: '21:00' },
       ];
-      return computeFreeSlots(date, durationMinutes, gestaltWorkingHours, existing, {
+      // Para la disponibilidad de Gestalt, solo bloquean citas del mismo calendario o sesiones de terapia individual
+      const gestaltAppts = existing.filter(
+        (a) => a.calendarId === calendarId || /gestalt/i.test(a.service),
+      );
+      return computeFreeSlots(date, durationMinutes, gestaltWorkingHours, gestaltAppts, {
         timezone,
         now,
         maxCapacity: 1,

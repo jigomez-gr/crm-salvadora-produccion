@@ -43,15 +43,8 @@ export function computeFreeSlots(
   const day = zoned.getDate();
   const dayOfWeek = zoned.getDay(); // 0=Sunday...6=Saturday
 
-  const workingDay = workingHours.find((w) => w.day === dayOfWeek);
-  if (!workingDay) return [];
-
-  const [openH, openM] = workingDay.open.split(':').map(Number);
-  const [closeH, closeM] = workingDay.close.split(':').map(Number);
-
-  // Build open/close instants as business-local wall-clock times
-  const dayStart = new TZDate(year, month, day, openH, openM, timezone);
-  const dayEnd = new TZDate(year, month, day, closeH, closeM, timezone);
+  const matchingShifts = workingHours.filter((w) => w.day === dayOfWeek);
+  if (matchingShifts.length === 0) return [];
 
   const slots: TimeSlot[] = [];
   const stepMs = Math.max(5, stepMinutes) * 60 * 1000;
@@ -61,27 +54,36 @@ export function computeFreeSlots(
     (a) => a.status !== AppointmentStatus.CANCELLED,
   );
 
-  let cursor = dayStart.getTime();
+  for (const workingDay of matchingShifts) {
+    const [openH, openM] = workingDay.open.split(':').map(Number);
+    const [closeH, closeM] = workingDay.close.split(':').map(Number);
 
-  while (cursor + durationMs <= dayEnd.getTime()) {
-    const slotStart = new Date(cursor);
-    const slotEnd = new Date(cursor + durationMs);
+    // Build open/close instants as business-local wall-clock times
+    const dayStart = new TZDate(year, month, day, openH, openM, timezone);
+    const dayEnd = new TZDate(year, month, day, closeH, closeM, timezone);
 
-    const isPast = slotStart.getTime() <= now.getTime();
+    let cursor = dayStart.getTime();
 
-    const overlappingCount = activeAppts.filter(
-      (a) =>
-        new Date(a.startsAt).getTime() < slotEnd.getTime() &&
-        new Date(a.endsAt).getTime() > slotStart.getTime(),
-    ).length;
+    while (cursor + durationMs <= dayEnd.getTime()) {
+      const slotStart = new Date(cursor);
+      const slotEnd = new Date(cursor + durationMs);
 
-    const hasConflict = overlappingCount >= effectiveMaxCapacity;
+      const isPast = slotStart.getTime() <= now.getTime();
 
-    if (!isPast && !hasConflict) {
-      slots.push({ startsAt: slotStart, endsAt: slotEnd });
+      const overlappingCount = activeAppts.filter(
+        (a) =>
+          new Date(a.startsAt).getTime() < slotEnd.getTime() &&
+          new Date(a.endsAt).getTime() > slotStart.getTime(),
+      ).length;
+
+      const hasConflict = overlappingCount >= effectiveMaxCapacity;
+
+      if (!isPast && !hasConflict) {
+        slots.push({ startsAt: slotStart, endsAt: slotEnd });
+      }
+
+      cursor += stepMs;
     }
-
-    cursor += stepMs;
   }
 
   return slots;

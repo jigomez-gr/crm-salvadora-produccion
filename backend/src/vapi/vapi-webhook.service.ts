@@ -700,8 +700,8 @@ export class VapiWebhookService {
           targetHourNorm = `${h.toString().padStart(2, '0')}:${m}`;
 
           if (isGestaltRequested) {
-            if (h < 10 || h > 19 || (h === 19 && parseInt(m, 10) > 0) || h >= 20) {
-              return `Las sesiones de «Terapia Gestalt» se realizan los lunes y algún miércoles entre las 10:00 y las 20:00 según disponibilidad y coordinación con la terapeuta. Las ${rawHora} queda fuera del horario. ${officialSvc.priceInfo}. ¿Te vendría bien un lunes o un miércoles dentro de esa franja?`;
+            if (h < 9 || (h >= 14 && h < 16) || h >= 21 || (h === 20 && parseInt(m, 10) > 0)) {
+              return `Las sesiones de «Terapia Gestalt» se realizan los lunes y los miércoles (sin asegurar) de 09:00 a 14:00 y de 16:00 a 21:00. Las ${rawHora} queda fuera del horario. ${officialSvc.priceInfo}. ¿Te vendría bien un lunes o un miércoles dentro de esas franjas?`;
             }
           } else if (h < 9 || h > 19 || (h === 19 && parseInt(m, 10) > 0) || h >= 20) {
             return `El horario oficial para «${officialSvc.name}» es de lunes a viernes entre las 09:00 y las 20:00. Las ${rawHora} queda fuera del horario de atención. ${officialSvc.priceInfo}. ¿Te vendría bien dentro de la franja de 09:00 a 20:00?`;
@@ -712,7 +712,7 @@ export class VapiWebhookService {
       if (isGestaltRequested && rawFecha) {
         const nonGestaltDays = ['martes', 'jueves', 'viernes', 'sabado', 'sábado', 'domingo'];
         if (nonGestaltDays.some((d) => rawFecha.includes(d))) {
-          return `Las sesiones de «Terapia Gestalt» solo se realizan los lunes y algún miércoles (con previa coordinación y aprobación de la terapeuta Salvadora Conesa Martinez). No se ofrecen los demás días. ${officialSvc.priceInfo}. ¿Te vendría bien un lunes o un miércoles?`;
+          return `Las sesiones de «Terapia Gestalt» se realizan los lunes (de 9:00 a 14:00 y de 16:00 a 21:00) y los miércoles (de 9:00 a 14:00 y de 16:00 a 21:00, horario provisional / sin asegurar). No se ofrecen los demás días. ${officialSvc.priceInfo}. ¿Te vendría bien un lunes o un miércoles?`;
         }
       }
 
@@ -786,13 +786,20 @@ export class VapiWebhookService {
         }
       }
 
-      const flexibleWorkingHours: WorkingHourSlot[] = [
-        { day: 1, open: '09:00', close: '20:00' },
-        { day: 2, open: '09:00', close: '20:00' },
-        { day: 3, open: '09:00', close: '20:00' },
-        { day: 4, open: '09:00', close: '20:00' },
-        { day: 5, open: '09:00', close: '20:00' },
-      ];
+      const flexibleWorkingHours: WorkingHourSlot[] = isGestaltRequested
+        ? [
+            { day: 1, open: '09:00', close: '14:00' },
+            { day: 1, open: '16:00', close: '21:00' },
+            { day: 3, open: '09:00', close: '14:00' },
+            { day: 3, open: '16:00', close: '21:00' },
+          ]
+        : [
+            { day: 1, open: '09:00', close: '20:00' },
+            { day: 2, open: '09:00', close: '20:00' },
+            { day: 3, open: '09:00', close: '20:00' },
+            { day: 4, open: '09:00', close: '20:00' },
+            { day: 5, open: '09:00', close: '20:00' },
+          ];
 
       const durationMinutes = officialSvc.durationMinutes || 60;
       const candidateSlots: Array<{ startsAt: Date; endsAt: Date }> = [];
@@ -1246,7 +1253,7 @@ export class VapiWebhookService {
         const zoned = new TZDate(startsAt.getTime(), ctx.timezone);
         const dayOfWeek = zoned.getDay();
         if (dayOfWeek !== 1 && dayOfWeek !== 3) {
-          return `Las sesiones de «Terapia Gestalt» solo se realizan los lunes y algún miércoles de 10:00 a 20:00 con previa coordinación y aprobación de Salvadora Conesa Martinez. No se pueden agendar en otros días. ¿Te vendría bien un lunes o un miércoles?`;
+          return `Las sesiones de «Terapia Gestalt» se realizan los lunes (de 9:00 a 14:00 y de 16:00 a 21:00) y los miércoles (de 9:00 a 14:00 y de 16:00 a 21:00, sin asegurar). No se pueden agendar en otros días. ¿Te vendría bien un lunes o un miércoles?`;
         }
       }
 
