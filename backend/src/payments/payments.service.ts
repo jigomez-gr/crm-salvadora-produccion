@@ -173,8 +173,16 @@ export class PaymentsService {
       paymentMethodTypes.push('bizum' as any);
     }
 
-    const fallbackSuccessUrl =
-      originUrl || process.env.CORS_ORIGIN || 'http://localhost:3000';
+    let fallbackSuccessUrl =
+      originUrl || process.env.FRONTEND_URL || process.env.APP_URL || process.env.CORS_ORIGIN || 'https://salvadoraconesa.es';
+    if (fallbackSuccessUrl.includes(',')) {
+      fallbackSuccessUrl = fallbackSuccessUrl.split(',')[0].trim();
+    }
+    fallbackSuccessUrl = fallbackSuccessUrl.trim();
+    if (!/^https?:\/\//i.test(fallbackSuccessUrl)) {
+      fallbackSuccessUrl = `https://${fallbackSuccessUrl}`;
+    }
+    fallbackSuccessUrl = fallbackSuccessUrl.replace(/\/+$/, '');
     const amountInCents = Math.round(dto.amount * 100);
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {

@@ -214,8 +214,11 @@ export class ZadarmaSmsService implements OnModuleInit {
     }
 
     const methodPath = '/v1/sms/send/';
+    // Spanish telecommunication regulations and Zadarma destinations prohibit raw web links in SMS.
+    // Sanitize any URL from outgoing SMS so carriers do not reject the message.
+    const sanitizedMessage = options.message.replace(/https?:\/\/\S+/gi, '(enlace enviado por correo)');
     const params: Record<string, string> = {
-      message: options.message,
+      message: sanitizedMessage,
       number: cleanNumber,
     };
 

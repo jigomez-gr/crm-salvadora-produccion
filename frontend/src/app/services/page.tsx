@@ -1319,7 +1319,10 @@ export default function ServicesPage() {
                       <UserCheck className="h-3.5 w-3.5 text-indigo-500" />
                       Responsable:
                     </span>
-                    <span className="font-medium text-indigo-700 truncate max-w-[150px]">
+                    <span
+                      className="font-medium text-indigo-700 truncate max-w-[220px]"
+                      title={s.manager ? `${s.manager.name} (${s.manager.email})` : "Sin asignar"}
+                    >
                       {s.manager?.name || "Sin asignar"}
                     </span>
                   </div>
@@ -1493,6 +1496,7 @@ export default function ServicesPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         title={editingService ? "Editar Servicio / Evento" : "Nuevo Servicio / Evento"}
+        className="max-w-2xl"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -2459,8 +2463,8 @@ export default function ServicesPage() {
             >
               <option value="">Sin responsable específico</option>
               {managers.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name} ({m.email})
+                <option key={m.id} value={m.id} title={`${m.name} (${m.email})`}>
+                  {m.name} {m.email ? `(${m.email})` : ''}
                 </option>
               ))}
             </select>
