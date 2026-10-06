@@ -70,6 +70,7 @@ export const MEDITACION_TIMETABLE: Record<number, string[]> = {
 @Injectable()
 export class AppointmentsService implements OnModuleInit {
   private readonly logger = new Logger(AppointmentsService.name);
+  private readonly recentDispatches = new Map<string, number>();
   constructor(
     @InjectRepository(Appointment)
     private readonly appointmentsRepo: Repository<Appointment>,
@@ -476,6 +477,40 @@ export class AppointmentsService implements OnModuleInit {
 
     const calendarId = dto.calendarId || serviceEntity?.calendarId || 'default';
     const serviceName = dto.service || serviceEntity?.name || 'General';
+    const cleanSvcLower = (serviceName || cleanServiceName || '').toLowerCase();
+    const isGestalt = /gestalt/i.test(cleanSvcLower);
+
+    if (isGestalt && !dto.allowCustomSchedule) {
+      let zoned = new TZDate(startsAt.getTime(), 'Europe/Madrid');
+      let dayOfWeek = zoned.getDay();
+      if (dayOfWeek !== 1 && dayOfWeek !== 3) {
+        const rawTimeMatch = dto.startsAt?.match(/[T ](\d{1,2}:\d{2})/);
+        if (rawTimeMatch) {
+          const rawHm = rawTimeMatch[1].padStart(5, '0');
+          const [rh, rm] = rawHm.split(':').map(Number);
+          const correctedZoned = new TZDate(
+            zoned.getFullYear(),
+            zoned.getMonth(),
+            zoned.getDate(),
+            rh,
+            rm,
+            'Europe/Madrid',
+          );
+          if (correctedZoned.getDay() === 1 || correctedZoned.getDay() === 3) {
+            startsAt = new Date(correctedZoned.getTime());
+            endsAt = new Date(startsAt.getTime() + (serviceEntity?.durationMinutes || 60) * 60000);
+            zoned = correctedZoned;
+            dayOfWeek = zoned.getDay();
+          }
+        }
+      }
+      if (dayOfWeek !== 1 && dayOfWeek !== 3) {
+        throw new BadRequestException(
+          'Las sesiones de Terapia Gestalt solo se realizan los lunes y algún miércoles previa coordinación y aprobación de la terapeuta (Salvadora Conesa Martinez).',
+        );
+      }
+    }
+
     const serviceId =
       serviceEntity?.id ?? (dto.serviceId && UUID_REGEX.test(dto.serviceId) ? dto.serviceId : null);
     const price =
@@ -486,10 +521,11 @@ export class AppointmentsService implements OnModuleInit {
         : isYoga || isMeditacion
         ? computedPrice
         : serviceEntity?.price ?? null;
-    const defaultStatus = serviceEntity?.requiresApproval
+    const defaultStatus = (serviceEntity?.requiresApproval || isGestalt)
       ? AppointmentStatus.PENDING_APPROVAL
       : AppointmentStatus.SCHEDULED;
-    const status = dto.status ?? defaultStatus;
+    // Terapia Gestalt SIEMPRE requiere aprobación de la terapeuta, sea presencial u online
+    const status = isGestalt ? AppointmentStatus.PENDING_APPROVAL : (dto.status ?? defaultStatus);
 
     // Resolve modality (in_person, phone, virtual)
     const cleanSvcStr = (cleanServiceName || '').toLowerCase();
@@ -634,7 +670,6 @@ export class AppointmentsService implements OnModuleInit {
     const withContact = await this.findOne(saved.id);
     this.eventEmitter.emit('appointment.created', withContact);
 
-    // Notify student via Email and WhatsApp
     const managerName = serviceEntity?.manager?.name || 'Centro de Yoga Salvadora Conesa';
     if (saved.status === AppointmentStatus.SCHEDULED) {
       await this.notifyStudentDecision(withContact, 'accepted', managerName).catch((err) => {
@@ -643,6 +678,9 @@ export class AppointmentsService implements OnModuleInit {
     } else if (saved.status === AppointmentStatus.PENDING_APPROVAL) {
       await this.notifyStudentDecision(withContact, 'pending_approval', managerName).catch((err) => {
         this.logger.error(`Error notifying student on pending_approval appointment: ${err}`);
+      });
+      await this.notifyTherapistPendingApproval(withContact, serviceEntity).catch((err) => {
+        this.logger.error(`Error notifying therapist on pending_approval appointment: ${err}`);
       });
     }
 
@@ -661,6 +699,7 @@ export class AppointmentsService implements OnModuleInit {
       const isYoga = /hatha.*yoga|yoga.*terap/i.test(targetServiceName);
       const isMeditacion =
         /meditaci/i.test(targetServiceName) && !/gong|sonor/i.test(targetServiceName);
+      const isGestalt = /gestalt/i.test(targetServiceName);
 
       let targetServiceEntity: Service | null = null;
       if (appt.serviceId) {
@@ -750,6 +789,14 @@ export class AppointmentsService implements OnModuleInit {
             targetServiceEntity?.scheduleText || 'Lunes y Jueves de 09:15 a 09:45';
           throw new BadRequestException(
             `Ese horario no corresponde a los turnos oficiales de Meditaciones Guiadas (${scheduleDisplay}).`,
+          );
+        }
+      } else if (isGestalt && !dto.allowCustomSchedule) {
+        let zoned = new TZDate(newStart.getTime(), 'Europe/Madrid');
+        let dayOfWeek = zoned.getDay();
+        if (dayOfWeek !== 1 && dayOfWeek !== 3) {
+          throw new BadRequestException(
+            'Las sesiones de Terapia Gestalt solo se realizan los lunes y algún miércoles previa coordinación y aprobación de la terapeuta (Salvadora Conesa Martinez).',
           );
         }
       }
@@ -1591,11 +1638,10 @@ export class AppointmentsService implements OnModuleInit {
               ${dateHtml}
               <p style="margin: 6px 0; color: #1e40af;">📍 <strong>Modalidad:</strong> ${modalityText}</p>
               ${
-                isVirtual && appt.calMeetingUrl
-                  ? `<div style="margin: 10px 0; padding: 10px; background-color: #ffffff; border-radius: 6px; border: 1px dashed #93c5fd;">
-                       <p style="margin: 0; font-size: 13px; color: #1e40af;">🔗 <strong>Enlace provisional de la videollamada:</strong></p>
-                       <p style="margin: 4px 0 0 0;"><a href="${appt.calMeetingUrl}" style="color: #2563eb; font-weight: bold; word-break: break-all;">${appt.calMeetingUrl}</a></p>
-                       <p style="margin: 4px 0 0 0; font-size: 11px; color: #6b7280;">(El enlace se activará definitivamente una vez confirmada la cita por el profesor/terapeuta).</p>
+                isVirtual
+                  ? `<div style="margin: 10px 0; padding: 10px; background-color: #f8fafc; border-radius: 6px; border: 1px dashed #cbd5e1;">
+                       <p style="margin: 0; font-size: 13px; color: #475569;">🔗 <strong>Enlace de la videollamada:</strong></p>
+                       <p style="margin: 4px 0 0 0; font-size: 12px; color: #64748b;">El enlace de acceso para unirte a la videollamada te será facilitado por correo en cuanto la terapeuta revise y apruebe tu solicitud.</p>
                      </div>`
                   : ''
               }
@@ -1812,28 +1858,35 @@ export class AppointmentsService implements OnModuleInit {
       // 1. Dispatch Email notification if enabled for this service
       if (shouldEmail) {
         if (contact.email) {
-          this.logger.log(`[Email] Sending ${decision} email to ${contact.email} for appt ${appt.id}...`);
-          const res = await this.emailService
-            .sendNotification(
-              contact.email,
-              contact.name,
-              subject,
-              emailHtml,
-              chatMessageText,
-              undefined,
-              contact.id,
-            )
-            .catch((err) => {
-              this.logger.error(`[Email] Error sending ${decision} email to ${contact.email}: ${err}`);
-              return { ok: false, error: String(err) };
-            });
-          this.logger.log(`[Email] Result for ${contact.email}: ${JSON.stringify(res)}`);
-          if (res?.ok === false) {
-            this.logger.warn(`[Email] Error detected sending email to contact ${contact.id} (${contact.email}). Setting emailerroneo='S'.`);
-            contact.emailerroneo = 'S';
-            await this.contactsRepo.save(contact).catch((e) => {
-              this.logger.warn(`Failed to save contact emailerroneo flag: ${e}`);
-            });
+          const debounceKey = `email:${appt.id}:${decision}:${contact.email.toLowerCase().trim()}`;
+          const lastSent = this.recentDispatches.get(debounceKey);
+          if (lastSent && Date.now() - lastSent < 15000) {
+            this.logger.log(`[Email] Skipping duplicate ${decision} email to ${contact.email} for appt ${appt.id} (sent < 15s ago).`);
+          } else {
+            this.recentDispatches.set(debounceKey, Date.now());
+            this.logger.log(`[Email] Sending ${decision} email to ${contact.email} for appt ${appt.id}...`);
+            const res = await this.emailService
+              .sendNotification(
+                contact.email,
+                contact.name,
+                subject,
+                emailHtml,
+                chatMessageText,
+                undefined,
+                contact.id,
+              )
+              .catch((err) => {
+                this.logger.error(`[Email] Error sending ${decision} email to ${contact.email}: ${err}`);
+                return { ok: false, error: String(err) };
+              });
+            this.logger.log(`[Email] Result for ${contact.email}: ${JSON.stringify(res)}`);
+            if (res?.ok === false) {
+              this.logger.warn(`[Email] Error detected sending email to contact ${contact.id} (${contact.email}). Setting emailerroneo='S'.`);
+              contact.emailerroneo = 'S';
+              await this.contactsRepo.save(contact).catch((e) => {
+                this.logger.warn(`Failed to save contact emailerroneo flag: ${e}`);
+              });
+            }
           }
         } else {
           this.logger.warn(`[Email] Contact ${contact.id} (${contact.name}) has NO email. Cannot send ${decision} notification.`);
@@ -1912,9 +1965,9 @@ export class AppointmentsService implements OnModuleInit {
         if (isProvisional) {
           smsText = `Hola ${contact.name || ''}, tu solicitud de plaza prioritaria para ${appt.service} (${formattedDate}) ha sido recibida (fecha provisional). Centro Salvadora.`;
         } else {
-          smsText = (isVirtual && appt.calMeetingUrl)
-            ? `Hola ${contact.name || ''}, tu solicitud online para ${appt.service} el ${formattedDate} ha sido recibida y está pendiente de confirmación. Enlace videollamada: ${appt.calMeetingUrl}. Centro Salvadora.`
-            : `Hola ${contact.name || ''}, tu solicitud para ${appt.service} el ${formattedDate} ha sido recibida y está pendiente de confirmación del profesor. Centro de Yoga Salvadora Conesa.`;
+          smsText = isVirtual
+            ? `Hola ${contact.name || ''}, tu solicitud online para ${appt.service} el ${formattedDate} ha sido recibida y está pendiente de confirmación de la terapeuta. Te enviaremos el enlace de la videollamada una vez aprobada. Centro Salvadora.`
+            : `Hola ${contact.name || ''}, tu solicitud para ${appt.service} el ${formattedDate} ha sido recibida y está pendiente de confirmación de la terapeuta (Salvadora Conesa Martinez). Centro de Yoga Salvadora Conesa.`;
         }
       } else if (decision === 'accepted' && isResched) {
         if (isProvisional) {
@@ -1942,29 +1995,36 @@ export class AppointmentsService implements OnModuleInit {
 
       // Direct Zadarma SMS dispatch if enabled for this service and contact has phone
       if (shouldSms && contact.phone && this.zadarmaSms) {
-        try {
-          this.logger.log(`[SMS] Dispatching Zadarma SMS for appointment ${appt.id} (${decision}) to ${contact.phone}...`);
-          let sender: string | undefined;
+        const smsDebounceKey = `sms:${appt.id}:${decision}:${contact.phone.replace(/\D/g, '')}`;
+        const lastSmsSent = this.recentDispatches.get(smsDebounceKey);
+        if (lastSmsSent && Date.now() - lastSmsSent < 15000) {
+          this.logger.log(`[SMS] Skipping duplicate ${decision} SMS to ${contact.phone} for appt ${appt.id} (sent < 15s ago).`);
+        } else {
+          this.recentDispatches.set(smsDebounceKey, Date.now());
           try {
-            const vapiAcc = await this.appointmentsRepo.manager
-              ?.getRepository(VapiAccount)
-              ?.findOne({ where: {} })
-              .catch(() => null);
-            if (vapiAcc?.zadarmaSenderId) {
-              sender = vapiAcc.zadarmaSenderId;
-            }
-          } catch {}
+            this.logger.log(`[SMS] Dispatching Zadarma SMS for appointment ${appt.id} (${decision}) to ${contact.phone}...`);
+            let sender: string | undefined;
+            try {
+              const vapiAcc = await this.appointmentsRepo.manager
+                ?.getRepository(VapiAccount)
+                ?.findOne({ where: {} })
+                .catch(() => null);
+              if (vapiAcc?.zadarmaSenderId) {
+                sender = vapiAcc.zadarmaSenderId;
+              }
+            } catch {}
 
-          const smsResult = await this.zadarmaSms.sendSms({
-            number: contact.phone,
-            message: smsText,
-            sender,
-            contactId: contact.id,
-            appointmentId: appt.id,
-          });
-          this.logger.log(`[SMS] Zadarma SMS result for appt ${appt.id}: ${JSON.stringify(smsResult)}`);
-        } catch (smsErr) {
-          this.logger.error(`Could not dispatch Zadarma SMS for appointment ${appt.id}: ${smsErr}`);
+            const smsResult = await this.zadarmaSms.sendSms({
+              number: contact.phone,
+              message: smsText,
+              sender,
+              contactId: contact.id,
+              appointmentId: appt.id,
+            });
+            this.logger.log(`[SMS] Zadarma SMS result for appt ${appt.id}: ${JSON.stringify(smsResult)}`);
+          } catch (smsErr) {
+            this.logger.error(`Could not dispatch Zadarma SMS for appointment ${appt.id}: ${smsErr}`);
+          }
         }
       } else {
         this.logger.log(
@@ -1993,6 +2053,160 @@ export class AppointmentsService implements OnModuleInit {
       }).catch(() => null);
     } catch (err) {
       this.logger.error(`Error notifying student about appointment ${appt.id}: ${err}`);
+    }
+  }
+
+  /**
+   * Notifica por correo electrónico a la terapeuta / responsable del servicio
+   * de una nueva cita registrada en estado PENDING_APPROVAL para su revisión y confirmación.
+   */
+  private async notifyTherapistPendingApproval(
+    appt: Appointment,
+    serviceEntity?: Service | null,
+  ): Promise<void> {
+    try {
+      const contact =
+        appt.contact ||
+        (await this.contactsRepo.findOne({ where: { id: appt.contactId } }));
+
+      let effectiveSvc = serviceEntity;
+      if (!effectiveSvc && appt.serviceId) {
+        effectiveSvc = await this.servicesRepo
+          .findOne({
+            where: { id: appt.serviceId },
+            relations: ['manager'],
+          })
+          .catch(() => null);
+      }
+      if (!effectiveSvc && appt.service) {
+        effectiveSvc = await this.servicesRepo
+          .findOne({
+            where: { name: appt.service },
+            relations: ['manager'],
+          })
+          .catch(() => null);
+      }
+
+      const isGestalt =
+        /gestalt/i.test(appt.service || '') ||
+        /gestalt/i.test(effectiveSvc?.name || '');
+      const therapistEmail =
+        effectiveSvc?.manager?.email ||
+        (isGestalt ? 'salvadoraconesa@gmail.com' : 'salvadoraconesa@gmail.com');
+      const therapistName =
+        effectiveSvc?.manager?.name ||
+        (isGestalt ? 'Salvadora Conesa Martinez' : 'Terapeuta / Responsable');
+
+      if (!therapistEmail) {
+        this.logger.warn(
+          `[Email Therapist] No therapist email configured for appointment ${appt.id}. Skipping notification.`,
+        );
+        return;
+      }
+
+      const startsAtDate = new Date(appt.startsAt);
+      const endsAtDate = appt.endsAt ? new Date(appt.endsAt) : null;
+      const formattedDate = startsAtDate.toLocaleDateString('es-ES', {
+        timeZone: 'Europe/Madrid',
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      });
+      const formattedStartTime = startsAtDate.toLocaleTimeString('es-ES', {
+        timeZone: 'Europe/Madrid',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      const formattedEndTime = endsAtDate
+        ? endsAtDate.toLocaleTimeString('es-ES', {
+            timeZone: 'Europe/Madrid',
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : '';
+      const formattedTime = formattedEndTime
+        ? `${formattedStartTime} a ${formattedEndTime}`
+        : formattedStartTime;
+
+      const isVirtual =
+        appt.modality === 'virtual' ||
+        appt.modality === 'online' ||
+        Boolean(appt.calMeetingUrl) ||
+        /online|virtual|videollamada/i.test(appt.notes || '') ||
+        /online|virtual|videollamada/i.test(appt.reason || '') ||
+        /online|virtual|videollamada/i.test(appt.service || '');
+
+      const modalityText = isVirtual
+        ? 'Online (Videollamada)'
+        : 'Presencial en el centro';
+      const clientName = contact?.name || 'Cliente / Alumno';
+      const clientPhone = contact?.phone || 'No facilitado';
+      const clientEmail = contact?.email || 'No facilitado';
+      const reasonOrNotes =
+        appt.reason || appt.notes || '(Sin notas adicionales)';
+
+      const subject = `🔔 Nueva solicitud de cita pendiente de aprobación: ${appt.service} - ${clientName}`;
+
+      const meetingUrlSection =
+        isVirtual && appt.calMeetingUrl
+          ? `
+            <div style="margin: 14px 0; padding: 12px; background-color: #f0fdf4; border: 1px dashed #22c55e; border-radius: 6px;">
+              <p style="margin: 0; font-size: 13px; color: #15803d; font-weight: bold;">🎥 Sala virtual reservada (Cal.com para la terapeuta):</p>
+              <p style="margin: 4px 0 0 0;"><a href="${appt.calMeetingUrl}" style="color: #16a34a; font-weight: bold; word-break: break-all;">${appt.calMeetingUrl}</a></p>
+              <p style="margin: 4px 0 0 0; font-size: 11px; color: #6b7280;">(El alumno/paciente aún NO tiene este enlace; se le enviará automáticamente en cuanto apruebes la cita en el CRM).</p>
+            </div>
+          `
+          : '';
+
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif; color: #1f2937; max-width: 620px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 10px; padding: 24px; background-color: #ffffff;">
+          <div style="text-align: center; margin-bottom: 20px; border-bottom: 1px solid #f3f4f6; padding-bottom: 16px;">
+            <h2 style="color: #d97706; margin: 0; font-size: 22px;">Nueva Solicitud de Cita Pendiente de Aprobación</h2>
+            <p style="margin: 6px 0 0 0; color: #6b7280; font-size: 14px;">Centro de Yoga Salvadora Conesa & CRM</p>
+          </div>
+
+          <p style="font-size: 15px;">Hola <strong>${therapistName}</strong>,</p>
+          <p style="font-size: 14px; color: #374151;">Has recibido una nueva solicitud de cita para <strong>${appt.service}</strong> que requiere tu revisión y confirmación previa.</p>
+
+          <div style="background-color: #fffbeb; border: 1px solid #fde68a; padding: 16px; border-radius: 8px; margin: 16px 0;">
+            <p style="margin: 6px 0;">👤 <strong>Paciente / Cliente:</strong> ${clientName}</p>
+            <p style="margin: 6px 0;">📞 <strong>Teléfono:</strong> <a href="tel:${clientPhone}" style="color: #2563eb;">${clientPhone}</a></p>
+            <p style="margin: 6px 0;">✉️ <strong>Email:</strong> ${clientEmail !== 'No facilitado' ? `<a href="mailto:${clientEmail}" style="color: #2563eb;">${clientEmail}</a>` : 'No facilitado'}</p>
+            <hr style="border: none; border-top: 1px solid #fef3c7; margin: 10px 0;" />
+            <p style="margin: 6px 0;">📌 <strong>Servicio:</strong> ${appt.service}</p>
+            <p style="margin: 6px 0;">📅 <strong>Fecha solicitada:</strong> ${formattedDate}</p>
+            <p style="margin: 6px 0;">⏰ <strong>Horario propuesto:</strong> ${formattedTime}</p>
+            <p style="margin: 6px 0;">📍 <strong>Modalidad:</strong> ${modalityText}</p>
+            <p style="margin: 6px 0;">📝 <strong>Motivo / Indicaciones:</strong> ${reasonOrNotes}</p>
+            ${meetingUrlSection}
+          </div>
+
+          <p style="font-size: 14px; color: #374151;">Para aprobar, reprogramar o rechazar esta solicitud, accede al calendario de tu <strong>CRM</strong>.</p>
+          <p style="font-size: 13px; color: #6b7280; margin-top: 20px; border-top: 1px solid #f3f4f6; padding-top: 14px;">Notificación automática del sistema de reservas.</p>
+        </div>
+      `;
+
+      const plainText = `Nueva solicitud de cita para ${appt.service} de ${clientName} (${clientPhone}, ${clientEmail}) para el ${formattedDate} de ${formattedTime} (${modalityText}). Motivo: ${reasonOrNotes}. Accede al CRM para aprobarla o gestionarla.`;
+
+      this.logger.log(
+        `[Email Therapist] Sending pending_approval alert to therapist ${therapistEmail} for appt ${appt.id}...`,
+      );
+      await this.emailService.sendNotification(
+        therapistEmail,
+        therapistName,
+        subject,
+        emailHtml,
+        plainText,
+        undefined,
+        appt.contactId,
+      ).catch((err) => {
+        this.logger.error(
+          `[Email Therapist] Failed to send email to therapist ${therapistEmail}: ${err}`,
+        );
+      });
+    } catch (err) {
+      this.logger.error(`[Email Therapist] Error in notifyTherapistPendingApproval: ${err}`);
     }
   }
 
@@ -2504,6 +2718,23 @@ export class AppointmentsService implements OnModuleInit {
       return slots;
     }
 
+    const isGestalt = /gestalt/i.test(effectiveSvcName);
+    if (isGestalt) {
+      const targetDay = zoned.getDay();
+      if (targetDay !== 1 && targetDay !== 3) {
+        return [];
+      }
+      const gestaltWorkingHours: WorkingHourSlot[] = [
+        { day: 1, open: '10:00', close: '20:00' },
+        { day: 3, open: '10:00', close: '20:00' },
+      ];
+      return computeFreeSlots(date, durationMinutes, gestaltWorkingHours, existing, {
+        timezone,
+        now,
+        maxCapacity: 1,
+      });
+    }
+
     // If targetService is an event, handle event editions or specific schedule
     if (targetService?.serviceType === 'event') {
       const editions = this.eventEditionsRepo
@@ -2632,6 +2863,17 @@ export class AppointmentsService implements OnModuleInit {
             startDate = new Date(correctedZoned.getTime());
           }
         }
+      }
+    }
+
+    const isGestalt = /gestalt/i.test(oldAppt.service || '');
+    if (isGestalt) {
+      const zoned = new TZDate(startDate.getTime(), timezone);
+      const dayOfWeek = zoned.getDay();
+      if (dayOfWeek !== 1 && dayOfWeek !== 3) {
+        throw new BadRequestException(
+          'Las sesiones de Terapia Gestalt solo se realizan los lunes y algún miércoles previa coordinación y aprobación de la terapeuta (Salvadora Conesa Martinez).',
+        );
       }
     }
 

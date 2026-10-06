@@ -73,9 +73,10 @@ async function resetServices() {
         calendarId: 'cal-gestalt',
         paymentType: 'in_person',
         allowedModalities: JSON.stringify(['in_person', 'virtual']),
-        requiresApproval: false,
+        requiresApproval: true,
         requiresReason: false,
         isActive: true,
+        scheduleText: 'Lunes y algún Miércoles (con aprobación previa)',
       },
       {
         name: 'Baño de Gong y Meditación Sonora',

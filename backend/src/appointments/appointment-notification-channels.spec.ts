@@ -328,13 +328,17 @@ describe('Appointments Multi-Channel Notifications (Service Level)', () => {
     expect(smsPayload.message).toContain('https://meet.jit.si/salvadora-terapia-gestalt-test1234');
   });
 
-  it('includes provisional meeting URL in email and SMS for pending_approval virtual appointment', async () => {
+  it('does NOT include meeting URL in email and SMS for pending_approval virtual appointment, but notifies therapist with details', async () => {
     servicesRepoMock.findOne.mockResolvedValue({
       id: 'svc-gestalt',
       name: 'Terapia Gestalt (Sesión Individual)',
       notifyByEmail: true,
       notifyByWhatsapp: true,
       notifyBySms: true,
+      manager: {
+        name: 'Salvadora Conesa Martinez',
+        email: 'salvadoraconesa@gmail.com',
+      },
     });
 
     const onlineApptPending: any = {
@@ -342,24 +346,38 @@ describe('Appointments Multi-Channel Notifications (Service Level)', () => {
       service: 'Terapia Gestalt (Sesión Individual)',
       serviceId: 'svc-gestalt',
       contactId: 'contact-test-1',
-      startsAt: new Date('2026-09-25T10:00:00.000Z'),
-      endsAt: new Date('2026-09-25T11:00:00.000Z'),
+      startsAt: new Date('2026-09-21T10:00:00.000Z'),
+      endsAt: new Date('2026-09-21T11:00:00.000Z'),
       status: AppointmentStatus.PENDING_APPROVAL,
       modality: 'virtual',
       calMeetingUrl: 'https://meet.jit.si/salvadora-terapia-gestalt-provisional',
       notes: 'Sesión online por videollamada',
     };
 
-    await (service as any).notifyStudentDecision(onlineApptPending, 'pending_approval', 'Jose Ignacio Gomez Raya');
+    await (service as any).notifyStudentDecision(onlineApptPending, 'pending_approval', 'Salvadora Conesa Martinez');
 
     expect(emailServiceMock.sendNotification).toHaveBeenCalledTimes(1);
     const [, , , emailHtml] = emailServiceMock.sendNotification.mock.calls[0];
-    expect(emailHtml).toContain('https://meet.jit.si/salvadora-terapia-gestalt-provisional');
+    // Must NOT leak the provisional meeting link to the student
+    expect(emailHtml).not.toContain('https://meet.jit.si/salvadora-terapia-gestalt-provisional');
     expect(emailHtml).toContain('Online (Videollamada)');
+    expect(emailHtml).toContain('El enlace de acceso para unirte a la videollamada te será facilitado');
 
     expect(zadarmaSmsMock.sendSms).toHaveBeenCalledTimes(1);
     const smsPayload = zadarmaSmsMock.sendSms.mock.calls[0][0];
-    expect(smsPayload.message).toContain('https://meet.jit.si/salvadora-terapia-gestalt-provisional');
+    expect(smsPayload.message).not.toContain('https://meet.jit.si/salvadora-terapia-gestalt-provisional');
+
+    // Now test that therapist receives the notification with meeting link
+    emailServiceMock.sendNotification.mockClear();
+    await (service as any).notifyTherapistPendingApproval(onlineApptPending);
+
+    expect(emailServiceMock.sendNotification).toHaveBeenCalledTimes(1);
+    const [therapistEmail, therapistName, subject, therapistHtml] = emailServiceMock.sendNotification.mock.calls[0];
+    expect(therapistEmail).toBe('salvadoraconesa@gmail.com');
+    expect(therapistName).toBe('Salvadora Conesa Martinez');
+    expect(subject).toContain('Nueva solicitud de cita pendiente de aprobación');
+    expect(therapistHtml).toContain('https://meet.jit.si/salvadora-terapia-gestalt-provisional');
+    expect(therapistHtml).toContain('Maria Garcia');
   });
 
   it('marks contact emailerroneo = S when emailService.sendNotification fails', async () => {

@@ -286,7 +286,7 @@ ${contacto ? `${contacto}\n` : ''}- Horario de apertura de clases: ${formatWeekl
    - Baño de Gong: ${gongDateText} (último sábado de cada mes de 18:00 a 20:00; se aceptan reservas provisionales).
    - Puja de Gongs: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027 (El precio se determinará en función de las características del viaje y alojamiento. Se aceptan reservas provisionales).
    - Encuentro de Mujeres: próximamente (El precio se determinará en función de las características del viaje y alojamiento. Se aceptan reservas provisionales).
-   - Terapia Gestalt: lunes a viernes entre las 09:00 y las 20:00 según disponibilidad${gestaltRequiresApproval ? ' (con confirmación previa de Jose Ignacio)' : ''}.
+   - Terapia Gestalt: se realiza los LUNES y algún MIÉRCOLES (horario entre las 10:00 y las 20:00, siempre con aprobación previa y obligatoria de la terapeuta Salvadora Conesa Martinez). No está disponible los martes, jueves, viernes ni fines de semana.
    - Bienestar Experience: ${bienestarSchedule} (${bienestarModality}, plaza directa sin aprobación).
 2. **COMPRUEBA SIEMPRE CONTRA EL CALENDARIO OFICIAL (NUNCA EN CITAS NI INVENTAR)**:
    - Si el cliente solicita o propone un día o una hora concreta (por ejemplo, "¿puedo ir este lunes?" o "¿a las 10 de la mañana?"), comprueba si ese turno está en el CALENDARIO OFICIAL del servicio:

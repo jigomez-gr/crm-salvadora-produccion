@@ -87,11 +87,11 @@ export const OFFICIAL_SERVICES: OfficialServiceConfig[] = [
     name: 'Terapia Gestalt (Sesión Individual)',
     aliases: /gestalt/i,
     category: 'individual_flexible',
-    scheduleSummary: 'lunes a viernes de 09:00 a 20:00 según disponibilidad',
+    scheduleSummary: 'lunes y algún miércoles de 10:00 a 20:00 según disponibilidad (requiere aprobación obligatoria de Salvadora Conesa Martinez)',
     durationMinutes: 60,
     maxCapacity: 1,
     requiresApproval: true,
-    priceInfo: '35€ por sesión de 1 hora. Requiere aprobación de Salvadora Conesa Martinez',
+    priceInfo: '35€ por sesión de 1 hora. Se realiza los lunes y algún miércoles, requiere aprobación obligatoria de la terapeuta Salvadora Conesa Martinez',
   },
   {
     id: 'bienestar-experience',
@@ -684,6 +684,7 @@ export class VapiWebhookService {
 
     // 2. SESIONES INDIVIDUALES (Gestalt, Bienestar)
     if (officialSvc?.category === 'individual_flexible') {
+      const isGestaltRequested = /gestalt/i.test(officialSvc.name);
       const weekdayMap: Record<string, number> = {
         domingo: 0, lunes: 1, martes: 2, miercoles: 3, miércoles: 3, jueves: 4, viernes: 5, sabado: 6, sábado: 6,
       };
@@ -698,9 +699,20 @@ export class VapiWebhookService {
           if (isTarde && h < 12) h += 12;
           targetHourNorm = `${h.toString().padStart(2, '0')}:${m}`;
 
-          if (h < 9 || h > 19 || (h === 19 && parseInt(m, 10) > 0) || h >= 20) {
+          if (isGestaltRequested) {
+            if (h < 10 || h > 19 || (h === 19 && parseInt(m, 10) > 0) || h >= 20) {
+              return `Las sesiones de «Terapia Gestalt» se realizan los lunes y algún miércoles entre las 10:00 y las 20:00 según disponibilidad y coordinación con la terapeuta. Las ${rawHora} queda fuera del horario. ${officialSvc.priceInfo}. ¿Te vendría bien un lunes o un miércoles dentro de esa franja?`;
+            }
+          } else if (h < 9 || h > 19 || (h === 19 && parseInt(m, 10) > 0) || h >= 20) {
             return `El horario oficial para «${officialSvc.name}» es de lunes a viernes entre las 09:00 y las 20:00. Las ${rawHora} queda fuera del horario de atención. ${officialSvc.priceInfo}. ¿Te vendría bien dentro de la franja de 09:00 a 20:00?`;
           }
+        }
+      }
+
+      if (isGestaltRequested && rawFecha) {
+        const nonGestaltDays = ['martes', 'jueves', 'viernes', 'sabado', 'sábado', 'domingo'];
+        if (nonGestaltDays.some((d) => rawFecha.includes(d))) {
+          return `Las sesiones de «Terapia Gestalt» solo se realizan los lunes y algún miércoles (con previa coordinación y aprobación de la terapeuta Salvadora Conesa Martinez). No se ofrecen los demás días. ${officialSvc.priceInfo}. ¿Te vendría bien un lunes o un miércoles?`;
         }
       }
 
@@ -790,6 +802,7 @@ export class VapiWebhookService {
         const targetDate = addDays(startDate, dayOffset);
         const dayOfWeek = targetDate.getDay();
         if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+        if (isGestaltRequested && dayOfWeek !== 1 && dayOfWeek !== 3) continue;
 
         let daySlots = await this.appointmentsService.getAvailableSlots(
           targetDate,
@@ -1228,10 +1241,20 @@ export class VapiWebhookService {
 
     // 3. Create appointment with conflict handling
     try {
+      const isGestalt = /gestalt/i.test(officialSvc?.name || serviceEntity?.name || serviceName);
+      if (isGestalt) {
+        const zoned = new TZDate(startsAt.getTime(), ctx.timezone);
+        const dayOfWeek = zoned.getDay();
+        if (dayOfWeek !== 1 && dayOfWeek !== 3) {
+          return `Las sesiones de «Terapia Gestalt» solo se realizan los lunes y algún miércoles de 10:00 a 20:00 con previa coordinación y aprobación de Salvadora Conesa Martinez. No se pueden agendar en otros días. ¿Te vendría bien un lunes o un miércoles?`;
+        }
+      }
+
       const requiresApproval =
-        serviceEntity?.requiresApproval !== undefined && serviceEntity?.requiresApproval !== null
+        isGestalt ||
+        (serviceEntity?.requiresApproval !== undefined && serviceEntity?.requiresApproval !== null
           ? Boolean(serviceEntity.requiresApproval)
-          : Boolean(officialSvc?.requiresApproval);
+          : Boolean(officialSvc?.requiresApproval));
       const isVirtual =
         params?.modalidad === 'virtual' ||
         params?.modality === 'virtual' ||

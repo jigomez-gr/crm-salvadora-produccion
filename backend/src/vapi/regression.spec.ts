@@ -203,8 +203,14 @@ describe('Batería de Pruebas de Regresión Exhaustiva: Ciclo de Vida de Citas y
       getAvailableSlots: jest.fn().mockImplementation(async (targetDate, duration, wh, tz) => {
         const zoned = new TZDate(targetDate.getTime(), tz || 'Europe/Madrid');
         const day = zoned.getDay();
+        if (day === 1) {
+          return [{ startsAt: new Date(Date.UTC(2026, 8, 7, 9, 0, 0)), endsAt: new Date(Date.UTC(2026, 8, 7, 10, 0, 0)) }]; // 11:00 Madrid (Gestalt lunes)
+        }
         if (day === 2) {
           return [{ startsAt: new Date(Date.UTC(2026, 8, 8, 15, 0, 0)), endsAt: new Date(Date.UTC(2026, 8, 8, 16, 30, 0)) }]; // 17:00 Madrid
+        }
+        if (day === 3) {
+          return [{ startsAt: new Date(Date.UTC(2026, 8, 9, 9, 0, 0)), endsAt: new Date(Date.UTC(2026, 8, 9, 10, 0, 0)) }]; // 11:00 Madrid (Gestalt miércoles)
         }
         if (day === 4) {
           return [{ startsAt: new Date(Date.UTC(2026, 8, 10, 15, 30, 0)), endsAt: new Date(Date.UTC(2026, 8, 10, 17, 0, 0)) }]; // 17:30 Madrid
@@ -464,7 +470,7 @@ describe('Batería de Pruebas de Regresión Exhaustiva: Ciclo de Vida de Citas y
     const apptGestalt = await appointmentsService.create({
       contactId: inMemoryContacts[0].id,
       service: 'Terapia Gestalt (Sesión Individual)',
-      startsAt: '2026-09-15T09:00:00.000Z',
+      startsAt: '2026-09-14T09:00:00.000Z',
     });
 
     expect(apptGestalt.status).toBe(AppointmentStatus.PENDING_APPROVAL);
@@ -711,7 +717,7 @@ describe('Batería de Pruebas de Regresión Exhaustiva: Ciclo de Vida de Citas y
             name: 'reservar_cita',
             arguments: {
               servicio: 'Terapia Gestalt (Sesión Individual)',
-              inicioIso: '2026-09-15T09:00:00.000Z',
+              inicioIso: '2026-09-14T09:00:00.000Z',
               nombre: TEST_CALLER_NAME,
             },
           },

@@ -751,9 +751,10 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
 
       try {
         const timezone = config?.timezone || 'Europe/Madrid';
+        const isGestalt = /gestalt/i.test(svc.name || '') || /gestalt/i.test(inputData.service || '');
         const requiresApproval =
-          svc.requiresApproval === true || /gestalt|bienestar/i.test(svc.name || '');
-        const status = requiresApproval ? 'pending_approval' : 'scheduled';
+          isGestalt || svc.requiresApproval === true || /bienestar/i.test(svc.name || '');
+        const status = isGestalt ? 'pending_approval' : (requiresApproval ? 'pending_approval' : 'scheduled');
         const isSinFecha = svc.sinfechadefinitiva === 'S';
         const recurring = resolveNextRecurringEventDate(svc.name, new Date(), timezone);
         let defaultEventDate = '2099-12-31T20:00:00.000Z';
@@ -781,6 +782,17 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           }
         }
         const effectiveStartsAt = parseFlexibleStartsAt(rawStartsAt, timezone, targetDate);
+
+        if (isGestalt) {
+          const z = new TZDate(new Date(effectiveStartsAt).getTime(), timezone);
+          const dow = z.getDay();
+          if (dow !== 1 && dow !== 3) {
+            return {
+              error: 'Las sesiones de Terapia Gestalt solo se realizan los lunes y algún miércoles previa coordinación y aprobación de la terapeuta (Salvadora Conesa Martinez).',
+              message: 'Las sesiones de Terapia Gestalt se realizan exclusivamente los lunes y algún miércoles según disponibilidad y coordinación con la terapeuta Salvadora Conesa Martinez. Por favor, indícame un lunes o miércoles que te venga bien.',
+            };
+          }
+        }
 
         const effectiveModality =
           inputData.modality ||
@@ -1529,14 +1541,14 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Movilidad de horarios: Los asistentes se pueden mover por los horarios libremente (martes o jueves), siempre teniendo en cuenta evitar horarios que estén completos para no colapsar el aforo (aforo máximo 28 plazas).
   Cuando un cliente solicite meditación o pregunte por ella, ofrécele los martes o jueves a las 9:15 y formaliza su plaza con 'bookAppointment'.
 - TERAPIA GESTALT (SESIÓN INDIVIDUAL):
+  * DÍAS DISPONIBLES: Las sesiones de Terapia Gestalt se realizan EXCLUSIVAMENTE los LUNES y algún MIÉRCOLES (horario habitual entre las 10:00 y las 20:00 según disponibilidad). NO se ofrecen ni realizan los martes, jueves, viernes ni fines de semana. Si el cliente solicita otro día, indícale amablemente que solo se atiende los lunes y algún miércoles.
   * Modalidad: Puede ser Presencial u Online (videollamada). Pregúntale al alumno/cliente qué modalidad prefiere. Si el alumno te facilita sus datos sin especificar modalidad, tramita la reserva y confírmale amablemente que su solicitud queda registrada y pendiente de aprobación por la terapeuta y responsable (**Salvadora Conesa Martinez**).
   * Duración: 60 minutos (1 hora).
   * Precio: ${gestaltPrice} por sesión (pago en el centro o previa confirmación).
   * Aforo: Es una sesión individual (solo 1 persona por horario).
-  * Horario: Se acuerda individualmente entre alumno y profesora. Consulta disponibilidad con 'checkAvailability'.
-  * APROBACIÓN OBLIGATORIA: Las citas de Terapia Gestalt requieren la aprobación previa de la terapeuta/profesora responsable (**Salvadora Conesa Martinez**).
-  * Al formalizar con 'bookAppointment', explícale con amabilidad al cliente que su solicitud de cita ha quedado registrada como **solicitud pendiente de confirmación** y que la terapeuta responsable le confirmará la cita (por email o WhatsApp) en cuanto la revise.
-  * ESTÁ ESTRICTAMENTE PROHIBIDO decir que la cita de Terapia Gestalt está confirmada o pasar enlaces de videollamada. Comunica SIEMPRE que queda como **solicitud pendiente de confirmación/aprobación por Salvadora Conesa Martinez** y que ella le avisará en cuanto la revise.
+  * APROBACIÓN OBLIGATORIA DE LA TERAPEUTA: Independientemente de que sea presencial u online, TODA cita de Terapia Gestalt REQUIERE la aprobación previa de la terapeuta y profesora responsable (**Salvadora Conesa Martinez**).
+  * Al formalizar con 'bookAppointment', explícale con amabilidad al cliente que su solicitud de cita ha quedado registrada como **solicitud pendiente de confirmación/aprobación por Salvadora Conesa Martinez** y que ella le avisará (por email o WhatsApp) en cuanto la revise y apruebe.
+  * ESTÁ ESTRICTAMENTE PROHIBIDO decir que la cita de Terapia Gestalt está confirmada o pasar enlaces de videollamada (Cal.com) antes de que la terapeuta la apruebe. Comunica SIEMPRE que queda como **solicitud pendiente de confirmación/aprobación por Salvadora Conesa Martinez** y que ella le avisará en cuanto la revise.
 - BIENESTAR EXPERIENCE (LONGEVIDAD Y BIENESTAR INTEGRAL):
   * Consulta y sigue siempre los detalles, descripción, modalidades, fechas y horarios oficiales configurados en la lista de Servicios de abajo (actualizados desde el CRM).
   * Modalidad y Formato: Revisa las modalidades permitidas y la descripción de la actividad. Si la actividad está configurada como presencial (por ejemplo, exposición en un Auditorio de Madrid o sesión en el centro), NO preguntes por modalidad virtual ni ofrezcas videollamada; asume presencial. Solo ofrece modalidad online si la lista de servicios incluye explícitamente modalidad virtual.

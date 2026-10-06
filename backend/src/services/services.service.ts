@@ -231,9 +231,10 @@ export class ServicesService implements OnModuleInit {
         gestaltSvc.price = gestaltSvc.price || '35.00';
         gestaltSvc.allowedModalities = ['in_person', 'virtual'];
         gestaltSvc.isActive = true;
+        gestaltSvc.scheduleText = 'Lunes y algún Miércoles (con aprobación previa)';
         if (!gestaltSvc.description || gestaltSvc.description.includes('Jose Ignacio')) {
           gestaltSvc.description =
-            'Sesión individual de psicoterapia Gestalt presencial u online. Enfoque humanista y toma de conciencia. Horario convenido individualmente entre terapeuta y alumno/paciente. Requiere aprobación previa por parte de la terapeuta y responsable (Salvadora Conesa Martinez). Precio: 35€ por sesión de 1 hora. Pago en el centro.';
+            'Sesión individual de psicoterapia Gestalt presencial u online. Enfoque humanista y toma de conciencia. Horario convenido individualmente entre terapeuta y alumno/paciente (lunes y algún miércoles). Requiere aprobación previa por parte de la terapeuta y responsable (Salvadora Conesa Martinez). Precio: 35€ por sesión de 1 hora. Pago en el centro.';
         }
         await this.serviceRepo.save(gestaltSvc);
       }
@@ -965,6 +966,13 @@ export class ServicesService implements OnModuleInit {
       `).catch(() => null);
 
       // Ensure only Terapia Gestalt requires approval; Baño de Gong, Fin de Semana, Talleres, etc. do NOT require approval
+      await this.serviceRepo.query(`
+        UPDATE services 
+        SET "requiresApproval" = true,
+            "scheduleText" = 'Lunes y algún Miércoles (con aprobación previa)'
+        WHERE name ILIKE '%gestalt%';
+      `).catch(() => null);
+
       await this.serviceRepo.query(`
         UPDATE services 
         SET "requiresApproval" = false
