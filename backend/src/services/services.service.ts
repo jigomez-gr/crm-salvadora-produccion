@@ -353,7 +353,7 @@ export class ServicesService implements OnModuleInit {
             flyerParticularUrl: '/flyers/ayuno_particular.jpg',
             flyerParticularPath: 'public/flyers/ayuno_particular.jpg',
             videoParticularUrl: '/videos/ayunoterapeuticoparticular.mp4',
-            videoParticularPath: 'public/videos/ayunoterapeuticoparticular.mp4',
+            videoParticularPath: 'media_base/videos/ayunoterapeuticoparticular.mp4',
             reminderNotes:
               'Llevar ropa cómoda de abrigo para la naturaleza, calzado de senderismo/montaña, botella de agua reutilizable, libreta de notas, bañador y toalla grande para saunas/baños termales si aplica.',
             isActive: true,
@@ -363,7 +363,7 @@ export class ServicesService implements OnModuleInit {
         ayunoSvc.flyerParticularUrl = '/flyers/ayuno_particular.jpg';
         ayunoSvc.flyerParticularPath = 'public/flyers/ayuno_particular.jpg';
         ayunoSvc.videoParticularUrl = '/videos/ayunoterapeuticoparticular.mp4';
-        ayunoSvc.videoParticularPath = 'public/videos/ayunoterapeuticoparticular.mp4';
+        ayunoSvc.videoParticularPath = 'media_base/videos/ayunoterapeuticoparticular.mp4';
         if (!ayunoSvc.flyerUrl) {
           ayunoSvc.flyerUrl = '/flyers/ayuno.jpeg';
           ayunoSvc.flyerPath = 'public/flyers/ayuno.jpeg';
@@ -965,6 +965,14 @@ export class ServicesService implements OnModuleInit {
         WHERE name ILIKE '%bienestar%';
       `).catch(() => null);
 
+      // Ensure Retiro de Ayuno videoParticularPath points to media_base/videos/ayunoterapeuticoparticular.mp4
+      await this.serviceRepo.query(`
+        UPDATE services 
+        SET "videoParticularUrl" = '/videos/ayunoterapeuticoparticular.mp4',
+            "videoParticularPath" = 'media_base/videos/ayunoterapeuticoparticular.mp4'
+        WHERE name ILIKE '%ayuno%' OR "videoParticularPath" LIKE '%ayunoterapeuticoparticular.mp4%';
+      `).catch(() => null);
+
       // Ensure only Terapia Gestalt requires approval; Baño de Gong, Fin de Semana, Talleres, etc. do NOT require approval
       await this.serviceRepo.query(`
         UPDATE services 
@@ -1173,7 +1181,7 @@ export class ServicesService implements OnModuleInit {
             }
             if (!s.videoParticularUrl) {
               s.videoParticularUrl = '/videos/ayunoterapeuticoparticular.mp4';
-              s.videoParticularPath = 'public/videos/ayunoterapeuticoparticular.mp4';
+              s.videoParticularPath = 'media_base/videos/ayunoterapeuticoparticular.mp4';
               changed = true;
             }
           }

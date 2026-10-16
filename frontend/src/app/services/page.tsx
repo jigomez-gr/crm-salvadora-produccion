@@ -2097,10 +2097,10 @@ export default function ServicesPage() {
                       setForm((f) => ({
                         ...f,
                         videoParticularPath: val,
-                        videoParticularUrl: f.videoParticularUrl || (val.startsWith("public/") ? val.replace(/^public/, "") : f.videoParticularUrl),
+                        videoParticularUrl: f.videoParticularUrl || (val.startsWith("public/") ? val.replace(/^public/, "") : val.startsWith("media_base/") ? val.replace(/^media_base/, "") : f.videoParticularUrl),
                       }));
                     }}
-                    placeholder="ej. public/videos/ayunoterapeuticoparticular.mp4"
+                    placeholder="ej. media_base/videos/ayunoterapeuticoparticular.mp4"
                     className="text-xs font-mono"
                   />
                 </div>
