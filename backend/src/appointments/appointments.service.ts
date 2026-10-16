@@ -792,8 +792,8 @@ export class AppointmentsService implements OnModuleInit {
           );
         }
       } else if (isGestalt && !dto.allowCustomSchedule) {
-        let zoned = new TZDate(newStart.getTime(), 'Europe/Madrid');
-        let dayOfWeek = zoned.getDay();
+        const zoned = new TZDate(newStart.getTime(), 'Europe/Madrid');
+        const dayOfWeek = zoned.getDay();
         if (dayOfWeek !== 1 && dayOfWeek !== 3) {
           throw new BadRequestException(
             'Las sesiones de Terapia Gestalt solo se realizan los lunes y algún miércoles previa coordinación y aprobación de la terapeuta (Salvadora Conesa Martinez).',
@@ -2012,7 +2012,9 @@ export class AppointmentsService implements OnModuleInit {
               if (vapiAcc?.zadarmaSenderId) {
                 sender = vapiAcc.zadarmaSenderId;
               }
-            } catch {}
+            } catch {
+              /* ignore */
+            }
 
             const smsResult = await this.zadarmaSms.sendSms({
               number: contact.phone,
@@ -2859,10 +2861,10 @@ export class AppointmentsService implements OnModuleInit {
     const isMeditacion = /meditaci/i.test(oldAppt.service || '') && !/gong|sonor/i.test(oldAppt.service || '');
     if (isYoga || isMeditacion) {
       const timetable = isYoga ? HATHA_YOGA_TIMETABLE : MEDITACION_TIMETABLE;
-      let zoned = new TZDate(startDate.getTime(), timezone);
-      let dayOfWeek = zoned.getDay();
-      let timeStr = format(zoned, 'HH:mm');
-      let allowed = timetable[dayOfWeek] || [];
+      const zoned = new TZDate(startDate.getTime(), timezone);
+      const dayOfWeek = zoned.getDay();
+      const timeStr = format(zoned, 'HH:mm');
+      const allowed = timetable[dayOfWeek] || [];
       if (!allowed.includes(timeStr)) {
         const rawTimeMatch = newStartsAtIso.match(/[T ](\d{1,2}:\d{2})/);
         if (rawTimeMatch) {

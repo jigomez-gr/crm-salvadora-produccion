@@ -811,7 +811,7 @@ export class VapiWebhookService {
         if (dayOfWeek === 0 || dayOfWeek === 6) continue;
         if (isGestaltRequested && dayOfWeek !== 1 && dayOfWeek !== 3) continue;
 
-        let daySlots = await this.appointmentsService.getAvailableSlots(
+        const daySlots = await this.appointmentsService.getAvailableSlots(
           targetDate,
           durationMinutes,
           flexibleWorkingHours,

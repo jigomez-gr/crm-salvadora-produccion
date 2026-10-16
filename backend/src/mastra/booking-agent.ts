@@ -197,7 +197,9 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
             emailerroneo: contact.emailerroneo || 'N',
             nameKnown: true,
           });
-        } catch {}
+        } catch {
+          /* ignore */
+        }
 
         let message = `Cliente identificado: ${contact.name} (teléfono: ${contact.phone}, email: ${contact.email || 'no especificado'}). Ya está registrado en el CRM. Puedes consultar sus citas y solicitudes previas con 'listContactAppointments'.`;
         if (hasEmailError) {
@@ -263,7 +265,9 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           name: contact?.name || inputData.name,
           nameKnown: true,
         });
-      } catch {}
+      } catch {
+        /* ignore */
+      }
       return {
         contact: {
           id: contact?.id,
@@ -317,7 +321,9 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
             emailerroneo: 'N',
             nameKnown: true,
           });
-        } catch {}
+        } catch {
+          /* ignore */
+        }
         return {
           contact: {
             id: contact?.id,
@@ -357,7 +363,9 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           emailerroneo: inputData.email ? 'N' : customer?.emailerroneo,
           nameKnown: !!(inputData.name || customer?.nameKnown),
         });
-      } catch {}
+      } catch {
+        /* ignore */
+      }
       return {
         contact: {
           id: contactId,
@@ -632,7 +640,9 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
                 name: nameToUse,
                 nameKnown: true,
               });
-            } catch {}
+            } catch {
+              /* ignore */
+            }
           }
         } catch {
           // fallback failed
@@ -979,7 +989,9 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
               emailerroneo: found.emailerroneo || 'N',
               nameKnown: !!(found.name && found.name !== found.phone),
             });
-          } catch {}
+          } catch {
+            /* ignore */
+          }
         }
       }
 
@@ -1115,7 +1127,9 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
               email: found.email,
               nameKnown: true,
             });
-          } catch {}
+          } catch {
+            /* ignore */
+          }
         }
       }
 
@@ -1240,7 +1254,9 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
               email: found.email,
               nameKnown: true,
             });
-          } catch {}
+          } catch {
+            /* ignore */
+          }
         }
       }
 
@@ -1752,11 +1768,11 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
         customInstructions = customInstructions
           .replace(/Bienestar Experience[^\n]*\n?/gi, `Bienestar Experience - Longevidad y Bienestar Integral (${bienestarPrice} / sesión 1h)\n`)
           .replace(/25([.,]00)?\s*€\s*\/?\s*(sesi[oó]n)?/gi, `${bienestarPrice} por sesión`)
-          .replace(/S[áa]bado\s*28\s*de\s*Noviembre\s*de\s*2026[^\.\n]*/gi, pujaDate)
+          .replace(/S[áa]bado\s*28\s*de\s*Noviembre\s*de\s*2026[^.\n]*/gi, pujaDate)
           .replace(/95\s*€/gi, pujaPrice)
-          .replace(/S[áa]bado\s*15\s*de\s*Mayo\s*de\s*2027[^\.\n]*/gi, mujeresDate)
+          .replace(/S[áa]bado\s*15\s*de\s*Mayo\s*de\s*2027[^.\n]*/gi, mujeresDate)
           .replace(/45\s*€/gi, mujeresPrice)
-          .replace(/S[áa]bado\s*26\s*de\s*Septiembre\s*de\s*2026[^\.\n]*/gi, gongDate);
+          .replace(/S[áa]bado\s*26\s*de\s*Septiembre\s*de\s*2026[^.\n]*/gi, gongDate);
       }
       const customInstructionsBlock = customInstructions
         ? `\n\n== Instrucciones del negocio (personalización) ==\nEl negocio ha añadido estas indicaciones sobre cómo atender. Síguelas siempre que no contradigan las reglas OBLIGATORIAS:\n${customInstructions}`
@@ -1769,11 +1785,11 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
         knowledgeBase = knowledgeBase
           .replace(/(\*\*Tarifa\*\*:\s*`?)25([.,]00)?\s*€(\s*\/\s*sesi[oó]n`?)/gi, `$1${bienestarPrice} / sesión$3`)
           .replace(/(Bienestar Experience[^\n]*?)25([.,]00)?\s*€/gi, `$1${bienestarPrice}`)
-          .replace(/S[áa]bado\s*28\s*de\s*Noviembre\s*de\s*2026[^\.\n]*/gi, pujaDate)
+          .replace(/S[áa]bado\s*28\s*de\s*Noviembre\s*de\s*2026[^.\n]*/gi, pujaDate)
           .replace(/95\s*€/gi, pujaPrice)
-          .replace(/S[áa]bado\s*15\s*de\s*Mayo\s*de\s*2027[^\.\n]*/gi, mujeresDate)
+          .replace(/S[áa]bado\s*15\s*de\s*Mayo\s*de\s*2027[^.\n]*/gi, mujeresDate)
           .replace(/45\s*€/gi, mujeresPrice)
-          .replace(/S[áa]bado\s*26\s*de\s*Septiembre\s*de\s*2026[^\.\n]*/gi, gongDate);
+          .replace(/S[áa]bado\s*26\s*de\s*Septiembre\s*de\s*2026[^.\n]*/gi, gongDate);
       }
       const knowledgeBlock = knowledgeBase
         ? `\n\n== Base de conocimiento ==\nUsa esta información del negocio para responder las dudas del cliente. Si la respuesta no está aquí, dilo con sinceridad; NO la inventes.\n"""\n${knowledgeBase}\n"""`
@@ -1844,15 +1860,15 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
               let desc = s.description;
               if (hasNoFixedDate) {
                 desc = desc
-                  .replace(/S[áa]bado\s*28\s*de\s*Noviembre\s*de\s*2026[^\.]*/gi, s.textosinfechadefinitiva || 'fechas por confirmar')
-                  .replace(/S[áa]bado\s*15\s*de\s*Mayo\s*de\s*2027[^\.]*/gi, s.textosinfechadefinitiva || 'fechas por confirmar');
+                  .replace(/S[áa]bado\s*28\s*de\s*Noviembre\s*de\s*2026[^.]*/gi, s.textosinfechadefinitiva || 'fechas por confirmar')
+                  .replace(/S[áa]bado\s*15\s*de\s*Mayo\s*de\s*2027[^.]*/gi, s.textosinfechadefinitiva || 'fechas por confirmar');
               }
               if (hasNoFixedPrice) {
                 desc = desc
                   .replace(/95\s*€/gi, s.textosinpreciodefinitivo || 'El precio se determinará en función de las características del viaje y alojamiento.')
                   .replace(/45\s*€/gi, s.textosinpreciodefinitivo || 'El precio se determinará en función de las características del viaje y alojamiento.');
               }
-              desc = desc.replace(/S[áa]bado\s*26\s*de\s*Septiembre\s*de\s*2026[^\.]*/gi, gongDate);
+              desc = desc.replace(/S[áa]bado\s*26\s*de\s*Septiembre\s*de\s*2026[^.]*/gi, gongDate);
               details += ` | Descripción y condiciones: ${desc}`;
             }
             if (hasNoFixedDate) {

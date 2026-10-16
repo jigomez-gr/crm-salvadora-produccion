@@ -147,6 +147,12 @@ export function ResponseDocumentModal({
     }
   }, [open, appointment, user]);
 
+  const [rejecting, setRejecting] = useState(false);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [isRescheduleMode, setIsRescheduleMode] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [proposedTimes, setProposedTimes] = useState("");
+
   if (!open) return null;
 
   const currentTemplate =
@@ -161,11 +167,6 @@ export function ResponseDocumentModal({
   }
 
   const isPending = appointment.status === "pending_approval";
-  const [rejecting, setRejecting] = useState(false);
-  const [showRejectDialog, setShowRejectDialog] = useState(false);
-  const [isRescheduleMode, setIsRescheduleMode] = useState(false);
-  const [rejectionReason, setRejectionReason] = useState("");
-  const [proposedTimes, setProposedTimes] = useState("");
 
   async function handleAcceptAndSave() {
     setSaving(true);

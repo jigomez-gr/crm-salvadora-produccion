@@ -60,7 +60,7 @@ function formatAiDiagnosisToHtml(rawText: string): string {
     }
 
     // Bold markdown **text** -> <strong>text</strong>
-    let lineHtml = trimmed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    const lineHtml = trimmed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
     // Section headers (EVALUACIÓN ..., HALLAZGOS ..., ESTRATIFICACIÓN ..., RECOMENDACIONES ..., etc.)
     if (
@@ -194,7 +194,9 @@ export class WidgetController {
         try {
           const eds = await this.eventEditionsService.findByService(s.id);
           editionsMap[s.id] = eds || [];
-        } catch {}
+        } catch {
+          /* ignore */
+        }
       }
     }
     const [agentConfig] = await this.agentsConfigService.findAll().catch(() => []);
@@ -947,7 +949,9 @@ export class WidgetController {
           cid: 'foto_paciente',
         };
         imageTagHtml = `<div style="margin-bottom: 14px;"><img src="cid:foto_paciente" alt="Foto Paciente" style="max-width: 260px; max-height: 220px; border-radius: 8px; object-fit: cover; display: block; border: 1px solid #e5e7eb;" /></div>`;
-      } catch {}
+      } catch {
+        /* ignore */
+      }
     }
 
     const canalTexto =
@@ -1033,13 +1037,15 @@ export class WidgetController {
     const businessName = agentConfig?.businessName || branding?.businessName || 'Centro de Yoga y Bienestar Salvadora';
     const waPhone = (agentConfig?.whatsappNumber || '34695172625').replace(/[^0-9]/g, '');
 
-    let editionsMap: Record<string, any[]> = {};
+    const editionsMap: Record<string, any[]> = {};
     if (this.eventEditionsService) {
       for (const s of dbServices) {
         try {
           const eds = await this.eventEditionsService.findByService(s.id);
           editionsMap[s.id] = eds || [];
-        } catch {}
+        } catch {
+          /* ignore */
+        }
       }
     }
 
@@ -1814,7 +1820,7 @@ export class WidgetController {
         vapiMsg.style.color = '#dc2626';
         return;
       }
-      if (/^[6789]\d{8}$/.test(phone)) {
+      if (/^[6789]\\d{8}$/.test(phone)) {
         phone = '+34' + phone;
       } else if (!phone.startsWith('+')) {
         phone = '+' + phone;

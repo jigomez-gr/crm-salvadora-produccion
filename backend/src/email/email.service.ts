@@ -412,7 +412,9 @@ export class EmailService implements OnModuleInit {
             error: errorMsg,
           });
           await this.messageRepo.save(record);
-        } catch {}
+        } catch {
+          /* ignore */
+        }
       }
 
       return { ok: false, error: errorMsg };

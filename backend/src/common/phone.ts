@@ -43,7 +43,7 @@ export function normalizePhoneStrict(input: string): string {
  */
 export function normalizePhoneLoose(input: string): string {
   if (!input) return '';
-  let trimmed = input.trim();
+  const trimmed = input.trim();
   const digitsOnly = trimmed.replace(/\D/g, '');
 
   // Spanish 9-digit mobile/landline without country code

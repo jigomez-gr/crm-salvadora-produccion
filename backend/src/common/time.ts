@@ -198,7 +198,7 @@ export function parseFlexibleStartsAt(
 
   // 3. European date format "DD/MM/YYYY HH:MM" or "DD-MM-YYYY HH:MM"
   const euDateMatch = normalized.match(
-    /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})[T ]\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/,
+    /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})[T ]\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/,
   );
   if (euDateMatch) {
     const [, d, m, y, h, min, s] = euDateMatch;

@@ -219,7 +219,7 @@ export class ServicesService implements OnModuleInit {
       }
 
       // 2. Ensure Terapia Gestalt service exists with requiresApproval=true and managerId = salvadora.id
-      let gestaltSvc = await this.serviceRepo.findOne({
+      const gestaltSvc = await this.serviceRepo.findOne({
         where: [{ name: ILike('%gestalt%') }],
       });
 
@@ -807,21 +807,21 @@ export class ServicesService implements OnModuleInit {
         }
         if (agentConfig.customInstructions && /28 de Noviembre/i.test(agentConfig.customInstructions)) {
           agentConfig.customInstructions = agentConfig.customInstructions.replace(
-            /S[áa]bado\s*28\s*de\s*Noviembre\s*de\s*2026[^\.\n]*/gi,
+            /S[áa]bado\s*28\s*de\s*Noviembre\s*de\s*2026[^.\n]*/gi,
             'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
           );
           changed = true;
         }
         if (agentConfig.customInstructions && /26 de Septiembre/i.test(agentConfig.customInstructions)) {
           agentConfig.customInstructions = agentConfig.customInstructions.replace(
-            /S[áa]bado\s*26\s*de\s*Septiembre\s*de\s*2026[^\.\n]*/gi,
+            /S[áa]bado\s*26\s*de\s*Septiembre\s*de\s*2026[^.\n]*/gi,
             'Sábado 31 de Octubre de 2026, 18:00 a 20:00 (último sábado de cada mes). Se aceptan reservas provisionales',
           );
           changed = true;
         }
         if (agentConfig.customInstructions && /15 de Mayo/i.test(agentConfig.customInstructions)) {
           agentConfig.customInstructions = agentConfig.customInstructions.replace(
-            /S[áa]bado\s*15\s*de\s*Mayo\s*de\s*2027[^\.\n]*/gi,
+            /S[áa]bado\s*15\s*de\s*Mayo\s*de\s*2027[^.\n]*/gi,
             'fecha por confirmar',
           );
           changed = true;
@@ -1113,7 +1113,7 @@ export class ServicesService implements OnModuleInit {
         ];
 
         for (const catData of defaultCategories) {
-          let cat = await this.categoryRepo.findOne({ where: { code: catData.code } });
+          const cat = await this.categoryRepo.findOne({ where: { code: catData.code } });
           if (!cat) {
             await this.categoryRepo.save(this.categoryRepo.create(catData));
           } else {
@@ -1285,7 +1285,7 @@ export class ServicesService implements OnModuleInit {
       const agentConfigs = await this.agentConfigRepo.find();
       for (const agent of agentConfigs) {
         agent.services = allServices.map((s) => {
-          let eventDatesText = s.eventDatesText;
+          const eventDatesText = s.eventDatesText;
           return {
             name: s.name,
             durationMinutes: s.durationMinutes,
