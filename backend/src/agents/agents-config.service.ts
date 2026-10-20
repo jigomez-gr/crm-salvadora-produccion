@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, OnModuleInit, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  OnModuleInit,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AgentConfig } from '../common/entities/agent-config.entity';
@@ -240,12 +246,19 @@ export class AgentsConfigService implements OnModuleInit {
 
   async update(agentKey: string, dto: UpdateAgentConfigDto): Promise<AgentConfig> {
     const config = await this.findByKey(agentKey);
+
+    if (dto.whatsappProvider === 'meta') {
+      throw new BadRequestException(
+        'Meta API Oficial — preparado / pendiente de activación. No puede seleccionarse como proveedor operativo todavía; utiliza Evolution API o YCloud.',
+      );
+    }
+
     // An empty/undefined secret means "leave it unchanged" — never overwrite a
     // stored secret with a blank value (the API no longer returns secrets, so
     // the UI sends them back empty for fields the user didn't touch).
     const patch: Record<string, any> = { ...dto };
     for (const field of SECRET_FIELDS) {
-      if (patch[field] === undefined || patch[field] === '') {
+      if (patch[field] === undefined || patch[field] === '' || patch[field] === null) {
         delete patch[field];
       }
     }

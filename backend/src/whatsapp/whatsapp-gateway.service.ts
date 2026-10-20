@@ -11,6 +11,7 @@ import {
   WhatsappFetchInboundMediaParams,
   WhatsappInboundMediaResult,
   WhatsappProvider,
+  WhatsappSendMediaParams,
   WhatsappSendResult,
   WhatsappSendTemplateParams,
   WhatsappSendTextParams,
@@ -142,6 +143,36 @@ export class WhatsappGatewayService {
   }
 
   /**
+   * Sends a MANUAL media message (Admin Sender, CLI).
+   * Allowed even when global WhatsApp automation is paused.
+   */
+  async sendManualMediaMessage(
+    params: WhatsappSendMediaParams,
+  ): Promise<WhatsappSendResult> {
+    return this.dispatchMedia(params);
+  }
+
+  /**
+   * Sends an AUTOMATED media message.
+   * Blocked when global WhatsApp automation is paused (`whatsappAutomationPaused === true`).
+   */
+  async sendAutomatedMediaMessage(
+    params: WhatsappSendMediaParams,
+  ): Promise<WhatsappSendResult> {
+    if (await this.isAutomationPaused()) {
+      this.logger.log(
+        `[WhatsApp Gateway] Automated media message to ${params.to} skipped — global WhatsApp automation is PAUSED.`,
+      );
+      return {
+        ok: false,
+        skippedByPause: true,
+        error: 'whatsapp_automation_paused',
+      };
+    }
+    return this.dispatchMedia(params);
+  }
+
+  /**
    * Sends an AUTOMATED template/reminder message.
    * Blocked when global WhatsApp automation is paused (`whatsappAutomationPaused === true`).
    */
@@ -163,7 +194,7 @@ export class WhatsappGatewayService {
     const provider = this.getProvider(providerType);
     if (!provider) {
       this.logger.warn(
-        `[WhatsApp Gateway] Provider '${providerType}' is not active in Phase 1 — skipping template send to ${params.to}.`,
+        `[WhatsApp Gateway] Provider '${providerType}' is not active — skipping template send to ${params.to}.`,
       );
       return {
         ok: false,
@@ -194,7 +225,7 @@ export class WhatsappGatewayService {
     const provider = this.getProvider(providerType);
     if (!provider) {
       this.logger.warn(
-        `[WhatsApp Gateway] Provider '${providerType}' is not active in Phase 1 — skipping text send to ${params.to}.`,
+        `[WhatsApp Gateway] Provider '${providerType}' is not active — skipping text send to ${params.to}.`,
       );
       return {
         ok: false,
@@ -202,5 +233,28 @@ export class WhatsappGatewayService {
       };
     }
     return provider.sendTextMessage(params);
+  }
+
+  private async dispatchMedia(
+    params: WhatsappSendMediaParams,
+  ): Promise<WhatsappSendResult> {
+    const providerType = this.resolveProviderType(params.config);
+    const provider = this.getProvider(providerType);
+    if (!provider) {
+      this.logger.warn(
+        `[WhatsApp Gateway] Provider '${providerType}' is not active — skipping media send to ${params.to}.`,
+      );
+      return {
+        ok: false,
+        error: `provider_${providerType}_not_implemented`,
+      };
+    }
+    if (!provider.sendMediaMessage) {
+      return {
+        ok: false,
+        error: `El proveedor '${providerType}' no soporta envío directo de archivos binarios sin URL pública. Utiliza Evolution API.`,
+      };
+    }
+    return provider.sendMediaMessage(params);
   }
 }

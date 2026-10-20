@@ -10,12 +10,14 @@ import { normalizePhoneLoose } from '../../common/phone';
 import {
   WhatsappConnectionStatus,
   WhatsappProvider,
+  WhatsappSendMediaParams,
   WhatsappSendResult,
   WhatsappSendTemplateParams,
   WhatsappSendTextParams,
 } from './whatsapp-provider.interface';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
+const MEDIA_TIMEOUT_MS = 30_000;
 
 export const EVOLUTION_WEBHOOK_EVENTS = [
   'MESSAGES_UPSERT',
@@ -100,6 +102,82 @@ export class EvolutionProvider implements WhatsappProvider {
     if (!res.ok) {
       this.logger.error(
         `[Evolution] sendText failed for instance '${instanceName}' (${res.status}): ${res.errorMessage ?? 'unknown error'}`,
+      );
+      return {
+        ok: false,
+        error: res.errorMessage || `Evolution HTTP ${res.status}`,
+      };
+    }
+
+    const providerMessageId: string | undefined =
+      res.data?.key?.id ??
+      res.data?.message?.key?.id ??
+      res.data?.data?.key?.id ??
+      res.data?.id;
+    const status: string | undefined =
+      res.data?.status ?? res.data?.data?.status ?? 'PENDING';
+
+    return {
+      ok: true,
+      providerMessageId,
+      status,
+    };
+  }
+
+  /**
+   * Sends a media message (document, video, audio) via Evolution API v2.3.7:
+   * POST /message/sendMedia/{instance}
+   *
+   * Converts the validated Buffer to pure Base64 ONLY right before calling Evolution API.
+   */
+  async sendMediaMessage(
+    params: WhatsappSendMediaParams,
+  ): Promise<WhatsappSendResult> {
+    const config = params.config;
+    const baseUrl = this.normalizeBaseUrl(config?.evolutionApiUrl);
+    const instanceName = config?.evolutionInstanceName?.trim();
+    const apiKey = config?.evolutionApiKey?.trim();
+
+    if (!baseUrl || !instanceName || !apiKey) {
+      const error =
+        'Evolution API no está completamente configurado en el agente (URL, instancia o API Key).';
+      this.logger.warn(`[Evolution] Cannot send media: ${error}`);
+      return { ok: false, error };
+    }
+
+    const toDigits = this.normalizeRecipientNumber(params.to);
+    if (!toDigits) {
+      return { ok: false, error: 'Número de destino inválido para Evolution API.' };
+    }
+
+    const pureBase64 = params.media.buffer.toString('base64');
+    const caption =
+      params.caption &&
+      params.caption.trim().length > 0 &&
+      params.media.mediaCategory !== 'audio'
+        ? params.caption.trim()
+        : '';
+    const payload: Record<string, unknown> = {
+      number: toDigits,
+      mediatype: params.media.mediaCategory,
+      mimetype: params.media.mimeType,
+      caption,
+      media: pureBase64,
+      fileName: params.media.filename,
+    };
+
+    const res = await this.requestEvolution(
+      baseUrl,
+      apiKey,
+      'POST',
+      `/message/sendMedia/${encodeURIComponent(instanceName)}`,
+      payload,
+      MEDIA_TIMEOUT_MS,
+    );
+
+    if (!res.ok) {
+      this.logger.error(
+        `[Evolution] sendMedia failed for instance '${instanceName}' (${res.status}): ${res.errorMessage ?? 'unknown error'}`,
       );
       return {
         ok: false,
@@ -409,8 +487,8 @@ export class EvolutionProvider implements WhatsappProvider {
       provider: 'evolution',
       state,
       instanceName,
-      qrBase64,
-      pairingCode,
+      qrBase64: state === 'open' ? null : qrBase64,
+      pairingCode: state === 'open' ? null : pairingCode,
     };
   }
 
@@ -593,9 +671,10 @@ export class EvolutionProvider implements WhatsappProvider {
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     path: string,
     body?: unknown,
+    timeoutMs: number = DEFAULT_TIMEOUT_MS,
   ): Promise<EvolutionHttpResult> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const headers: Record<string, string> = {

@@ -1246,13 +1246,14 @@ function HumanNoticeCard() {
   );
 }
 
-// ─── WhatsApp Provider (YCloud / Evolution API QR / Meta Cloud API) ──────────────
+// ─── WhatsApp Provider (Evolution API / YCloud / Meta Cloud API) ──────────────
 
 function WhatsappProviderCard() {
   const toast = useToast();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedKey, setSelectedKey] = useState<string>("booking");
   const [form, setForm] = useState<Agent | null>(null);
+  const [operativeProvider, setOperativeProvider] = useState<"evolution" | "ycloud">("ycloud");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedTick, setSavedTick] = useState(0);
@@ -1273,7 +1274,9 @@ function WhatsappProviderCard() {
         const initial =
           list.find((a) => a.agentKey === "booking") || list[0] || null;
         if (initial) {
+          const prov = initial.whatsappProvider === "evolution" ? "evolution" : "ycloud";
           setSelectedKey(initial.agentKey);
+          setOperativeProvider(prov);
           setForm({
             ...initial,
             whatsappProvider: initial.whatsappProvider || "ycloud",
@@ -1296,6 +1299,8 @@ function WhatsappProviderCard() {
     setEvoNotice("");
     try {
       const cfg = await apiFetch<Agent>(`/api/agents/${agentKey}/config`);
+      const prov = cfg.whatsappProvider === "evolution" ? "evolution" : "ycloud";
+      setOperativeProvider(prov);
       setForm({
         ...cfg,
         whatsappProvider: cfg.whatsappProvider || "ycloud",
@@ -1303,6 +1308,8 @@ function WhatsappProviderCard() {
     } catch {
       const found = agents.find((a) => a.agentKey === agentKey);
       if (found) {
+        const prov = found.whatsappProvider === "evolution" ? "evolution" : "ycloud";
+        setOperativeProvider(prov);
         setForm({
           ...found,
           whatsappProvider: found.whatsappProvider || "ycloud",
@@ -1351,21 +1358,36 @@ function WhatsappProviderCard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form?.agentKey, form?.whatsappProvider]);
 
-  async function saveConfigInternal(): Promise<Agent> {
+  async function saveConfigInternal(overrideProvider?: "evolution" | "ycloud"): Promise<Agent> {
     if (!form) throw new Error("Agente no cargado");
+    const targetProvider =
+      overrideProvider ??
+      (form.whatsappProvider === "meta"
+        ? operativeProvider
+        : (form.whatsappProvider || "ycloud"));
+    const payload = {
+      ...form,
+      whatsappProvider: targetProvider,
+    };
     const updated = await apiFetch<Agent>(
       `/api/agents/${form.agentKey}/config`,
       {
         method: "PUT",
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       }
     );
+    const updatedOperative =
+      updated.whatsappProvider === "evolution" ? "evolution" : "ycloud";
+    setOperativeProvider(updatedOperative);
     setForm((f) =>
       f
         ? {
             ...f,
             ...updated,
-            whatsappProvider: updated.whatsappProvider || "ycloud",
+            whatsappProvider:
+              f.whatsappProvider === "meta"
+                ? "meta"
+                : (updated.whatsappProvider || "ycloud"),
             openrouterApiKey: null,
             ycloudApiKey: null,
             ycloudWebhookSecret: null,
@@ -1385,13 +1407,21 @@ function WhatsappProviderCard() {
   }
 
   async function handleSaveWhatsapp() {
+    if (!form) return;
     setSaving(true);
     setEvoError("");
     try {
+      const viewingMeta = form.whatsappProvider === "meta";
       const updated = await saveConfigInternal();
-      toast.success(
-        `Configuración de WhatsApp (${(updated.whatsappProvider || "ycloud").toUpperCase()}) guardada.`
-      );
+      if (viewingMeta) {
+        toast.success(
+          `Credenciales preparadas de Meta API Oficial guardadas. El proveedor operativo sigue siendo ${operativeProvider.toUpperCase()} (Meta pendiente de activación).`
+        );
+      } else {
+        toast.success(
+          `Proveedor (${(updated.whatsappProvider || "ycloud").toUpperCase()}) y configuración de WhatsApp guardados.`
+        );
+      }
       if (updated.whatsappProvider === "evolution") {
         await fetchEvolutionStatus(updated.agentKey, true);
       }
@@ -1412,7 +1442,7 @@ function WhatsappProviderCard() {
     setEvoError("");
     setEvoNotice("");
     try {
-      await saveConfigInternal();
+      await saveConfigInternal("evolution");
       const res = await apiFetch<EvolutionConnectionStatus>(
         `/api/agents/${form.agentKey}/whatsapp/evolution/connect`,
         { method: "POST" }
@@ -1423,7 +1453,7 @@ function WhatsappProviderCard() {
         toast.success("WhatsApp conectado en Evolution API.");
       } else if (res.qrBase64) {
         setEvoNotice(
-          "Escanea el código QR con tu móvil (WhatsApp → Dispositivos vinculados → Vincular un dispositivo)."
+          "Escanea el código QR con tu móvil (WhatsApp → Dispositivos vinculados → Vincular dispositivo)."
         );
         toast.success("Código QR generado. Escanéalo con el móvil.");
       } else {
@@ -1467,7 +1497,7 @@ function WhatsappProviderCard() {
     setEvoError("");
     setEvoNotice("");
     try {
-      await saveConfigInternal();
+      await saveConfigInternal("evolution");
       const res = await apiFetch<{
         ok: boolean;
         instanceName: string;
@@ -1568,17 +1598,15 @@ function WhatsappProviderCard() {
           <div className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5 text-indigo-600" />
             <h2 className="text-sm font-semibold text-neutral-900">
-              Proveedor de WhatsApp y Conexión (YCloud / Evolution API QR / Meta Oficial)
+              Proveedor de WhatsApp y Conexión (Evolution API / YCloud / Meta Oficial)
             </h2>
           </div>
           <p className="mt-1 text-xs text-neutral-500">
-            Cambia el método de envío y recepción de WhatsApp entre{" "}
-            <strong>YCloud</strong>, <strong>Evolution API v2 (QR)</strong> o{" "}
-            <strong>Meta Cloud API Oficial</strong>, y gestiona la instancia y el
-            código QR de vinculación.
+            Selecciona el proveedor de WhatsApp por agente y configura sus credenciales sin borrar las de los demás proveedores. Proveedor operativo actual:{" "}
+            <strong className="text-indigo-700 uppercase">{operativeProvider}</strong>.
           </p>
         </div>
-        {agents.length > 1 && (
+        {agents.length > 0 && (
           <div className="sm:w-48 shrink-0">
             <label className="mb-1 block text-[11px] font-medium text-neutral-600">
               Agente
@@ -1601,24 +1629,24 @@ function WhatsappProviderCard() {
       {/* Selector de Método / Proveedor */}
       <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3.5 space-y-2">
         <label className="block text-xs font-semibold text-neutral-800">
-          Método / Proveedor activo de WhatsApp:
+          Proveedor WhatsApp:
         </label>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           {[
+            {
+              id: "evolution" as const,
+              title: "Evolution API",
+              subtitle: "Conexión QR / Instancia v2",
+            },
             {
               id: "ycloud" as const,
               title: "YCloud",
               subtitle: "WhatsApp Business API",
             },
             {
-              id: "evolution" as const,
-              title: "Evolution API v2",
-              subtitle: "Conexión por QR / Baileys",
-            },
-            {
               id: "meta" as const,
               title: "Meta API Oficial",
-              subtitle: "Cloud API Directa",
+              subtitle: "Preparado / Pendiente",
             },
           ].map((opt) => {
             const selected = activeProvider === opt.id;
@@ -1644,7 +1672,7 @@ function WhatsappProviderCard() {
                     selected ? "text-indigo-900" : "text-neutral-800"
                   )}
                 >
-                  {opt.title}
+                  [ {opt.title} ]
                 </span>
                 <span className="text-[11px] text-neutral-500">
                   {opt.subtitle}
@@ -1661,35 +1689,43 @@ function WhatsappProviderCard() {
           {/* Estado de la instancia + Botones de control */}
           <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3.5 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <QrCode className="h-4 w-4 text-indigo-600" />
                 <span className="text-xs font-semibold text-neutral-700">
-                  Estado de instancia Evolution:
+                  Estado de conexión:
                 </span>
                 {(() => {
                   const st = evoStatus?.state;
                   const hasQr = !!evoStatus?.qrBase64 && st !== "open";
+                  if (evoActionLoading === "connect") {
+                    return (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-800">
+                        <span className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse" />
+                        CREANDO INSTANCIA
+                      </span>
+                    );
+                  }
                   if (evoError && (!st || st === "unknown")) {
                     return (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">
                         <span className="h-2 w-2 rounded-full bg-red-500" />
-                        Error
+                        ERROR
                       </span>
                     );
                   }
                   if (st === "open") {
                     return (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 border border-emerald-200">
                         <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                        Conectado
+                        CONECTADO
                       </span>
                     );
                   }
                   if (hasQr) {
                     return (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 border border-amber-200">
                         <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-                        Esperando QR
+                        ESPERANDO QR
                       </span>
                     );
                   }
@@ -1697,7 +1733,7 @@ function WhatsappProviderCard() {
                     return (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
                         <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
-                        Conectando
+                        CONECTANDO
                       </span>
                     );
                   }
@@ -1705,7 +1741,7 @@ function WhatsappProviderCard() {
                     return (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-200 px-2.5 py-0.5 text-xs font-semibold text-neutral-700">
                         <span className="h-2 w-2 rounded-full bg-neutral-500" />
-                        Desconectado
+                        DESCONECTADO
                       </span>
                     );
                   }
@@ -1713,18 +1749,23 @@ function WhatsappProviderCard() {
                     return (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">
                         <span className="h-2 w-2 rounded-full bg-red-500" />
-                        Error
+                        ERROR
                       </span>
                     );
                   }
                   return (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-600">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-semibold text-neutral-600">
                       <span className="h-2 w-2 rounded-full bg-neutral-400" />
-                      Sin configurar
+                      SIN CONFIGURAR
                     </span>
                   );
                 })()}
               </div>
+              {evoStatus?.state === "open" && (
+                <span className="text-xs font-semibold text-emerald-800">
+                  Número conectado: {form.whatsappNumber || "+34 646 034 231"}
+                </span>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -1736,8 +1777,23 @@ function WhatsappProviderCard() {
               >
                 <QrCode className="h-3.5 w-3.5" />
                 {evoActionLoading === "connect"
-                  ? "Generando QR…"
-                  : "Crear / Conectar (QR)"}
+                  ? "Creando instancia…"
+                  : "Crear / Conectar"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={handleEvolutionRefreshQr}
+                disabled={!!evoActionLoading}
+              >
+                <RefreshCw
+                  className={cn(
+                    "h-3.5 w-3.5",
+                    evoActionLoading === "qr" && "animate-spin"
+                  )}
+                />
+                Actualizar QR
               </Button>
               <Button
                 type="button"
@@ -1802,37 +1858,118 @@ function WhatsappProviderCard() {
             </p>
           )}
 
-          {/* Visor de Código QR */}
-          {evoStatus?.qrBase64 && evoStatus.state !== "open" && (
-            <div className="flex flex-col items-center rounded-xl border border-indigo-200 bg-indigo-50/40 p-4 space-y-3">
-              <p className="text-xs font-medium text-neutral-800 text-center">
-                Abre WhatsApp en el teléfono (
-                {form.whatsappNumber || "+34 646 034 231"}) →{" "}
-                <strong>Dispositivos vinculados</strong> →{" "}
-                <strong>Vincular un dispositivo</strong> y escanea este código
-                QR:
-              </p>
-              <div className="rounded-xl bg-white p-3 shadow-sm border border-neutral-200">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={
-                    evoStatus.qrBase64.startsWith("data:image")
-                      ? evoStatus.qrBase64
-                      : `data:image/png;base64,${evoStatus.qrBase64}`
-                  }
-                  alt="Código QR de WhatsApp Evolution API"
-                  className="h-56 w-56 object-contain"
-                />
+          {/* Tarjeta cuando la instancia está CONECTADA */}
+          {evoStatus?.state === "open" && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800 border border-emerald-300">
+                    🟢 CONECTADO
+                  </span>
+                  <span className="text-xs font-semibold text-emerald-950">
+                    {form.businessName} ({form.agentKey})
+                  </span>
+                </div>
+                <p className="text-xs text-emerald-900">
+                  Número conectado:{" "}
+                  <strong>{form.whatsappNumber || "+34 646 034 231"}</strong> · Instancia:{" "}
+                  <code className="font-mono font-semibold">
+                    {evoStatus.instanceName || form.evolutionInstanceName || "salvadora_whatsapp"}
+                  </code>
+                </p>
               </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => fetchEvolutionStatus(form.agentKey, false)}
+                  disabled={!!evoActionLoading}
+                >
+                  Actualizar estado
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="danger"
+                  onClick={handleEvolutionDisconnect}
+                  disabled={!!evoActionLoading}
+                >
+                  Desconectar
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Tarjeta propia del CRM para el QR real de Evolution API */}
+          {evoStatus?.qrBase64 && evoStatus.state !== "open" && (
+            <div className="rounded-2xl border-2 border-indigo-200 bg-white p-5 shadow-sm space-y-4">
+              <div className="border-b border-neutral-100 pb-3">
+                <h3 className="text-sm font-bold text-neutral-900 flex items-center gap-2">
+                  <QrCode className="h-4 w-4 text-indigo-600" />
+                  Conectar WhatsApp
+                </h3>
+                <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-1.5 text-xs text-neutral-700">
+                  <div>
+                    <span className="font-medium text-neutral-500">Agente:</span>{" "}
+                    <span className="font-semibold text-neutral-900">
+                      {form.businessName || form.agentKey}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-neutral-500">Número:</span>{" "}
+                    <span className="font-semibold text-neutral-900">
+                      {form.whatsappNumber || "+34 646 034 231"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-neutral-500">Instancia:</span>{" "}
+                    <code className="font-mono font-semibold text-indigo-700">
+                      {evoStatus.instanceName ||
+                        form.evolutionInstanceName ||
+                        "salvadora_whatsapp"}
+                    </code>
+                  </div>
+                </div>
+                <div className="mt-2 text-xs font-semibold text-amber-800">
+                  Estado: 🟠 Esperando vinculación
+                </div>
+              </div>
+
+              <div className="flex flex-col items-center justify-center py-2">
+                <div className="rounded-xl bg-white p-4 shadow-sm border border-neutral-200">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={
+                      evoStatus.qrBase64.startsWith("data:image")
+                        ? evoStatus.qrBase64
+                        : `data:image/png;base64,${evoStatus.qrBase64}`
+                    }
+                    alt="Código QR oficial de Evolution API"
+                    className="h-64 w-64 object-contain bg-white"
+                  />
+                </div>
+              </div>
+
               {evoStatus.pairingCode && (
-                <p className="text-xs text-neutral-600">
+                <p className="text-center text-xs text-neutral-600">
                   Código de vinculación:{" "}
-                  <code className="rounded bg-white px-2 py-0.5 font-mono font-semibold text-indigo-700 border border-indigo-200">
+                  <code className="rounded bg-neutral-50 px-2 py-0.5 font-mono font-semibold text-indigo-700 border border-indigo-200">
                     {evoStatus.pairingCode}
                   </code>
                 </p>
               )}
-              <div className="flex flex-wrap items-center gap-2">
+
+              <div className="rounded-lg bg-neutral-50 border border-neutral-200 p-3 text-xs text-neutral-700 space-y-1">
+                <p className="font-semibold text-neutral-900">
+                  Abre WhatsApp en el teléfono:
+                </p>
+                <p>Ajustes / Dispositivos vinculados</p>
+                <p>→ Vincular dispositivo</p>
+                <p>→ Escanea este código</p>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
                 <Button
                   type="button"
                   size="sm"
@@ -1855,7 +1992,7 @@ function WhatsappProviderCard() {
                   onClick={() => fetchEvolutionStatus(form.agentKey, false)}
                   disabled={!!evoActionLoading}
                 >
-                  Ya lo he escaneado (Comprobar estado)
+                  Actualizar estado
                 </Button>
               </div>
             </div>
@@ -1864,10 +2001,10 @@ function WhatsappProviderCard() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="mb-1 block text-xs font-medium text-neutral-700">
-                Número de WhatsApp
+                Número WhatsApp
               </label>
               <Input
-                placeholder="+34646034231"
+                placeholder="+34 646 034 231"
                 value={form.whatsappNumber ?? ""}
                 onChange={(e) =>
                   setForm((f) =>
@@ -1876,13 +2013,13 @@ function WhatsappProviderCard() {
                 }
               />
               <p className="mt-1 text-[11px] text-neutral-500">
-                Número dedicado vinculado a la instancia (formato E.164).
+                Número dedicado vinculado a la instancia (ej: +34 646 034 231).
               </p>
             </div>
 
             <div>
               <label className="mb-1 block text-xs font-medium text-neutral-700">
-                Nombre de instancia en Evolution
+                Nombre instancia
               </label>
               <Input
                 placeholder="salvadora_whatsapp"
@@ -1896,7 +2033,7 @@ function WhatsappProviderCard() {
                 }
               />
               <p className="mt-1 text-[11px] text-neutral-500">
-                Nombre único de la instancia (se crea automáticamente si no existe).
+                Nombre único de la instancia (ej: salvadora_whatsapp).
               </p>
             </div>
           </div>
@@ -1925,7 +2062,7 @@ function WhatsappProviderCard() {
             onChange={(v) =>
               setForm((f) => (f ? { ...f, evolutionApiKey: v } : null))
             }
-            hint="Cabecera apikey hacia Evolution API (nunca se expone al navegador)."
+            hint="Cabecera apikey hacia Evolution API (nunca se expone en texto plano tras guardar)."
           />
 
           <SecretInput
@@ -2050,10 +2187,9 @@ function WhatsappProviderCard() {
       {/* ─── MODO 3: META CLOUD API OFICIAL ─── */}
       {activeProvider === "meta" && (
         <div className="space-y-4 pt-2 border-t border-neutral-100">
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            Los campos de <strong>Meta Cloud API Oficial</strong> están listos
-            para guardar tus credenciales y su proveedor de envío/webhook se
-            activará en la Fase 5.
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+            <strong>Meta API Oficial — preparado / pendiente de activación:</strong>{" "}
+            Puedes dejar guardadas las credenciales de Meta Cloud API por adelantado sin perder la configuración de Evolution API ni de YCloud. No se activará como proveedor operativo hasta que <code>MetaProvider</code> esté habilitado.
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -2123,11 +2259,257 @@ function WhatsappProviderCard() {
       <div className="pt-2 flex items-center gap-3">
         <Button type="button" onClick={handleSaveWhatsapp} disabled={saving}>
           <Upload className="h-4 w-4" />
-          {saving
-            ? "Guardando…"
-            : `Guardar proveedor (${activeProvider.toUpperCase()}) y credenciales`}
+          {saving ? "Guardando…" : "Guardar proveedor y configuración"}
         </Button>
       </div>
+    </div>
+  );
+}
+
+// ─── Utilidad Admin: Enviar WhatsApp (Texto + Adjuntos) ─────────────────────────
+
+interface WhatsappAdminSendResult {
+  ok: boolean;
+  provider: string;
+  agentKey: string;
+  to: string;
+  threadId: string;
+  status: string;
+  providerMessageId: string | null;
+  providerMessageIds: string[];
+  filename: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+}
+
+function WhatsappAdminSenderCard() {
+  const toast = useToast();
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agentKey, setAgentKey] = useState("booking");
+  const [toPhone, setToPhone] = useState("");
+  const [messageText, setMessageText] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<WhatsappAdminSendResult | null>(null);
+  const [errorMsg, setErrorMsg] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    apiFetch<Agent[]>("/api/agents")
+      .then((list) => {
+        setAgents(list);
+        if (list.length > 0 && !list.some((a) => a.agentKey === "booking")) {
+          setAgentKey(list[0].agentKey);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    setSelectedFile(file);
+    setErrorMsg("");
+    setResult(null);
+  }
+
+  function clearFile() {
+    setSelectedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }
+
+  async function handleSend(e: React.FormEvent) {
+    e.preventDefault();
+    setErrorMsg("");
+    setResult(null);
+
+    const cleanTo = toPhone.trim();
+    const cleanMsg = messageText.trim();
+
+    if (!cleanTo) {
+      setErrorMsg("Indica el teléfono destino (ej: +34600111222).");
+      return;
+    }
+
+    if (!cleanMsg && !selectedFile) {
+      setErrorMsg("Escribe un mensaje de texto, adjunta un archivo o ambos.");
+      return;
+    }
+
+    setSending(true);
+    try {
+      const formData = new FormData();
+      formData.append("agentKey", agentKey);
+      formData.append("to", cleanTo);
+      if (cleanMsg) {
+        formData.append("message", cleanMsg);
+      }
+      if (selectedFile) {
+        formData.append("file", selectedFile);
+      }
+
+      const res = await apiFetch<WhatsappAdminSendResult>(
+        "/api/whatsapp/admin/send",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      setResult(res);
+      setMessageText("");
+      clearFile();
+      toast.success(`WhatsApp enviado correctamente a ${res.to} (${res.provider}).`);
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo enviar el mensaje de WhatsApp.";
+      setErrorMsg(msg);
+      toast.error(msg);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const isMp3WithText =
+    selectedFile?.name.toLowerCase().endsWith(".mp3") &&
+    messageText.trim().length > 0;
+
+  return (
+    <div className="mt-6 max-w-xl rounded-xl border border-neutral-200 bg-white p-6 shadow-xs space-y-4">
+      <div className="flex items-center gap-2">
+        <Send className="h-5 w-5 text-emerald-600" />
+        <div>
+          <h2 className="text-sm font-semibold text-neutral-900">
+            Enviar WhatsApp (Envío Manual Admin)
+          </h2>
+          <p className="text-xs text-neutral-500">
+            Envía un mensaje de texto y/o archivo adjunto a cualquier teléfono (exista o no en Contactos). Queda registrado en Inbox y Auditoría, y funciona incluso con la automatización global en pausa.
+          </p>
+        </div>
+      </div>
+
+      <form onSubmit={handleSend} className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              Agente
+            </label>
+            <select
+              className="block w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              value={agentKey}
+              onChange={(e) => setAgentKey(e.target.value)}
+            >
+              {agents.length === 0 ? (
+                <option value="booking">booking</option>
+              ) : (
+                agents.map((a) => (
+                  <option key={a.agentKey} value={a.agentKey}>
+                    {a.businessName} ({a.agentKey})
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              Teléfono destino
+            </label>
+            <Input
+              placeholder="+34600111222"
+              value={toPhone}
+              onChange={(e) => setToPhone(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-neutral-700">
+            Mensaje / texto {selectedFile ? "(opcional)" : ""}
+          </label>
+          <textarea
+            rows={3}
+            className="block w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-indigo-500 focus:outline-none"
+            placeholder="Escribe aquí el mensaje de WhatsApp o el comentario del archivo adjunto…"
+            value={messageText}
+            onChange={(e) => setMessageText(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-neutral-700">
+            Archivo adjunto (opcional · máx. 1 archivo: .pdf, .docx, .xlsx, .txt, .mp3, .mp4)
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.docx,.xlsx,.txt,.mp3,.mp4,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,audio/mpeg,video/mp4"
+              onChange={handleFileChange}
+              className="block text-xs text-neutral-600 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-indigo-700 hover:file:bg-indigo-100"
+            />
+            {selectedFile && (
+              <button
+                type="button"
+                onClick={clearFile}
+                className="text-xs font-medium text-red-600 hover:underline"
+              >
+                Quitar archivo ({selectedFile.name})
+              </button>
+            )}
+          </div>
+          {isMp3WithText && (
+            <p className="mt-1.5 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2.5 py-1">
+              ℹ️ WhatsApp no admite texto adjunto (caption) en audios MP3: se enviará primero el mensaje de texto y a continuación el audio MP3.
+            </p>
+          )}
+        </div>
+
+        {errorMsg && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            {errorMsg}
+          </div>
+        )}
+
+        {result && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900 space-y-1">
+            <div className="font-semibold">
+              ✅ Envío completado ({result.status.toUpperCase()})
+            </div>
+            <div>
+              <strong>Proveedor:</strong> {result.provider} ·{" "}
+              <strong>Destino:</strong> {result.to} ·{" "}
+              <strong>Conversación:</strong> <code>{result.threadId}</code>
+            </div>
+            {result.filename && (
+              <div>
+                <strong>Archivo:</strong> {result.filename} ({result.mimeType})
+              </div>
+            )}
+            {result.providerMessageIds && result.providerMessageIds.length > 1 ? (
+              <div>
+                <strong>providerMessageIds:</strong>{" "}
+                <code>{result.providerMessageIds.join(", ")}</code>
+              </div>
+            ) : (
+              <div>
+                <strong>providerMessageId:</strong>{" "}
+                <code>{result.providerMessageId || "N/A"}</code>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="pt-1">
+          <Button type="submit" disabled={sending}>
+            <Send className="h-4 w-4" />
+            {sending ? "Enviando WhatsApp…" : "Enviar WhatsApp"}
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -2468,8 +2850,11 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {/* Proveedor de WhatsApp y Conexión (YCloud / Evolution API QR / Meta Oficial) */}
+      {/* Proveedor de WhatsApp y Conexión (Evolution API / YCloud / Meta Oficial) */}
       <WhatsappProviderCard />
+
+      {/* Utilidad Admin: Enviar WhatsApp Manual (Texto y Archivos) */}
+      <WhatsappAdminSenderCard />
 
       {/* Branding */}
       <div className="mt-6 max-w-xl rounded-xl border border-neutral-200 bg-white p-6">

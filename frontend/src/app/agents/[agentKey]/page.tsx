@@ -668,7 +668,7 @@ function ConfigTab({
       `/api/agents/${agent.agentKey}/config`,
       {
         method: "PUT",
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, whatsappProvider: form.whatsappProvider === "meta" ? (agent.whatsappProvider === "evolution" ? "evolution" : "ycloud") : (form.whatsappProvider || "ycloud") }),
       }
     );
     onSaved(updated);
@@ -883,7 +883,7 @@ function ConfigTab({
     try {
       const updated = await apiFetch<Agent>(`/api/agents/${agent.agentKey}/config`, {
         method: "PUT",
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, whatsappProvider: form.whatsappProvider === "meta" ? (agent.whatsappProvider === "evolution" ? "evolution" : "ycloud") : (form.whatsappProvider || "ycloud") }),
       });
       onSaved(updated);
       // Refresh the secret "configured" flags from the server and drop any
@@ -1159,9 +1159,9 @@ function ConfigTab({
                 }))
               }
             >
-              <option value="ycloud">YCloud (Por defecto)</option>
-              <option value="evolution">Evolution API v2 (QR / Baileys)</option>
-              <option value="meta">Meta Cloud API Directa (Preparado)</option>
+              <option value="evolution">Evolution API</option>
+              <option value="ycloud">YCloud</option>
+              <option value="meta">Meta API Oficial (Preparado)</option>
             </select>
           </div>
         </div>
@@ -1581,10 +1581,8 @@ function ConfigTab({
         {form.whatsappProvider === "meta" && (
           <div className="space-y-3 pt-2 border-t border-neutral-100">
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-              La integración con <strong>Meta Cloud API Directa</strong> está
-              preparada en la base de datos y se activará en la Fase 5. Mientras
-              tanto, utiliza <strong>YCloud</strong> o{" "}
-              <strong>Evolution API v2</strong>.
+              <strong>Meta API Oficial — preparado / pendiente de activación:</strong>{" "}
+              La integración con Meta Cloud API está preparada en la base de datos y pendiente de activación. Mientras tanto, el proveedor operativo seguirá siendo <strong>Evolution API</strong> o <strong>YCloud</strong>.
             </div>
           </div>
         )}

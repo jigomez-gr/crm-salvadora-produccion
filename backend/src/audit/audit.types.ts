@@ -24,6 +24,7 @@ export const AuditAction = {
   SETTINGS_UPDATE: 'settings.update',
   WHATSAPP_AUTOMATION_PAUSED: 'whatsapp.automation_paused',
   WHATSAPP_AUTOMATION_RESUMED: 'whatsapp.automation_resumed',
+  WHATSAPP_ADMIN_SEND: 'whatsapp.admin_send',
   DATA_CLEAR_DEMO: 'data.clear_demo',
   ONBOARDING_COMPLETE: 'onboarding.complete',
   EMAIL_CONFIG_UPDATE: 'email.config_update',
