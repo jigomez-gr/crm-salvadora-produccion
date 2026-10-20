@@ -2242,6 +2242,20 @@ export class ServicesService implements OnModuleInit {
           res.redirect(302, `https://salvadora.jigretera.com${fallbackUrl}`);
           return;
         }
+        if (normalizedSlot === 'flyer-particular') {
+          if (service.flyerParticularUrl && (service.flyerParticularUrl.startsWith('http://') || service.flyerParticularUrl.startsWith('https://'))) {
+            res.redirect(302, service.flyerParticularUrl);
+            return;
+          }
+          if (service.flyerParticularUrl && service.flyerParticularUrl.startsWith('/')) {
+            res.redirect(302, `https://salvadora.jigretera.com${service.flyerParticularUrl}`);
+            return;
+          }
+        }
+        if (service.name.toLowerCase().includes('gong')) {
+          res.redirect(302, 'https://salvadora.jigretera.com/flyers/banogong_particular.jpg');
+          return;
+        }
         if (service.name.toLowerCase().includes('ayuno')) {
           res.redirect(302, 'https://salvadora.jigretera.com/flyers/ayuno.jpeg');
           return;
