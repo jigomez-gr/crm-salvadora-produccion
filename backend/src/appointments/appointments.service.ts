@@ -560,8 +560,11 @@ export class AppointmentsService implements OnModuleInit {
     let calMeetingUrl: string | null = dto.calMeetingUrl || null;
     let calStatus: string | null = null;
 
-    // Sincronización automática con Cal.com para citas virtuales (tanto confirmadas como pendientes de aprobación)
-    if (modality === 'virtual' && contact && !calMeetingUrl) {
+    // Sincronización automática con Cal.com para citas virtuales:
+    // Se ejecuta ÚNICAMENTE si la cita queda confirmada inmediatamente (SCHEDULED).
+    // Si la cita requiere aprobación previa (PENDING_APPROVAL, como Terapia Gestalt), Cal.com NO debe llamarse aquí,
+    // sino únicamente cuando la terapeuta/responsable la acepte (en accept()).
+    if (modality === 'virtual' && contact && !calMeetingUrl && status === AppointmentStatus.SCHEDULED) {
       try {
         const calResult = await this.calcomService.createBooking({
           startsAt,
@@ -1522,7 +1525,8 @@ export class AppointmentsService implements OnModuleInit {
 
       if (isVirtual) {
         appt.modality = 'virtual';
-        if (!appt.calMeetingUrl) {
+        // Solo generar reunión Cal.com si la cita no está pendiente de aprobación (o si ya está siendo aprobada/aceptada)
+        if (!appt.calMeetingUrl && appt.status !== AppointmentStatus.PENDING_APPROVAL) {
           try {
             const calResult = await this.calcomService.createBooking({
               startsAt: appt.startsAt,
