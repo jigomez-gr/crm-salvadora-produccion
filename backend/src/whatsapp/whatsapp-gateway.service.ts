@@ -7,6 +7,7 @@ import {
 } from '../common/entities/agent-config.entity';
 import { AppSettings } from '../common/entities/app-settings.entity';
 import {
+  WhatsappConnectionStatus,
   WhatsappFetchInboundMediaParams,
   WhatsappInboundMediaResult,
   WhatsappProvider,
@@ -15,10 +16,12 @@ import {
   WhatsappSendTextParams,
 } from './providers/whatsapp-provider.interface';
 import { YCloudProvider } from './providers/ycloud.provider';
+import { EvolutionProvider } from './providers/evolution.provider';
 
 @Injectable()
 export class WhatsappGatewayService {
   private readonly logger = new Logger(WhatsappGatewayService.name);
+  private readonly fallbackEvolutionProvider = new EvolutionProvider();
 
   constructor(
     private readonly ycloudProvider: YCloudProvider,
@@ -28,6 +31,8 @@ export class WhatsappGatewayService {
     @Optional()
     @InjectRepository(AgentConfig)
     private readonly agentConfigRepo?: Repository<AgentConfig>,
+    @Optional()
+    private readonly evolutionProvider?: EvolutionProvider,
   ) {}
 
   /**
@@ -81,10 +86,29 @@ export class WhatsappGatewayService {
       case 'ycloud':
         return this.ycloudProvider;
       case 'evolution':
+        return this.evolutionProvider ?? this.fallbackEvolutionProvider;
       case 'meta':
       default:
         return null;
     }
+  }
+
+  /**
+   * Queries connection status for the configured provider of the given agent.
+   */
+  async getConnectionStatus(
+    config: AgentConfig,
+  ): Promise<WhatsappConnectionStatus> {
+    const providerType = this.resolveProviderType(config);
+    const provider = this.getProvider(providerType);
+    if (provider?.getConnectionStatus) {
+      return provider.getConnectionStatus(config);
+    }
+    return {
+      provider: providerType,
+      state: config?.whatsappNumber ? 'open' : 'unconfigured',
+      instanceName: config?.evolutionInstanceName ?? null,
+    };
   }
 
   /**

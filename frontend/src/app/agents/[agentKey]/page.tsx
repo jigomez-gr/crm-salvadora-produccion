@@ -23,6 +23,7 @@ import Link from "next/link";
 import { apiFetch, apiUrl, ApiError } from "@/lib/api";
 import {
   Agent,
+  EvolutionConnectionStatus,
   KnowledgeList,
   ModelsResponse,
   OpenRouterModel,
@@ -571,18 +572,34 @@ function ConfigTab({
   onSaved: (a: Agent) => void;
 }) {
   const router = useRouter();
-  const [form, setForm] = useState<Agent>({ ...agent });
+  const toast = useToast();
+  const [form, setForm] = useState<Agent>({
+    ...agent,
+    whatsappProvider: agent.whatsappProvider || "ycloud",
+  });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [copiedEvoWebhook, setCopiedEvoWebhook] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   // Bumped after each successful save to remount the SecretInputs (so a
   // just-changed secret snaps back to its masked "Configurada" state).
   const [savedTick, setSavedTick] = useState(0);
 
+  // Evolution API live instance state (never persisted in agent_configs)
+  const [evoStatus, setEvoStatus] = useState<EvolutionConnectionStatus | null>(
+    null
+  );
+  const [evoActionLoading, setEvoActionLoading] = useState<string | null>(null);
+  const [evoError, setEvoError] = useState("");
+  const [evoNotice, setEvoNotice] = useState("");
+
   const webhookUrl = apiUrl(`/api/webhooks/ycloud/${agent.agentKey}`);
+  const evolutionWebhookUrl = apiUrl(
+    `/api/webhooks/evolution/${agent.agentKey}`
+  );
   const isLocalWebhook = /localhost|127\.0\.0\.1/.test(webhookUrl);
 
   async function copyWebhook() {
@@ -592,6 +609,232 @@ function ConfigTab({
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // clipboard not available — the field is selectable as fallback
+    }
+  }
+
+  async function copyEvolutionWebhook() {
+    try {
+      await navigator.clipboard.writeText(evolutionWebhookUrl);
+      setCopiedEvoWebhook(true);
+      setTimeout(() => setCopiedEvoWebhook(false), 2000);
+    } catch {
+      // clipboard not available
+    }
+  }
+
+  async function fetchEvolutionStatus(silent = false) {
+    if (!silent) {
+      setEvoActionLoading("status");
+      setEvoError("");
+    }
+    try {
+      const status = await apiFetch<EvolutionConnectionStatus>(
+        `/api/agents/${agent.agentKey}/whatsapp/evolution/status`
+      );
+      setEvoStatus((prev) => ({
+        ...status,
+        // Preserve QR if still connecting and status poll didn't include QR
+        qrBase64:
+          status.state === "open"
+            ? null
+            : (status.qrBase64 ?? prev?.qrBase64 ?? null),
+        pairingCode:
+          status.state === "open"
+            ? null
+            : (status.pairingCode ?? prev?.pairingCode ?? null),
+      }));
+    } catch (err) {
+      if (!silent) {
+        setEvoError(
+          err instanceof ApiError
+            ? err.message
+            : "No se pudo consultar el estado de Evolution API."
+        );
+      }
+    } finally {
+      if (!silent) setEvoActionLoading(null);
+    }
+  }
+
+  useEffect(() => {
+    if ((form.whatsappProvider || "ycloud") === "evolution") {
+      fetchEvolutionStatus(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agent.agentKey, form.whatsappProvider]);
+
+  async function saveAgentConfigInternal(): Promise<Agent> {
+    const updated = await apiFetch<Agent>(
+      `/api/agents/${agent.agentKey}/config`,
+      {
+        method: "PUT",
+        body: JSON.stringify(form),
+      }
+    );
+    onSaved(updated);
+    setForm((f) => ({
+      ...f,
+      openrouterApiKey: null,
+      ycloudApiKey: null,
+      ycloudWebhookSecret: null,
+      evolutionApiKey: null,
+      evolutionWebhookSecret: null,
+      metaAccessToken: null,
+      metaAppSecret: null,
+      metaVerifyToken: null,
+      hasOpenrouterApiKey: updated.hasOpenrouterApiKey,
+      hasYcloudApiKey: updated.hasYcloudApiKey,
+      hasYcloudWebhookSecret: updated.hasYcloudWebhookSecret,
+      hasEvolutionApiKey: updated.hasEvolutionApiKey,
+      hasEvolutionWebhookSecret: updated.hasEvolutionWebhookSecret,
+      hasMetaAccessToken: updated.hasMetaAccessToken,
+      hasMetaAppSecret: updated.hasMetaAppSecret,
+      hasMetaVerifyToken: updated.hasMetaVerifyToken,
+    }));
+    setSavedTick((t) => t + 1);
+    return updated;
+  }
+
+  async function handleEvolutionConnect() {
+    setEvoActionLoading("connect");
+    setEvoError("");
+    setEvoNotice("");
+    try {
+      await saveAgentConfigInternal();
+      const res = await apiFetch<EvolutionConnectionStatus>(
+        `/api/agents/${agent.agentKey}/whatsapp/evolution/connect`,
+        { method: "POST" }
+      );
+      setEvoStatus(res);
+      if (res.state === "open") {
+        setEvoNotice("Instancia conectada correctamente en Evolution API.");
+        toast.success("WhatsApp conectado en Evolution API.");
+      } else if (res.qrBase64) {
+        setEvoNotice(
+          "Escanea el código QR desde tu móvil (WhatsApp → Dispositivos vinculados)."
+        );
+      } else {
+        setEvoNotice("Instancia preparada en Evolution API.");
+      }
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo crear o conectar la instancia en Evolution API.";
+      setEvoError(msg);
+      toast.error(msg);
+    } finally {
+      setEvoActionLoading(null);
+    }
+  }
+
+  async function handleEvolutionRefreshQr() {
+    setEvoActionLoading("qr");
+    setEvoError("");
+    try {
+      const res = await apiFetch<EvolutionConnectionStatus>(
+        `/api/agents/${agent.agentKey}/whatsapp/evolution/qr`
+      );
+      setEvoStatus(res);
+    } catch (err) {
+      setEvoError(
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo obtener el código QR."
+      );
+    } finally {
+      setEvoActionLoading(null);
+    }
+  }
+
+  async function handleEvolutionConfigureWebhook() {
+    setEvoActionLoading("webhook");
+    setEvoError("");
+    setEvoNotice("");
+    try {
+      await saveAgentConfigInternal();
+      const res = await apiFetch<{
+        ok: boolean;
+        instanceName: string;
+        webhookUrl: string;
+        events: string[];
+      }>(
+        `/api/agents/${agent.agentKey}/whatsapp/evolution/configure-webhook`,
+        { method: "POST" }
+      );
+      setEvoNotice(
+        `Webhook configurado en Evolution API (${res.webhookUrl}) con eventos: ${res.events.join(", ")}.`
+      );
+      toast.success("Webhook configurado en Evolution API.");
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo configurar el webhook en Evolution API.";
+      setEvoError(msg);
+      toast.error(msg);
+    } finally {
+      setEvoActionLoading(null);
+    }
+  }
+
+  async function handleEvolutionRestart() {
+    setEvoActionLoading("restart");
+    setEvoError("");
+    setEvoNotice("");
+    try {
+      const res = await apiFetch<{
+        ok: boolean;
+        instanceName: string;
+        state: string;
+      }>(`/api/agents/${agent.agentKey}/whatsapp/evolution/restart`, {
+        method: "POST",
+      });
+      setEvoNotice(`Instancia '${res.instanceName}' reiniciada.`);
+      toast.success("Instancia reiniciada.");
+      await fetchEvolutionStatus(true);
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo reiniciar la instancia.";
+      setEvoError(msg);
+      toast.error(msg);
+    } finally {
+      setEvoActionLoading(null);
+    }
+  }
+
+  async function handleEvolutionDisconnect() {
+    setEvoActionLoading("disconnect");
+    setEvoError("");
+    setEvoNotice("");
+    try {
+      const res = await apiFetch<{
+        ok: boolean;
+        instanceName: string;
+        state: "close";
+      }>(`/api/agents/${agent.agentKey}/whatsapp/evolution/disconnect`, {
+        method: "POST",
+      });
+      setEvoStatus({
+        provider: "evolution",
+        state: res.state,
+        instanceName: res.instanceName,
+        qrBase64: null,
+        pairingCode: null,
+      });
+      setEvoNotice(`Instancia '${res.instanceName}' desconectada.`);
+      toast.success("Instancia de WhatsApp desconectada.");
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo desconectar la instancia.";
+      setEvoError(msg);
+      toast.error(msg);
+    } finally {
+      setEvoActionLoading(null);
     }
   }
 
@@ -889,88 +1132,462 @@ function ConfigTab({
 
       {/* WhatsApp connection */}
       <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-4">
-        <div>
-          <h2 className="text-sm font-semibold text-neutral-700">Conexión de WhatsApp (YCloud)</h2>
-          <p className="mt-0.5 text-xs text-neutral-500">
-            Conecta el agente a WhatsApp a través de YCloud.
-          </p>
-        </div>
-        <SecretInput
-          key={`ycloud-api-${savedTick}`}
-          label="Clave de API de YCloud"
-          placeholder="Tu API key de YCloud"
-          hasValue={!!form.hasYcloudApiKey}
-          value={form.ycloudApiKey}
-          onChange={(v) => setForm((f) => ({ ...f, ycloudApiKey: v }))}
-        />
-        <div>
-          <label className="mb-1 block text-xs font-medium text-neutral-700">
-            Número de WhatsApp
-          </label>
-          <Input
-            placeholder="+34600000000"
-            value={form.whatsappNumber ?? ""}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, whatsappNumber: e.target.value || null }))
-            }
-          />
-          <p className="mt-1 text-xs text-neutral-500">
-            Número desde el que envía el agente (formato E.164)
-          </p>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-neutral-700">
-            URL del webhook (pégala en YCloud)
-          </label>
-          <div className="flex gap-2">
-            <Input
-              readOnly
-              value={webhookUrl}
-              onFocus={(e) => e.currentTarget.select()}
-              className="font-mono text-xs"
-            />
-            <Button type="button" variant="secondary" onClick={copyWebhook}>
-              {copied ? (
-                <>
-                  <Check className="h-3.5 w-3.5" /> Copiado
-                </>
-              ) : (
-                <>
-                  <Copy className="h-3.5 w-3.5" /> Copiar
-                </>
-              )}
-            </Button>
-          </div>
-          <p className="mt-1 text-xs text-neutral-500">
-            En YCloud → Developers → Webhooks, crea un webhook con esta URL. Copia
-            el <em>secret</em> que te dé y pégalo abajo.
-          </p>
-          {isLocalWebhook && (
-            <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              ⚠️ Esta URL apunta a tu ordenador (<code>localhost</code>) y{" "}
-              <strong>no funcionará en YCloud</strong>: YCloud necesita una
-              dirección pública con <code>https://</code> para poder avisarte
-              cuando llega un WhatsApp.
-              <br />
-              Para probar desde tu ordenador, expón el backend con un túnel (lo
-              más simple: <code>cloudflared tunnel --url http://localhost:3001</code>
-              ) y pega en YCloud la URL pública que te dé, terminada en{" "}
-              <code>/api/webhooks/ycloud/{agent.agentKey}</code>. Tienes los pasos
-              completos en el README (“Probar WhatsApp desde tu ordenador”). Si
-              despliegas en un servidor (Dokploy), aquí aparecerá automáticamente
-              la URL de tu dominio con HTTPS.
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-neutral-700">
+              Conexión de WhatsApp
+            </h2>
+            <p className="mt-0.5 text-xs text-neutral-500">
+              Selecciona el proveedor de WhatsApp para este agente (YCloud por
+              defecto, Evolution API v2 o Meta Cloud API).
             </p>
-          )}
+          </div>
+          <div className="sm:w-64">
+            <label className="mb-1 block text-[11px] font-medium text-neutral-600">
+              Proveedor de WhatsApp
+            </label>
+            <select
+              className="block w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-800 focus:border-indigo-500 focus:outline-none"
+              value={form.whatsappProvider || "ycloud"}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  whatsappProvider: e.target.value as
+                    | "ycloud"
+                    | "evolution"
+                    | "meta",
+                }))
+              }
+            >
+              <option value="ycloud">YCloud (Por defecto)</option>
+              <option value="evolution">Evolution API v2 (QR / Baileys)</option>
+              <option value="meta">Meta Cloud API Directa (Preparado)</option>
+            </select>
+          </div>
         </div>
-        <SecretInput
-          key={`ycloud-secret-${savedTick}`}
-          label="Webhook secret de YCloud"
-          placeholder="Secret que te da YCloud al crear el webhook"
-          hasValue={!!form.hasYcloudWebhookSecret}
-          value={form.ycloudWebhookSecret}
-          onChange={(v) => setForm((f) => ({ ...f, ycloudWebhookSecret: v }))}
-          hint="Sirve para verificar que los mensajes vienen de YCloud."
-        />
+
+        {(form.whatsappProvider || "ycloud") === "ycloud" && (
+          <div className="space-y-4 pt-2 border-t border-neutral-100">
+            <SecretInput
+              key={`ycloud-api-${savedTick}`}
+              label="Clave de API de YCloud"
+              placeholder="Tu API key de YCloud"
+              hasValue={!!form.hasYcloudApiKey}
+              value={form.ycloudApiKey}
+              onChange={(v) => setForm((f) => ({ ...f, ycloudApiKey: v }))}
+            />
+            <div>
+              <label className="mb-1 block text-xs font-medium text-neutral-700">
+                Número de WhatsApp
+              </label>
+              <Input
+                placeholder="+34600000000"
+                value={form.whatsappNumber ?? ""}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    whatsappNumber: e.target.value || null,
+                  }))
+                }
+              />
+              <p className="mt-1 text-xs text-neutral-500">
+                Número desde el que envía el agente (formato E.164)
+              </p>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-neutral-700">
+                URL del webhook (pégala en YCloud)
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  readOnly
+                  value={webhookUrl}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="font-mono text-xs"
+                />
+                <Button type="button" variant="secondary" onClick={copyWebhook}>
+                  {copied ? (
+                    <>
+                      <Check className="h-3.5 w-3.5" /> Copiado
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3.5 w-3.5" /> Copiar
+                    </>
+                  )}
+                </Button>
+              </div>
+              <p className="mt-1 text-xs text-neutral-500">
+                En YCloud → Developers → Webhooks, crea un webhook con esta URL.
+                Copia el <em>secret</em> que te dé y pégalo abajo.
+              </p>
+              {isLocalWebhook && (
+                <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  ⚠️ Esta URL apunta a tu ordenador (<code>localhost</code>) y{" "}
+                  <strong>no funcionará en YCloud</strong>: YCloud necesita una
+                  dirección pública con <code>https://</code> para poder
+                  avisarte cuando llega un WhatsApp.
+                  <br />
+                  Para probar desde tu ordenador, expón el backend con un túnel
+                  (lo más simple:{" "}
+                  <code>cloudflared tunnel --url http://localhost:3001</code>) y
+                  pega en YCloud la URL pública que te dé, terminada en{" "}
+                  <code>/api/webhooks/ycloud/{agent.agentKey}</code>. Tienes los
+                  pasos completos en el README (“Probar WhatsApp desde tu
+                  ordenador”). Si despliegas en un servidor (Dokploy), aquí
+                  aparecerá automáticamente la URL de tu dominio con HTTPS.
+                </p>
+              )}
+            </div>
+            <SecretInput
+              key={`ycloud-secret-${savedTick}`}
+              label="Webhook secret de YCloud"
+              placeholder="Secret que te da YCloud al crear el webhook"
+              hasValue={!!form.hasYcloudWebhookSecret}
+              value={form.ycloudWebhookSecret}
+              onChange={(v) =>
+                setForm((f) => ({ ...f, ycloudWebhookSecret: v }))
+              }
+              hint="Sirve para verificar que los mensajes vienen de YCloud."
+            />
+          </div>
+        )}
+
+        {form.whatsappProvider === "evolution" && (
+          <div className="space-y-4 pt-2 border-t border-neutral-100">
+            {/* Live status bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xs font-medium text-neutral-600">
+                  Estado de conexión:
+                </span>
+                {(() => {
+                  const st = evoStatus?.state;
+                  const hasQr = !!evoStatus?.qrBase64 && st !== "open";
+                  if (evoError && (!st || st === "unknown")) {
+                    return (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">
+                        <span className="h-2 w-2 rounded-full bg-red-500" />
+                        Error
+                      </span>
+                    );
+                  }
+                  if (st === "open") {
+                    return (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700">
+                        <span className="h-2 w-2 rounded-full bg-green-500" />
+                        Conectado
+                      </span>
+                    );
+                  }
+                  if (hasQr) {
+                    return (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                        <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                        Esperando QR
+                      </span>
+                    );
+                  }
+                  if (st === "connecting") {
+                    return (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+                        <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                        Conectando
+                      </span>
+                    );
+                  }
+                  if (st === "close") {
+                    return (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-200 px-2.5 py-0.5 text-xs font-semibold text-neutral-700">
+                        <span className="h-2 w-2 rounded-full bg-neutral-500" />
+                        Desconectado
+                      </span>
+                    );
+                  }
+                  if (st === "unknown") {
+                    return (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">
+                        <span className="h-2 w-2 rounded-full bg-red-500" />
+                        Error
+                      </span>
+                    );
+                  }
+                  return (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-600">
+                      <span className="h-2 w-2 rounded-full bg-neutral-400" />
+                      Sin configurar
+                    </span>
+                  );
+                })()}
+                {evoStatus?.instanceName && (
+                  <span className="font-mono text-xs text-neutral-500">
+                    ({evoStatus.instanceName})
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleEvolutionConnect}
+                  disabled={!!evoActionLoading}
+                >
+                  {evoActionLoading === "connect"
+                    ? "Conectando…"
+                    : "Crear / Conectar"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => fetchEvolutionStatus(false)}
+                  disabled={!!evoActionLoading}
+                >
+                  <RefreshCw
+                    className={cn(
+                      "h-3.5 w-3.5",
+                      evoActionLoading === "status" && "animate-spin"
+                    )}
+                  />
+                  Actualizar estado
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleEvolutionConfigureWebhook}
+                  disabled={!!evoActionLoading}
+                >
+                  {evoActionLoading === "webhook"
+                    ? "Configurando…"
+                    : "Configurar Webhook"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleEvolutionRestart}
+                  disabled={!!evoActionLoading}
+                >
+                  {evoActionLoading === "restart"
+                    ? "Reiniciando…"
+                    : "Reiniciar"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="danger"
+                  onClick={handleEvolutionDisconnect}
+                  disabled={!!evoActionLoading}
+                >
+                  {evoActionLoading === "disconnect"
+                    ? "Desconectando…"
+                    : "Desconectar"}
+                </Button>
+              </div>
+            </div>
+
+            {evoStatus?.detail && (
+              <p className="text-xs text-neutral-500">{evoStatus.detail}</p>
+            )}
+            {evoNotice && (
+              <p className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
+                {evoNotice}
+              </p>
+            )}
+            {evoError && (
+              <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                {evoError}
+              </p>
+            )}
+
+            {/* QR Code display when instance needs QR scanning */}
+            {evoStatus?.qrBase64 && evoStatus.state !== "open" && (
+              <div className="flex flex-col items-center rounded-xl border border-indigo-200 bg-indigo-50/40 p-4 space-y-3">
+                <p className="text-xs font-medium text-neutral-800 text-center">
+                  Abre WhatsApp en el teléfono dedicado (
+                  {form.whatsappNumber || "+34 646 034 231"}) →{" "}
+                  <strong>Dispositivos vinculados</strong> →{" "}
+                  <strong>Vincular un dispositivo</strong> y escanea este código
+                  QR:
+                </p>
+                <div className="rounded-xl bg-white p-3 shadow-sm border border-neutral-200">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={
+                      evoStatus.qrBase64.startsWith("data:image")
+                        ? evoStatus.qrBase64
+                        : `data:image/png;base64,${evoStatus.qrBase64}`
+                    }
+                    alt="Código QR de WhatsApp Evolution API"
+                    className="h-56 w-56 object-contain"
+                  />
+                </div>
+                {evoStatus.pairingCode && (
+                  <p className="text-xs text-neutral-600">
+                    Código de vinculación:{" "}
+                    <code className="rounded bg-white px-2 py-0.5 font-mono font-semibold text-indigo-700 border border-indigo-200">
+                      {evoStatus.pairingCode}
+                    </code>
+                  </p>
+                )}
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={handleEvolutionRefreshQr}
+                    disabled={!!evoActionLoading}
+                  >
+                    <RefreshCw
+                      className={cn(
+                        "h-3.5 w-3.5",
+                        evoActionLoading === "qr" && "animate-spin"
+                      )}
+                    />
+                    Actualizar QR
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => fetchEvolutionStatus(false)}
+                    disabled={!!evoActionLoading}
+                  >
+                    Ya lo he escaneado (Comprobar estado)
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-neutral-700">
+                  Número de WhatsApp
+                </label>
+                <Input
+                  placeholder="+34646034231"
+                  value={form.whatsappNumber ?? ""}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      whatsappNumber: e.target.value || null,
+                    }))
+                  }
+                />
+                <p className="mt-1 text-xs text-neutral-500">
+                  Número dedicado vinculado a la instancia (formato E.164).
+                </p>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-neutral-700">
+                  Nombre de instancia
+                </label>
+                <Input
+                  placeholder="salvadora_whatsapp"
+                  value={form.evolutionInstanceName ?? ""}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      evolutionInstanceName: e.target.value || null,
+                    }))
+                  }
+                />
+                <p className="mt-1 text-xs text-neutral-500">
+                  Identificador único de la instancia en Evolution API.
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-neutral-700">
+                URL Evolution API
+              </label>
+              <Input
+                placeholder="https://evolutionapi.jigretera.com"
+                value={form.evolutionApiUrl ?? ""}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    evolutionApiUrl: e.target.value || null,
+                  }))
+                }
+              />
+              <p className="mt-1 text-xs text-neutral-500">
+                URL base del servidor Evolution API v2.3.7 (sin barra final).
+              </p>
+            </div>
+
+            <SecretInput
+              key={`evolution-api-${savedTick}`}
+              label="Evolution API Key"
+              placeholder="Clave global o de instancia de Evolution API"
+              hasValue={!!form.hasEvolutionApiKey}
+              value={form.evolutionApiKey}
+              onChange={(v) => setForm((f) => ({ ...f, evolutionApiKey: v }))}
+              hint="Se envía en la cabecera apikey hacia Evolution API y nunca se expone al navegador."
+            />
+
+            <SecretInput
+              key={`evolution-secret-${savedTick}`}
+              label="Webhook Secret (x-evolution-secret)"
+              placeholder="Secreto para autenticar los webhooks de Evolution API"
+              hasValue={!!form.hasEvolutionWebhookSecret}
+              value={form.evolutionWebhookSecret}
+              onChange={(v) =>
+                setForm((f) => ({ ...f, evolutionWebhookSecret: v }))
+              }
+              hint="El CRM validará este secreto en modo fail-closed mediante la cabecera x-evolution-secret."
+            />
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-neutral-700">
+                Endpoint de Webhook del CRM para Evolution API
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  readOnly
+                  value={evolutionWebhookUrl}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="font-mono text-xs"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={copyEvolutionWebhook}
+                >
+                  {copiedEvoWebhook ? (
+                    <>
+                      <Check className="h-3.5 w-3.5" /> Copiado
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3.5 w-3.5" /> Copiar
+                    </>
+                  )}
+                </Button>
+              </div>
+              <p className="mt-1 text-xs text-neutral-500">
+                Pulsa el botón <strong>Configurar Webhook</strong> arriba para
+                registrar automáticamente esta ruta y la cabecera{" "}
+                <code>x-evolution-secret</code> en Evolution API.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {form.whatsappProvider === "meta" && (
+          <div className="space-y-3 pt-2 border-t border-neutral-100">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              La integración con <strong>Meta Cloud API Directa</strong> está
+              preparada en la base de datos y se activará en la Fase 5. Mientras
+              tanto, utiliza <strong>YCloud</strong> o{" "}
+              <strong>Evolution API v2</strong>.
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Reminders */}
@@ -980,11 +1597,22 @@ function ConfigTab({
             Recordatorios de cita
           </h2>
           <p className="mt-1 text-xs text-neutral-500">
-            Envía un recordatorio por WhatsApp 24 h y 2 h antes de cada cita.
-            Fuera de la ventana de 24 h, WhatsApp exige una{" "}
-            <span className="font-medium">plantilla aprobada (HSM)</span>: créala
-            en YCloud con 3 variables — {"{{1}}"} nombre, {"{{2}}"} servicio,{" "}
-            {"{{3}}"} fecha y hora — e indica aquí su nombre.
+            {form.whatsappProvider === "evolution" ? (
+              <>
+                Envía un recordatorio por WhatsApp antes de cada cita. Con{" "}
+                <span className="font-medium">Evolution API</span> los
+                recordatorios se envían directamente como mensaje de texto sin
+                necesidad de plantilla HSM aprobada por Meta.
+              </>
+            ) : (
+              <>
+                Envía un recordatorio por WhatsApp 24 h y 2 h antes de cada
+                cita. Fuera de la ventana de 24 h, WhatsApp exige una{" "}
+                <span className="font-medium">plantilla aprobada (HSM)</span>:
+                créala en YCloud con 3 variables — {"{{1}}"} nombre, {"{{2}}"}{" "}
+                servicio, {"{{3}}"} fecha y hora — e indica aquí su nombre.
+              </>
+            )}
           </p>
         </div>
         <div className="flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 p-3">
@@ -993,7 +1621,9 @@ function ConfigTab({
               Recordatorios activos
             </p>
             <p className="text-xs text-neutral-500">
-              Requiere una plantilla aprobada y el número de WhatsApp configurado
+              {form.whatsappProvider === "evolution"
+                ? "Envía recordatorios como texto directo a través de la instancia Evolution conectada"
+                : "Requiere una plantilla aprobada y el número de WhatsApp configurado"}
             </p>
           </div>
           <button
@@ -1014,41 +1644,45 @@ function ConfigTab({
             />
           </button>
         </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-neutral-700">
-            Nombre de la plantilla (HSM)
-          </label>
-          <Input
-            placeholder="p. ej. recordatorio_cita"
-            value={form.reminderTemplateName ?? ""}
-            onChange={(e) =>
-              setForm((f) => ({
-                ...f,
-                reminderTemplateName: e.target.value || null,
-              }))
-            }
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-neutral-700">
-            Idioma de la plantilla
-          </label>
-          <Input
-            className="w-32"
-            placeholder="es"
-            value={form.reminderTemplateLanguage ?? ""}
-            onChange={(e) =>
-              setForm((f) => ({
-                ...f,
-                reminderTemplateLanguage: e.target.value,
-              }))
-            }
-          />
-          <p className="mt-1 text-xs text-neutral-500">
-            Código de idioma de la plantilla en WhatsApp (p. ej. <code>es</code>{" "}
-            o <code>es_ES</code>).
-          </p>
-        </div>
+        {form.whatsappProvider !== "evolution" && (
+          <>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-neutral-700">
+                Nombre de la plantilla (HSM)
+              </label>
+              <Input
+                placeholder="p. ej. recordatorio_cita"
+                value={form.reminderTemplateName ?? ""}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    reminderTemplateName: e.target.value || null,
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-neutral-700">
+                Idioma de la plantilla
+              </label>
+              <Input
+                className="w-32"
+                placeholder="es"
+                value={form.reminderTemplateLanguage ?? ""}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    reminderTemplateLanguage: e.target.value,
+                  }))
+                }
+              />
+              <p className="mt-1 text-xs text-neutral-500">
+                Código de idioma de la plantilla en WhatsApp (p. ej.{" "}
+                <code>es</code> o <code>es_ES</code>).
+              </p>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Voice Phone Agent (VAPI & Zadarma) */}

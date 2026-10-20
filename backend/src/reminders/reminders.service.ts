@@ -264,16 +264,42 @@ export class RemindersService implements OnModuleInit {
     try {
       switch (channel) {
         case ReminderChannel.WHATSAPP: {
-          if (!config?.remindersEnabled || !config.reminderTemplateName) {
+          const isEvolution = config?.whatsappProvider === 'evolution';
+          if (
+            !config?.remindersEnabled ||
+            (!isEvolution && !config.reminderTemplateName)
+          ) {
             this.logger.debug(
               `Agent '${agentKey}' does not have remindersEnabled or reminderTemplateName. Skipping WhatsApp.`,
             );
             await this.remindersRepo.remove(claim);
             return;
           }
-          const from = config.whatsappNumber || process.env.YCLOUD_WHATSAPP_NUMBER;
+          const from =
+            config.whatsappNumber ||
+            (isEvolution ? config.evolutionInstanceName : undefined) ||
+            process.env.YCLOUD_WHATSAPP_NUMBER;
           if (!phone || !from) {
             result = { ok: false, error: 'Falta teléfono del contacto o remitente WhatsApp' };
+            break;
+          }
+          const reminderText = `Hola ${contactName}, te recordamos tu cita de ${appt.service} programada para el ${whenDateStr} a las ${whenTimeStr}.${svc?.reminderNotes ? ` Indicaciones: ${svc.reminderNotes}` : ''} Centro de Yoga Salvadora Conesa.`;
+          if (isEvolution && this.whatsappGateway) {
+            const evoRes = await this.whatsappGateway.sendAutomatedTextMessage({
+              config,
+              from,
+              to: phone,
+              body: reminderText,
+            });
+            if (evoRes.skippedByPause) {
+              await this.remindersRepo.remove(claim);
+              return;
+            }
+            result = {
+              ok: evoRes.ok,
+              providerMessageId: evoRes.providerMessageId,
+              error: evoRes.error,
+            };
             break;
           }
           const components = this.buildComponents(appt, config);
@@ -282,15 +308,16 @@ export class RemindersService implements OnModuleInit {
                 config,
                 from,
                 to: phone,
-                templateName: config.reminderTemplateName,
+                templateName: config.reminderTemplateName || 'recordatorio_cita',
                 languageCode: config.reminderTemplateLanguage || 'es',
                 components,
+                fallbackText: reminderText,
                 apiKeyOverride: config.ycloudApiKey,
               })
             : await this.ycloudClient.sendTemplateMessage(
                 from,
                 phone,
-                config.reminderTemplateName,
+                config.reminderTemplateName || 'recordatorio_cita',
                 config.reminderTemplateLanguage || 'es',
                 components,
                 config.ycloudApiKey,

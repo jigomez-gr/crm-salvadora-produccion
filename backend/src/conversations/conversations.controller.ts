@@ -255,7 +255,11 @@ export class ConversationsController {
     const config = await this.agentsConfigService
       .findByKeyOrNull(conv.agentKey)
       .catch(() => null);
-    const from = config?.whatsappNumber || process.env.YCLOUD_WHATSAPP_NUMBER;
+    const isEvolution = config?.whatsappProvider === 'evolution';
+    const from =
+      config?.whatsappNumber ||
+      (isEvolution ? config?.evolutionInstanceName : undefined) ||
+      process.env.YCLOUD_WHATSAPP_NUMBER;
     if (!from) {
       // If contact has email, deliver by email instead of failing
       const contact = conv.contactId

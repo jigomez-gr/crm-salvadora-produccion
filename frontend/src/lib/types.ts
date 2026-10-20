@@ -393,6 +393,17 @@ export interface Agent {
   hasMetaVerifyToken?: boolean;
 }
 
+export interface EvolutionConnectionStatus {
+  provider: "ycloud" | "evolution" | "meta";
+  state: "open" | "connecting" | "close" | "unconfigured" | "unknown";
+  instanceName?: string | null;
+  qrBase64?: string | null;
+  pairingCode?: string | null;
+  detail?: string;
+  created?: boolean;
+  webhookConfigured?: boolean;
+}
+
 export interface OpenRouterModel {
   id: string;
   name: string;
