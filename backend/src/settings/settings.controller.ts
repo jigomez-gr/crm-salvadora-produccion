@@ -81,7 +81,12 @@ export class SettingsController {
     @CurrentUser() actor: AuthUser,
     @Ip() ip: string,
   ) {
+    const previous = await this.settings.get();
+    const prevPaused = Boolean(previous.whatsappAutomationPaused);
+
     const settings = await this.settings.update(dto);
+    const nextPaused = Boolean(settings.whatsappAutomationPaused);
+
     this.audit({
       actor: { id: actor.id, email: actor.email },
       action: AuditAction.SETTINGS_UPDATE,
@@ -90,6 +95,26 @@ export class SettingsController {
       ip,
       metadata: { changed: Object.keys(dto) },
     });
+
+    if (dto.whatsappAutomationPaused !== undefined && prevPaused !== nextPaused) {
+      this.audit({
+        actor: { id: actor.id, email: actor.email },
+        action: nextPaused
+          ? AuditAction.WHATSAPP_AUTOMATION_PAUSED
+          : AuditAction.WHATSAPP_AUTOMATION_RESUMED,
+        summary: nextPaused
+          ? 'Pausó globalmente la automatización de WhatsApp'
+          : 'Reanudó globalmente la automatización de WhatsApp',
+        targetType: 'settings',
+        targetId: settings.id,
+        ip,
+        metadata: {
+          previousWhatsappAutomationPaused: prevPaused,
+          whatsappAutomationPaused: nextPaused,
+        },
+      });
+    }
+
     return settings;
   }
 

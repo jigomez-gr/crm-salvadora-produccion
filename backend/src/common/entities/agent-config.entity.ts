@@ -16,6 +16,8 @@ export interface WorkingHourSlot {
   close: string; // "18:00"
 }
 
+export type WhatsappProviderType = 'ycloud' | 'evolution' | 'meta';
+
 @Entity('agent_configs')
 export class AgentConfig {
   @PrimaryGeneratedColumn('uuid')
@@ -63,7 +65,11 @@ export class AgentConfig {
   @Column({ nullable: true })
   openrouterApiKey: string;
 
-  // ─── WhatsApp connection (YCloud) ───
+  // ─── WhatsApp provider & connection ───
+  // Active WhatsApp provider ('ycloud' | 'evolution' | 'meta'). Defaults to 'ycloud'.
+  @Column({ type: 'varchar', length: 20, default: 'ycloud' })
+  whatsappProvider: WhatsappProviderType;
+
   // Business WhatsApp number this agent sends from (E.164). Falls back to
   // YCLOUD_WHATSAPP_NUMBER env when empty.
   @Column({ nullable: true })
@@ -77,6 +83,38 @@ export class AgentConfig {
   // Falls back to YCLOUD_WEBHOOK_SECRET env when empty.
   @Column({ nullable: true })
   ycloudWebhookSecret: string;
+
+  // ─── Evolution API connection (prepared & configurable per agent) ───
+  @Column({ nullable: true })
+  evolutionApiUrl: string;
+
+  @Column({ nullable: true })
+  evolutionInstanceName: string;
+
+  @Column({ nullable: true })
+  evolutionApiKey: string;
+
+  @Column({ nullable: true })
+  evolutionWebhookSecret: string;
+
+  // ─── Meta WhatsApp Cloud API connection (prepared for future activation) ───
+  @Column({ nullable: true })
+  metaPhoneNumberId: string;
+
+  @Column({ nullable: true })
+  metaWabaId: string;
+
+  @Column({ nullable: true })
+  metaAccessToken: string;
+
+  @Column({ nullable: true })
+  metaAppSecret: string;
+
+  @Column({ nullable: true })
+  metaVerifyToken: string;
+
+  @Column({ nullable: true, default: 'v21.0' })
+  metaGraphVersion: string;
 
   @Column({ default: true })
   enabled: boolean;

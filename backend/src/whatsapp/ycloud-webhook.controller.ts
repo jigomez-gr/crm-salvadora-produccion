@@ -7,6 +7,7 @@ import {
   HttpCode,
   HttpStatus,
   Logger,
+  Optional,
   RawBodyRequest,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
@@ -17,6 +18,8 @@ import { ContactsService } from '../contacts/contacts.service';
 import { AgentRunnerService } from '../agents/agent-runner.service';
 import { AgentsConfigService } from '../agents/agents-config.service';
 import { YCloudClient } from './ycloud-client.service';
+import { WhatsappGatewayService } from './whatsapp-gateway.service';
+import { AgentConfig } from '../common/entities/agent-config.entity';
 import { MessageChannel, MessageStatus } from '../common/entities/message.entity';
 import { parseInboundMessage } from './inbound-parser';
 import { verifyYCloudSignature } from './ycloud-signature';
@@ -46,6 +49,7 @@ export class YCloudWebhookController {
     private readonly agentsConfigService: AgentsConfigService,
     private readonly ycloudClient: YCloudClient,
     private readonly eventEmitter: EventEmitter2,
+    @Optional() private readonly whatsappGateway?: WhatsappGatewayService,
   ) {}
 
   // Backward-compatible base route → routes to the default seeded 'booking' agent.
@@ -111,7 +115,7 @@ export class YCloudWebhookController {
 
   private async processWebhook(
     agentKey: string,
-    config: { ycloudApiKey?: string; whatsappNumber?: string } | null,
+    config: Partial<AgentConfig> | null,
     body: any,
   ): Promise<void> {
     // Outbound delivery/read status updates for messages we sent.
@@ -126,7 +130,7 @@ export class YCloudWebhookController {
 
   private async processInbound(
     agentKey: string,
-    config: { ycloudApiKey?: string; whatsappNumber?: string } | null,
+    config: Partial<AgentConfig> | null,
     body: any,
   ): Promise<void> {
     // Parse text OR media (image/audio/video/document/sticker/location/…) into
@@ -165,15 +169,23 @@ export class YCloudWebhookController {
       externalId,
     });
 
-    // Send reply via YCloud — number + key from this agent's config, env as fallback
+    // Send reply via WhatsappGatewayService (preserving YCloud behavior)
     const whatsappNumber = config?.whatsappNumber || process.env.YCLOUD_WHATSAPP_NUMBER;
     if (whatsappNumber && reply && outbound) {
-      const result = await this.ycloudClient.sendTextMessage(
-        whatsappNumber,
-        from,
-        reply,
-        config?.ycloudApiKey,
-      );
+      const result = this.whatsappGateway
+        ? await this.whatsappGateway.sendAutomatedTextMessage({
+            config: (config as AgentConfig) ?? null,
+            from: whatsappNumber,
+            to: from,
+            body: reply,
+            apiKeyOverride: config?.ycloudApiKey,
+          })
+        : await this.ycloudClient.sendTextMessage(
+            whatsappNumber,
+            from,
+            reply,
+            config?.ycloudApiKey,
+          );
       if (result.ok) {
         // Record provider id + sent status so later status webhooks can be
         // correlated back to this message.

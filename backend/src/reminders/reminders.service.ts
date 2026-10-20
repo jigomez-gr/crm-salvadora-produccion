@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, In, Repository } from 'typeorm';
 import { Cron } from '@nestjs/schedule';
@@ -21,6 +21,7 @@ import {
   YCloudClient,
   TemplateComponent,
 } from '../whatsapp/ycloud-client.service';
+import { WhatsappGatewayService } from '../whatsapp/whatsapp-gateway.service';
 import { EmailService } from '../email/email.service';
 import { ZadarmaSmsService } from '../sms/zadarma-sms.service';
 import { VapiService } from '../vapi/vapi.service';
@@ -52,6 +53,7 @@ export class RemindersService implements OnModuleInit {
     private readonly emailService: EmailService,
     private readonly zadarmaSmsService: ZadarmaSmsService,
     private readonly vapiService: VapiService,
+    @Optional() private readonly whatsappGateway?: WhatsappGatewayService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -216,6 +218,19 @@ export class RemindersService implements OnModuleInit {
       return;
     }
 
+    // Global WhatsApp automation pause: skip WhatsApp reminders before claiming
+    // the idempotency row so that if automation is resumed within the grace window,
+    // the reminder can still be delivered. Other channels (Email/SMS/Vapi) are unaffected.
+    if (
+      channel === ReminderChannel.WHATSAPP &&
+      (await this.whatsappGateway?.isAutomationPaused().catch(() => false))
+    ) {
+      this.logger.log(
+        `Reminder skipped for appointment ${appt.id} (whatsapp) — global WhatsApp automation is PAUSED.`,
+      );
+      return;
+    }
+
     // Atomic claim: insert the idempotency row first.
     let claim: AppointmentReminder;
     try {
@@ -262,14 +277,28 @@ export class RemindersService implements OnModuleInit {
             break;
           }
           const components = this.buildComponents(appt, config);
-          const ycloudRes = await this.ycloudClient.sendTemplateMessage(
-            from,
-            phone,
-            config.reminderTemplateName,
-            config.reminderTemplateLanguage || 'es',
-            components,
-            config.ycloudApiKey,
-          );
+          const ycloudRes = this.whatsappGateway
+            ? await this.whatsappGateway.sendAutomatedTemplateMessage({
+                config,
+                from,
+                to: phone,
+                templateName: config.reminderTemplateName,
+                languageCode: config.reminderTemplateLanguage || 'es',
+                components,
+                apiKeyOverride: config.ycloudApiKey,
+              })
+            : await this.ycloudClient.sendTemplateMessage(
+                from,
+                phone,
+                config.reminderTemplateName,
+                config.reminderTemplateLanguage || 'es',
+                components,
+                config.ycloudApiKey,
+              );
+          if ((ycloudRes as { skippedByPause?: boolean })?.skippedByPause) {
+            await this.remindersRepo.remove(claim);
+            return;
+          }
           result = {
             ok: ycloudRes.ok,
             providerMessageId: ycloudRes.providerMessageId,

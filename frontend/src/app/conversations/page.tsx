@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { apiFetch, apiUrl, ApiError } from "@/lib/api";
 import {
+  AppSettings,
   Conversation,
   ConversationPage,
   Message,
@@ -321,6 +322,7 @@ function ConversationsPageInner() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [handoffBusy, setHandoffBusy] = useState(false);
+  const [whatsappAutomationPaused, setWhatsappAutomationPaused] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
 
@@ -385,6 +387,13 @@ function ConversationsPageInner() {
       }
       setLoadingThreads(false);
     });
+    apiFetch<AppSettings>("/api/settings")
+      .then((s) => {
+        if (!cancelled) {
+          setWhatsappAutomationPaused(Boolean(s.whatsappAutomationPaused));
+        }
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -616,6 +625,14 @@ function ConversationsPageInner() {
           <h1 className="text-sm font-semibold text-neutral-900">
             Conversaciones
           </h1>
+          {whatsappAutomationPaused && (
+            <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-900">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+              <span>
+                WhatsApp automático: <strong>PAUSADO</strong>. Solo respuestas manuales.
+              </span>
+            </div>
+          )}
         </div>
         <div className="flex-1 overflow-y-auto">
           {loadingThreads ? (
@@ -782,6 +799,16 @@ function ConversationsPageInner() {
                 )}
               </div>
             </div>
+
+            {/* Global WhatsApp automation pause banner */}
+            {isWhatsapp && whatsappAutomationPaused && (
+              <div className="flex items-center gap-2 border-b border-amber-300 bg-amber-100/90 px-5 py-2 text-xs font-medium text-amber-950">
+                <AlertCircle className="h-4 w-4 shrink-0 text-amber-700" />
+                <span>
+                  <strong>WhatsApp automático: PAUSADO globalmente.</strong> Los mensajes entrantes se reciben y guardan, pero el agente IA no responderá automáticamente. Puedes responder manualmente desde este chat.
+                </span>
+              </div>
+            )}
 
             {/* Handoff banner */}
             {isWhatsapp && selectedThread?.handoff && (

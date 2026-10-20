@@ -1,16 +1,20 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AgentConfig } from '../common/entities/agent-config.entity';
+import { AppSettings } from '../common/entities/app-settings.entity';
+import { YCloudProvider } from './providers/ycloud.provider';
+import { WhatsappGatewayService } from './whatsapp-gateway.service';
 import { YCloudClient } from './ycloud-client.service';
 
 /**
- * The bare YCloud send client, with no other dependencies. Extracted into its
- * own module so consumers that need to *send* WhatsApp messages (the inbound
- * webhook, the conversations inbox manual-send, future reminders) can import it
- * without pulling in the webhook controller — and without creating an import
- * cycle (WhatsappModule imports ConversationsModule, so ConversationsModule
- * can't import WhatsappModule back).
+ * WhatsApp outbound gateway & provider module.
+ * Exports WhatsappGatewayService alongside YCloudProvider and YCloudClient so
+ * all existing modules importing YCloudModule gain access to WhatsappGatewayService
+ * without introducing circular module dependencies.
  */
 @Module({
-  providers: [YCloudClient],
-  exports: [YCloudClient],
+  imports: [TypeOrmModule.forFeature([AppSettings, AgentConfig])],
+  providers: [YCloudClient, YCloudProvider, WhatsappGatewayService],
+  exports: [YCloudClient, YCloudProvider, WhatsappGatewayService],
 })
 export class YCloudModule {}

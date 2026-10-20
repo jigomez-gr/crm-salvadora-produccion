@@ -22,6 +22,8 @@ export const AuditAction = {
   CONTACT_OPT_IN: 'contact.opt_in',
   CONTACT_ANONYMIZE: 'contact.anonymize',
   SETTINGS_UPDATE: 'settings.update',
+  WHATSAPP_AUTOMATION_PAUSED: 'whatsapp.automation_paused',
+  WHATSAPP_AUTOMATION_RESUMED: 'whatsapp.automation_resumed',
   DATA_CLEAR_DEMO: 'data.clear_demo',
   ONBOARDING_COMPLETE: 'onboarding.complete',
   EMAIL_CONFIG_UPDATE: 'email.config_update',

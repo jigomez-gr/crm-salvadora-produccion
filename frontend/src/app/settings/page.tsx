@@ -1255,6 +1255,8 @@ export default function SettingsPage() {
   const [brandColor, setBrandColor] = useState("#4f46e5");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [serviciosEnMantenimiento, setServiciosEnMantenimiento] = useState<"S" | "N">("N");
+  const [whatsappAutomationPaused, setWhatsappAutomationPaused] = useState(false);
+  const [savingWhatsappPause, setSavingWhatsappPause] = useState(false);
   const [saving, setSaving] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -1275,6 +1277,7 @@ export default function SettingsPage() {
         setServiciosEnMantenimiento(
           data.serviciosEnMantenimiento === "S" ? "S" : "N"
         );
+        setWhatsappAutomationPaused(Boolean(data.whatsappAutomationPaused));
       })
       .catch(() => {})
       .finally(() => {
@@ -1325,6 +1328,7 @@ export default function SettingsPage() {
           brandColor,
           logoUrl: logoUrl ?? "",
           serviciosEnMantenimiento,
+          whatsappAutomationPaused,
         }),
       });
       await branding.refresh();
@@ -1335,6 +1339,32 @@ export default function SettingsPage() {
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleToggleWhatsappPause(nextPaused: boolean) {
+    setSavingWhatsappPause(true);
+    try {
+      const updated = await apiFetch<AppSettings>("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify({
+          whatsappAutomationPaused: nextPaused,
+        }),
+      });
+      setWhatsappAutomationPaused(Boolean(updated.whatsappAutomationPaused));
+      toast.success(
+        updated.whatsappAutomationPaused
+          ? "Automatización de WhatsApp PAUSADA. Los mensajes entrantes seguirán llegando al Inbox, pero el agente no responderá automáticamente."
+          : "Automatización de WhatsApp ACTIVA. El agente y los envíos automáticos vuelven a estar operativos."
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo actualizar el estado de WhatsApp automático."
+      );
+    } finally {
+      setSavingWhatsappPause(false);
     }
   }
 
@@ -1480,6 +1510,74 @@ export default function SettingsPage() {
             <div className="mt-1.5 rounded bg-white/90 p-2 font-mono text-[11px] text-red-950 border border-red-200">
               "Los servicios en línea de la Escuela de Yoga de Salvadora Conesa No están operativos en estos momentos Intentelo más tarde "
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Pausa Global de Automatización de WhatsApp */}
+      <div
+        className={cn(
+          "mt-6 max-w-xl rounded-xl border p-6 transition-all shadow-xs",
+          whatsappAutomationPaused
+            ? "border-amber-300 bg-amber-50/70"
+            : "border-neutral-200 bg-white"
+        )}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <Bot
+                className={cn(
+                  "h-5 w-5",
+                  whatsappAutomationPaused
+                    ? "text-amber-600"
+                    : "text-emerald-600"
+                )}
+              />
+              <h2 className="text-sm font-semibold text-neutral-800">
+                WhatsApp automático: {whatsappAutomationPaused ? "PAUSADO" : "ACTIVO"}
+              </h2>
+            </div>
+            <p className="mt-1 text-xs text-neutral-600">
+              Pausa global de la automatización de WhatsApp sin desconectar la sesión ni cerrar el número. Cuando está <strong>PAUSADO</strong>, los mensajes entrantes siguen guardándose y mostrándose en el Inbox, pero no se ejecuta la IA ni se envían respuestas, recordatorios o notificaciones automáticas. Los envíos manuales desde el Inbox siguen permitidos.
+            </p>
+          </div>
+          <span
+            className={cn(
+              "rounded-full px-2.5 py-0.5 text-xs font-semibold shrink-0",
+              whatsappAutomationPaused
+                ? "bg-amber-100 text-amber-900 border border-amber-300"
+                : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+            )}
+          >
+            WhatsApp automático: {whatsappAutomationPaused ? "PAUSADO" : "ACTIVO"}
+          </span>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            variant={whatsappAutomationPaused ? "primary" : "secondary"}
+            size="sm"
+            disabled={savingWhatsappPause}
+            onClick={() => handleToggleWhatsappPause(!whatsappAutomationPaused)}
+            className={cn(
+              whatsappAutomationPaused
+                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                : "border-amber-400 bg-amber-100/80 hover:bg-amber-200 text-amber-950"
+            )}
+          >
+            {savingWhatsappPause
+              ? "Actualizando…"
+              : whatsappAutomationPaused
+              ? "Reanudar WhatsApp automático (ACTIVO)"
+              : "Pausar WhatsApp automático (PAUSADO)"}
+          </Button>
+        </div>
+
+        {whatsappAutomationPaused && (
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-100/90 p-3 text-xs text-amber-950 leading-relaxed shadow-2xs">
+            ⏸️ <strong>Automatización global de WhatsApp en PAUSA:</strong> Los mensajes entrantes siguen registrándose en Conversaciones/Inbox y puedes contestar manualmente, pero el agente IA y los avisos automáticos por WhatsApp están detenidos.
           </div>
         )}
       </div>

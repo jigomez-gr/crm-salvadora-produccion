@@ -20,6 +20,7 @@ import { CreateServiceDto, UpdateServiceDto } from './dto/service.dto';
 import { parseWeeklyScheduleFromText } from './schedule-parser';
 import { EmailService } from '../email/email.service';
 import { YCloudClient } from '../whatsapp/ycloud-client.service';
+import { WhatsappGatewayService } from '../whatsapp/whatsapp-gateway.service';
 import { resolveNextRecurringEventDate } from '../common/time';
 
 @Injectable()
@@ -47,6 +48,8 @@ export class ServicesService implements OnModuleInit {
     private readonly emailService: EmailService,
     @Optional()
     private readonly ycloudClient?: YCloudClient,
+    @Optional()
+    private readonly whatsappGateway?: WhatsappGatewayService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -1977,13 +1980,24 @@ export class ServicesService implements OnModuleInit {
       // 4. Dispatch WhatsApp
       if (shouldSendWhatsapp && contact.phone) {
         try {
-          await this.ycloudClient?.sendTextMessage(
-            fromWhatsappNumber,
-            contact.phone,
-            chatMessageText,
-            config?.ycloudApiKey,
-          );
-          notifiedWhatsapp++;
+          if (this.whatsappGateway) {
+            const waRes = await this.whatsappGateway.sendAutomatedTextMessage({
+              config,
+              from: fromWhatsappNumber,
+              to: contact.phone,
+              body: chatMessageText,
+              apiKeyOverride: config?.ycloudApiKey,
+            });
+            if (waRes.ok) notifiedWhatsapp++;
+          } else if (this.ycloudClient) {
+            const waRes = await this.ycloudClient.sendTextMessage(
+              fromWhatsappNumber,
+              contact.phone,
+              chatMessageText,
+              config?.ycloudApiKey,
+            );
+            if (!waRes || waRes.ok !== false) notifiedWhatsapp++;
+          }
         } catch (waErr) {
           console.warn(`Error sending prebooked WhatsApp to ${contact.phone}:`, waErr);
         }

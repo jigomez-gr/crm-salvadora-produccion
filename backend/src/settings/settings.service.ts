@@ -29,6 +29,7 @@ export class SettingsService implements OnModuleInit {
         ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticeSmsEnabled" boolean DEFAULT false;
         ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticeVapiEnabled" boolean DEFAULT false;
         ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "serviciosEnMantenimiento" character varying(1) DEFAULT 'N';
+        ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "whatsappAutomationPaused" boolean NOT NULL DEFAULT false;
       `);
     } catch (e) {
       console.warn('Auto-migration warning in app_settings table:', e);
@@ -53,6 +54,11 @@ export class SettingsService implements OnModuleInit {
   async isMaintenanceActive(): Promise<boolean> {
     const s = await this.get();
     return s.serviciosEnMantenimiento === 'S';
+  }
+
+  async isWhatsappAutomationPaused(): Promise<boolean> {
+    const s = await this.get();
+    return Boolean(s.whatsappAutomationPaused);
   }
 
   async getBranding(): Promise<PublicBranding> {
@@ -89,6 +95,10 @@ export class SettingsService implements OnModuleInit {
     if (dto.serviciosEnMantenimiento !== undefined) {
       settings.serviciosEnMantenimiento =
         dto.serviciosEnMantenimiento?.toUpperCase() === 'S' ? 'S' : 'N';
+    }
+
+    if (dto.whatsappAutomationPaused !== undefined) {
+      settings.whatsappAutomationPaused = Boolean(dto.whatsappAutomationPaused);
     }
 
     return this.repo.save(settings);

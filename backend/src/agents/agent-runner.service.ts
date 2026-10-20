@@ -166,6 +166,21 @@ export class AgentRunnerService {
       threadId: inbound.threadId,
     });
 
+    // 0. Global WhatsApp Automation Pause ("kill switch")
+    // Inbound messages are still saved in conversations/messages and shown in the
+    // Inbox above, but no automatic replies or LLM execution may run while paused.
+    if (channel === MessageChannel.WHATSAPP) {
+      const isWhatsappPaused = await this.settingsService
+        ?.isWhatsappAutomationPaused()
+        .catch(() => false);
+      if (isWhatsappPaused) {
+        this.logger.log(
+          `Global WhatsApp automation is PAUSED — inbound recorded on '${threadId}', auto-reply skipped.`,
+        );
+        return { reply: '', outbound: null };
+      }
+    }
+
     // 1. Maintenance Mode Check ('S')
     const isMaintenance = await this.settingsService?.isMaintenanceActive().catch(() => false);
     if (isMaintenance) {

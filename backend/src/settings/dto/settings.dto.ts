@@ -66,4 +66,8 @@ export class UpdateSettingsDto {
   @IsString()
   @MaxLength(1)
   serviciosEnMantenimiento?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  whatsappAutomationPaused?: boolean;
 }

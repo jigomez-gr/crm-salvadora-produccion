@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBoolean,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -13,6 +14,13 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+import { WhatsappProviderType } from '../../common/entities/agent-config.entity';
+
+const WHATSAPP_PROVIDERS: readonly WhatsappProviderType[] = [
+  'ycloud',
+  'evolution',
+  'meta',
+] as const;
 
 // "HH:MM" 24h time.
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -150,6 +158,10 @@ export class UpdateAgentConfigDto {
   openrouterApiKey?: string;
 
   @IsOptional()
+  @IsIn(WHATSAPP_PROVIDERS)
+  whatsappProvider?: WhatsappProviderType;
+
+  @IsOptional()
   @IsString()
   @MaxLength(40)
   whatsappNumber?: string;
@@ -163,6 +175,56 @@ export class UpdateAgentConfigDto {
   @IsString()
   @MaxLength(400)
   ycloudWebhookSecret?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  evolutionApiUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  evolutionInstanceName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  evolutionApiKey?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  evolutionWebhookSecret?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  metaPhoneNumberId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  metaWabaId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  metaAccessToken?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  metaAppSecret?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  metaVerifyToken?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  metaGraphVersion?: string;
 
   @IsOptional()
   @IsBoolean()

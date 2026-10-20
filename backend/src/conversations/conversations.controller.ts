@@ -8,6 +8,7 @@ import {
   HttpStatus,
   Logger,
   NotFoundException,
+  Optional,
   Param,
   Patch,
   Post,
@@ -21,6 +22,7 @@ import { MessagesService, toMessageView } from './messages.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AgentsConfigService } from '../agents/agents-config.service';
 import { YCloudClient } from '../whatsapp/ycloud-client.service';
+import { WhatsappGatewayService } from '../whatsapp/whatsapp-gateway.service';
 import {
   SetHandoffDto,
   SendManualMessageDto,
@@ -55,6 +57,7 @@ export class ConversationsController {
     private readonly eventEmitter: EventEmitter2,
     private readonly emailService: EmailService,
     private readonly contactsService: ContactsService,
+    @Optional() private readonly whatsappGateway?: WhatsappGatewayService,
   ) {}
 
   @Get()
@@ -128,25 +131,38 @@ export class ConversationsController {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), MEDIA_FETCH_TIMEOUT_MS);
     try {
-      const upstream = await fetch(message.mediaUrl, {
-        signal: controller.signal,
-        headers:
-          config?.ycloudApiKey ? { 'X-API-Key': config.ycloudApiKey } : undefined,
-      });
-      if (!upstream.ok) {
-        this.logger.warn(
-          `Media fetch for message ${messageId} failed: ${upstream.status}`,
-        );
-        throw new HttpException(
-          'No se pudo obtener el archivo del proveedor',
-          HttpStatus.BAD_GATEWAY,
-        );
+      let bytes: Buffer;
+      let upstreamContentType: string | null = null;
+      if (this.whatsappGateway) {
+        const mediaRes = await this.whatsappGateway.fetchInboundMedia({
+          config,
+          mediaUrl: message.mediaUrl,
+          signal: controller.signal,
+        });
+        bytes = mediaRes.buffer;
+        upstreamContentType = mediaRes.contentType;
+      } else {
+        const upstream = await fetch(message.mediaUrl, {
+          signal: controller.signal,
+          headers:
+            config?.ycloudApiKey ? { 'X-API-Key': config.ycloudApiKey } : undefined,
+        });
+        if (!upstream.ok) {
+          this.logger.warn(
+            `Media fetch for message ${messageId} failed: ${upstream.status}`,
+          );
+          throw new HttpException(
+            'No se pudo obtener el archivo del proveedor',
+            HttpStatus.BAD_GATEWAY,
+          );
+        }
+        bytes = Buffer.from(await upstream.arrayBuffer());
+        upstreamContentType = upstream.headers.get('content-type');
       }
-      const bytes = Buffer.from(await upstream.arrayBuffer());
       res.setHeader(
         'Content-Type',
         message.mediaMimeType ||
-          upstream.headers.get('content-type') ||
+          upstreamContentType ||
           'application/octet-stream',
       );
       // Private: this is customer PII, not a shared/cacheable asset.
@@ -266,12 +282,20 @@ export class ConversationsController {
     // Sending by hand means the operator has seen the thread — clear unread.
     await this.messagesService.markRead(threadId);
 
-    const result = await this.ycloudClient.sendTextMessage(
-      from,
-      to,
-      dto.body,
-      config?.ycloudApiKey,
-    );
+    const result = this.whatsappGateway
+      ? await this.whatsappGateway.sendManualTextMessage({
+          config,
+          from,
+          to,
+          body: dto.body,
+          apiKeyOverride: config?.ycloudApiKey,
+        })
+      : await this.ycloudClient.sendTextMessage(
+          from,
+          to,
+          dto.body,
+          config?.ycloudApiKey,
+        );
     if (result.ok) {
       await this.messagesService.updateStatus(
         message.id,

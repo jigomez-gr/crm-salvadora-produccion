@@ -54,6 +54,10 @@ export class AppSettings {
   @Column({ type: 'varchar', length: 1, default: 'N' })
   serviciosEnMantenimiento: string;
 
+  // Global WhatsApp automation pause ("kill switch" for automated replies, reminders & notifications)
+  @Column({ type: 'boolean', default: false })
+  whatsappAutomationPaused: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

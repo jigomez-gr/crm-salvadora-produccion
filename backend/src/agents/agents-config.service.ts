@@ -14,10 +14,15 @@ import {
 export const DEFAULT_MODEL = 'openai/gpt-4.1-mini';
 
 // Secret fields that must NEVER be sent to the browser/API clients.
-const SECRET_FIELDS = [
+export const SECRET_FIELDS = [
   'openrouterApiKey',
   'ycloudApiKey',
   'ycloudWebhookSecret',
+  'evolutionApiKey',
+  'evolutionWebhookSecret',
+  'metaAccessToken',
+  'metaAppSecret',
+  'metaVerifyToken',
 ] as const;
 
 /**
@@ -58,6 +63,17 @@ export class AgentsConfigService implements OnModuleInit {
         ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "facebookUrl" text;
         ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "googleReviewUrl" text;
         ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "seoDescription" text;
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "whatsappProvider" character varying(20) NOT NULL DEFAULT 'ycloud';
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "evolutionApiUrl" character varying;
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "evolutionInstanceName" character varying;
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "evolutionApiKey" character varying;
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "evolutionWebhookSecret" character varying;
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "metaPhoneNumberId" character varying;
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "metaWabaId" character varying;
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "metaAccessToken" character varying;
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "metaAppSecret" character varying;
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "metaVerifyToken" character varying;
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "metaGraphVersion" character varying DEFAULT 'v21.0';
       `);
     } catch (err: any) {
       this.logger.warn(`Could not ensure agent_configs columns: ${err?.message || err}`);

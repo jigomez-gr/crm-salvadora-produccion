@@ -18,6 +18,7 @@ import { normalizePhoneStrict, normalizePhoneLoose } from '../common/phone';
 import { EmailService } from '../email/email.service';
 import { ZadarmaSmsService } from '../sms/zadarma-sms.service';
 import { YCloudClient } from '../whatsapp/ycloud-client.service';
+import { WhatsappGatewayService } from '../whatsapp/whatsapp-gateway.service';
 import { AgentsConfigService } from '../agents/agents-config.service';
 
 export interface ContradictionResult {
@@ -48,6 +49,8 @@ export class ContactVerificationService {
     private readonly ycloudClient?: YCloudClient,
     @Optional()
     private readonly agentsConfigService?: AgentsConfigService,
+    @Optional()
+    private readonly whatsappGateway?: WhatsappGatewayService,
   ) {}
 
   /**
@@ -420,8 +423,8 @@ export class ContactVerificationService {
   }
 
   private async sendWhatsAppOtp(phone: string, code: string): Promise<void> {
-    if (!this.ycloudClient) {
-      this.logger.warn('YCloudClient not available for WhatsApp OTP');
+    if (!this.whatsappGateway && !this.ycloudClient) {
+      this.logger.warn('WhatsappGatewayService / YCloudClient not available for WhatsApp OTP');
       return;
     }
 
@@ -431,12 +434,25 @@ export class ContactVerificationService {
 
     const fromNumber =
       config?.whatsappNumber ||
+      (config as any)?.whatsappPhoneNumber ||
+      process.env.YCLOUD_WHATSAPP_NUMBER ||
       process.env.YCLOUD_FROM_PHONE ||
       '+34600000000';
 
     const message = `🌿 *Centro de Yoga Salvadora Conesa*\nTu código de verificación es: *${code}*\n\n⏱️ Este código es válido durante un máximo de *7 minutos*.`;
 
-    await this.ycloudClient.sendTextMessage(
+    if (this.whatsappGateway) {
+      await this.whatsappGateway.sendAutomatedTextMessage({
+        config,
+        from: fromNumber,
+        to: phone,
+        body: message,
+        apiKeyOverride: config?.ycloudApiKey,
+      });
+      return;
+    }
+
+    await this.ycloudClient!.sendTextMessage(
       fromNumber,
       phone,
       message,

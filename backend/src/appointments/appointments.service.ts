@@ -43,6 +43,7 @@ import { generateDoctorReportPdfBuffer } from './pdf-report.generator';
 import { AnalizaIaService, AiAnalysisResponse } from './analiza-ia.service';
 import { EmailService } from '../email/email.service';
 import { YCloudClient } from '../whatsapp/ycloud-client.service';
+import { WhatsappGatewayService } from '../whatsapp/whatsapp-gateway.service';
 import { AgentsConfigService } from '../agents/agents-config.service';
 import { MessagesService } from '../conversations/messages.service';
 import { Conversation } from '../common/entities/conversation.entity';
@@ -93,6 +94,8 @@ export class AppointmentsService implements OnModuleInit {
     @Optional()
     @InjectRepository(EventEdition)
     private readonly eventEditionsRepo?: Repository<EventEdition>,
+    @Optional()
+    private readonly whatsappGateway?: WhatsappGatewayService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -1902,23 +1905,52 @@ export class AppointmentsService implements OnModuleInit {
       // 2. Dispatch WhatsApp notification if enabled for this service
       if (shouldWhatsapp) {
         if (contact.phone) {
-          const config = await this.agentsConfigService
-            ?.findByKey('booking')
-            .catch(() => null);
-          const fromNumber =
-            config?.whatsappPhoneNumber ||
-            process.env.YCLOUD_FROM_PHONE ||
-            '+34600000000';
-          await this.ycloudClient
-            ?.sendTextMessage(
-              fromNumber,
-              contact.phone,
-              chatMessageText,
-              config?.ycloudApiKey,
-            )
-            ?.catch((err) => {
-              this.logger.warn(`[WhatsApp] Error sending WhatsApp to ${contact.phone} for appt ${appt.id}: ${err}`);
-            });
+          const [settingsRow] =
+            (await this.settingsRepo?.find({ take: 1 }).catch(() => [])) || [];
+          const isPausedInRepo = Boolean(settingsRow?.whatsappAutomationPaused);
+          if (isPausedInRepo) {
+            this.logger.log(
+              `[WhatsApp] Global WhatsApp automation is PAUSED. Skipping WhatsApp notification for appt ${appt.id}.`,
+            );
+          } else {
+            const config = await this.agentsConfigService
+              ?.findByKey('booking')
+              .catch(() => null);
+            const fromNumber =
+              config?.whatsappNumber ||
+              (config as any)?.whatsappPhoneNumber ||
+              process.env.YCLOUD_WHATSAPP_NUMBER ||
+              process.env.YCLOUD_FROM_PHONE ||
+              '+34600000000';
+            if (this.whatsappGateway) {
+              await this.whatsappGateway
+                .sendAutomatedTextMessage({
+                  config,
+                  from: fromNumber,
+                  to: contact.phone,
+                  body: chatMessageText,
+                  apiKeyOverride: config?.ycloudApiKey,
+                })
+                .catch((err) => {
+                  this.logger.warn(
+                    `[WhatsApp] Error sending WhatsApp to ${contact.phone} for appt ${appt.id}: ${err}`,
+                  );
+                });
+            } else {
+              await this.ycloudClient
+                ?.sendTextMessage(
+                  fromNumber,
+                  contact.phone,
+                  chatMessageText,
+                  config?.ycloudApiKey,
+                )
+                ?.catch((err) => {
+                  this.logger.warn(
+                    `[WhatsApp] Error sending WhatsApp to ${contact.phone} for appt ${appt.id}: ${err}`,
+                  );
+                });
+            }
+          }
         } else {
           this.logger.warn(`[WhatsApp] Contact ${contact.id} (${contact.name}) has NO phone. Cannot send WhatsApp notification.`);
         }

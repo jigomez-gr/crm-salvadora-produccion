@@ -354,7 +354,13 @@ export interface Agent {
   tone: string;
   timezone: string;
   model: string;
+  whatsappProvider?: "ycloud" | "evolution" | "meta";
   whatsappNumber: string | null;
+  evolutionApiUrl?: string | null;
+  evolutionInstanceName?: string | null;
+  metaPhoneNumberId?: string | null;
+  metaWabaId?: string | null;
+  metaGraphVersion?: string | null;
   enabled: boolean;
   // Appointment reminders (WhatsApp HSM template).
   remindersEnabled: boolean;
@@ -372,9 +378,19 @@ export interface Agent {
   openrouterApiKey?: string | null;
   ycloudApiKey?: string | null;
   ycloudWebhookSecret?: string | null;
+  evolutionApiKey?: string | null;
+  evolutionWebhookSecret?: string | null;
+  metaAccessToken?: string | null;
+  metaAppSecret?: string | null;
+  metaVerifyToken?: string | null;
   hasOpenrouterApiKey?: boolean;
   hasYcloudApiKey?: boolean;
   hasYcloudWebhookSecret?: boolean;
+  hasEvolutionApiKey?: boolean;
+  hasEvolutionWebhookSecret?: boolean;
+  hasMetaAccessToken?: boolean;
+  hasMetaAppSecret?: boolean;
+  hasMetaVerifyToken?: boolean;
 }
 
 export interface OpenRouterModel {
@@ -451,6 +467,7 @@ export interface AppSettings {
   brandColor: string;
   logoUrl: string | null;
   serviciosEnMantenimiento?: string;
+  whatsappAutomationPaused?: boolean;
   onboardingCompleted: boolean;
   humanNoticeEmail?: string | null;
   humanNoticePhone?: string | null;

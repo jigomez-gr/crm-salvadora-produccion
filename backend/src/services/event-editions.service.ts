@@ -7,6 +7,7 @@ import { Appointment, AppointmentStatus } from '../common/entities/appointment.e
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EmailService } from '../email/email.service';
 import { YCloudClient } from '../whatsapp/ycloud-client.service';
+import { WhatsappGatewayService } from '../whatsapp/whatsapp-gateway.service';
 import {
   CreateEventEditionDto,
   UpdateEventEditionDto,
@@ -30,6 +31,7 @@ export class EventEditionsService implements OnModuleInit {
     private readonly eventEmitter: EventEmitter2,
     @Optional() private readonly emailService?: EmailService,
     @Optional() private readonly ycloudClient?: YCloudClient,
+    @Optional() private readonly whatsappGateway?: WhatsappGatewayService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -309,10 +311,23 @@ export class EventEditionsService implements OnModuleInit {
         }
       }
 
-      if (dto.sendWhatsapp !== false && contactPhone && this.ycloudClient) {
+      if (dto.sendWhatsapp !== false && contactPhone && (this.whatsappGateway || this.ycloudClient)) {
         try {
-          await this.ycloudClient.sendTextMessage('34695172625', contactPhone, messageBody);
-          notifiedWhatsapp++;
+          if (this.whatsappGateway) {
+            const config = await this.whatsappGateway.resolveAgentConfig('booking');
+            const fromNumber = config?.whatsappNumber || '34695172625';
+            const waRes = await this.whatsappGateway.sendAutomatedTextMessage({
+              config,
+              from: fromNumber,
+              to: contactPhone,
+              body: messageBody,
+              apiKeyOverride: config?.ycloudApiKey,
+            });
+            if (waRes.ok) notifiedWhatsapp++;
+          } else if (this.ycloudClient) {
+            await this.ycloudClient.sendTextMessage('34695172625', contactPhone, messageBody);
+            notifiedWhatsapp++;
+          }
         } catch (err) {
           console.warn(`[confirmEdition] Error sending WhatsApp to ${contactPhone}:`, err);
         }
@@ -403,10 +418,23 @@ export class EventEditionsService implements OnModuleInit {
         }
       }
 
-      if (dto.sendWhatsapp !== false && contactPhone && this.ycloudClient) {
+      if (dto.sendWhatsapp !== false && contactPhone && (this.whatsappGateway || this.ycloudClient)) {
         try {
-          await this.ycloudClient.sendTextMessage('34695172625', contactPhone, messageBody);
-          notifiedWhatsapp++;
+          if (this.whatsappGateway) {
+            const config = await this.whatsappGateway.resolveAgentConfig('booking');
+            const fromNumber = config?.whatsappNumber || '34695172625';
+            const waRes = await this.whatsappGateway.sendAutomatedTextMessage({
+              config,
+              from: fromNumber,
+              to: contactPhone,
+              body: messageBody,
+              apiKeyOverride: config?.ycloudApiKey,
+            });
+            if (waRes.ok) notifiedWhatsapp++;
+          } else if (this.ycloudClient) {
+            await this.ycloudClient.sendTextMessage('34695172625', contactPhone, messageBody);
+            notifiedWhatsapp++;
+          }
         } catch (err) {
           console.warn(`[cancelEdition] Error sending WhatsApp to ${contactPhone}:`, err);
         }
