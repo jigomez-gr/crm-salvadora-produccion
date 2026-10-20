@@ -6,9 +6,16 @@ import { EvolutionAdminController } from './evolution-admin.controller';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { ContactsModule } from '../contacts/contacts.module';
 import { AgentsModule } from '../agents/agents.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [YCloudModule, ConversationsModule, ContactsModule, AgentsModule],
+  imports: [
+    YCloudModule,
+    ConversationsModule,
+    ContactsModule,
+    AgentsModule,
+    AuthModule,
+  ],
   controllers: [
     YCloudWebhookController,
     EvolutionWebhookController,
