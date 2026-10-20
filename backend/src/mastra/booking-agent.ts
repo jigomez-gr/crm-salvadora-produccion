@@ -811,10 +811,12 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         }
 
         const effectiveModality =
-          inputData.modality ||
-          (svc.allowedModalities && svc.allowedModalities.length === 1
-            ? svc.allowedModalities[0]
-            : 'in_person');
+          (svc.allowedModalities && !svc.allowedModalities.includes('virtual'))
+            ? 'in_person'
+            : (inputData.modality ||
+               (svc.allowedModalities && svc.allowedModalities.length === 1
+                 ? svc.allowedModalities[0]
+                 : 'in_person'));
 
         const appointment = await deps.bookAppointment(
           contactId,
@@ -1490,6 +1492,17 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
 - NUNCA inventes horarios, días u horas disponibles. ANTES de sugerir cualquier horario, debes llamar OBLIGATORIAMENTE a la herramienta 'checkAvailability' para la fecha y servicio solicitados.
 - Si el día pedido está cerrado (como fines de semana) o 'checkAvailability' no devuelve huecos, indícaselo con total claridad al cliente (p. ej. "Los sábados y domingos estamos cerrados") y ofrece consultar el siguiente día laborable en que haya disponibilidad.
 - Ofrece únicamente los horarios reales que te devuelva 'checkAvailability', en la zona horaria ${timezone} y en lenguaje natural (p. ej. "el lunes a las 10:00").
+- SEDE Y UBICACIÓN OFICIAL DEL CENTRO:
+  * El Centro de Yoga y Bienestar Salvadora Conesa tiene su ÚNICA SEDE en:
+    Club Social Parque Granada, Calle Holanda, 1, 28942 Fuenlabrada (Madrid).
+  * TODAS las clases regulares presenciales (Hatha Yoga Terapéutico, Meditaciones Guiadas, Baños de Gong, Pujas de Gong y Talleres de Constelaciones) se imparten única y exclusivamente en esta sede: Calle Holanda, 1, Fuenlabrada (Madrid).
+  * ESTÁ ESTRICTAMENTE PROHIBIDO inventar sedes, lugares o municipios alternativos (como Zoco, Parque Coimbra o cualquier otra localidad). Si el cliente pregunta dónde es la clase o cita, indícale siempre que es en el Centro de Yoga Salvadora Conesa (Calle Holanda 1, Fuenlabrada).
+- MODALIDADES PRESENCIALES VS ONLINE:
+  * Hatha Yoga Terapéutico: Es 100% PRESENCIAL en el centro (Calle Holanda 1, Fuenlabrada). NUNCA es online, ni virtual, ni por videollamada. NUNCA menciones enlaces virtuales ni videollamadas para Yoga. Al formalizar o confirmar una clase de Yoga, indícale siempre que la cita es presencial en el centro.
+  * Meditaciones Guiadas: Son 100% PRESENCIALES en el centro (Martes y Jueves 09:15 a 09:45).
+  * Baños de Gong, Pujas de Gong y Talleres de Constelaciones: Son 100% PRESENCIALES en el centro.
+  * Retiro de Ayuno Terapéutico: Es 100% PRESENCIAL en la naturaleza.
+  * Terapia Gestalt (Sesión Individual): Es el ÚNICO servicio que dispone de modalidad dual: Presencial en el centro u Online (por videollamada). Pregunta al cliente qué modalidad prefiere ÚNICAMENTE cuando solicite Terapia Gestalt.
 - REGLA ESTRICTA DE FECHAS PASADAS, PERIODICIDAD, "PRÓXIMAMENTE", PRECIOS VARIABLES Y RESERVAS PROVISIONALES (OBLIGATORIA):
   1. PROHIBICIÓN ABSOLUTA DE OFRECER FECHAS PASADAS:
      - NUNCA, bajo ninguna circunstancia, respondas ofreciendo una fecha o sesión que ya haya transcurrido respecto a la fecha actual (hoy es ${now}).
@@ -1545,6 +1558,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     - Si el asistente no se convierte en alumno tras probar, puede seguir asistiendo a **clases esporádicas a ${yogaSinglePrice} la sesión suelta** (a todos los efectos).
     - Cualquier persona puede **convertirse en alumno con cuota mensual cuando quiera**, o **dejar de ser alumno bajo petición** cuando lo desee.
     - Comunica siempre con calidez y cercanía que su primera clase es un regalo de bienvenida del centro.
+    - Al formalizar la primera clase de prueba de Hatha Yoga con 'bookAppointment', la plaza queda CONFIRMADA de inmediato (actividad presencial en el centro con aforo de 20 a 28 personas). Informa al alumno de que su plaza presencial en el centro está confirmada y le esperamos en Calle Holanda 1, Fuenlabrada.
   * CONDICIÓN DE ALUMNO, HORARIO FIJO Y GESTIÓN DE CITAS:
     - **Horario semanal fijo**: El alumno dispone de un horario asignado para el día o días de la semana según su modalidad (1 o 2 clases a la semana) para que **no tenga que reservar cada cita semanalmente**.
     - **Citas automáticas semanales**: A los alumnos se les generan automáticamente sus citas semanales antes de comenzar la nueva semana basándose en sus horarios fijos habituales.

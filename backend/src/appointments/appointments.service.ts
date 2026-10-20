@@ -531,27 +531,27 @@ export class AppointmentsService implements OnModuleInit {
     const status = isGestalt ? AppointmentStatus.PENDING_APPROVAL : (dto.status ?? defaultStatus);
 
     // Resolve modality (in_person, phone, virtual)
-    const cleanSvcStr = (cleanServiceName || '').toLowerCase();
-    const notesLower = (dto.notes || '').toLowerCase();
-    const reasonLower = (dto.reason || '').toLowerCase();
-    const isVirtualExplicit =
-      dto.modality === 'virtual' ||
-      dto.modality === 'online' ||
-      Boolean(dto.calMeetingUrl) ||
-      /online|virtual|videollamada/i.test(dto.modality || '') ||
-      /online|virtual|videollamada/i.test(notesLower) ||
-      /online|virtual|videollamada/i.test(reasonLower) ||
-      /online|virtual|videollamada/i.test(cleanSvcStr);
-
     const allowed = serviceEntity?.allowedModalities?.length
       ? serviceEntity.allowedModalities
       : ['in_person'];
+    const allowsVirtual = allowed.includes('virtual') || isGestalt;
+
+    const notesLower = (dto.notes || '').toLowerCase();
+    const reasonLower = (dto.reason || '').toLowerCase();
+    const isVirtualExplicit =
+      allowsVirtual &&
+      (dto.modality === 'virtual' ||
+        dto.modality === 'online' ||
+        /online|virtual|videollamada/i.test(dto.modality || '') ||
+        /online|virtual|videollamada/i.test(notesLower) ||
+        /online|virtual|videollamada/i.test(reasonLower));
+
     let modality = isVirtualExplicit
       ? 'virtual'
-      : dto.modality || allowed[0] || 'in_person';
-    if (!isVirtualExplicit && dto.modality && !allowed.includes(dto.modality)) {
-      // Fall back or accept if not strictly configured
-      modality = dto.modality;
+      : (dto.modality && allowed.includes(dto.modality) ? dto.modality : (allowed[0] || 'in_person'));
+
+    if (!allowsVirtual) {
+      modality = 'in_person';
     }
 
     const reason = dto.reason || null;
@@ -560,7 +560,7 @@ export class AppointmentsService implements OnModuleInit {
       : (dto.notes || null);
     let calBookingId: string | null = null;
     let calBookingUid: string | null = null;
-    let calMeetingUrl: string | null = dto.calMeetingUrl || null;
+    let calMeetingUrl: string | null = allowsVirtual ? (dto.calMeetingUrl || null) : null;
     let calStatus: string | null = null;
 
     // Sincronización automática con Cal.com para citas virtuales:
@@ -638,12 +638,18 @@ export class AppointmentsService implements OnModuleInit {
           existingPending.calendarId = calendarId;
           existingPending.price = price;
           existingPending.modality = modality;
+          if (modality !== 'virtual') {
+            existingPending.calMeetingUrl = null;
+            existingPending.calBookingUid = null;
+            existingPending.calBookingId = null;
+            existingPending.calStatus = null;
+          }
           existingPending.isFirstClass = isFirstClass;
           existingPending.isRecovery = dto.isRecovery ?? existingPending.isRecovery ?? false;
           existingPending.recoveredFromAppointmentId = dto.recoveredFromAppointmentId ?? existingPending.recoveredFromAppointmentId;
           existingPending.notes = finalNotes || existingPending.notes;
           existingPending.reason = reason || existingPending.reason;
-          existingPending.status = AppointmentStatus.PENDING_APPROVAL;
+          existingPending.status = status;
           return repo.save(existingPending);
         }
 
@@ -1208,15 +1214,21 @@ export class AppointmentsService implements OnModuleInit {
     }
 
     // Cal.com sync upon approval if virtual and not yet generated
+    const allowsVirtual = serviceEntity?.allowedModalities?.includes('virtual') ?? (/gestalt/i.test(appt.service || ''));
     const isVirtualAppt =
-      appt.modality === 'virtual' ||
-      appt.modality === 'online' ||
-      Boolean(appt.calMeetingUrl) ||
-      /online|virtual|videollamada/i.test(appt.notes || '') ||
-      /online|virtual|videollamada/i.test(appt.reason || '') ||
-      /online|virtual|videollamada/i.test(appt.service || '');
+      allowsVirtual &&
+      (appt.modality === 'virtual' ||
+        appt.modality === 'online' ||
+        /online|virtual|videollamada/i.test(appt.notes || '') ||
+        /online|virtual|videollamada/i.test(appt.reason || ''));
 
-    if (isVirtualAppt) {
+    if (!allowsVirtual) {
+      appt.modality = 'in_person';
+      appt.calMeetingUrl = null;
+      appt.calBookingUid = null;
+      appt.calBookingId = null;
+      appt.calStatus = null;
+    } else if (isVirtualAppt) {
       appt.modality = 'virtual';
       if (!appt.calMeetingUrl && appt.contact) {
         try {
@@ -1518,13 +1530,13 @@ export class AppointmentsService implements OnModuleInit {
         ? (serviceEntity?.textosinfechadefinitiva || 'Por determinar')
         : (formattedEndTime ? `${formattedStartTime} a ${formattedEndTime}` : formattedStartTime);
 
+      const allowsVirtual = serviceEntity?.allowedModalities?.includes('virtual') ?? (/gestalt/i.test(appt.service || ''));
       const isVirtual =
-        appt.modality === 'virtual' ||
-        appt.modality === 'online' ||
-        Boolean(appt.calMeetingUrl) ||
-        /online|virtual|videollamada/i.test(appt.notes || '') ||
-        /online|virtual|videollamada/i.test(appt.reason || '') ||
-        /online|virtual|videollamada/i.test(appt.service || '');
+        allowsVirtual &&
+        (appt.modality === 'virtual' ||
+          appt.modality === 'online' ||
+          /online|virtual|videollamada/i.test(appt.notes || '') ||
+          /online|virtual|videollamada/i.test(appt.reason || ''));
 
       if (isVirtual) {
         appt.modality = 'virtual';
@@ -2167,13 +2179,13 @@ export class AppointmentsService implements OnModuleInit {
         ? `${formattedStartTime} a ${formattedEndTime}`
         : formattedStartTime;
 
+      const allowsVirtual = effectiveSvc?.allowedModalities?.includes('virtual') ?? (/gestalt/i.test(appt.service || ''));
       const isVirtual =
-        appt.modality === 'virtual' ||
-        appt.modality === 'online' ||
-        Boolean(appt.calMeetingUrl) ||
-        /online|virtual|videollamada/i.test(appt.notes || '') ||
-        /online|virtual|videollamada/i.test(appt.reason || '') ||
-        /online|virtual|videollamada/i.test(appt.service || '');
+        allowsVirtual &&
+        (appt.modality === 'virtual' ||
+          appt.modality === 'online' ||
+          /online|virtual|videollamada/i.test(appt.notes || '') ||
+          /online|virtual|videollamada/i.test(appt.reason || ''));
 
       const modalityText = isVirtual
         ? 'Online (Videollamada)'
