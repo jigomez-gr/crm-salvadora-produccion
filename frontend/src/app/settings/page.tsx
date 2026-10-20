@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ShieldAlert, Upload, Trash2, Bot, Mail, Send, CreditCard, Copy, Check, Video, PhoneCall, RefreshCw, FileText, UserCheck, Bell, Sparkles } from "lucide-react";
-import { apiFetch, ApiError } from "@/lib/api";
+import { ShieldAlert, Upload, Trash2, Bot, Mail, Send, CreditCard, Copy, Check, Video, PhoneCall, RefreshCw, FileText, UserCheck, Bell, Sparkles, MessageSquare, QrCode } from "lucide-react";
+import { apiFetch, apiUrl, ApiError } from "@/lib/api";
 import { readableTextColor } from "@/lib/color";
-import { AppSettings, EmailConfig, PaymentConfig, CalcomConfig, VapiAccountConfig } from "@/lib/types";
+import { Agent, AppSettings, EmailConfig, EvolutionConnectionStatus, PaymentConfig, CalcomConfig, VapiAccountConfig } from "@/lib/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranding } from "@/contexts/BrandingContext";
 import { useToast } from "@/contexts/ToastContext";
@@ -1246,6 +1246,892 @@ function HumanNoticeCard() {
   );
 }
 
+// ─── WhatsApp Provider (YCloud / Evolution API QR / Meta Cloud API) ──────────────
+
+function WhatsappProviderCard() {
+  const toast = useToast();
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [selectedKey, setSelectedKey] = useState<string>("booking");
+  const [form, setForm] = useState<Agent | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [savedTick, setSavedTick] = useState(0);
+  const [copiedYcloud, setCopiedYcloud] = useState(false);
+  const [copiedEvolution, setCopiedEvolution] = useState(false);
+
+  const [evoStatus, setEvoStatus] = useState<EvolutionConnectionStatus | null>(null);
+  const [evoActionLoading, setEvoActionLoading] = useState<string | null>(null);
+  const [evoError, setEvoError] = useState("");
+  const [evoNotice, setEvoNotice] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<Agent[]>("/api/agents")
+      .then((list) => {
+        if (cancelled) return;
+        setAgents(list);
+        const initial =
+          list.find((a) => a.agentKey === "booking") || list[0] || null;
+        if (initial) {
+          setSelectedKey(initial.agentKey);
+          setForm({
+            ...initial,
+            whatsappProvider: initial.whatsappProvider || "ycloud",
+          });
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function selectAgent(agentKey: string) {
+    setSelectedKey(agentKey);
+    setEvoStatus(null);
+    setEvoError("");
+    setEvoNotice("");
+    try {
+      const cfg = await apiFetch<Agent>(`/api/agents/${agentKey}/config`);
+      setForm({
+        ...cfg,
+        whatsappProvider: cfg.whatsappProvider || "ycloud",
+      });
+    } catch {
+      const found = agents.find((a) => a.agentKey === agentKey);
+      if (found) {
+        setForm({
+          ...found,
+          whatsappProvider: found.whatsappProvider || "ycloud",
+        });
+      }
+    }
+  }
+
+  async function fetchEvolutionStatus(agentKey: string, silent = false) {
+    if (!silent) {
+      setEvoActionLoading("status");
+      setEvoError("");
+    }
+    try {
+      const status = await apiFetch<EvolutionConnectionStatus>(
+        `/api/agents/${agentKey}/whatsapp/evolution/status`
+      );
+      setEvoStatus((prev) => ({
+        ...status,
+        qrBase64:
+          status.state === "open"
+            ? null
+            : (status.qrBase64 ?? prev?.qrBase64 ?? null),
+        pairingCode:
+          status.state === "open"
+            ? null
+            : (status.pairingCode ?? prev?.pairingCode ?? null),
+      }));
+    } catch (err) {
+      if (!silent) {
+        setEvoError(
+          err instanceof ApiError
+            ? err.message
+            : "No se pudo consultar el estado de Evolution API."
+        );
+      }
+    } finally {
+      if (!silent) setEvoActionLoading(null);
+    }
+  }
+
+  useEffect(() => {
+    if (form && (form.whatsappProvider || "ycloud") === "evolution") {
+      fetchEvolutionStatus(form.agentKey, true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form?.agentKey, form?.whatsappProvider]);
+
+  async function saveConfigInternal(): Promise<Agent> {
+    if (!form) throw new Error("Agente no cargado");
+    const updated = await apiFetch<Agent>(
+      `/api/agents/${form.agentKey}/config`,
+      {
+        method: "PUT",
+        body: JSON.stringify(form),
+      }
+    );
+    setForm((f) =>
+      f
+        ? {
+            ...f,
+            ...updated,
+            whatsappProvider: updated.whatsappProvider || "ycloud",
+            openrouterApiKey: null,
+            ycloudApiKey: null,
+            ycloudWebhookSecret: null,
+            evolutionApiKey: null,
+            evolutionWebhookSecret: null,
+            metaAccessToken: null,
+            metaAppSecret: null,
+            metaVerifyToken: null,
+          }
+        : null
+    );
+    setAgents((list) =>
+      list.map((a) => (a.agentKey === updated.agentKey ? updated : a))
+    );
+    setSavedTick((t) => t + 1);
+    return updated;
+  }
+
+  async function handleSaveWhatsapp() {
+    setSaving(true);
+    setEvoError("");
+    try {
+      const updated = await saveConfigInternal();
+      toast.success(
+        `Configuración de WhatsApp (${(updated.whatsappProvider || "ycloud").toUpperCase()}) guardada.`
+      );
+      if (updated.whatsappProvider === "evolution") {
+        await fetchEvolutionStatus(updated.agentKey, true);
+      }
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo guardar la configuración de WhatsApp."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleEvolutionConnect() {
+    if (!form) return;
+    setEvoActionLoading("connect");
+    setEvoError("");
+    setEvoNotice("");
+    try {
+      await saveConfigInternal();
+      const res = await apiFetch<EvolutionConnectionStatus>(
+        `/api/agents/${form.agentKey}/whatsapp/evolution/connect`,
+        { method: "POST" }
+      );
+      setEvoStatus(res);
+      if (res.state === "open") {
+        setEvoNotice("Instancia conectada correctamente en Evolution API.");
+        toast.success("WhatsApp conectado en Evolution API.");
+      } else if (res.qrBase64) {
+        setEvoNotice(
+          "Escanea el código QR con tu móvil (WhatsApp → Dispositivos vinculados → Vincular un dispositivo)."
+        );
+        toast.success("Código QR generado. Escanéalo con el móvil.");
+      } else {
+        setEvoNotice("Instancia preparada en Evolution API.");
+      }
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo crear o conectar la instancia en Evolution API.";
+      setEvoError(msg);
+      toast.error(msg);
+    } finally {
+      setEvoActionLoading(null);
+    }
+  }
+
+  async function handleEvolutionRefreshQr() {
+    if (!form) return;
+    setEvoActionLoading("qr");
+    setEvoError("");
+    try {
+      const res = await apiFetch<EvolutionConnectionStatus>(
+        `/api/agents/${form.agentKey}/whatsapp/evolution/qr`
+      );
+      setEvoStatus(res);
+    } catch (err) {
+      setEvoError(
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo obtener el código QR."
+      );
+    } finally {
+      setEvoActionLoading(null);
+    }
+  }
+
+  async function handleEvolutionConfigureWebhook() {
+    if (!form) return;
+    setEvoActionLoading("webhook");
+    setEvoError("");
+    setEvoNotice("");
+    try {
+      await saveConfigInternal();
+      const res = await apiFetch<{
+        ok: boolean;
+        instanceName: string;
+        webhookUrl: string;
+        events: string[];
+      }>(
+        `/api/agents/${form.agentKey}/whatsapp/evolution/configure-webhook`,
+        { method: "POST" }
+      );
+      setEvoNotice(
+        `Webhook registrado en Evolution API (${res.webhookUrl}) con eventos: ${res.events.join(", ")}.`
+      );
+      toast.success("Webhook configurado en Evolution API.");
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo configurar el webhook en Evolution API.";
+      setEvoError(msg);
+      toast.error(msg);
+    } finally {
+      setEvoActionLoading(null);
+    }
+  }
+
+  async function handleEvolutionRestart() {
+    if (!form) return;
+    setEvoActionLoading("restart");
+    setEvoError("");
+    setEvoNotice("");
+    try {
+      const res = await apiFetch<{
+        ok: boolean;
+        instanceName: string;
+        state: string;
+      }>(`/api/agents/${form.agentKey}/whatsapp/evolution/restart`, {
+        method: "POST",
+      });
+      setEvoNotice(`Instancia '${res.instanceName}' reiniciada.`);
+      toast.success("Instancia reiniciada.");
+      await fetchEvolutionStatus(form.agentKey, true);
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo reiniciar la instancia.";
+      setEvoError(msg);
+      toast.error(msg);
+    } finally {
+      setEvoActionLoading(null);
+    }
+  }
+
+  async function handleEvolutionDisconnect() {
+    if (!form) return;
+    setEvoActionLoading("disconnect");
+    setEvoError("");
+    setEvoNotice("");
+    try {
+      const res = await apiFetch<{
+        ok: boolean;
+        instanceName: string;
+        state: "close";
+      }>(`/api/agents/${form.agentKey}/whatsapp/evolution/disconnect`, {
+        method: "POST",
+      });
+      setEvoStatus({
+        provider: "evolution",
+        state: res.state,
+        instanceName: res.instanceName,
+        qrBase64: null,
+        pairingCode: null,
+      });
+      setEvoNotice(`Instancia '${res.instanceName}' desconectada.`);
+      toast.success("Instancia de WhatsApp desconectada.");
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo desconectar la instancia.";
+      setEvoError(msg);
+      toast.error(msg);
+    } finally {
+      setEvoActionLoading(null);
+    }
+  }
+
+  if (loading || !form) return null;
+
+  const ycloudWebhookUrl = apiUrl(`/api/webhooks/ycloud/${form.agentKey}`);
+  const evolutionWebhookUrl = apiUrl(`/api/webhooks/evolution/${form.agentKey}`);
+  const activeProvider = form.whatsappProvider || "ycloud";
+
+  return (
+    <div className="mt-6 max-w-xl rounded-xl border border-indigo-200 bg-white p-6 shadow-xs space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5 text-indigo-600" />
+            <h2 className="text-sm font-semibold text-neutral-900">
+              Proveedor de WhatsApp y Conexión (YCloud / Evolution API QR / Meta Oficial)
+            </h2>
+          </div>
+          <p className="mt-1 text-xs text-neutral-500">
+            Cambia el método de envío y recepción de WhatsApp entre{" "}
+            <strong>YCloud</strong>, <strong>Evolution API v2 (QR)</strong> o{" "}
+            <strong>Meta Cloud API Oficial</strong>, y gestiona la instancia y el
+            código QR de vinculación.
+          </p>
+        </div>
+        {agents.length > 1 && (
+          <div className="sm:w-48 shrink-0">
+            <label className="mb-1 block text-[11px] font-medium text-neutral-600">
+              Agente
+            </label>
+            <select
+              className="block w-full rounded-lg border border-neutral-300 bg-white px-2.5 py-1.5 text-xs font-medium text-neutral-800 focus:border-indigo-500 focus:outline-none"
+              value={selectedKey}
+              onChange={(e) => selectAgent(e.target.value)}
+            >
+              {agents.map((a) => (
+                <option key={a.agentKey} value={a.agentKey}>
+                  {a.businessName} ({a.agentKey})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* Selector de Método / Proveedor */}
+      <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3.5 space-y-2">
+        <label className="block text-xs font-semibold text-neutral-800">
+          Método / Proveedor activo de WhatsApp:
+        </label>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {[
+            {
+              id: "ycloud" as const,
+              title: "YCloud",
+              subtitle: "WhatsApp Business API",
+            },
+            {
+              id: "evolution" as const,
+              title: "Evolution API v2",
+              subtitle: "Conexión por QR / Baileys",
+            },
+            {
+              id: "meta" as const,
+              title: "Meta API Oficial",
+              subtitle: "Cloud API Directa",
+            },
+          ].map((opt) => {
+            const selected = activeProvider === opt.id;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() =>
+                  setForm((f) =>
+                    f ? { ...f, whatsappProvider: opt.id } : null
+                  )
+                }
+                className={cn(
+                  "flex flex-col items-start rounded-lg border p-2.5 text-left transition-all",
+                  selected
+                    ? "border-indigo-600 bg-indigo-50/90 ring-1 ring-indigo-600"
+                    : "border-neutral-200 bg-white hover:border-neutral-300"
+                )}
+              >
+                <span
+                  className={cn(
+                    "text-xs font-semibold",
+                    selected ? "text-indigo-900" : "text-neutral-800"
+                  )}
+                >
+                  {opt.title}
+                </span>
+                <span className="text-[11px] text-neutral-500">
+                  {opt.subtitle}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ─── MODO 1: EVOLUTION API (QR / INSTANCIA / WEBHOOK) ─── */}
+      {activeProvider === "evolution" && (
+        <div className="space-y-4 pt-2 border-t border-neutral-100">
+          {/* Estado de la instancia + Botones de control */}
+          <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3.5 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <QrCode className="h-4 w-4 text-indigo-600" />
+                <span className="text-xs font-semibold text-neutral-700">
+                  Estado de instancia Evolution:
+                </span>
+                {(() => {
+                  const st = evoStatus?.state;
+                  const hasQr = !!evoStatus?.qrBase64 && st !== "open";
+                  if (evoError && (!st || st === "unknown")) {
+                    return (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">
+                        <span className="h-2 w-2 rounded-full bg-red-500" />
+                        Error
+                      </span>
+                    );
+                  }
+                  if (st === "open") {
+                    return (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                        Conectado
+                      </span>
+                    );
+                  }
+                  if (hasQr) {
+                    return (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                        <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                        Esperando QR
+                      </span>
+                    );
+                  }
+                  if (st === "connecting") {
+                    return (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+                        <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                        Conectando
+                      </span>
+                    );
+                  }
+                  if (st === "close") {
+                    return (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-200 px-2.5 py-0.5 text-xs font-semibold text-neutral-700">
+                        <span className="h-2 w-2 rounded-full bg-neutral-500" />
+                        Desconectado
+                      </span>
+                    );
+                  }
+                  if (st === "unknown") {
+                    return (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">
+                        <span className="h-2 w-2 rounded-full bg-red-500" />
+                        Error
+                      </span>
+                    );
+                  }
+                  return (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-600">
+                      <span className="h-2 w-2 rounded-full bg-neutral-400" />
+                      Sin configurar
+                    </span>
+                  );
+                })()}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleEvolutionConnect}
+                disabled={!!evoActionLoading}
+              >
+                <QrCode className="h-3.5 w-3.5" />
+                {evoActionLoading === "connect"
+                  ? "Generando QR…"
+                  : "Crear / Conectar (QR)"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => fetchEvolutionStatus(form.agentKey, false)}
+                disabled={!!evoActionLoading}
+              >
+                <RefreshCw
+                  className={cn(
+                    "h-3.5 w-3.5",
+                    evoActionLoading === "status" && "animate-spin"
+                  )}
+                />
+                Actualizar estado
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={handleEvolutionConfigureWebhook}
+                disabled={!!evoActionLoading}
+              >
+                {evoActionLoading === "webhook"
+                  ? "Configurando…"
+                  : "Configurar Webhook"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={handleEvolutionRestart}
+                disabled={!!evoActionLoading}
+              >
+                {evoActionLoading === "restart" ? "Reiniciando…" : "Reiniciar"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="danger"
+                onClick={handleEvolutionDisconnect}
+                disabled={!!evoActionLoading}
+              >
+                {evoActionLoading === "disconnect"
+                  ? "Desconectando…"
+                  : "Desconectar"}
+              </Button>
+            </div>
+          </div>
+
+          {evoStatus?.detail && (
+            <p className="text-xs text-neutral-500">{evoStatus.detail}</p>
+          )}
+          {evoNotice && (
+            <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+              {evoNotice}
+            </p>
+          )}
+          {evoError && (
+            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              {evoError}
+            </p>
+          )}
+
+          {/* Visor de Código QR */}
+          {evoStatus?.qrBase64 && evoStatus.state !== "open" && (
+            <div className="flex flex-col items-center rounded-xl border border-indigo-200 bg-indigo-50/40 p-4 space-y-3">
+              <p className="text-xs font-medium text-neutral-800 text-center">
+                Abre WhatsApp en el teléfono (
+                {form.whatsappNumber || "+34 646 034 231"}) →{" "}
+                <strong>Dispositivos vinculados</strong> →{" "}
+                <strong>Vincular un dispositivo</strong> y escanea este código
+                QR:
+              </p>
+              <div className="rounded-xl bg-white p-3 shadow-sm border border-neutral-200">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={
+                    evoStatus.qrBase64.startsWith("data:image")
+                      ? evoStatus.qrBase64
+                      : `data:image/png;base64,${evoStatus.qrBase64}`
+                  }
+                  alt="Código QR de WhatsApp Evolution API"
+                  className="h-56 w-56 object-contain"
+                />
+              </div>
+              {evoStatus.pairingCode && (
+                <p className="text-xs text-neutral-600">
+                  Código de vinculación:{" "}
+                  <code className="rounded bg-white px-2 py-0.5 font-mono font-semibold text-indigo-700 border border-indigo-200">
+                    {evoStatus.pairingCode}
+                  </code>
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleEvolutionRefreshQr}
+                  disabled={!!evoActionLoading}
+                >
+                  <RefreshCw
+                    className={cn(
+                      "h-3.5 w-3.5",
+                      evoActionLoading === "qr" && "animate-spin"
+                    )}
+                  />
+                  Actualizar QR
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => fetchEvolutionStatus(form.agentKey, false)}
+                  disabled={!!evoActionLoading}
+                >
+                  Ya lo he escaneado (Comprobar estado)
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-neutral-700">
+                Número de WhatsApp
+              </label>
+              <Input
+                placeholder="+34646034231"
+                value={form.whatsappNumber ?? ""}
+                onChange={(e) =>
+                  setForm((f) =>
+                    f ? { ...f, whatsappNumber: e.target.value || null } : null
+                  )
+                }
+              />
+              <p className="mt-1 text-[11px] text-neutral-500">
+                Número dedicado vinculado a la instancia (formato E.164).
+              </p>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-neutral-700">
+                Nombre de instancia en Evolution
+              </label>
+              <Input
+                placeholder="salvadora_whatsapp"
+                value={form.evolutionInstanceName ?? ""}
+                onChange={(e) =>
+                  setForm((f) =>
+                    f
+                      ? { ...f, evolutionInstanceName: e.target.value || null }
+                      : null
+                  )
+                }
+              />
+              <p className="mt-1 text-[11px] text-neutral-500">
+                Nombre único de la instancia (se crea automáticamente si no existe).
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              URL Evolution API
+            </label>
+            <Input
+              placeholder="https://evolutionapi.jigretera.com"
+              value={form.evolutionApiUrl ?? ""}
+              onChange={(e) =>
+                setForm((f) =>
+                  f ? { ...f, evolutionApiUrl: e.target.value || null } : null
+                )
+              }
+            />
+          </div>
+
+          <SecretInput
+            key={`settings-evo-api-${savedTick}`}
+            label="Evolution API Key"
+            placeholder="Clave global o de instancia de Evolution API"
+            hasValue={!!form.hasEvolutionApiKey}
+            value={form.evolutionApiKey}
+            onChange={(v) =>
+              setForm((f) => (f ? { ...f, evolutionApiKey: v } : null))
+            }
+            hint="Cabecera apikey hacia Evolution API (nunca se expone al navegador)."
+          />
+
+          <SecretInput
+            key={`settings-evo-secret-${savedTick}`}
+            label="Webhook Secret (x-evolution-secret)"
+            placeholder="Secreto para autenticar los webhooks de Evolution API"
+            hasValue={!!form.hasEvolutionWebhookSecret}
+            value={form.evolutionWebhookSecret}
+            onChange={(v) =>
+              setForm((f) => (f ? { ...f, evolutionWebhookSecret: v } : null))
+            }
+            hint="Validación fail-closed mediante la cabecera x-evolution-secret."
+          />
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              Endpoint de Webhook del CRM para Evolution API
+            </label>
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                value={evolutionWebhookUrl}
+                onFocus={(e) => e.currentTarget.select()}
+                className="font-mono text-xs"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  navigator.clipboard.writeText(evolutionWebhookUrl);
+                  setCopiedEvolution(true);
+                  setTimeout(() => setCopiedEvolution(false), 2000);
+                }}
+              >
+                {copiedEvolution ? (
+                  <>
+                    <Check className="h-3.5 w-3.5" /> Copiado
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3.5 w-3.5" /> Copiar
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODO 2: YCLOUD ─── */}
+      {activeProvider === "ycloud" && (
+        <div className="space-y-4 pt-2 border-t border-neutral-100">
+          <SecretInput
+            key={`settings-ycloud-api-${savedTick}`}
+            label="Clave de API de YCloud"
+            placeholder="Tu API key de YCloud"
+            hasValue={!!form.hasYcloudApiKey}
+            value={form.ycloudApiKey}
+            onChange={(v) =>
+              setForm((f) => (f ? { ...f, ycloudApiKey: v } : null))
+            }
+          />
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              Número de WhatsApp
+            </label>
+            <Input
+              placeholder="+34600000000"
+              value={form.whatsappNumber ?? ""}
+              onChange={(e) =>
+                setForm((f) =>
+                  f ? { ...f, whatsappNumber: e.target.value || null } : null
+                )
+              }
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              URL del webhook (pégala en YCloud)
+            </label>
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                value={ycloudWebhookUrl}
+                onFocus={(e) => e.currentTarget.select()}
+                className="font-mono text-xs"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  navigator.clipboard.writeText(ycloudWebhookUrl);
+                  setCopiedYcloud(true);
+                  setTimeout(() => setCopiedYcloud(false), 2000);
+                }}
+              >
+                {copiedYcloud ? (
+                  <>
+                    <Check className="h-3.5 w-3.5" /> Copiado
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3.5 w-3.5" /> Copiar
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+          <SecretInput
+            key={`settings-ycloud-secret-${savedTick}`}
+            label="Webhook secret de YCloud"
+            placeholder="Secret que te da YCloud al crear el webhook"
+            hasValue={!!form.hasYcloudWebhookSecret}
+            value={form.ycloudWebhookSecret}
+            onChange={(v) =>
+              setForm((f) => (f ? { ...f, ycloudWebhookSecret: v } : null))
+            }
+          />
+        </div>
+      )}
+
+      {/* ─── MODO 3: META CLOUD API OFICIAL ─── */}
+      {activeProvider === "meta" && (
+        <div className="space-y-4 pt-2 border-t border-neutral-100">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            Los campos de <strong>Meta Cloud API Oficial</strong> están listos
+            para guardar tus credenciales y su proveedor de envío/webhook se
+            activará en la Fase 5.
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-neutral-700">
+                Phone Number ID (Meta)
+              </label>
+              <Input
+                placeholder="Ej. 102938475610293"
+                value={form.metaPhoneNumberId ?? ""}
+                onChange={(e) =>
+                  setForm((f) =>
+                    f
+                      ? { ...f, metaPhoneNumberId: e.target.value || null }
+                      : null
+                  )
+                }
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-neutral-700">
+                WhatsApp Business Account ID (WABA ID)
+              </label>
+              <Input
+                placeholder="Ej. 998877665544332"
+                value={form.metaWabaId ?? ""}
+                onChange={(e) =>
+                  setForm((f) =>
+                    f ? { ...f, metaWabaId: e.target.value || null } : null
+                  )
+                }
+              />
+            </div>
+          </div>
+          <SecretInput
+            key={`settings-meta-token-${savedTick}`}
+            label="Access Token permanente de Meta"
+            placeholder="EAAG..."
+            hasValue={!!form.hasMetaAccessToken}
+            value={form.metaAccessToken}
+            onChange={(v) =>
+              setForm((f) => (f ? { ...f, metaAccessToken: v } : null))
+            }
+          />
+          <SecretInput
+            key={`settings-meta-secret-${savedTick}`}
+            label="App Secret de Meta"
+            placeholder="App Secret para verificar X-Hub-Signature-256"
+            hasValue={!!form.hasMetaAppSecret}
+            value={form.metaAppSecret}
+            onChange={(v) =>
+              setForm((f) => (f ? { ...f, metaAppSecret: v } : null))
+            }
+          />
+          <SecretInput
+            key={`settings-meta-verify-${savedTick}`}
+            label="Verify Token del Webhook de Meta"
+            placeholder="Token de verificación GET hub.verify_token"
+            hasValue={!!form.hasMetaVerifyToken}
+            value={form.metaVerifyToken}
+            onChange={(v) =>
+              setForm((f) => (f ? { ...f, metaVerifyToken: v } : null))
+            }
+          />
+        </div>
+      )}
+
+      <div className="pt-2 flex items-center gap-3">
+        <Button type="button" onClick={handleSaveWhatsapp} disabled={saving}>
+          <Upload className="h-4 w-4" />
+          {saving
+            ? "Guardando…"
+            : `Guardar proveedor (${activeProvider.toUpperCase()}) y credenciales`}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { user } = useAuth();
   const branding = useBranding();
@@ -1581,6 +2467,9 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      {/* Proveedor de WhatsApp y Conexión (YCloud / Evolution API QR / Meta Oficial) */}
+      <WhatsappProviderCard />
 
       {/* Branding */}
       <div className="mt-6 max-w-xl rounded-xl border border-neutral-200 bg-white p-6">
