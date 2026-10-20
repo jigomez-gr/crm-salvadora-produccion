@@ -1365,10 +1365,25 @@ function WhatsappProviderCard() {
       (form.whatsappProvider === "meta"
         ? operativeProvider
         : (form.whatsappProvider || "ycloud"));
-    const payload = {
+    const payload: Record<string, any> = {
       ...form,
       whatsappProvider: targetProvider,
     };
+    const secretKeys = [
+      "openrouterApiKey",
+      "ycloudApiKey",
+      "ycloudWebhookSecret",
+      "evolutionApiKey",
+      "evolutionWebhookSecret",
+      "metaAccessToken",
+      "metaAppSecret",
+      "metaVerifyToken",
+    ] as const;
+    for (const key of secretKeys) {
+      if (!payload[key] || typeof payload[key] !== "string" || !payload[key].trim()) {
+        delete payload[key];
+      }
+    }
     const updated = await apiFetch<Agent>(
       `/api/agents/${form.agentKey}/config`,
       {

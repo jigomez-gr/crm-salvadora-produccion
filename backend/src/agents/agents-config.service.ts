@@ -258,7 +258,11 @@ export class AgentsConfigService implements OnModuleInit {
     // the UI sends them back empty for fields the user didn't touch).
     const patch: Record<string, any> = { ...dto };
     for (const field of SECRET_FIELDS) {
-      if (patch[field] === undefined || patch[field] === '' || patch[field] === null) {
+      if (
+        patch[field] === undefined ||
+        patch[field] === null ||
+        (typeof patch[field] === 'string' && patch[field].trim() === '')
+      ) {
         delete patch[field];
       }
     }
