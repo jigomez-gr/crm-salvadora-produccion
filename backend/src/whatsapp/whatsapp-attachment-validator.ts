@@ -16,7 +16,17 @@ export interface RawUploadedFile {
 }
 
 export interface ValidatedWhatsappAttachment extends WhatsappMediaInput {
-  extension: '.pdf' | '.docx' | '.xlsx' | '.txt' | '.mp3' | '.mp4';
+  extension:
+    | '.pdf'
+    | '.docx'
+    | '.xlsx'
+    | '.txt'
+    | '.mp3'
+    | '.mp4'
+    | '.jpg'
+    | '.jpeg'
+    | '.png'
+    | '.webp';
   messageMediaType: MediaType;
   sizeBytes: number;
 }
@@ -374,9 +384,95 @@ export function validateWhatsappAttachment(
       };
     }
 
+    case '.jpg':
+    case '.jpeg': {
+      if (rawMime !== 'image/jpeg' && rawMime !== 'image/jpg') {
+        throw new BadRequestException(
+          `Tipo MIME inválido para archivo .jpeg/.jpg ("${rawMime}"). Se esperaba "image/jpeg".`,
+        );
+      }
+      if (
+        sizeBytes < 3 ||
+        file.buffer[0] !== 0xff ||
+        file.buffer[1] !== 0xd8 ||
+        file.buffer[2] !== 0xff
+      ) {
+        throw new BadRequestException(
+          'El archivo de imagen no contiene una cabecera JPEG válida (0xFFD8FF).',
+        );
+      }
+      return {
+        buffer: file.buffer,
+        filename: safeFilename,
+        mimeType: 'image/jpeg',
+        mediaCategory: 'image',
+        messageMediaType: MediaType.IMAGE,
+        extension: ext as '.jpg' | '.jpeg',
+        sizeBytes,
+      };
+    }
+
+    case '.png': {
+      if (rawMime !== 'image/png') {
+        throw new BadRequestException(
+          `Tipo MIME inválido para archivo .png ("${rawMime}"). Se esperaba "image/png".`,
+        );
+      }
+      const isPng =
+        sizeBytes >= 8 &&
+        file.buffer[0] === 0x89 &&
+        file.buffer[1] === 0x50 &&
+        file.buffer[2] === 0x4e &&
+        file.buffer[3] === 0x47 &&
+        file.buffer[4] === 0x0d &&
+        file.buffer[5] === 0x0a &&
+        file.buffer[6] === 0x1a &&
+        file.buffer[7] === 0x0a;
+      if (!isPng) {
+        throw new BadRequestException(
+          'El archivo no contiene una cabecera PNG válida.',
+        );
+      }
+      return {
+        buffer: file.buffer,
+        filename: safeFilename,
+        mimeType: 'image/png',
+        mediaCategory: 'image',
+        messageMediaType: MediaType.IMAGE,
+        extension: '.png',
+        sizeBytes,
+      };
+    }
+
+    case '.webp': {
+      if (rawMime !== 'image/webp') {
+        throw new BadRequestException(
+          `Tipo MIME inválido para archivo .webp ("${rawMime}"). Se esperaba "image/webp".`,
+        );
+      }
+      const isWebp =
+        sizeBytes >= 12 &&
+        file.buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+        file.buffer.subarray(8, 12).toString('ascii') === 'WEBP';
+      if (!isWebp) {
+        throw new BadRequestException(
+          'El archivo no contiene una cabecera WEBP válida (RIFF....WEBP).',
+        );
+      }
+      return {
+        buffer: file.buffer,
+        filename: safeFilename,
+        mimeType: 'image/webp',
+        mediaCategory: 'image',
+        messageMediaType: MediaType.IMAGE,
+        extension: '.webp',
+        sizeBytes,
+      };
+    }
+
     default:
       throw new BadRequestException(
-        `Extensión de archivo no permitida ("${ext || 'sin extensión'}"). Formatos admitidos: .pdf, .docx, .xlsx, .txt, .mp3, .mp4.`,
+        `Extensión de archivo no permitida ("${ext || 'sin extensión'}"). Formatos admitidos: .pdf, .docx, .xlsx, .txt, .mp3, .mp4, .jpg, .jpeg, .png, .webp.`,
       );
   }
 }

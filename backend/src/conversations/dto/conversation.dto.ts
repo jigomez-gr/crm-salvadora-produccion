@@ -34,10 +34,10 @@ export class QueryThreadsDto {
 
 /** Operator sends a manual reply (WhatsApp or Email) on a thread. */
 export class SendManualMessageDto {
+  @IsOptional()
   @IsString()
-  @MinLength(1)
   @MaxLength(4096)
-  body: string;
+  body?: string;
 
   @IsOptional()
   @IsString()

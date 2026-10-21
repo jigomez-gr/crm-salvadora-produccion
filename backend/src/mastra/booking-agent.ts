@@ -27,7 +27,12 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1';
 // live here; config comes from requestContext.
 export interface BookingAgentDeps {
   findContactByPhone: (phone: string) => Promise<any | null>;
-  createContact: (phone: string, name?: string, email?: string) => Promise<any>;
+  createContact: (
+    phone: string,
+    name?: string,
+    email?: string,
+    extra?: { source?: string; tags?: string[] },
+  ) => Promise<any>;
   updateContact: (
     contactId: string,
     fields: { name?: string; email?: string; phone?: string; emailerroneo?: 'S' | 'N' },
@@ -250,11 +255,26 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     }),
     execute: async (inputData, context) => {
       const normalizedPhone = normalizePhoneLoose(inputData.phone);
-      const contact = await deps.createContact(normalizedPhone, inputData.name, inputData.email);
+      const threadId = (context as any)?.requestContext?.get?.('threadId');
+      const channel = (context as any)?.requestContext?.get?.('channel');
+      const isWhatsapp =
+        channel === 'whatsapp' ||
+        (typeof threadId === 'string' &&
+          (threadId.startsWith('booking:+') ||
+            (threadId.includes(':+') && !threadId.includes('widget-web'))));
+      const source = isWhatsapp ? 'whatsapp' : 'landing';
+      const tags = isWhatsapp
+        ? ['lead_whatsapp', 'whatsapp']
+        : ['lead_landing_web'];
+      const contact = await deps.createContact(
+        normalizedPhone,
+        inputData.name,
+        inputData.email,
+        { source, tags },
+      );
       if (contact?.id && inputData.email) {
         await deps.updateContact(contact.id, { email: inputData.email, phone: normalizedPhone });
       }
-      const threadId = (context as any)?.requestContext?.get?.('threadId');
       if (contact?.id && threadId && deps.linkThreadContact) {
         await deps.linkThreadContact(threadId, contact.id).catch(() => null);
       }
@@ -305,7 +325,22 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
 
       if (!contactId && (normalizedPhone || customer?.phone)) {
         const phoneToUse = normalizedPhone || customer?.phone;
-        const contact = await deps.createContact(phoneToUse, inputData.name || customer?.name, inputData.email || customer?.email);
+        const channel = (context as any)?.requestContext?.get?.('channel');
+        const isWhatsapp =
+          channel === 'whatsapp' ||
+          (typeof threadId === 'string' &&
+            (threadId.startsWith('booking:+') ||
+              (threadId.includes(':+') && !threadId.includes('widget-web'))));
+        const source = isWhatsapp ? 'whatsapp' : 'landing';
+        const tags = isWhatsapp
+          ? ['lead_whatsapp', 'whatsapp']
+          : ['lead_landing_web'];
+        const contact = await deps.createContact(
+          phoneToUse,
+          inputData.name || customer?.name,
+          inputData.email || customer?.email,
+          { source, tags },
+        );
         if (contact?.id && inputData.email) {
           await deps.updateContact(contact.id, { email: inputData.email, phone: phoneToUse, emailerroneo: 'N' });
         }
@@ -622,10 +657,21 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
 
       if (!contactId && phoneToUse) {
         try {
+          const channel = (context as any)?.requestContext?.get?.('channel');
+          const isWhatsapp =
+            channel === 'whatsapp' ||
+            (typeof threadId === 'string' &&
+              (threadId.startsWith('booking:+') ||
+                (threadId.includes(':+') && !threadId.includes('widget-web'))));
+          const source = isWhatsapp ? 'whatsapp' : 'landing';
+          const tags = isWhatsapp
+            ? ['lead_whatsapp', 'whatsapp']
+            : ['lead_landing_web'];
           const fallback = await deps.createContact(
             phoneToUse,
             nameToUse,
             emailToUse,
+            { source, tags },
           );
           contactId = fallback?.id;
           if (contactId && threadId && deps.linkThreadContact) {

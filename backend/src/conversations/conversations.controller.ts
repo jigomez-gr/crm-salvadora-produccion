@@ -6,6 +6,8 @@ import {
   HttpCode,
   HttpException,
   HttpStatus,
+  Inject,
+  Ip,
   Logger,
   NotFoundException,
   Optional,
@@ -14,15 +16,22 @@ import {
   Post,
   Query,
   Res,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
+  forwardRef,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { MessagesService, toMessageView } from './messages.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser, AuthUser } from '../auth/current-user.decorator';
 import { AgentsConfigService } from '../agents/agents-config.service';
 import { YCloudClient } from '../whatsapp/ycloud-client.service';
 import { WhatsappGatewayService } from '../whatsapp/whatsapp-gateway.service';
+import { WhatsappAdminSendService } from '../whatsapp/whatsapp-admin-send.service';
+import { RawUploadedFile } from '../whatsapp/whatsapp-attachment-validator';
 import {
   SetHandoffDto,
   SendManualMessageDto,
@@ -58,6 +67,9 @@ export class ConversationsController {
     private readonly emailService: EmailService,
     private readonly contactsService: ContactsService,
     @Optional() private readonly whatsappGateway?: WhatsappGatewayService,
+    @Optional()
+    @Inject(forwardRef(() => WhatsappAdminSendService))
+    private readonly whatsappAdminSendService?: WhatsappAdminSendService,
   ) {}
 
   @Get()
@@ -218,17 +230,16 @@ export class ConversationsController {
   }
 
   /**
-   * Operator sends a manual WhatsApp reply on a thread (e.g. after taking over
-   * via handoff). Free-text is only valid inside WhatsApp's 24h window; outside
-   * it the send will fail and the message is marked `failed`.
-   */
-  /**
-   * Operator sends a manual reply on a thread (WhatsApp or Email).
+   * Operator sends a manual reply on a thread (WhatsApp with optional attachment, or Email).
    */
   @Post(':threadId/messages')
+  @UseInterceptors(FileInterceptor('file'))
   async sendManual(
     @Param('threadId') threadId: string,
     @Body() dto: SendManualMessageDto,
+    @UploadedFile() file?: RawUploadedFile,
+    @CurrentUser() actor?: AuthUser,
+    @Ip() ip?: string,
   ) {
     const conv = await this.messagesService.getConversation(threadId);
     if (!conv) throw new NotFoundException('Conversación no encontrada');
@@ -240,6 +251,9 @@ export class ConversationsController {
       threadId.startsWith('email:');
 
     if (isEmailThread) {
+      if (!dto.body?.trim()) {
+        throw new BadRequestException('El cuerpo del correo no puede estar vacío');
+      }
       return this.replyEmail(threadId, { body: dto.body, subject: dto.subject });
     }
 
@@ -249,9 +263,38 @@ export class ConversationsController {
       );
     }
 
-    // threadId is `agentKey:phone`; the customer phone is everything after the
-    // first ':'.
+    const cleanBody = typeof dto.body === 'string' ? dto.body.trim() : '';
+    if (!cleanBody && !file) {
+      throw new BadRequestException(
+        'Debes indicar un mensaje de texto, un archivo adjunto o ambos.',
+      );
+    }
+
+    // threadId is `agentKey:phone`; the customer phone is everything after the first ':'.
     const to = threadId.slice(threadId.indexOf(':') + 1);
+
+    if (this.whatsappAdminSendService) {
+      const res = await this.whatsappAdminSendService.sendManual({
+        agentKey: conv.agentKey || 'booking',
+        to,
+        message: cleanBody || undefined,
+        file: file ?? null,
+        actor: {
+          id: actor?.id ?? null,
+          email: actor?.email ?? null,
+        },
+        ip,
+        source: 'admin_ui',
+      });
+
+      const lastMsgId = res.messageIds[res.messageIds.length - 1];
+      const msg = lastMsgId
+        ? await this.messagesService.getMessageById(lastMsgId)
+        : null;
+      return msg ? toMessageView(msg) : { ok: true, ...res };
+    }
+
+    // Fallback if whatsappAdminSendService is not injected (e.g. unit tests):
     const config = await this.agentsConfigService
       .findByKeyOrNull(conv.agentKey)
       .catch(() => null);
@@ -260,46 +303,32 @@ export class ConversationsController {
       config?.whatsappNumber ||
       (isEvolution ? config?.evolutionInstanceName : undefined) ||
       process.env.YCLOUD_WHATSAPP_NUMBER;
-    if (!from) {
-      // If contact has email, deliver by email instead of failing
-      const contact = conv.contactId
-        ? await this.contactsService.findById(conv.contactId).catch(() => null)
-        : null;
-      if (contact?.email) {
-        return this.replyEmail(threadId, { body: dto.body, subject: dto.subject });
-      }
-      throw new BadRequestException(
-        'Este agente no tiene número de WhatsApp configurado (trámite en curso en Meta). Para responder a este contacto por correo, utiliza la opción de respuesta por email.',
-      );
-    }
 
-    // Persist first (queued) so the message shows immediately even if the send
-    // is slow, then send and reconcile the status.
     const message = await this.messagesService.saveMessage({
       contactId: conv.contactId,
       threadId,
       direction: MessageDirection.OUTBOUND,
       channel: MessageChannel.WHATSAPP,
-      body: dto.body,
+      body: cleanBody,
       status: MessageStatus.QUEUED,
     });
-    // Sending by hand means the operator has seen the thread — clear unread.
     await this.messagesService.markRead(threadId);
 
     const result = this.whatsappGateway
       ? await this.whatsappGateway.sendManualTextMessage({
           config,
-          from,
+          from: from || '',
           to,
-          body: dto.body,
+          body: cleanBody,
           apiKeyOverride: config?.ycloudApiKey,
         })
       : await this.ycloudClient.sendTextMessage(
-          from,
+          from || '',
           to,
-          dto.body,
+          cleanBody,
           config?.ycloudApiKey,
         );
+
     if (result.ok) {
       await this.messagesService.updateStatus(
         message.id,
@@ -308,9 +337,6 @@ export class ConversationsController {
       );
     } else {
       await this.messagesService.updateStatus(message.id, MessageStatus.FAILED);
-      this.logger.error(
-        `Manual reply on '${threadId}' was NOT delivered: ${result.error ?? 'unknown error'}`,
-      );
     }
 
     const saved = { ...message, status: result.ok ? MessageStatus.SENT : MessageStatus.FAILED };

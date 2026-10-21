@@ -113,7 +113,7 @@ export class WhatsappAdminSendService {
     const contact = await this.contactsService.upsertByPhone(
       normalizedTo,
       undefined,
-      { source: 'whatsapp_manual' },
+      { source: 'whatsapp_manual', tags: ['lead_whatsapp', 'whatsapp'] },
     );
 
     // 2. Reuse or create conversation threadId = `${agentKey}:${normalizedTo}`
@@ -237,6 +237,7 @@ export class WhatsappAdminSendService {
         mediaType: validatedFile.messageMediaType,
         mediaMimeType: validatedFile.mimeType,
         mediaFilename: validatedFile.filename,
+        mediaUrl: `data:${validatedFile.mimeType};base64,${validatedFile.buffer.toString('base64')}`,
       });
       messageIds.push(audioMsg.id);
 
@@ -289,6 +290,7 @@ export class WhatsappAdminSendService {
         mediaType: validatedFile.messageMediaType,
         mediaMimeType: validatedFile.mimeType,
         mediaFilename: validatedFile.filename,
+        mediaUrl: `data:${validatedFile.mimeType};base64,${validatedFile.buffer.toString('base64')}`,
       });
       messageIds.push(mediaMsg.id);
 

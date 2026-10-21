@@ -20,6 +20,8 @@ import {
   Sparkles,
   RotateCcw,
   TrendingUp,
+  Paperclip,
+  X,
 } from "lucide-react";
 import { apiFetch, apiUrl, ApiError } from "@/lib/api";
 import {
@@ -320,6 +322,8 @@ function ConversationsPageInner() {
   const [loadingThreads, setLoadingThreads] = useState(true);
   const [loadedThread, setLoadedThread] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [sending, setSending] = useState(false);
   const [handoffBusy, setHandoffBusy] = useState(false);
   const [whatsappAutomationPaused, setWhatsappAutomationPaused] = useState(false);
@@ -401,6 +405,8 @@ function ConversationsPageInner() {
 
   useEffect(() => {
     if (!selected) return;
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
     let cancelled = false;
     loadMessages(selected).then((data) => {
       if (cancelled) return;
@@ -543,14 +549,26 @@ function ConversationsPageInner() {
 
   async function sendManual() {
     const body = draft.trim();
-    if (!body || !selected || sending) return;
+    if ((!body && !selectedFile) || !selected || sending) return;
     setSending(true);
     try {
-      await apiFetch(`/api/conversations/${selected}/messages`, {
-        method: "POST",
-        body: JSON.stringify({ body }),
-      });
+      if (selectedFile) {
+        const formData = new FormData();
+        if (body) formData.append("body", body);
+        formData.append("file", selectedFile);
+        await apiFetch(`/api/conversations/${selected}/messages`, {
+          method: "POST",
+          body: formData,
+        });
+      } else {
+        await apiFetch(`/api/conversations/${selected}/messages`, {
+          method: "POST",
+          body: JSON.stringify({ body }),
+        });
+      }
       setDraft("");
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       const data = await loadMessages(selected);
       setMessages(data);
       refreshThreads();
@@ -986,7 +1004,54 @@ function ConversationsPageInner() {
             {/* Composer — manual reply (WhatsApp threads only) */}
             {isWhatsapp && (
               <div className="border-t border-neutral-200 bg-white px-4 py-3">
+                {selectedFile && (
+                  <div className="mb-2 flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs text-neutral-800">
+                    <Paperclip className="h-4 w-4 text-neutral-500 flex-shrink-0" />
+                    <span className="truncate font-medium max-w-xs">{selectedFile.name}</span>
+                    <span className="text-[11px] text-neutral-400">
+                      ({(selectedFile.size / 1024).toFixed(0)} KB)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFile(null);
+                        if (fileInputRef.current) fileInputRef.current.value = "";
+                      }}
+                      className="ml-auto rounded p-0.5 text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700"
+                      title="Quitar archivo adjunto"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
                 <div className="flex items-end gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    accept=".pdf,.docx,.xlsx,.txt,.mp3,.mp4,.jpg,.jpeg,.png,.webp,image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (file.size > 16 * 1024 * 1024) {
+                          toast.error("El archivo no puede superar los 16 MB");
+                          return;
+                        }
+                        setSelectedFile(file);
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={sending}
+                    title="Adjuntar archivo o imagen"
+                    className="px-2.5 h-10 border-neutral-300 text-neutral-600 hover:text-neutral-900"
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
                   <Textarea
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
@@ -997,12 +1062,12 @@ function ConversationsPageInner() {
                       }
                     }}
                     rows={1}
-                    placeholder="Escribe un mensaje…"
+                    placeholder={selectedFile ? "Añade un texto o pie de foto (opcional)…" : "Escribe un mensaje…"}
                     className="max-h-32 min-h-[40px] resize-none"
                   />
                   <Button
                     onClick={sendManual}
-                    disabled={sending || draft.trim().length === 0}
+                    disabled={sending || (!draft.trim() && !selectedFile)}
                   >
                     <Send className="h-4 w-4" />
                     {sending ? "Enviando…" : "Enviar"}
@@ -1010,7 +1075,7 @@ function ConversationsPageInner() {
                 </div>
                 <p className="mt-1 text-[10px] text-neutral-400">
                   Los mensajes manuales solo se entregan dentro de la ventana de
-                  24 h de WhatsApp.
+                  24 h de WhatsApp. Formatos admitidos: imágenes, PDF, Word, Excel, audio, vídeo y texto (máx. 16 MB).
                 </p>
               </div>
             )}

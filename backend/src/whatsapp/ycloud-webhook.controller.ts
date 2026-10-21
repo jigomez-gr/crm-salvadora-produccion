@@ -141,7 +141,14 @@ export class YCloudWebhookController {
     const { from, externalId, body: messageBody, agentPrompt, media } = parsed;
 
     // Upsert contact by phone
-    const contact = await this.contactsService.upsertByPhone(from);
+    const contact = await this.contactsService.upsertByPhone(
+      from,
+      undefined,
+      {
+        source: 'whatsapp',
+        tags: ['lead_whatsapp', 'whatsapp'],
+      },
+    );
 
     // Run agent — persists messages (idempotently, by externalId) and emits SSE
     // events internally. Thread is scoped per agent so the same contact talking

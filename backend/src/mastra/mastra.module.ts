@@ -74,11 +74,17 @@ export { NestMastraModule };
           findContactByPhone: async (phone: string) => {
             return contactsService.findByPhone(phone);
           },
-          createContact: async (phone: string, name?: string, email?: string) => {
+          createContact: async (
+            phone: string,
+            name?: string,
+            email?: string,
+            extra?: { source?: string; tags?: string[] },
+          ) => {
+            const isWhatsapp = extra?.source === 'whatsapp';
             return contactsService.upsertByPhone(phone, name, {
               email,
-              source: 'landing',
-              tags: ['lead_landing_web'],
+              source: extra?.source ?? 'landing',
+              tags: extra?.tags ?? (isWhatsapp ? ['lead_whatsapp', 'whatsapp'] : ['lead_landing_web']),
             });
           },
           updateContact: async (

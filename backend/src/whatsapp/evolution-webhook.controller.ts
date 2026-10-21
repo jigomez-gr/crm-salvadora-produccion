@@ -147,7 +147,14 @@ export class EvolutionWebhookController {
     for (const parsed of messages) {
       const { externalId, from, body: messageBody } = parsed;
 
-      const contact = await this.contactsService.upsertByPhone(from);
+      const contact = await this.contactsService.upsertByPhone(
+        from,
+        undefined,
+        {
+          source: 'whatsapp',
+          tags: ['lead_whatsapp', 'whatsapp'],
+        },
+      );
 
       const { reply, outbound } = await this.agentRunnerService.run({
         agentKey,

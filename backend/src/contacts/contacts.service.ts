@@ -548,12 +548,13 @@ export class ContactsService {
     const normalized = normalizePhoneLoose(phone);
     let contact = await this.findByPhone(normalized);
     if (!contact) {
+      const isWhatsapp = extra?.source?.startsWith('whatsapp');
       contact = this.contactsRepo.create({
         phone: normalized,
         name: name || normalized,
         email: extra?.email || null,
-        tags: extra?.tags ?? ['lead_landing_web'],
-        source: extra?.source ?? 'landing',
+        tags: extra?.tags ?? (isWhatsapp ? ['lead_whatsapp', 'whatsapp'] : ['lead_landing_web']),
+        source: extra?.source ?? (isWhatsapp ? 'whatsapp' : 'landing'),
         pipelineStage: PipelineStage.NEW,
         boardPosition: Date.now(),
       });
@@ -561,6 +562,18 @@ export class ContactsService {
       this.emitUpdated(contact);
     } else {
       let changed = false;
+      const isWhatsapp = extra?.source?.startsWith('whatsapp');
+      if (
+        isWhatsapp &&
+        contact.source === 'landing' &&
+        (!contact.tags ||
+          contact.tags.length === 0 ||
+          (contact.tags.length === 1 && contact.tags[0] === 'lead_landing_web'))
+      ) {
+        contact.source = 'whatsapp';
+        contact.tags = ['lead_whatsapp', 'whatsapp'];
+        changed = true;
+      }
       if (name && (contact.name === contact.phone || !contact.name || contact.name === normalized)) {
         contact.name = name;
         changed = true;
@@ -571,6 +584,9 @@ export class ContactsService {
       }
       if (extra?.tags && extra.tags.length > 0) {
         const existingTags = new Set(contact.tags || []);
+        if (isWhatsapp && existingTags.has('lead_landing_web')) {
+          existingTags.delete('lead_landing_web');
+        }
         for (const t of extra.tags) existingTags.add(t);
         contact.tags = Array.from(existingTags);
         changed = true;
