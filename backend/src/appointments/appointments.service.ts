@@ -420,7 +420,7 @@ export class AppointmentsService implements OnModuleInit {
       /meditaci/i.test(cleanServiceName) && !/gong|sonor/i.test(cleanServiceName);
     if (isMeditacion && !dto.allowCustomSchedule) {
       const fallbackTimetable: Record<number, string[]> = {
-        1: ['09:15'],
+        2: ['09:15'],
         4: ['09:15'],
       };
       const hasCustomSchedule =
@@ -763,7 +763,7 @@ export class AppointmentsService implements OnModuleInit {
         let dayOfWeek = zoned.getDay();
         let timeStr = format(zoned, 'HH:mm');
         const fallbackTimetable: Record<number, string[]> = {
-          1: ['09:15'],
+          2: ['09:15'],
           4: ['09:15'],
         };
         const hasCustomSchedule =
@@ -798,7 +798,7 @@ export class AppointmentsService implements OnModuleInit {
         }
         if (!allowed.includes(timeStr)) {
           const scheduleDisplay =
-            targetServiceEntity?.scheduleText || 'Lunes y Jueves de 09:15 a 09:45';
+            targetServiceEntity?.scheduleText || 'Martes y Jueves de 09:15 a 09:45';
           throw new BadRequestException(
             `Ese horario no corresponde a los turnos oficiales de Meditaciones Guiadas (${scheduleDisplay}).`,
           );
@@ -2403,26 +2403,6 @@ export class AppointmentsService implements OnModuleInit {
     serviceName?: string | null,
     contactId?: string | null,
   ): Promise<void> {
-    // 1. Prevent the SAME contact from booking two simultaneous appointments (e.g. Constelar + Participante, 1 clase + 2 clases, etc.)
-    if (contactId) {
-      const contactConflict = await repo
-        .createQueryBuilder('a')
-        .where('a.contactId = :contactId', { contactId })
-        .andWhere('a.status NOT IN (:...nonBlocking)', {
-          nonBlocking: [AppointmentStatus.CANCELLED],
-        })
-        .andWhere('a.startsAt < :endsAt', { endsAt })
-        .andWhere('a.endsAt > :startsAt', { startsAt })
-        .andWhere(excludeId ? 'a.id != :excludeId' : '1=1', { excludeId })
-        .getOne();
-
-      if (contactConflict) {
-        throw new ConflictException(
-          `Este contacto ya tiene una reserva activa para «${contactConflict.service}» en ese mismo horario. No es posible agendar citas simultáneas para la misma persona.`,
-        );
-      }
-    }
-
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     let managerServiceIds: string[] = [];
     let targetService: Service | null = null;
@@ -2455,6 +2435,56 @@ export class AppointmentsService implements OnModuleInit {
       /taller|grupal/i.test(effectiveSvcName) ||
       Boolean(targetService?.maxCapacity && targetService.maxCapacity > 1);
 
+    const isProvisional =
+      startsAt.getFullYear() >= 2099 ||
+      targetService?.sinfechadefinitiva === 'S';
+
+    // 1. Prevent the SAME contact from booking two simultaneous appointments (e.g. Constelar + Participante, 1 clase + 2 clases, etc.)
+    if (contactId) {
+      const conflictQb = repo
+        .createQueryBuilder('a')
+        .where('a.contactId = :contactId', { contactId })
+        .andWhere('a.status NOT IN (:...nonBlocking)', {
+          nonBlocking: [AppointmentStatus.CANCELLED],
+        })
+        .andWhere('a.startsAt < :endsAt', { endsAt })
+        .andWhere('a.endsAt > :startsAt', { startsAt })
+        .andWhere(excludeId ? 'a.id != :excludeId' : '1=1', { excludeId });
+
+      const contactConflicts: Appointment[] = conflictQb.getMany
+        ? await conflictQb.getMany()
+        : [await conflictQb.getOne()].filter(Boolean) as Appointment[];
+
+      for (const conflict of contactConflicts) {
+        const conflictIsProvisional =
+          new Date(conflict.startsAt).getFullYear() >= 2099;
+
+        if (isProvisional || conflictIsProvisional) {
+          // Priority bookings for services with provisional / unconfirmed dates (year >= 2099 or sinfechadefinitiva)
+          // do NOT conflict across different services. A customer can have priority bookings for Baño de Gong AND Constelaciones, etc.
+          const isSameService =
+            (targetService?.id && conflict.serviceId === targetService.id) ||
+            (conflict.service && effectiveSvcName && conflict.service.trim().toLowerCase() === effectiveSvcName.trim().toLowerCase());
+
+          if (!isSameService) {
+            continue; // Not a conflict! Independent priority reservations for different services
+          }
+        }
+
+        throw new ConflictException(
+          `Este contacto ya tiene una reserva activa para «${conflict.service}» en ese mismo horario. No es posible agendar citas simultáneas para la misma persona.`,
+        );
+      }
+    }
+
+    if (targetService?.managerId) {
+      const sharedServices = await this.servicesRepo.find({
+        where: { managerId: targetService.managerId },
+        select: ['id'],
+      });
+      managerServiceIds = sharedServices.map((s) => s.id);
+    }
+
     let maxCapacity = 1;
     if (isYoga) {
       maxCapacity =
@@ -2477,14 +2507,6 @@ export class AppointmentsService implements OnModuleInit {
       maxCapacity = 20;
     }
 
-    if (targetService?.managerId) {
-      const sharedServices = await this.servicesRepo.find({
-        where: { managerId: targetService.managerId },
-        select: ['id'],
-      });
-      managerServiceIds = sharedServices.map((s) => s.id);
-    }
-
     const qb = repo
       .createQueryBuilder('a')
       .where('a.status NOT IN (:...nonBlocking)', {
@@ -2496,7 +2518,20 @@ export class AppointmentsService implements OnModuleInit {
       .andWhere('a.startsAt < :endsAt', { endsAt })
       .andWhere('a.endsAt > :startsAt', { startsAt });
 
-    if (isYoga) {
+    if (isProvisional) {
+      // For provisional bookings without fixed date (year >= 2099 or sinfechadefinitiva),
+      // only count appointments for the SAME service towards maxCapacity.
+      if (targetService?.id) {
+        qb.andWhere('(a.serviceId = :svcId OR a.service ILIKE :svcName)', {
+          svcId: targetService.id,
+          svcName: `%${serviceName || targetService.name}%`,
+        });
+      } else if (serviceName) {
+        qb.andWhere('a.service ILIKE :svcName', {
+          svcName: `%${serviceName}%`,
+        });
+      }
+    } else if (isYoga) {
       // Clases de Yoga: NUNCA se ven limitadas porque el profesor tenga otra cita a esa hora
       // sino por el aforo máximo de alumnos por grupo (20 plazas).
       // Se contabilizan conjuntamente todas las modalidades de Yoga (1 clase, 2 clases, suelta, prueba, recuperación).

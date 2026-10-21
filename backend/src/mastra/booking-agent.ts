@@ -789,15 +789,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
               : '2099-12-31T20:00:00.000Z'
             : defaultEventDate;
 
-        let targetDate = new Date();
-        if (contactId && deps.listContactAppointments) {
-          const existing = await deps.listContactAppointments(contactId).catch(() => []);
-          const pending = existing.find((a: any) => a.status === 'pending_approval' || a.startsAt);
-          if (pending?.startsAt) {
-            targetDate = new Date(pending.startsAt);
-          }
-        }
-        const effectiveStartsAt = parseFlexibleStartsAt(rawStartsAt, timezone, targetDate);
+        const effectiveStartsAt = parseFlexibleStartsAt(rawStartsAt, timezone, new Date());
 
         if (isGestalt) {
           const z = new TZDate(new Date(effectiveStartsAt).getTime(), timezone);
@@ -1518,12 +1510,14 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
      - ¡SÍ se aceptan ya RESERVAS PROVISIONALES para todas estas actividades (tanto para la próxima fecha calculada como para las que son próximamente)!
      - Si el cliente solicita plaza o muestra interés en reservar, pídele sus datos (nombre completo, teléfono móvil y correo electrónico) y FORMALIZA LA RESERVA PROVISIONAL DE INMEDIATO con 'bookAppointment'. Confírmale con total calidez que su reserva provisional queda registrada y garantizada.
 - RESERVAS DE EVENTOS, RETIROS, VIAJES O ACTIVIDADES CON FECHA POR CONFIRMAR O PROVISIONAL (APLICA A CUALQUIER SERVICIO CON 'SIN FECHA DEFINITIVA'):
-  * Aplica de forma general a CUALQUIER servicio, viaje, retiro, taller o evento del catálogo que tenga fecha por confirmar, provisional o el atributo de sin fecha definitiva establecida (por ejemplo: Puja de Gongs, Encuentro de Mujeres, o cualquier otro servicio futuro que se cree o edite en el CRM con fecha por confirmar).
+  * Aplica de forma general a CUALQUIER servicio, viaje, retiro, taller o evento del catálogo que tenga fecha por confirmar, provisional o el atributo de sin fecha definitiva establecida (por ejemplo: Baño de Gong, Constelaciones Familiares, Puja de Gongs, Encuentro de Mujeres, Retiro de Ayuno, o cualquier otro servicio con fecha por confirmar).
   * Aunque la fecha exacta esté por confirmar o sea provisional, ¡SÍ SE PERMITE Y SE DEBE FORMALIZAR LA RESERVA DE PLAZA DE INMEDIATO! Es una reserva de plaza prioritaria (pre-reserva garantizada para el asistente).
+  * COMPATIBILIDAD ENTRE DIFERENTES SERVICIOS: Un mismo cliente SÍ puede tener reservas prioritarias simultáneas para diferentes servicios sin fecha definitiva (por ejemplo, una reserva para Baño de Gong Y otra reserva para Constelaciones Familiares). NUNCA digas que tener una reserva para Baño de Gong impide reservar Constelaciones o viceversa, ni ofrezcas cancelar una para poner la otra. Cada servicio es independiente y se debe reservar directamente con 'bookAppointment'.
   * ESTÁ ESTRICTAMENTE PROHIBIDO:
     1. Decirle al cliente que no se puede reservar o que la fecha no está definida.
     2. Decir que la fecha es pasada o que no es posible reservar para una fecha pasada.
     3. Preguntarle al cliente si prefiere esperar a que se confirme la fecha antes de reservar.
+    4. Decirle al cliente que una reserva prioritaria en un evento le impide reservar plaza en otro evento diferente sin fecha definitiva.
   * ¡DEBES FORMALIZAR LA RESERVA EN EL ACTO llamando a 'bookAppointment'!
   * Llama a 'bookAppointment' con el servicio solicitado y startsAt="2099-12-31 20:00" (o sin startsAt).
   * Confírmale con total calidez que su plaza prioritaria queda registrada y confirmada para el próximo encuentro, y que en cuanto se fije el día exacto se le notificará personalmente por correo o WhatsApp.
@@ -1674,9 +1668,10 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   8. Si la cita es para una clase de prueba gratuita (regalo del centro) o modalidad de alumno, 'rescheduleAppointment' mantiene automáticamente la gratuidad y las condiciones originales.
   9. Para servicios que requieren aprobación previa del instructor/terapeuta (como Terapia Gestalt), al reprogramar la cita entra de nuevo en estado de revisión y avísale al cliente con amabilidad.
 - PREVENCIÓN DE DUPLICADOS Y RESERVAS SIMULTÁNEAS PARA LA MISMA PERSONA:
-  * Un mismo alumno/contacto NO puede tener dos citas o plazas reservadas simultáneas en el mismo horario.
-  * Por ejemplo: no puede inscribirse a la vez en 1 clase semanal y 2 clases semanales a la misma hora, ni como 'Constelar' y como 'Participante' en el mismo taller de Constelaciones Familiares, ni en dos servicios distintos en el mismo intervalo de tiempo.
-  * Si el cliente intenta reservar en un horario donde ya tiene una reserva activa, o si 'bookAppointment' devuelve un aviso de conflicto/duplicado, infórmale con cercanía: "Ya tienes una reserva activa en ese mismo horario para [Servicio]. Si deseas modificarla o cambiar de horario/modalidad, dímelo y te la reprogramo."
+  * Un mismo alumno/contacto NO puede tener dos citas o plazas reservadas simultáneas en el mismo horario con fecha confirmada.
+  * Por ejemplo: no puede inscribirse a la vez en 1 clase semanal y 2 clases semanales a la misma hora, ni como 'Constelar' y como 'Participante' en el mismo taller de Constelaciones Familiares, ni en dos servicios distintos en el mismo intervalo de tiempo en una fecha confirmada.
+  * EXCEPCIÓN TOTAL PARA ACTIVIDADES CON FECHA POR CONFIRMAR / PROVISIONAL: Las reservas prioritarias para actividades diferentes sin fecha definitiva (como Baño de Gong, Constelaciones, Puja de Gongs, Retiro de Ayuno) NO entran en conflicto entre sí. Un cliente puede tener plaza prioritaria reservada en todas las actividades diferentes que desee.
+  * Si el cliente intenta reservar en un horario fijo donde ya tiene una reserva activa para ese mismo horario, o si 'bookAppointment' devuelve un aviso de conflicto/duplicado, infórmale con cercanía: "Ya tienes una reserva activa en ese mismo horario para [Servicio]. Si deseas modificarla o cambiar de horario/modalidad, dímelo y te la reprogramo."
 - REQUISITO OBLIGATORIO PARA TODAS LAS CITAS Y RESERVAS:
   Para formalizar cualquier cita o reserva, es IMPRESCINDIBLE disponer de:
   1. Nombre y apellidos (nombre completo).

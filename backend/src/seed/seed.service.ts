@@ -236,7 +236,7 @@ export class SeedService implements OnModuleInit {
         durationMinutes: 30,
         price: '15.00',
         paymentType: ServicePaymentType.FREE,
-        scheduleText: 'Lunes y Jueves de 09:15 a 09:45',
+        scheduleText: 'Martes y Jueves de 09:15 a 09:45',
         flyerUrl: '/flyer-parque-granada.png',
         calendarId: 'cal-meditacion',
         managerId: salvadoraManager.id,

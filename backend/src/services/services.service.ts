@@ -581,19 +581,17 @@ export class ServicesService implements OnModuleInit {
             s.notifyByWhatsapp = true;
             updated = true;
           }
-          if (!s.weeklySchedule || Object.keys(s.weeklySchedule).length === 0) {
+          if (
+            !s.weeklySchedule ||
+            Object.keys(s.weeklySchedule).length === 0 ||
+            s.weeklySchedule[1] ||
+            (s.scheduleText && (s.scheduleText.includes('14:00 y 20:45') || s.scheduleText.includes('Lunes')))
+          ) {
             s.weeklySchedule = {
-              1: ['09:15'],
+              2: ['09:15'],
               4: ['09:15'],
             };
-            s.scheduleText = 'Lunes y Jueves de 09:15 a 09:45';
-            updated = true;
-          } else if (s.scheduleText && s.scheduleText.includes('14:00 y 20:45')) {
-            s.weeklySchedule = {
-              1: ['09:15'],
-              4: ['09:15'],
-            };
-            s.scheduleText = 'Lunes y Jueves de 09:15 a 09:45';
+            s.scheduleText = 'Martes y Jueves de 09:15 a 09:45';
             updated = true;
           }
         } else if (/baño.*gong|gong/i.test(s.name)) {

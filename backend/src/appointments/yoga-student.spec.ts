@@ -106,6 +106,7 @@ describe('Yoga Appointments & Student Lifecycle', () => {
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
       getOne: jest.fn().mockResolvedValue(null),
+      getMany: jest.fn().mockResolvedValue([]),
       getCount: jest.fn().mockResolvedValue(0),
     }),
     query: jest.fn().mockResolvedValue([]),
@@ -113,7 +114,8 @@ describe('Yoga Appointments & Student Lifecycle', () => {
 
   const servicesRepoMock: any = {
     findOne: jest.fn().mockImplementation(({ where }) => {
-      if (where?.name && /gong|sonor/i.test(where.name)) {
+      const nameVal = where?.name?.value || where?.name || '';
+      if (/gong|sonor/i.test(nameVal)) {
         return Promise.resolve({
           id: 'svc-gong',
           name: 'Baño de Gong y Meditación Sonora',
@@ -121,6 +123,18 @@ describe('Yoga Appointments & Student Lifecycle', () => {
           price: '16.00',
           calendarId: 'cal-gong',
           maxCapacity: 30,
+          sinfechadefinitiva: 'S',
+        });
+      }
+      if (/constel/i.test(nameVal)) {
+        return Promise.resolve({
+          id: 'svc-constel',
+          name: 'Constelaciones Familiares (Participante / Representante)',
+          durationMinutes: 240,
+          price: '20.00',
+          calendarId: 'cal-constelaciones',
+          maxCapacity: 25,
+          sinfechadefinitiva: 'S',
         });
       }
       return Promise.resolve({
@@ -390,5 +404,26 @@ describe('Yoga Appointments & Student Lifecycle', () => {
     expect(appt.service).toBe('Baño de Gong y Meditación Sonora');
     expect(new Date(appt.startsAt).toISOString()).toBe('2026-09-26T16:00:00.000Z');
     expect(appt.price).toBe('16.00');
+  });
+
+  it('permite registrar reservas prioritarias simultáneas para diferentes servicios sin fecha definitiva (ej. Baño de Gong y Constelaciones Familiares) para el mismo contacto', async () => {
+    // 1. Reserva prioritaria en 2099 para Baño de Gong
+    const apptGong = await appointmentsService.create({
+      contactId: 'contact-ana-1',
+      service: 'Baño de Gong y Meditación Sonora',
+      startsAt: '2099-12-31T20:00:00.000Z',
+      endsAt: '2099-12-31T22:00:00.000Z',
+    });
+    expect(apptGong).toBeDefined();
+
+    // 2. Reserva prioritaria en 2099 para Constelaciones Familiares para el MISMO contacto
+    const apptConstel = await appointmentsService.create({
+      contactId: 'contact-ana-1',
+      service: 'Constelaciones Familiares (Participante / Representante)',
+      startsAt: '2099-12-31T20:00:00.000Z',
+      endsAt: '2099-12-31T24:00:00.000Z',
+    });
+    expect(apptConstel).toBeDefined();
+    expect(apptConstel.service).toBe('Constelaciones Familiares (Participante / Representante)');
   });
 });
