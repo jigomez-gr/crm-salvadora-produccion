@@ -9,7 +9,7 @@ import { YCloudModule } from '../whatsapp/ycloud.module';
 import { AgentsConfigModule } from '../agents/agents-config.module';
 import { EmailModule } from '../email/email.module';
 import { ContactsModule } from '../contacts/contacts.module';
-import { WhatsappModule } from '../whatsapp/whatsapp.module';
+import { WhatsappAdminSendService } from '../whatsapp/whatsapp-admin-send.service';
 
 @Module({
   imports: [
@@ -22,10 +22,9 @@ import { WhatsappModule } from '../whatsapp/whatsapp.module';
     AgentsConfigModule,
     forwardRef(() => EmailModule),
     forwardRef(() => ContactsModule),
-    forwardRef(() => WhatsappModule),
   ],
-  providers: [MessagesService],
+  providers: [MessagesService, WhatsappAdminSendService],
   controllers: [ConversationsController],
-  exports: [MessagesService],
+  exports: [MessagesService, WhatsappAdminSendService],
 })
 export class ConversationsModule {}

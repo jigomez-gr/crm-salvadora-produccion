@@ -26,7 +26,7 @@ import { ZadarmaSmsModule } from '../sms/zadarma-sms.module';
     forwardRef(() => EmailModule),
     YCloudModule,
     AgentsConfigModule,
-    ConversationsModule,
+    forwardRef(() => ConversationsModule),
     ZadarmaSmsModule,
   ],
   providers: [AppointmentsService, AnalizaIaService],

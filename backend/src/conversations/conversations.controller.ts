@@ -68,7 +68,6 @@ export class ConversationsController {
     private readonly contactsService: ContactsService,
     @Optional() private readonly whatsappGateway?: WhatsappGatewayService,
     @Optional()
-    @Inject(forwardRef(() => WhatsappAdminSendService))
     private readonly whatsappAdminSendService?: WhatsappAdminSendService,
   ) {}
 
