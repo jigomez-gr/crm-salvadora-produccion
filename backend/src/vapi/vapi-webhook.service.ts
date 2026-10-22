@@ -128,7 +128,7 @@ export const OFFICIAL_SERVICES: OfficialServiceConfig[] = [
     eventSpokenDate: 'sábado 21 de noviembre de 2026 de 18:00 a 20:00',
     durationMinutes: 120,
     maxCapacity: 30,
-    priceInfo: '16€ por persona',
+    priceInfo: '16€ por persona (14€ si vienes acompañado/a). En esta sesión mejoraremos el hígado',
   },
   {
     id: 'puja-gong',

@@ -161,15 +161,16 @@ export class ServicesService implements OnModuleInit {
           WHERE "name" ILIKE '%puja%';
 
           UPDATE services SET
-            "description" = 'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 21 de Noviembre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€. Pago en el centro.',
+            "description" = 'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 21 de Noviembre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€ (14€ si vienes acompañado/acompañada). Pago en el centro.',
             "eventDatesText" = 'Sábado 21 de Noviembre de 2026 (18:00 a 20:00)',
+            "scheduleText" = 'Sábado 21 de Noviembre (18:00 a 20:00)',
             "eventStartDate" = '2026-11-21T17:00:00.000Z',
             "eventEndDate" = '2026-11-21T19:00:00.000Z',
             "sinfechadefinitiva" = 'N',
             "textosinfechadefinitiva" = NULL,
             "flyerParticularUrl" = '/flyers/banogongparticular.jpg',
             "flyerParticularPath" = 'public/flyers/banogongparticular.jpg',
-            "textoespecifico" = 'Próxima sesión confirmada: Sábado 21 de Noviembre de 2026 de 18:00 a 20:00 h.'
+            "textoespecifico" = 'Próxima sesión confirmada: Sábado 21 de Noviembre de 2026 de 18:00 a 20:00 h. Mejoraremos el Hígado. Precio: 16 € (14 € si vienes acompañado/acompañada).'
           WHERE ("name" ILIKE '%baño de gong%' OR "name" ILIKE '%meditación sonora%');
         `);
       } catch (colErr) {
@@ -394,10 +395,13 @@ export class ServicesService implements OnModuleInit {
         where: [{ name: ILike('%baño de gong%') }, { name: ILike('%meditación sonora%') }],
       });
       const gongDesc =
-        'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 21 de Noviembre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€. Pago en el centro.';
+        'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 21 de Noviembre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€ (14€ si vienes acompañado/acompañada). Pago en el centro.';
       const gongDateText = 'Sábado 21 de Noviembre de 2026 (18:00 a 20:00)';
+      const gongScheduleText = 'Sábado 21 de Noviembre (18:00 a 20:00)';
       const gongStart = new Date('2026-11-21T17:00:00.000Z');
       const gongEnd = new Date('2026-11-21T19:00:00.000Z');
+      const gongTextoEspecifico =
+        'Próxima sesión confirmada: Sábado 21 de Noviembre de 2026 de 18:00 a 20:00 h. Mejoraremos el Hígado. Precio: 16 € (14 € si vienes acompañado/acompañada).';
       if (!gongSvc) {
         gongSvc = await this.serviceRepo.save(
           this.serviceRepo.create({
@@ -405,6 +409,7 @@ export class ServicesService implements OnModuleInit {
             description: gongDesc,
             serviceType: ServiceType.EVENT,
             eventDatesText: gongDateText,
+            scheduleText: gongScheduleText,
             eventStartDate: gongStart,
             eventEndDate: gongEnd,
             durationMinutes: 120,
@@ -419,24 +424,21 @@ export class ServicesService implements OnModuleInit {
             flyerParticularUrl: '/flyers/banogongparticular.jpg',
             flyerParticularPath: 'public/flyers/banogongparticular.jpg',
             sinfechadefinitiva: 'N',
-            textoespecifico: 'Próxima sesión confirmada: Sábado 21 de Noviembre de 2026 de 18:00 a 20:00 h.',
+            textoespecifico: gongTextoEspecifico,
             isActive: true,
           }),
         );
       } else {
         gongSvc.description = gongDesc;
         gongSvc.eventDatesText = gongDateText;
+        gongSvc.scheduleText = gongScheduleText;
         gongSvc.eventStartDate = gongStart;
         gongSvc.eventEndDate = gongEnd;
         gongSvc.sinfechadefinitiva = 'N';
         gongSvc.textosinfechadefinitiva = null;
-        if (!gongSvc.flyerParticularUrl) {
-          gongSvc.flyerParticularUrl = '/flyers/banogongparticular.jpg';
-          gongSvc.flyerParticularPath = 'public/flyers/banogongparticular.jpg';
-        }
-        if (!gongSvc.textoespecifico) {
-          gongSvc.textoespecifico = 'Próxima sesión confirmada: Sábado 21 de Noviembre de 2026 de 18:00 a 20:00 h.';
-        }
+        gongSvc.flyerParticularUrl = '/flyers/banogongparticular.jpg';
+        gongSvc.flyerParticularPath = 'public/flyers/banogongparticular.jpg';
+        gongSvc.textoespecifico = gongTextoEspecifico;
         gongSvc.managerId = manager.id;
         gongSvc.reminderNotes =
           gongSvc.reminderNotes ||
@@ -749,14 +751,16 @@ export class ServicesService implements OnModuleInit {
             return {
               ...s,
               eventDatesText: 'Sábado 21 de Noviembre de 2026 (18:00 a 20:00)',
+              scheduleText: 'Sábado 21 de Noviembre (18:00 a 20:00)',
               eventStartDate: '2026-11-21T17:00:00.000Z',
               eventEndDate: '2026-11-21T19:00:00.000Z',
               sinfechadefinitiva: 'N',
               textosinfechadefinitiva: null,
               flyerParticularUrl: '/flyers/banogongparticular.jpg',
-              textoespecifico: 'Próxima sesión confirmada: Sábado 21 de Noviembre de 2026 de 18:00 a 20:00 h.',
+              textoespecifico:
+                'Próxima sesión confirmada: Sábado 21 de Noviembre de 2026 de 18:00 a 20:00 h. Mejoraremos el Hígado. Precio: 16 € (14 € si vienes acompañado/acompañada).',
               description:
-                'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 21 de Noviembre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€. Pago en el centro.',
+                'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 21 de Noviembre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€ (14€ si vienes acompañado/acompañada). Pago en el centro.',
             };
           }
           if (/constelar|asunto propio/i.test(s.name || '')) {

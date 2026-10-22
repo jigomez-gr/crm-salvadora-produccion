@@ -9,12 +9,13 @@ export class UpdateBanoGongDateAndFlyer1782914000000 implements MigrationInterfa
       SET "eventStartDate" = '2026-11-21T17:00:00.000Z',
           "eventEndDate" = '2026-11-21T19:00:00.000Z',
           "eventDatesText" = 'Sábado 21 de Noviembre de 2026 (18:00 a 20:00)',
+          "scheduleText" = 'Sábado 21 de Noviembre (18:00 a 20:00)',
           sinfechadefinitiva = 'N',
           textosinfechadefinitiva = NULL,
-          textoespecifico = 'Próxima sesión confirmada: Sábado 21 de Noviembre de 2026 de 18:00 a 20:00 h.',
+          textoespecifico = 'Próxima sesión confirmada: Sábado 21 de Noviembre de 2026 de 18:00 a 20:00 h. Mejoraremos el Hígado. Precio: 16 € (14 € si vienes acompañado/acompañada).',
           "flyerParticularUrl" = '/flyers/banogongparticular.jpg',
           "flyerParticularPath" = 'public/flyers/banogongparticular.jpg',
-          description = 'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 21 de Noviembre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€. Pago en el centro.'
+          description = 'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 21 de Noviembre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€ (14€ si vienes acompañado/acompañada). Pago en el centro.'
       WHERE id = '3886172f-4a00-4af7-9d5f-5c4015e07f9c' OR name ILIKE '%Baño de Gong y Meditación Sonora%'
     `);
 
