@@ -423,6 +423,8 @@ export class ServicesService implements OnModuleInit {
               'Llevar ropa cómoda de abrigo, calcetines cálidos y, si lo deseas, tu propia manta o cojín para disfrutar de la experiencia sonora con el máximo confort.',
             flyerParticularUrl: '/flyers/banogongparticular.jpg',
             flyerParticularPath: 'public/flyers/banogongparticular.jpg',
+            videoParticularUrl: '/videos/Bano-de-Gong_particular.mp4',
+            videoParticularPath: 'media_base/videos/Bano-de-Gong_particular.mp4',
             sinfechadefinitiva: 'N',
             textoespecifico: gongTextoEspecifico,
             isActive: true,
@@ -438,6 +440,8 @@ export class ServicesService implements OnModuleInit {
         gongSvc.textosinfechadefinitiva = null;
         gongSvc.flyerParticularUrl = '/flyers/banogongparticular.jpg';
         gongSvc.flyerParticularPath = 'public/flyers/banogongparticular.jpg';
+        gongSvc.videoParticularUrl = '/videos/Bano-de-Gong_particular.mp4';
+        gongSvc.videoParticularPath = 'media_base/videos/Bano-de-Gong_particular.mp4';
         gongSvc.textoespecifico = gongTextoEspecifico;
         gongSvc.managerId = manager.id;
         gongSvc.reminderNotes =
@@ -2248,6 +2252,8 @@ export class ServicesService implements OnModuleInit {
         if (service.name.toLowerCase().includes('gong')) {
           candidates.push(path.resolve(dir, 'banogongparticular.jpg'));
           candidates.push(path.resolve(dir, 'banogong_particular.jpg'));
+          candidates.push(path.resolve(dir, 'Bano-de-Gong_particular.mp4'));
+          candidates.push(path.resolve(dir, 'banogongparticular.mp4'));
         }
       }
 
