@@ -432,14 +432,18 @@ export class AgentRunnerService {
 
       for (const step of (result as any).steps ?? []) {
         for (const tc of step.toolCalls ?? []) {
-          const name = tc?.toolName || tc?.name || tc?.function?.name || 'unknown';
+          const name = tc?.toolName || tc?.name || tc?.function?.name || tc?.tool?.id || tc?.id || '';
           const args = tc?.args ?? tc?.arguments ?? tc?.parameters ?? {};
-          this.logger.log(`[ToolCall] ${name}: ${JSON.stringify(args)}`);
+          if (name || Object.keys(args).length > 0) {
+            this.logger.log(`[ToolCall] ${name || 'unknown'}: ${JSON.stringify(args)}`);
+          }
         }
         for (const tr of step.toolResults ?? []) {
-          const name = tr?.toolName || tr?.name || 'unknown';
+          const name = tr?.toolName || tr?.name || tr?.tool?.id || tr?.id || '';
           const res = tr?.result ?? tr?.output ?? {};
-          this.logger.log(`[ToolResult] ${name}: ${JSON.stringify(res)}`);
+          if (name || (typeof res === 'object' && Object.keys(res).length > 0)) {
+            this.logger.log(`[ToolResult] ${name || 'unknown'}: ${JSON.stringify(res)}`);
+          }
         }
       }
 

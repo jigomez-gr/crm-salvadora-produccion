@@ -1463,13 +1463,20 @@ export class ServicesService implements OnModuleInit {
     if (dto.videoParticularUrl !== undefined) service.videoParticularUrl = dto.videoParticularUrl || null;
     if (dto.videoPath !== undefined) service.videoPath = dto.videoPath || null;
     if (dto.videoUrl !== undefined) service.videoUrl = dto.videoUrl || null;
-    if (dto.textoespecifico !== undefined) service.textoespecifico = dto.textoespecifico || null;
+    if (dto.textoespecifico !== undefined)
+      service.textoespecifico = dto.textoespecifico?.trim() ? dto.textoespecifico.trim() : null;
     if (dto.fechaDesde !== undefined) service.fechaDesde = dto.fechaDesde || '2000-01-01';
     if (dto.fechaHasta !== undefined) service.fechaHasta = dto.fechaHasta || '2099-12-31';
     if (dto.sinfechadefinitiva !== undefined) service.sinfechadefinitiva = dto.sinfechadefinitiva;
-    if (dto.textosinfechadefinitiva !== undefined) service.textosinfechadefinitiva = dto.textosinfechadefinitiva || null;
+    if (dto.textosinfechadefinitiva !== undefined)
+      service.textosinfechadefinitiva = dto.textosinfechadefinitiva?.trim()
+        ? dto.textosinfechadefinitiva.trim()
+        : null;
     if (dto.sinpreciodefinitivo !== undefined) service.sinpreciodefinitivo = dto.sinpreciodefinitivo;
-    if (dto.textosinpreciodefinitivo !== undefined) service.textosinpreciodefinitivo = dto.textosinpreciodefinitivo || null;
+    if (dto.textosinpreciodefinitivo !== undefined)
+      service.textosinpreciodefinitivo = dto.textosinpreciodefinitivo?.trim()
+        ? dto.textosinpreciodefinitivo.trim()
+        : null;
 
     const saved = await this.serviceRepo.save(service);
     await this.syncAgentConfigServices();
