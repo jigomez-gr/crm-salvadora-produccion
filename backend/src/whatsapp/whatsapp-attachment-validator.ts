@@ -6,7 +6,7 @@ import * as path from 'path';
 import { MediaType } from '../common/entities/message.entity';
 import { WhatsappMediaInput } from './providers/whatsapp-provider.interface';
 
-const DEFAULT_MAX_ATTACHMENT_MB = 16;
+const DEFAULT_MAX_ATTACHMENT_MB = 101;
 
 export interface RawUploadedFile {
   originalname: string;
@@ -38,7 +38,7 @@ const MIME_XLSX =
 
 /**
  * Resolves the CRM's internal maximum attachment size in bytes from
- * `process.env.WHATSAPP_MAX_ATTACHMENT_MB` (default: 16 MB).
+ * `process.env.WHATSAPP_MAX_ATTACHMENT_MB` (default: 101 MB).
  */
 export function getWhatsappMaxAttachmentBytes(): {
   maxMb: number;

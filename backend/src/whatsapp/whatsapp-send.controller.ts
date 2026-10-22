@@ -81,7 +81,11 @@ export class WhatsappSendController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 101 * 1024 * 1024 },
+    }),
+  )
   async adminSend(
     @Body() body: WhatsappMultipartBody,
     @UploadedFile() file: RawUploadedFile | undefined,
@@ -108,7 +112,11 @@ export class WhatsappSendController {
    */
   @Post('cli/send')
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 101 * 1024 * 1024 },
+    }),
+  )
   async cliSend(
     @Headers('x-whatsapp-cli-token') cliToken: string | string[] | undefined,
     @Body() body: WhatsappMultipartBody,

@@ -2322,6 +2322,13 @@ function WhatsappAdminSenderCard() {
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
+    if (file && file.size > 101 * 1024 * 1024) {
+      setErrorMsg("El archivo no puede superar los 101 MB.");
+      toast.error("El archivo no puede superar los 101 MB.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      setSelectedFile(null);
+      return;
+    }
     setSelectedFile(file);
     setErrorMsg("");
     setResult(null);
@@ -2456,7 +2463,7 @@ function WhatsappAdminSenderCard() {
 
         <div>
           <label className="mb-1 block text-xs font-medium text-neutral-700">
-            Archivo adjunto (opcional · máx. 1 archivo: .pdf, .docx, .xlsx, .txt, .mp3, .mp4)
+            Archivo adjunto (opcional · máx. 101 MB: .pdf, .docx, .xlsx, .txt, .mp3, .mp4)
           </label>
           <div className="flex flex-wrap items-center gap-2">
             <input

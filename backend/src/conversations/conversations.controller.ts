@@ -47,8 +47,8 @@ import { EmailService } from '../email/email.service';
 import { ContactsService } from '../contacts/contacts.service';
 
 // Cap the wait when streaming media from YCloud so a slow/hung upstream can't
-// pin a request open. WhatsApp media is small (≤16 MB; 100 MB for documents).
-const MEDIA_FETCH_TIMEOUT_MS = 20_000;
+// pin a request open. WhatsApp media limit is 101 MB for documents and media.
+const MEDIA_FETCH_TIMEOUT_MS = 60_000;
 
 // Inbox pagination defaults (the sidebar shows a page of threads at a time).
 const DEFAULT_LIMIT = 30;
@@ -232,7 +232,11 @@ export class ConversationsController {
    * Operator sends a manual reply on a thread (WhatsApp with optional attachment, or Email).
    */
   @Post(':threadId/messages')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 101 * 1024 * 1024 },
+    }),
+  )
   async sendManual(
     @Param('threadId') threadId: string,
     @Body() dto: SendManualMessageDto,

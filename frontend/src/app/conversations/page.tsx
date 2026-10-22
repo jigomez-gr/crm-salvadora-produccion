@@ -1033,8 +1033,8 @@ function ConversationsPageInner() {
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        if (file.size > 16 * 1024 * 1024) {
-                          toast.error("El archivo no puede superar los 16 MB");
+                        if (file.size > 101 * 1024 * 1024) {
+                          toast.error("El archivo no puede superar los 101 MB");
                           return;
                         }
                         setSelectedFile(file);
@@ -1075,7 +1075,7 @@ function ConversationsPageInner() {
                 </div>
                 <p className="mt-1 text-[10px] text-neutral-400">
                   Los mensajes manuales solo se entregan dentro de la ventana de
-                  24 h de WhatsApp. Formatos admitidos: imágenes, PDF, Word, Excel, audio, vídeo y texto (máx. 16 MB).
+                  24 h de WhatsApp. Formatos admitidos: imágenes, PDF, Word, Excel, audio, vídeo y texto (máx. 101 MB).
                 </p>
               </div>
             )}

@@ -135,7 +135,7 @@ describe('WhatsApp Complete Suite — Provider Selector, Evolution API v2.3.7, Q
       ...originalEnv,
       EVOLUTION_WEBHOOK_BASE_URL: 'http://crm-backend-internal:3001',
       WHATSAPP_CLI_TOKEN: 'super-secret-cli-token-2026',
-      WHATSAPP_MAX_ATTACHMENT_MB: '16',
+      WHATSAPP_MAX_ATTACHMENT_MB: '101',
     };
 
     fetchMock = jest.fn();
