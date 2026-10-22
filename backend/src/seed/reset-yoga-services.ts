@@ -80,11 +80,11 @@ async function resetServices() {
       },
       {
         name: 'Baño de Gong y Meditación Sonora',
-        description: 'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 31 de Octubre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€. Pago en el centro. Se aceptan reservas provisionales.',
+        description: 'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 21 de Noviembre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€. Pago en el centro.',
         serviceType: 'event',
-        eventDatesText: 'Sábado 31 de Octubre de 2026 (18:00 a 20:00)',
-        eventStartDate: new Date('2026-10-31T17:00:00.000Z'),
-        eventEndDate: new Date('2026-10-31T19:00:00.000Z'),
+        eventDatesText: 'Sábado 21 de Noviembre de 2026 (18:00 a 20:00)',
+        eventStartDate: new Date('2026-11-21T17:00:00.000Z'),
+        eventEndDate: new Date('2026-11-21T19:00:00.000Z'),
         durationMinutes: 120,
         price: '16.00',
         maxCapacity: 30,
@@ -271,7 +271,7 @@ Servicios y Actividades principales del centro:
    - Individual, presencial u online (videollamada). Se coordina horario específico.
 
 4. Baños de Gong y Meditación Sonora (16€ / 2 horas):
-   - Un sábado al mes (el último sábado de cada mes). Próxima sesión: Sábado 31 de Octubre de 2026 (18:00 a 20:00). Aforo: 30 personas. Se aceptan reservas provisionales.
+   - Un sábado al mes (el último sábado de cada mes). Próxima sesión: Sábado 21 de Noviembre de 2026 (18:00 a 20:00). Aforo: 30 personas.
 
 5. Puja de Gongs (El precio se determinará en función de las características del viaje y alojamiento / 11 horas de sonido durante toda la noche):
    - dos encuentros  la primera puja es proximamente y la segunda en marzo 2027. Aforo: 30 personas. Se aceptan reservas provisionales.

@@ -161,10 +161,15 @@ export class ServicesService implements OnModuleInit {
           WHERE "name" ILIKE '%puja%';
 
           UPDATE services SET
-            "description" = 'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 31 de Octubre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€. Pago en el centro. Se aceptan reservas provisionales.',
-            "eventDatesText" = 'Sábado 31 de Octubre de 2026 (18:00 a 20:00)',
-            "eventStartDate" = '2026-10-31T17:00:00.000Z',
-            "eventEndDate" = '2026-10-31T19:00:00.000Z'
+            "description" = 'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 21 de Noviembre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€. Pago en el centro.',
+            "eventDatesText" = 'Sábado 21 de Noviembre de 2026 (18:00 a 20:00)',
+            "eventStartDate" = '2026-11-21T17:00:00.000Z',
+            "eventEndDate" = '2026-11-21T19:00:00.000Z',
+            "sinfechadefinitiva" = 'N',
+            "textosinfechadefinitiva" = NULL,
+            "flyerParticularUrl" = '/flyers/banogongparticular.jpg',
+            "flyerParticularPath" = 'public/flyers/banogongparticular.jpg',
+            "textoespecifico" = 'Próxima sesión confirmada: Sábado 21 de Noviembre de 2026 de 18:00 a 20:00 h.'
           WHERE ("name" ILIKE '%baño de gong%' OR "name" ILIKE '%meditación sonora%');
         `);
       } catch (colErr) {
@@ -389,10 +394,10 @@ export class ServicesService implements OnModuleInit {
         where: [{ name: ILike('%baño de gong%') }, { name: ILike('%meditación sonora%') }],
       });
       const gongDesc =
-        'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 31 de Octubre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€. Pago en el centro. Se aceptan reservas provisionales.';
-      const gongDateText = 'Sábado 31 de Octubre de 2026 (18:00 a 20:00)';
-      const gongStart = new Date('2026-10-31T17:00:00.000Z');
-      const gongEnd = new Date('2026-10-31T19:00:00.000Z');
+        'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 21 de Noviembre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€. Pago en el centro.';
+      const gongDateText = 'Sábado 21 de Noviembre de 2026 (18:00 a 20:00)';
+      const gongStart = new Date('2026-11-21T17:00:00.000Z');
+      const gongEnd = new Date('2026-11-21T19:00:00.000Z');
       if (!gongSvc) {
         gongSvc = await this.serviceRepo.save(
           this.serviceRepo.create({
@@ -411,6 +416,10 @@ export class ServicesService implements OnModuleInit {
             allowedModalities: ['in_person'],
             reminderNotes:
               'Llevar ropa cómoda de abrigo, calcetines cálidos y, si lo deseas, tu propia manta o cojín para disfrutar de la experiencia sonora con el máximo confort.',
+            flyerParticularUrl: '/flyers/banogongparticular.jpg',
+            flyerParticularPath: 'public/flyers/banogongparticular.jpg',
+            sinfechadefinitiva: 'N',
+            textoespecifico: 'Próxima sesión confirmada: Sábado 21 de Noviembre de 2026 de 18:00 a 20:00 h.',
             isActive: true,
           }),
         );
@@ -419,6 +428,15 @@ export class ServicesService implements OnModuleInit {
         gongSvc.eventDatesText = gongDateText;
         gongSvc.eventStartDate = gongStart;
         gongSvc.eventEndDate = gongEnd;
+        gongSvc.sinfechadefinitiva = 'N';
+        gongSvc.textosinfechadefinitiva = null;
+        if (!gongSvc.flyerParticularUrl) {
+          gongSvc.flyerParticularUrl = '/flyers/banogongparticular.jpg';
+          gongSvc.flyerParticularPath = 'public/flyers/banogongparticular.jpg';
+        }
+        if (!gongSvc.textoespecifico) {
+          gongSvc.textoespecifico = 'Próxima sesión confirmada: Sábado 21 de Noviembre de 2026 de 18:00 a 20:00 h.';
+        }
         gongSvc.managerId = manager.id;
         gongSvc.reminderNotes =
           gongSvc.reminderNotes ||
@@ -730,11 +748,15 @@ export class ServicesService implements OnModuleInit {
             changed = true;
             return {
               ...s,
-              eventDatesText: 'Sábado 31 de Octubre de 2026 (18:00 a 20:00)',
-              eventStartDate: '2026-10-31T17:00:00.000Z',
-              eventEndDate: '2026-10-31T19:00:00.000Z',
+              eventDatesText: 'Sábado 21 de Noviembre de 2026 (18:00 a 20:00)',
+              eventStartDate: '2026-11-21T17:00:00.000Z',
+              eventEndDate: '2026-11-21T19:00:00.000Z',
+              sinfechadefinitiva: 'N',
+              textosinfechadefinitiva: null,
+              flyerParticularUrl: '/flyers/banogongparticular.jpg',
+              textoespecifico: 'Próxima sesión confirmada: Sábado 21 de Noviembre de 2026 de 18:00 a 20:00 h.',
               description:
-                'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 31 de Octubre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€. Pago en el centro. Se aceptan reservas provisionales.',
+                'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 21 de Noviembre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€. Pago en el centro.',
             };
           }
           if (/constelar|asunto propio/i.test(s.name || '')) {
@@ -813,10 +835,10 @@ export class ServicesService implements OnModuleInit {
           );
           changed = true;
         }
-        if (agentConfig.customInstructions && /26 de Septiembre/i.test(agentConfig.customInstructions)) {
+        if (agentConfig.customInstructions && /(26 de Septiembre|31 de Octubre)/i.test(agentConfig.customInstructions)) {
           agentConfig.customInstructions = agentConfig.customInstructions.replace(
-            /S[áa]bado\s*26\s*de\s*Septiembre\s*de\s*2026[^.\n]*/gi,
-            'Sábado 31 de Octubre de 2026, 18:00 a 20:00 (último sábado de cada mes). Se aceptan reservas provisionales',
+            /S[áa]bado\s*(26\s*de\s*Septiembre|31\s*de\s*Octubre)\s*de\s*2026[^.\n]*/gi,
+            'Sábado 21 de Noviembre de 2026, 18:00 a 20:00 (fecha confirmada)',
           );
           changed = true;
         }
@@ -2219,6 +2241,10 @@ export class ServicesService implements OnModuleInit {
           candidates.push(path.resolve(dir, 'itinerario8.mp4'));
           candidates.push(path.resolve(dir, 'ayuno.jpeg'));
         }
+        if (service.name.toLowerCase().includes('gong')) {
+          candidates.push(path.resolve(dir, 'banogongparticular.jpg'));
+          candidates.push(path.resolve(dir, 'banogong_particular.jpg'));
+        }
       }
 
       for (const cand of candidates) {
@@ -2266,13 +2292,13 @@ export class ServicesService implements OnModuleInit {
             res.redirect(302, service.flyerParticularUrl);
             return;
           }
-          if (service.flyerParticularUrl && service.flyerParticularUrl.startsWith('/')) {
+          if (service.flyerParticularUrl && service.flyerParticularUrl.startsWith('/') && !service.flyerParticularUrl.includes('/api/services/')) {
             res.redirect(302, `https://salvadora.jigretera.com${service.flyerParticularUrl}`);
             return;
           }
         }
         if (service.name.toLowerCase().includes('gong')) {
-          res.redirect(302, 'https://salvadora.jigretera.com/flyers/banogong_particular.jpg');
+          res.redirect(302, 'https://salvadora.jigretera.com/flyers/banogongparticular.jpg');
           return;
         }
         if (service.name.toLowerCase().includes('ayuno')) {
