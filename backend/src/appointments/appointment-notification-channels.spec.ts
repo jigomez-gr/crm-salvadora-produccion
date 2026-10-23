@@ -307,7 +307,7 @@ describe('Appointments Multi-Channel Notifications (Service Level)', () => {
       endsAt: new Date('2026-09-25T11:00:00.000Z'),
       status: AppointmentStatus.SCHEDULED,
       modality: 'virtual',
-      calMeetingUrl: 'https://meet.jit.si/salvadora-terapia-gestalt-test1234',
+      calMeetingUrl: 'https://app.cal.com/video/salvadora-terapia-gestalt-test1234',
       notes: 'Sesión online solicitada',
     };
 
@@ -315,17 +315,17 @@ describe('Appointments Multi-Channel Notifications (Service Level)', () => {
 
     expect(emailServiceMock.sendNotification).toHaveBeenCalledTimes(1);
     const [, , , emailHtml, chatText] = emailServiceMock.sendNotification.mock.calls[0];
-    expect(emailHtml).toContain('https://meet.jit.si/salvadora-terapia-gestalt-test1234');
-    expect(emailHtml).toContain('🎥 Acceder a la Videollamada');
-    expect(chatText).toContain('https://meet.jit.si/salvadora-terapia-gestalt-test1234');
+    expect(emailHtml).toContain('https://app.cal.com/video/salvadora-terapia-gestalt-test1234');
+    expect(emailHtml).toContain('🎥 Acceder a la Videollamada (Cal.com)');
+    expect(chatText).toContain('https://app.cal.com/video/salvadora-terapia-gestalt-test1234');
 
     expect(ycloudClientMock.sendTextMessage).toHaveBeenCalledTimes(1);
     const [, , whatsappBody] = ycloudClientMock.sendTextMessage.mock.calls[0];
-    expect(whatsappBody).toContain('https://meet.jit.si/salvadora-terapia-gestalt-test1234');
+    expect(whatsappBody).toContain('https://app.cal.com/video/salvadora-terapia-gestalt-test1234');
 
     expect(zadarmaSmsMock.sendSms).toHaveBeenCalledTimes(1);
     const smsPayload = zadarmaSmsMock.sendSms.mock.calls[0][0];
-    expect(smsPayload.message).toContain('https://meet.jit.si/salvadora-terapia-gestalt-test1234');
+    expect(smsPayload.message).toContain('https://app.cal.com/video/salvadora-terapia-gestalt-test1234');
   });
 
   it('does NOT include meeting URL in email and SMS for pending_approval virtual appointment, but notifies therapist with details', async () => {
@@ -350,7 +350,7 @@ describe('Appointments Multi-Channel Notifications (Service Level)', () => {
       endsAt: new Date('2026-09-21T11:00:00.000Z'),
       status: AppointmentStatus.PENDING_APPROVAL,
       modality: 'virtual',
-      calMeetingUrl: 'https://meet.jit.si/salvadora-terapia-gestalt-provisional',
+      calMeetingUrl: 'https://app.cal.com/video/salvadora-terapia-gestalt-provisional',
       notes: 'Sesión online por videollamada',
     };
 
@@ -359,13 +359,13 @@ describe('Appointments Multi-Channel Notifications (Service Level)', () => {
     expect(emailServiceMock.sendNotification).toHaveBeenCalledTimes(1);
     const [, , , emailHtml] = emailServiceMock.sendNotification.mock.calls[0];
     // Must NOT leak the provisional meeting link to the student
-    expect(emailHtml).not.toContain('https://meet.jit.si/salvadora-terapia-gestalt-provisional');
+    expect(emailHtml).not.toContain('https://app.cal.com/video/salvadora-terapia-gestalt-provisional');
     expect(emailHtml).toContain('Online (Videollamada)');
     expect(emailHtml).toContain('El enlace de acceso para unirte a la videollamada te será facilitado');
 
     expect(zadarmaSmsMock.sendSms).toHaveBeenCalledTimes(1);
     const smsPayload = zadarmaSmsMock.sendSms.mock.calls[0][0];
-    expect(smsPayload.message).not.toContain('https://meet.jit.si/salvadora-terapia-gestalt-provisional');
+    expect(smsPayload.message).not.toContain('https://app.cal.com/video/salvadora-terapia-gestalt-provisional');
 
     // Now test that therapist receives the notification with meeting link
     emailServiceMock.sendNotification.mockClear();
@@ -376,7 +376,7 @@ describe('Appointments Multi-Channel Notifications (Service Level)', () => {
     expect(therapistEmail).toBe('salvadoraconesa@gmail.com');
     expect(therapistName).toBe('Salvadora Conesa Martinez');
     expect(subject).toContain('Nueva solicitud de cita pendiente de aprobación');
-    expect(therapistHtml).toContain('https://meet.jit.si/salvadora-terapia-gestalt-provisional');
+    expect(therapistHtml).toContain('https://app.cal.com/video/salvadora-terapia-gestalt-provisional');
     expect(therapistHtml).toContain('Maria Garcia');
   });
 

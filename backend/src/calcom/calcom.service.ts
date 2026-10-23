@@ -40,8 +40,8 @@ export class CalcomService implements OnModuleInit {
   // Default credentials provided for Cal.com v2 integration
   public static readonly DEFAULT_API_KEY = 'cal_live_52d03181802548eb1270a90a738ca3ba';
   public static readonly DEFAULT_BASE_URL = 'https://api.cal.com/v2';
-  public static readonly DEFAULT_EVENT_TYPE_ID = '4252426';
-  public static readonly CAL_API_VERSION = '2024-08-13';
+  public static readonly DEFAULT_EVENT_TYPE_ID = '7581584';
+  public static readonly CAL_API_VERSION = '2024-06-14';
 
   constructor(
     @InjectRepository(CalcomAccount)
@@ -176,7 +176,7 @@ export class CalcomService implements OnModuleInit {
         : `client-${(params.contact.phone || 'crm').replace(/[^0-9]/g, '')}@salvadoraconesayoga.es`;
 
     const generatedUid = `v-${randomBytes(6).toString('hex')}`;
-    const fallbackMeetingUrl = `https://meet.jit.si/salvadora-sesion-${generatedUid}`;
+    const fallbackMeetingUrl = `https://app.cal.com/video/${generatedUid}`;
 
     if (!account.enabled || !apiKey) {
       this.logger.log(

@@ -190,7 +190,8 @@ export class ZadarmaSmsService implements OnModuleInit {
    * Sends an SMS via Zadarma API and persists the log in PostgreSQL.
    */
   async sendSms(options: SendSmsOptions): Promise<SendSmsResult> {
-    const cleanNumber = options.number.replace(/\s+/g, '').replace(/^[+]/, '');
+    const rawNum = options.number || (options as any).to || '';
+    const cleanNumber = rawNum.replace(/\s+/g, '').replace(/^[+]/, '');
     const { apiKey, apiSecret, senderId, enabled } = await this.getCredentials();
 
     if (!enabled) {
@@ -214,10 +215,12 @@ export class ZadarmaSmsService implements OnModuleInit {
     }
 
     const methodPath = '/v1/sms/send/';
-    // Spanish telecommunication regulations and Zadarma destinations prohibit raw web links in SMS.
-    // Sanitize any URL from outgoing SMS so carriers do not reject the message, keeping anonymized virtual room codes.
-    const sanitizedMessage = options.message
-      .replace(/https?:\/\/meet\.jit\.si\/([^\s.,:;)]+)/gi, 'sala virtual: $1 (acceso directo en tu email/whatsapp)')
+    // Spanish telecommunication regulations and Zadarma destinations prohibit web links and domain extensions in SMS.
+    // Sanitize any URL and .com domains from outgoing SMS so carriers do not reject the message.
+    const sanitizedMessage = (options.message || '')
+      .replace(/https?:\/\/(?:app\.)?cal\.com\/video\/([^\s.,:;)]+)/gi, 'videollamada Cal: sala $1 (acceso directo en tu email/whatsapp)')
+      .replace(/https?:\/\/meet\.jit\.si\/([^\s.,:;)]+)/gi, 'videollamada Cal: sala $1 (acceso directo en tu email/whatsapp)')
+      .replace(/cal\.com/gi, 'Cal')
       .replace(/https?:\/\/\S+/gi, '(enlace enviado por email y whatsapp)');
     const params: Record<string, string> = {
       message: sanitizedMessage,

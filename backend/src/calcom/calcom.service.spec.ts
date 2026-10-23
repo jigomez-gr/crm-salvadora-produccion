@@ -1,4 +1,4 @@
-﻿import { Test, TestingModule } from '@nestjs/testing';
+import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { CalcomService } from './calcom.service';
 import { CalcomAccount } from '../common/entities/calcom-account.entity';
@@ -81,7 +81,7 @@ describe('CalcomService (v2 integration)', () => {
     const [calledUrl, calledOpts] = fetchSpy.mock.calls[0] as [string, any];
     expect(calledUrl).toBe('https://api.cal.com/v2/bookings');
     expect(calledOpts.method).toBe('POST');
-    expect(calledOpts.headers['cal-api-version']).toBe('2024-08-13');
+    expect(calledOpts.headers['cal-api-version']).toBe(CalcomService.CAL_API_VERSION);
     expect(calledOpts.headers['Authorization']).toBe('Bearer cal_live_test123');
 
     const body = JSON.parse(calledOpts.body);
@@ -110,7 +110,7 @@ describe('CalcomService (v2 integration)', () => {
     const [calledUrl, calledOpts] = fetchSpy.mock.calls[0] as [string, any];
     expect(calledUrl).toBe('https://api.cal.com/v2/bookings/uid-xyz-789/cancel');
     expect(calledOpts.method).toBe('POST');
-    expect(calledOpts.headers['cal-api-version']).toBe('2024-08-13');
+    expect(calledOpts.headers['cal-api-version']).toBe(CalcomService.CAL_API_VERSION);
   });
 
   it('tests connection via GET /v2/me', async () => {
@@ -140,6 +140,6 @@ describe('CalcomService (v2 integration)', () => {
 
     const [calledUrl, calledOpts] = fetchSpy.mock.calls[0] as [string, any];
     expect(calledUrl).toBe('https://api.cal.com/v2/me');
-    expect(calledOpts.headers['cal-api-version']).toBe('2024-08-13');
+    expect(calledOpts.headers['cal-api-version']).toBe(CalcomService.CAL_API_VERSION);
   });
 });

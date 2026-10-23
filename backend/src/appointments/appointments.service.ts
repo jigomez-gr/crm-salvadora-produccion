@@ -61,11 +61,16 @@ import * as crypto from 'crypto';
 export function getAnonymizedMeetingUrl(rawUrl?: string | null): string {
   if (!rawUrl || typeof rawUrl !== 'string' || !rawUrl.trim()) {
     const uid = crypto.randomBytes(6).toString('hex');
-    return `https://meet.jit.si/salvadora-sesion-v-${uid}`;
+    return `https://app.cal.com/video/v-${uid}`;
   }
-  const trimmed = rawUrl.trim();
+  let trimmed = rawUrl.trim();
+  if (trimmed.includes('meet.jit.si')) {
+    const parts = trimmed.split('/');
+    const last = parts[parts.length - 1];
+    return `https://app.cal.com/video/${last}`;
+  }
   if (/\(|\)/.test(trimmed)) {
-    return trimmed.replace(/[()]/g, '');
+    trimmed = trimmed.replace(/[()]/g, '');
   }
   return trimmed;
 }
@@ -1591,7 +1596,7 @@ export class AppointmentsService implements OnModuleInit {
         if (appt.status !== AppointmentStatus.PENDING_APPROVAL) {
           if (!appt.calMeetingUrl) {
             const uid = crypto.randomBytes(6).toString('hex');
-            appt.calMeetingUrl = `https://meet.jit.si/salvadora-sesion-v-${uid}`;
+            appt.calMeetingUrl = `https://app.cal.com/video/v-${uid}`;
             if (typeof this.appointmentsRepo?.save === 'function') {
               await this.appointmentsRepo.save(appt).catch(() => null);
             }
@@ -1629,9 +1634,9 @@ export class AppointmentsService implements OnModuleInit {
           ${
             appt.calMeetingUrl
               ? `<div style="margin: 12px 0 8px 0;">
-                   <a href="${appt.calMeetingUrl}" style="background-color: #2563eb; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 14px;">🎥 Acceder a la Videollamada</a>
+                   <a href="${appt.calMeetingUrl}" style="background-color: #2563eb; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 14px;">🎥 Acceder a la Videollamada (Cal.com)</a>
                  </div>
-                 <p style="margin: 4px 0; font-size: 12px; color: #6b7280;">Enlace de acceso: <a href="${appt.calMeetingUrl}" style="color: #2563eb;">${appt.calMeetingUrl}</a></p>
+                 <p style="margin: 4px 0; font-size: 12px; color: #6b7280;">Enlace de acceso Cal.com: <a href="${appt.calMeetingUrl}" style="color: #2563eb;">${appt.calMeetingUrl}</a></p>
                  <p style="margin: 4px 0; font-size: 12px; color: #6b7280;">(Por favor, conéctate 5 minutos antes con cámara y micrófono activados).</p>`
               : ''
           }
@@ -1785,7 +1790,7 @@ export class AppointmentsService implements OnModuleInit {
           : '';
         const effectiveMeetingLink = getAnonymizedMeetingUrl(appt.calMeetingUrl);
         const locationWhatsApp = isVirtual
-          ? `Online por Videollamada${effectiveMeetingLink ? `\n🔗 *Enlace videollamada:* ${effectiveMeetingLink}` : ''}`
+          ? `Online por Videollamada (Cal.com)${effectiveMeetingLink ? `\n🔗 *Enlace videollamada Cal.com:* ${effectiveMeetingLink}` : ''}`
           : 'Presencial en Club Social Parque Granada (C/ Holanda 1, Fuenlabrada)';
 
         const priceWhatsApp = isSinPrecio
@@ -2055,16 +2060,18 @@ export class AppointmentsService implements OnModuleInit {
         if (isProvisional) {
           smsText = `Hola ${contact.name || ''}, cambio registrado: tu plaza prioritaria de ${appt.service} es para el ${formattedDate} (fecha provisional). Centro Salvadora.`;
         } else {
+          const calCode = (appt.calMeetingUrl || '').split('/').pop() || 'sala';
           smsText = isVirtual
-            ? `Hola ${contact.name || ''}, confirmamos el cambio de tu cita online de ${appt.service}: tu nuevo horario es el ${formattedDate} a las ${formattedStartTime}. Enlace videollamada: ${getAnonymizedMeetingUrl(appt.calMeetingUrl)}. Centro Salvadora.`
+            ? `Hola ${contact.name || ''}, confirmamos el cambio de tu cita online de ${appt.service}: tu nuevo horario es el ${formattedDate} a las ${formattedStartTime}. Videollamada Cal.com (sala ${calCode}, acceso directo en tu email y whatsapp). Centro Salvadora.`
             : `Hola ${contact.name || ''}, confirmamos el cambio de tu cita para ${appt.service}: tu nuevo horario es el ${formattedDate} a las ${formattedStartTime}. Centro de Yoga Salvadora Conesa.`;
         }
       } else if (decision === 'accepted') {
         if (isProvisional) {
           smsText = `Hola ${contact.name || ''}, tu plaza prioritaria para ${appt.service} (${formattedDate}) ha quedado reservada. Fecha provisional: te avisaremos al confirmarse la fecha definitiva. Centro Salvadora.`;
         } else {
+          const calCode = (appt.calMeetingUrl || '').split('/').pop() || 'sala';
           smsText = isVirtual
-            ? `Hola ${contact.name || ''}, confirmamos tu cita online de ${appt.service} el ${formattedDate} a las ${formattedStartTime}. Enlace videollamada: ${getAnonymizedMeetingUrl(appt.calMeetingUrl)}. Centro Salvadora.`
+            ? `Hola ${contact.name || ''}, confirmamos tu cita online de ${appt.service} el ${formattedDate} a las ${formattedStartTime}. Videollamada Cal.com (sala ${calCode}, acceso directo en tu email y whatsapp). Centro Salvadora.`
             : `Hola ${contact.name || ''}, tu cita para ${appt.service} el ${formattedDate} a las ${formattedStartTime} ha sido confirmada en Centro de Yoga Salvadora Conesa. ¡Te esperamos!`;
         }
       } else if (decision === 'reschedule_requested') {
