@@ -325,7 +325,8 @@ describe('Appointments Multi-Channel Notifications (Service Level)', () => {
 
     expect(zadarmaSmsMock.sendSms).toHaveBeenCalledTimes(1);
     const smsPayload = zadarmaSmsMock.sendSms.mock.calls[0][0];
-    expect(smsPayload.message).toContain('https://app.cal.com/video/salvadora-terapia-gestalt-test1234');
+    expect(smsPayload.message).toContain('salvadora-terapia-gestalt-test1234');
+    expect(smsPayload.message).toContain('Videollamada Cal.com');
   });
 
   it('does NOT include meeting URL in email and SMS for pending_approval virtual appointment, but notifies therapist with details', async () => {
