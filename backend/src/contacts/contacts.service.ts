@@ -178,6 +178,7 @@ export class ContactsService {
         ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "studentEnrolledAt" timestamptz;
         ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "bloqueado" character varying(1) DEFAULT 'N';
         ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "emailerroneo" character varying(1) NOT NULL DEFAULT 'N';
+        ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "contactadowassap" character varying(1) NOT NULL DEFAULT 'N';
         CREATE TABLE IF NOT EXISTS "contact_identity_changes" (
           "id" uuid NOT NULL DEFAULT gen_random_uuid(),
           "contactId" uuid REFERENCES contacts(id) ON DELETE CASCADE,
@@ -555,6 +556,7 @@ export class ContactsService {
         email: extra?.email || null,
         tags: extra?.tags ?? (isWhatsapp ? ['lead_whatsapp', 'whatsapp'] : ['lead_landing_web']),
         source: extra?.source ?? (isWhatsapp ? 'whatsapp' : 'landing'),
+        contactadowassap: isWhatsapp ? 'S' : 'N',
         pipelineStage: PipelineStage.NEW,
         boardPosition: Date.now(),
       });
@@ -572,6 +574,10 @@ export class ContactsService {
       ) {
         contact.source = 'whatsapp';
         contact.tags = ['lead_whatsapp', 'whatsapp'];
+        contact.contactadowassap = 'S';
+        changed = true;
+      } else if (isWhatsapp && contact.contactadowassap !== 'S') {
+        contact.contactadowassap = 'S';
         changed = true;
       }
       if (name && (contact.name === contact.phone || !contact.name || contact.name === normalized)) {
@@ -612,6 +618,7 @@ export class ContactsService {
       source: dto.source ?? 'manual',
       bloqueado: dto.bloqueado?.toUpperCase() === 'S' ? 'S' : 'N',
       emailerroneo: dto.emailerroneo?.toUpperCase() === 'S' ? 'S' : 'N',
+      contactadowassap: dto.contactadowassap?.toUpperCase() === 'S' ? 'S' : 'N',
       // New contacts land at the top of their column (newest first).
       boardPosition: Date.now(),
     });
@@ -640,11 +647,12 @@ export class ContactsService {
       'studentSchedule',
       'bloqueado',
       'emailerroneo',
+      'contactadowassap',
     ] as const;
     const target = contact as unknown as Record<string, unknown>;
     for (const key of simpleFields) {
       if (dto[key] !== undefined) {
-        if (key === 'bloqueado' || key === 'emailerroneo') {
+        if (key === 'bloqueado' || key === 'emailerroneo' || key === 'contactadowassap') {
           target[key] = dto[key]?.toUpperCase() === 'S' ? 'S' : 'N';
         } else {
           target[key] = dto[key];

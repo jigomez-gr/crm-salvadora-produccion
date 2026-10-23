@@ -332,6 +332,13 @@ export class WhatsappAdminSendService {
     }
 
     await this.messagesService.markRead(threadId);
+    if (contact.contactadowassap !== 'S') {
+      try {
+        await this.contactsService.update(contact.id, { contactadowassap: 'S' });
+      } catch (err) {
+        this.logger.warn(`Could not set contactadowassap for contact ${contact.id}: ${err}`);
+      }
+    }
     this.events.emit('conversation.updated', { threadId });
 
     const primaryProviderMessageId = providerMessageIds[0] ?? null;

@@ -158,6 +158,7 @@ export interface Contact {
   // Consent / GDPR.
   bloqueado?: string;
   emailerroneo?: string;
+  contactadowassap?: string;
   optedOut: boolean;
   optedOutAt?: string | null;
   anonymizedAt?: string | null;

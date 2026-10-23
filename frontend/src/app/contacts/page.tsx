@@ -244,6 +244,8 @@ function ContactsPageInner() {
       isStudent: data.isStudent,
       studentModality: data.isStudent ? (data.studentModality || "1_clase_semanal") : null,
       bloqueado: data.bloqueado || "N",
+      emailerroneo: data.emailerroneo || "N",
+      contactadowassap: data.contactadowassap || "N",
     };
     if (editingContact) {
       await apiFetch(`/api/contacts/${editingContact.id}`, {
@@ -475,6 +477,17 @@ function ContactsPageInner() {
                       <Phone className="h-3.5 w-3.5 text-neutral-400" />
                       {c.phone}
                     </span>
+                    <div className="mt-1 flex items-center gap-1">
+                      {c.contactadowassap === "S" ? (
+                        <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200" title="Contactado por WhatsApp">
+                          WA: Sí
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium bg-neutral-100 text-neutral-600 border border-neutral-200" title="No contactado por WhatsApp">
+                          WA: No
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">

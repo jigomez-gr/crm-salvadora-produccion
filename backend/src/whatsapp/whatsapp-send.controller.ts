@@ -80,7 +80,7 @@ export class WhatsappSendController {
   @Post('admin/send')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.SERVICE_MANAGER)
   @UseInterceptors(
     FileInterceptor('file', {
       limits: { fileSize: 101 * 1024 * 1024 },

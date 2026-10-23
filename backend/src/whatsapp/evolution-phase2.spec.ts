@@ -926,6 +926,7 @@ describe('WhatsApp Complete Suite — Provider Selector, Evolution API v2.3.7, Q
             id: `contact-${phone}`,
             name: 'Cliente',
             phone,
+          contactadowassap: 'S',
           })),
         } as any,
         runner,
@@ -1012,6 +1013,7 @@ describe('WhatsApp Complete Suite — Provider Selector, Evolution API v2.3.7, Q
           id: 'contact-manual-1',
           name: phone,
           phone,
+          contactadowassap: 'S',
         })),
       };
       eventEmitterMock = {

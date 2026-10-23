@@ -73,6 +73,11 @@ export class CreateContactDto {
   @IsString()
   @MaxLength(1)
   emailerroneo?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1)
+  contactadowassap?: string;
 }
 
 export class UpdateContactDto {
@@ -148,6 +153,11 @@ export class UpdateContactDto {
   @IsString()
   @MaxLength(1)
   emailerroneo?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1)
+  contactadowassap?: string;
 }
 
 export class ConvertToStudentDto {

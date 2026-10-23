@@ -106,6 +106,10 @@ export class Contact {
   @Column({ type: 'varchar', length: 1, default: 'N' })
   emailerroneo: string;
 
+  // WhatsApp contacted flag: 'S' = contacted via WhatsApp, 'N' = not contacted (default)
+  @Column({ type: 'varchar', length: 1, default: 'N' })
+  contactadowassap: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

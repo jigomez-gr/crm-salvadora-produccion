@@ -32,6 +32,7 @@ export interface ContactFormData {
   studentModality: string;
   bloqueado: string;
   emailerroneo: string;
+  contactadowassap: string;
 }
 
 export function toForm(c?: Partial<Contact>): ContactFormData {
@@ -51,6 +52,7 @@ export function toForm(c?: Partial<Contact>): ContactFormData {
     studentModality: c?.studentModality ?? "1_clase_semanal",
     bloqueado: c?.bloqueado === "S" ? "S" : "N",
     emailerroneo: c?.emailerroneo === "S" ? "S" : "N",
+    contactadowassap: c?.contactadowassap === "S" ? "S" : "N",
   };
 }
 
@@ -253,6 +255,28 @@ export function ContactModal({
               ⚠️ <strong>Atención:</strong> Este contacto tiene bloqueada la formalización de reservas hasta que valide su correo con un código OTP de 7 minutos.
             </p>
           )}
+        </div>
+        <div className={`rounded-lg border p-3 space-y-2 ${form.contactadowassap === "S" ? "border-emerald-300 bg-emerald-50/70" : "border-neutral-200 bg-neutral-50/70"}`}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-neutral-800">
+              Contactado por WhatsApp (contactadowassap)
+            </span>
+            <select
+              className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs font-medium focus:border-emerald-500 focus:outline-none"
+              value={form.contactadowassap}
+              onChange={(e) => setField("contactadowassap", e.target.value)}
+            >
+              <option value="N">N (No)</option>
+              <option value="S">S (Sí)</option>
+            </select>
+          </div>
+          <p className="text-[11px] leading-relaxed text-neutral-600">
+            {form.contactadowassap === "S" ? (
+              <span className="text-emerald-700 font-medium">✓ Registrado como contactado por WhatsApp.</span>
+            ) : (
+              <span>Indica si ya se ha contactado o conversado por WhatsApp con este número.</span>
+            )}
+          </p>
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-neutral-700">

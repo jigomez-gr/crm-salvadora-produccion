@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   History,
+  MessageSquare,
 } from "lucide-react";
 import Link from "next/link";
 import { apiFetch, ApiError, apiUrl } from "@/lib/api";
@@ -82,6 +83,12 @@ export default function ContactDetailPage({
   const [smsOpen, setSmsOpen] = useState(false);
   const [smsMessage, setSmsMessage] = useState("");
   const [smsSending, setSmsSending] = useState(false);
+
+  const [whatsappOpen, setWhatsappOpen] = useState(false);
+  const [whatsappMessage, setWhatsappMessage] = useState("");
+  const [whatsappFile, setWhatsappFile] = useState<File | null>(null);
+  const [whatsappSending, setWhatsappSending] = useState(false);
+  const [whatsappMarkAsContactado, setWhatsappMarkAsContactado] = useState(true);
 
   const [selectedDocAppt, setSelectedDocAppt] = useState<Appointment | null>(null);
   const [aiCropAppt, setAiCropAppt] = useState<Appointment | null>(null);
@@ -215,6 +222,74 @@ export default function ContactDetailPage({
       toast.error(err instanceof ApiError ? err.message : "Error enviando SMS.");
     } finally {
       setSmsSending(false);
+    }
+  }
+
+  async function handleToggleContactadowassap() {
+    if (!contact) return;
+    const newStatus = contact.contactadowassap === "S" ? "N" : "S";
+    setBusy(true);
+    try {
+      await apiFetch(`/api/contacts/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ contactadowassap: newStatus }),
+      });
+      await refresh();
+      toast.success(
+        newStatus === "S"
+          ? "✅ Contacto marcado como contactado por WhatsApp (S)."
+          : "ℹ️ Contacto marcado como NO contactado por WhatsApp (N)."
+      );
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Error al actualizar estado de WhatsApp.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSendWhatsapp(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    if (!contact?.phone) {
+      toast.error("El contacto no tiene número de teléfono.");
+      return;
+    }
+    if (!whatsappMessage.trim() && !whatsappFile) {
+      toast.error("Escribe un mensaje o adjunta un archivo para enviar.");
+      return;
+    }
+    setWhatsappSending(true);
+    try {
+      const formData = new FormData();
+      formData.append("to", contact.phone);
+      if (whatsappMessage.trim()) {
+        formData.append("message", whatsappMessage.trim());
+      }
+      if (whatsappFile) {
+        formData.append("file", whatsappFile);
+      }
+      await apiFetch("/api/whatsapp/admin/send", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (whatsappMarkAsContactado && contact.contactadowassap !== "S") {
+        await apiFetch(`/api/contacts/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ contactadowassap: "S" }),
+        }).catch(() => null);
+      }
+
+      await refresh();
+      setWhatsappOpen(false);
+      setWhatsappMessage("");
+      setWhatsappFile(null);
+      toast.success("Mensaje de WhatsApp enviado correctamente.");
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Error al enviar mensaje por WhatsApp."
+      );
+    } finally {
+      setWhatsappSending(false);
     }
   }
 
@@ -360,6 +435,8 @@ export default function ContactDetailPage({
       isStudent: data.isStudent,
       studentModality: data.isStudent ? (data.studentModality || "1_clase_semanal") : null,
       bloqueado: data.bloqueado || "N",
+      emailerroneo: data.emailerroneo || "N",
+      contactadowassap: data.contactadowassap || "N",
     };
     await apiFetch(`/api/contacts/${id}`, {
       method: "PATCH",
@@ -534,6 +611,15 @@ export default function ContactDetailPage({
                 🚫 Bloqueado (Restricción técnica)
               </Badge>
             )}
+            {contact.contactadowassap === "S" ? (
+              <Badge variant="success" className="bg-emerald-100 text-emerald-800 border-emerald-300 font-medium">
+                💬 WhatsApp: Sí
+              </Badge>
+            ) : (
+              <Badge variant="default" className="text-neutral-600 bg-neutral-100 border-neutral-200">
+                💬 WhatsApp: No
+              </Badge>
+            )}
             {contact.anonymizedAt && (
               <Badge variant="default">Anonimizado</Badge>
             )}
@@ -615,6 +701,21 @@ export default function ContactDetailPage({
             >
               <Phone className="h-3.5 w-3.5 text-[#800020]" />
               Enviar SMS
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+              disabled={!contact.phone}
+              title={
+                !contact.phone
+                  ? "Este contacto no tiene teléfono registrado"
+                  : "Enviar un mensaje de WhatsApp a este contacto"
+              }
+              onClick={() => setWhatsappOpen(true)}
+            >
+              <MessageSquare className="h-3.5 w-3.5 text-emerald-600" />
+              Enviar WhatsApp
             </Button>
             <Button
               variant="secondary"
@@ -727,12 +828,40 @@ export default function ContactDetailPage({
       )}
 
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-neutral-200 bg-white p-4">
-          <div className="flex items-center gap-2 text-xs font-medium text-neutral-500">
-            <Phone className="h-3.5 w-3.5" />
-            Teléfono
+        <div className="rounded-xl border border-neutral-200 bg-white p-4 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-medium text-neutral-500">
+                <Phone className="h-3.5 w-3.5" />
+                Teléfono
+              </div>
+              <button
+                type="button"
+                onClick={handleToggleContactadowassap}
+                disabled={busy}
+                title="Pulsa para cambiar si está contactado por WhatsApp o no"
+                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${
+                  contact.contactadowassap === "S"
+                    ? "bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200"
+                    : "bg-neutral-100 text-neutral-600 border-neutral-200 hover:bg-neutral-200"
+                }`}
+              >
+                WhatsApp: {contact.contactadowassap === "S" ? "Sí (S)" : "No (N)"}
+              </button>
+            </div>
+            <p className="mt-1 text-sm font-medium text-neutral-900">{contact.phone}</p>
           </div>
-          <p className="mt-1 text-sm text-neutral-900">{contact.phone}</p>
+          <div className="mt-3 flex items-center gap-2 pt-2 border-t border-neutral-100">
+            <Button
+              size="sm"
+              variant="secondary"
+              className="text-xs w-full justify-center border-emerald-300 text-emerald-800 hover:bg-emerald-50 py-1 h-8"
+              onClick={() => setWhatsappOpen(true)}
+            >
+              <MessageSquare className="h-3.5 w-3.5 text-emerald-600 mr-1" />
+              Enviar WhatsApp
+            </Button>
+          </div>
         </div>
         <div className="rounded-xl border border-neutral-200 bg-white p-4 flex flex-col justify-between">
           <div>
@@ -1139,6 +1268,115 @@ export default function ContactDetailPage({
             <Send className="h-3.5 w-3.5" />
             {smsSending ? "Enviando…" : "Enviar SMS"}
           </Button>
+        </div>
+      </Modal>
+
+      {/* Compose WhatsApp */}
+      <Modal
+        open={whatsappOpen}
+        onClose={() => setWhatsappOpen(false)}
+        title="Enviar WhatsApp"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-between text-sm text-neutral-600 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
+            <div>
+              <span className="text-xs text-neutral-500 block">Destinatario:</span>
+              <span className="font-semibold text-emerald-950">{contact.name} ({contact.phone})</span>
+            </div>
+            {contact.contactadowassap === "S" ? (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                Contactado: Sí
+              </span>
+            ) : (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-700">
+                Contactado: No
+              </span>
+            )}
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              Mensaje de WhatsApp
+            </label>
+            <Textarea
+              rows={4}
+              value={whatsappMessage}
+              onChange={(e) => setWhatsappMessage(e.target.value)}
+              placeholder="Escribe el mensaje de WhatsApp a enviar…"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              Adjunto opcional (imagen, PDF, documento o audio)
+            </label>
+            <input
+              type="file"
+              onChange={(e) => setWhatsappFile(e.target.files?.[0] || null)}
+              className="block w-full text-xs text-neutral-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
+            />
+            {whatsappFile && (
+              <div className="mt-1 flex items-center justify-between text-xs text-neutral-500 bg-neutral-50 p-1.5 rounded">
+                <span>📎 {whatsappFile.name} ({(whatsappFile.size / 1024).toFixed(1)} KB)</span>
+                <button
+                  type="button"
+                  onClick={() => setWhatsappFile(null)}
+                  className="text-red-500 hover:text-red-700 text-xs font-medium"
+                >
+                  Quitar
+                </button>
+              </div>
+            )}
+          </div>
+
+          <label className="flex items-center gap-2 cursor-pointer text-xs text-neutral-700 pt-1">
+            <input
+              type="checkbox"
+              checked={whatsappMarkAsContactado}
+              onChange={(e) => setWhatsappMarkAsContactado(e.target.checked)}
+              className="rounded border-neutral-300 text-emerald-600 focus:ring-emerald-500"
+            />
+            <span>Marcar automáticamente como <strong>Contactado por WhatsApp (S)</strong> al enviar</span>
+          </label>
+
+          <div className="rounded-lg bg-neutral-50 p-2 text-[11px] text-neutral-500 border border-neutral-200">
+            💡 Puedes enviar el mensaje directamente desde el CRM (usando la pasarela oficial de WhatsApp) o abrirlo en WhatsApp Web / Móvil.
+          </div>
+        </div>
+
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-neutral-100 pt-3">
+          <a
+            href={`https://wa.me/${contact.phone.replace(/[^0-9]/g, "")}${whatsappMessage.trim() ? `?text=${encodeURIComponent(whatsappMessage.trim())}` : ""}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={async () => {
+              if (whatsappMarkAsContactado && contact.contactadowassap !== "S") {
+                await apiFetch(`/api/contacts/${id}`, {
+                  method: "PATCH",
+                  body: JSON.stringify({ contactadowassap: "S" }),
+                }).catch(() => null);
+                await refresh();
+              }
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md transition-colors"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            Abrir en WhatsApp Web / App
+          </a>
+
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setWhatsappOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => handleSendWhatsapp()}
+              disabled={whatsappSending || (!whatsappMessage.trim() && !whatsappFile) || !contact.phone}
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              <Send className="h-3.5 w-3.5" />
+              {whatsappSending ? "Enviando…" : "Enviar desde CRM"}
+            </Button>
+          </div>
         </div>
       </Modal>
 
