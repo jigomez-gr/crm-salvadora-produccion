@@ -175,13 +175,8 @@ export class CalcomService implements OnModuleInit {
         ? params.contact.email
         : `client-${(params.contact.phone || 'crm').replace(/[^0-9]/g, '')}@salvadoraconesayoga.es`;
 
-    const safeServiceName = (params.serviceName || 'sesion')
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]/g, '-');
     const generatedUid = `v-${randomBytes(6).toString('hex')}`;
-    const fallbackMeetingUrl = `https://meet.jit.si/salvadora-${safeServiceName}-${generatedUid}`;
+    const fallbackMeetingUrl = `https://meet.jit.si/salvadora-sesion-${generatedUid}`;
 
     if (!account.enabled || !apiKey) {
       this.logger.log(

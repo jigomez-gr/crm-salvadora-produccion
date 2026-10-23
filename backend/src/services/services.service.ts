@@ -134,6 +134,7 @@ export class ServicesService implements OnModuleInit {
           );
 
           UPDATE services SET "notifyByEmail" = true WHERE "notifyByEmail" IS NULL OR "notifyByEmail" = false;
+          UPDATE services SET "notifyByWhatsapp" = true WHERE "notifyByWhatsapp" IS NULL OR ("name" ILIKE '%gestalt%' AND "notifyByWhatsapp" = false);
           UPDATE services SET "reminderNotes" = 'Llevar ropa cómoda de abrigo, calcetines cálidos y, si lo deseas, tu propia manta o cojín para disfrutar de la experiencia sonora con el máximo confort.'
           WHERE ("name" ILIKE '%gong%' OR "name" ILIKE '%sonora%') AND "reminderNotes" ILIKE '%9:15%';
 
