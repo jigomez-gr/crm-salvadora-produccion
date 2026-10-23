@@ -112,7 +112,7 @@ Bajo ninguna circunstancia reserves ni consultes citas ni des horarios.`;
   const constelDateText =
     constelSvc?.sinfechadefinitiva === 'S'
       ? (constelSvc.textosinfechadefinitiva || 'fecha provisional por confirmar')
-      : (constelSvc?.eventDatesText || constelSvc?.scheduleText || 'Domingo 25 de Octubre de 2026 de 10:00 a 14:00');
+      : (constelSvc?.eventDatesText || constelSvc?.scheduleText || 'Sábado 14 de Noviembre de 2026 de 10:00 a 14:00');
   const pujaPrice = 'El precio se determinará en función de las características del viaje y alojamiento.';
   const constelarPrice = getServicePrice(/constel.*(constelar|propio)/i, '60€');
   const participarPrice = getServicePrice(/constel.*(particip|represen)/i, '20€');

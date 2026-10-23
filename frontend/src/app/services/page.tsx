@@ -2131,6 +2131,15 @@ export default function ServicesPage() {
                   <video
                     key={getMediaDisplayUrl(form.videoParticularUrl, form.videoParticularPath, editingService?.id, "video-particular")}
                     src={getMediaDisplayUrl(form.videoParticularUrl, form.videoParticularPath, editingService?.id, "video-particular")}
+                    poster={
+                      form.videoParticularUrl?.includes("constelacionesparticular") || form.videoParticularPath?.includes("constelacionesparticular")
+                        ? "/videos/poster_constelacionesparticular.jpg"
+                        : form.videoParticularUrl?.includes("ayunoterapeuticoparticular")
+                        ? "/videos/ayunoterapeuticoparticular-poster.jpg"
+                        : form.videoParticularUrl?.includes("Bano-de-Gong_particular")
+                        ? "/videos/Bano-de-Gong_particular-poster.jpg"
+                        : undefined
+                    }
                     controls
                     preload="metadata"
                     playsInline

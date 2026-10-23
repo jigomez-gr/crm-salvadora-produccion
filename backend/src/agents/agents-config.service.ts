@@ -128,7 +128,7 @@ export class AgentsConfigService implements OnModuleInit {
           '   - Terapia Gestalt y Bienestar Experience: Sesiones individuales de 1h con cita previa acordada.\n' +
           '   - Baño de Gong: Sesión mensual en fin de semana de 2 horas (18:00 a 20:00).\n' +
           '   - Puja de Gongs: Noche de sonido de 11 horas continuas (21:00 a 08:00).\n' +
-          '   - Constelaciones Familiares: Taller mensual en domingo (10:00 a 14:00).\n' +
+          '   - Constelaciones Familiares: Taller mensual en fin de semana (10:00 a 14:00).\n' +
           '   - Retiro de Ayuno Terapéutico: Puente de Octubre.\n\n' +
           '3. Contacto: WhatsApp Reservas: 695 172 625.\n\n' +
           '4. Proceso de Reserva: Confirma nombre y teléfono, consulta disponibilidad y formaliza la plaza.',

@@ -1064,16 +1064,26 @@ export class WidgetController {
         dateLabel = s.textosinfechadefinitiva || 'Próxima convocatoria';
       }
 
-      const videoPlayerHtml = s.videoUrl ? `
+      const targetVideo = s.videoParticularUrl || s.videoUrl;
+      const targetPoster = targetVideo?.includes('constelacionesparticular')
+        ? '/videos/poster_constelacionesparticular.jpg'
+        : targetVideo?.includes('ayunoterapeuticoparticular')
+        ? '/videos/ayunoterapeuticoparticular-poster.jpg'
+        : targetVideo?.includes('Bano-de-Gong_particular')
+        ? '/videos/Bano-de-Gong_particular-poster.jpg'
+        : '';
+      const posterAttr = targetPoster ? ` poster="${targetPoster}"` : '';
+      const videoPlayerHtml = targetVideo ? `
         <div style="margin: 12px 0;">
           <div style="font-size: 11px; font-weight: bold; color: #800020; margin-bottom: 4px; text-transform: uppercase;">🎥 Vídeo del Servicio:</div>
-          <video controls preload="metadata" style="width: 100%; max-height: 220px; border-radius: 8px; background: #000; box-shadow: 0 2px 8px rgba(0,0,0,0.15);" src="${s.videoUrl}"></video>
+          <video controls preload="metadata"${posterAttr} style="width: 100%; max-height: 220px; border-radius: 8px; background: #000; box-shadow: 0 2px 8px rgba(0,0,0,0.15);" src="${targetVideo}"></video>
         </div>
       ` : '';
 
-      const flyerHtml = s.flyerUrl ? `
+      const targetFlyer = s.flyerParticularUrl || s.flyerUrl;
+      const flyerHtml = targetFlyer ? `
         <div style="margin: 10px 0;">
-          <img src="${s.flyerUrl}" alt="${s.name}" style="max-height: 180px; width: 100%; object-fit: cover; border-radius: 8px; border: 1px solid #ddd;" />
+          <img src="${targetFlyer}" alt="${s.name}" style="max-height: 180px; width: 100%; object-fit: cover; border-radius: 8px; border: 1px solid #ddd;" />
         </div>
       ` : '';
 

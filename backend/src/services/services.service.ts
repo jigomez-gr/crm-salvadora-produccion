@@ -505,12 +505,12 @@ export class ServicesService implements OnModuleInit {
           this.serviceRepo.create({
             name: 'Constelaciones Familiares (Constelar / Asunto Propio)',
             description:
-              'Taller vivencial mensual de sanación de vínculos y patrones familiares. Modalidad para trabajar un asunto o síntoma personal propio. Próxima fecha: Domingo 25 de Octubre de 2026 (10:00 a 14:00). Precio: 60€. Aforo: 25 personas. Pago en el centro.',
+              'Taller vivencial mensual de sanación de vínculos y patrones familiares. Modalidad para trabajar un asunto o síntoma personal propio. Próxima fecha: Sábado 14 de Noviembre de 2026 (10:00 a 14:00). Precio: 60€. Aforo: 25 personas. Pago en el centro.',
             serviceType: ServiceType.EVENT,
-            eventDatesText: 'Domingo 25 de Octubre de 2026 (10:00 a 14:00)',
-            eventStartDate: new Date('2026-10-25T10:00:00.000Z'),
-            eventEndDate: new Date('2026-10-25T14:00:00.000Z'),
-            scheduleText: 'Domingos intensivos de 10:00 a 14:00',
+            eventDatesText: 'Sábado 14 de Noviembre de 2026 (10:00 a 14:00)',
+            eventStartDate: new Date('2026-11-14T09:00:00.000Z'),
+            eventEndDate: new Date('2026-11-14T13:00:00.000Z'),
+            scheduleText: 'Sábado 14 de Noviembre (10:00 a 14:00)',
             durationMinutes: 240,
             price: '60.00',
             maxCapacity: 25,
@@ -518,6 +518,11 @@ export class ServicesService implements OnModuleInit {
             managerId: manager.id,
             requiresApproval: false,
             allowedModalities: ['in_person'],
+            flyerParticularUrl: '/flyers/constelaciones_familiares_particular.jpg',
+            flyerParticularPath: 'public/flyers/constelaciones_familiares_particular.jpg',
+            videoParticularUrl: '/videos/constelacionesparticular.mp4',
+            videoParticularPath: 'media_base/videos/constelacionesparticular.mp4',
+            sinfechadefinitiva: 'N',
             reminderNotes:
               'Llevar ropa cómoda, cuaderno para notas si lo deseas y botella de agua. Rogamos acudir 10 minutos antes para comenzar puntualmente.',
             isActive: true,
@@ -525,6 +530,18 @@ export class ServicesService implements OnModuleInit {
         );
       } else {
         constelarSvc.managerId = manager.id;
+        constelarSvc.eventStartDate = new Date('2026-11-14T09:00:00.000Z');
+        constelarSvc.eventEndDate = new Date('2026-11-14T13:00:00.000Z');
+        constelarSvc.eventDatesText = 'Sábado 14 de Noviembre de 2026 (10:00 a 14:00)';
+        constelarSvc.scheduleText = 'Sábado 14 de Noviembre (10:00 a 14:00)';
+        constelarSvc.sinfechadefinitiva = 'N';
+        constelarSvc.textosinfechadefinitiva = null;
+        constelarSvc.flyerParticularUrl = '/flyers/constelaciones_familiares_particular.jpg';
+        constelarSvc.flyerParticularPath = 'public/flyers/constelaciones_familiares_particular.jpg';
+        constelarSvc.videoParticularUrl = '/videos/constelacionesparticular.mp4';
+        constelarSvc.videoParticularPath = 'media_base/videos/constelacionesparticular.mp4';
+        constelarSvc.description =
+          'Taller vivencial mensual de sanación de vínculos y patrones familiares. Modalidad para trabajar un asunto o síntoma personal propio. Próxima fecha: Sábado 14 de Noviembre de 2026 (10:00 a 14:00). Precio: 60€. Aforo: 25 personas. Pago en el centro.';
         constelarSvc.reminderNotes =
           constelarSvc.reminderNotes ||
           'Llevar ropa cómoda, cuaderno para notas si lo deseas y botella de agua. Rogamos acudir 10 minutos antes para comenzar puntualmente.';
@@ -540,12 +557,12 @@ export class ServicesService implements OnModuleInit {
           this.serviceRepo.create({
             name: 'Constelaciones Familiares (Participante / Representante)',
             description:
-              'Taller vivencial mensual de sanación de vínculos familiares. Modalidad para participar como representante u observador en el campo de trabajo. Próxima fecha: Domingo 25 de Octubre de 2026 (10:00 a 14:00). Precio: 20€. Aforo: 25 personas. Pago en el centro.',
+              'Taller vivencial mensual de sanación de vínculos familiares. Modalidad para participar como representante u observador en el campo de trabajo. Próxima fecha: Sábado 14 de Noviembre de 2026 (10:00 a 14:00). Precio: 20€. Aforo: 25 personas. Pago en el centro.',
             serviceType: ServiceType.EVENT,
-            eventDatesText: 'Domingo 25 de Octubre de 2026 (10:00 a 14:00)',
-            eventStartDate: new Date('2026-10-25T10:00:00.000Z'),
-            eventEndDate: new Date('2026-10-25T14:00:00.000Z'),
-            scheduleText: 'Domingos intensivos de 10:00 a 14:00',
+            eventDatesText: 'Sábado 14 de Noviembre de 2026 (10:00 a 14:00)',
+            eventStartDate: new Date('2026-11-14T09:00:00.000Z'),
+            eventEndDate: new Date('2026-11-14T13:00:00.000Z'),
+            scheduleText: 'Sábado 14 de Noviembre (10:00 a 14:00)',
             durationMinutes: 240,
             price: '20.00',
             maxCapacity: 25,
@@ -553,6 +570,11 @@ export class ServicesService implements OnModuleInit {
             managerId: manager.id,
             requiresApproval: false,
             allowedModalities: ['in_person'],
+            flyerParticularUrl: '/flyers/constelaciones_familiares_particular.jpg',
+            flyerParticularPath: 'public/flyers/constelaciones_familiares_particular.jpg',
+            videoParticularUrl: '/videos/constelacionesparticular.mp4',
+            videoParticularPath: 'media_base/videos/constelacionesparticular.mp4',
+            sinfechadefinitiva: 'N',
             reminderNotes:
               'Llevar ropa cómoda, libreta de notas si lo deseas y botella de agua. Rogamos puntualidad a las 10:00.',
             isActive: true,
@@ -560,6 +582,18 @@ export class ServicesService implements OnModuleInit {
         );
       } else {
         participarConstelacionesSvc.managerId = manager.id;
+        participarConstelacionesSvc.eventStartDate = new Date('2026-11-14T09:00:00.000Z');
+        participarConstelacionesSvc.eventEndDate = new Date('2026-11-14T13:00:00.000Z');
+        participarConstelacionesSvc.eventDatesText = 'Sábado 14 de Noviembre de 2026 (10:00 a 14:00)';
+        participarConstelacionesSvc.scheduleText = 'Sábado 14 de Noviembre (10:00 a 14:00)';
+        participarConstelacionesSvc.sinfechadefinitiva = 'N';
+        participarConstelacionesSvc.textosinfechadefinitiva = null;
+        participarConstelacionesSvc.flyerParticularUrl = '/flyers/constelaciones_familiares_particular.jpg';
+        participarConstelacionesSvc.flyerParticularPath = 'public/flyers/constelaciones_familiares_particular.jpg';
+        participarConstelacionesSvc.videoParticularUrl = '/videos/constelacionesparticular.mp4';
+        participarConstelacionesSvc.videoParticularPath = 'media_base/videos/constelacionesparticular.mp4';
+        participarConstelacionesSvc.description =
+          'Taller vivencial mensual de sanación de vínculos familiares. Modalidad para participar como representante u observador en el campo de trabajo. Próxima fecha: Sábado 14 de Noviembre de 2026 (10:00 a 14:00). Precio: 20€. Aforo: 25 personas. Pago en el centro.';
         participarConstelacionesSvc.reminderNotes =
           participarConstelacionesSvc.reminderNotes ||
           'Llevar ropa cómoda, libreta de notas si lo deseas y botella de agua. Rogamos puntualidad a las 10:00.';
@@ -1007,6 +1041,22 @@ export class ServicesService implements OnModuleInit {
         SET "videoParticularUrl" = '/videos/ayunoterapeuticoparticular.mp4',
             "videoParticularPath" = 'media_base/videos/ayunoterapeuticoparticular.mp4'
         WHERE name ILIKE '%ayuno%' OR "videoParticularPath" LIKE '%ayunoterapeuticoparticular.mp4%';
+      `).catch(() => null);
+
+      // Ensure Constelaciones Familiares media, flyer and date
+      await this.serviceRepo.query(`
+        UPDATE services 
+        SET "videoParticularUrl" = '/videos/constelacionesparticular.mp4',
+            "videoParticularPath" = 'media_base/videos/constelacionesparticular.mp4',
+            "flyerParticularUrl" = '/flyers/constelaciones_familiares_particular.jpg',
+            "flyerParticularPath" = 'public/flyers/constelaciones_familiares_particular.jpg',
+            "eventStartDate" = '2026-11-14T09:00:00.000Z',
+            "eventEndDate" = '2026-11-14T13:00:00.000Z',
+            "eventDatesText" = 'Sábado 14 de Noviembre de 2026 (10:00 a 14:00)',
+            "scheduleText" = 'Sábado 14 de Noviembre (10:00 a 14:00)',
+            sinfechadefinitiva = 'N',
+            textosinfechadefinitiva = NULL
+        WHERE name ILIKE '%constelaci%';
       `).catch(() => null);
 
       // Ensure only Terapia Gestalt requires approval; Baño de Gong, Fin de Semana, Talleres, etc. do NOT require approval
