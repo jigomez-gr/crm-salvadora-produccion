@@ -250,7 +250,7 @@ export class WidgetController {
       })),
       services: visibleServices.map((s) => {
         const isYoga = /yoga/i.test(s.name);
-        const isMeditacion = /meditaci/i.test(s.name);
+        const isMeditacion = /meditaci/i.test(s.name) && !/gong|sonor/i.test(s.name);
         return {
           id: s.id,
           name: s.name,
