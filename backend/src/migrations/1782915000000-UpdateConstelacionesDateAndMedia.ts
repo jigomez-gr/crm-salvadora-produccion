@@ -16,6 +16,7 @@ export class UpdateConstelacionesDateAndMedia1782915000000 implements MigrationI
           "flyerParticularPath" = 'public/flyers/constelaciones_familiares_particular.jpg',
           "videoParticularUrl" = '/videos/constelacionesparticular.mp4',
           "videoParticularPath" = 'media_base/videos/constelacionesparticular.mp4',
+          textoespecifico = 'Próxima fecha confirmada: Sábado 14 de Noviembre de 2026 de 10:00 a 14:00 h en el centro.',
           description = CASE
             WHEN name ILIKE '%constelar%' THEN 'Taller vivencial mensual de sanación de vínculos y patrones familiares. Modalidad para trabajar un asunto o síntoma personal propio. Próxima fecha: Sábado 14 de Noviembre de 2026 (10:00 a 14:00). Precio: 60€. Aforo: 25 personas. Pago en el centro.'
             ELSE 'Taller vivencial mensual de sanación de vínculos familiares. Modalidad para participar como representante u observador en el campo de trabajo. Próxima fecha: Sábado 14 de Noviembre de 2026 (10:00 a 14:00). Precio: 20€. Aforo: 25 personas. Pago en el centro.'
