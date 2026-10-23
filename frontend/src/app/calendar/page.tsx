@@ -55,6 +55,7 @@ import { useEvents } from "@/hooks/useEvents";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
 import { ResponseDocumentModal } from "@/components/ResponseDocumentModal";
+import { ContactPicker, ContactPickerRef } from "@/components/ContactPicker";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
@@ -147,7 +148,7 @@ function AppointmentModal({
     : "";
 
   const contactRef = useRef<HTMLDivElement>(null);
-  const contactSelectRef = useRef<HTMLSelectElement>(null);
+  const contactPickerRef = useRef<ContactPickerRef>(null);
   const serviceRef = useRef<HTMLDivElement>(null);
   const serviceSelectRef = useRef<HTMLSelectElement>(null);
   const startsAtRef = useRef<HTMLDivElement>(null);
@@ -382,7 +383,7 @@ function AppointmentModal({
       // Focus and scroll to first missing input
       if (!form.contactId) {
         contactRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-        contactSelectRef.current?.focus();
+        contactPickerRef.current?.focus();
       } else if (!form.service && !form.serviceId) {
         serviceRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
         serviceSelectRef.current?.focus();
@@ -551,7 +552,7 @@ function AppointmentModal({
         )}
 
         <div ref={contactRef}>
-          <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center justify-between mb-1.5">
             <label className="block text-xs font-semibold text-neutral-800">
               Contacto (Alumno / Paciente) <span className="text-red-500">*</span>
             </label>
@@ -562,37 +563,17 @@ function AppointmentModal({
               </span>
             )}
           </div>
-          <select
-            ref={contactSelectRef}
-            className={cn(
-              "block w-full rounded-lg bg-white px-3 py-2 text-sm focus:outline-none transition-colors",
-              submitted && !form.contactId
-                ? "border-2 border-red-500 bg-red-50/40 text-red-950 focus:border-red-600 focus:ring-2 focus:ring-red-200"
-                : "border border-neutral-300 focus:border-indigo-500"
-            )}
+          <ContactPicker
+            ref={contactPickerRef}
             value={form.contactId}
-            onChange={(e) => {
-              setForm((f) => ({ ...f, contactId: e.target.value }));
+            initialContact={initial?.contact}
+            hasError={submitted && !form.contactId}
+            required
+            onChange={(contactId) => {
+              setForm((f) => ({ ...f, contactId }));
               if (error && error.includes("Contacto")) setError("");
             }}
-          >
-            <option value="">-- Selecciona el alumno o paciente para la cita --</option>
-            {contacts.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} {c.phone ? `(${c.phone})` : c.email ? `(${c.email})` : ""}
-              </option>
-            ))}
-          </select>
-          {submitted && !form.contactId ? (
-            <p className="mt-1 text-xs text-red-600 font-medium flex items-center gap-1">
-              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-              Por favor, selecciona para qué persona es la cita en el menú desplegable.
-            </p>
-          ) : contacts.length === 0 ? (
-            <p className="mt-1 text-xs text-amber-700 italic">
-              No hay contactos cargados. Crea un contacto primero en la sección de Contactos.
-            </p>
-          ) : null}
+          />
         </div>
 
         <div ref={serviceRef}>
@@ -896,7 +877,7 @@ function AppointmentModal({
                   type="button"
                   onClick={() => {
                     contactRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-                    contactSelectRef.current?.focus();
+                    contactPickerRef.current?.focus();
                   }}
                   className="text-[11px] text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-2 py-0.5 rounded font-semibold self-start sm:self-auto cursor-pointer"
                 >
@@ -1350,7 +1331,7 @@ function AppointmentModal({
                   type="button"
                   onClick={() => {
                     contactRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-                    contactSelectRef.current?.focus();
+                    contactPickerRef.current?.focus();
                   }}
                   className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-red-600 text-white font-semibold text-[11px] hover:bg-red-700 transition-colors shadow-xs"
                 >
@@ -1562,7 +1543,7 @@ function AppointmentModal({
           initialImageSrc={tempImageSrc}
           selectedSpecialty={aiSpecialty}
           appointmentId={initial?.id}
-          patientName={contacts.find((c) => c.id === form.contactId)?.name}
+          patientName={initial?.contact?.name || contacts.find((c) => c.id === form.contactId)?.name}
           notes={form.reason}
           onAnalysisSuccess={(res) => {
             setAiResultText(res.analysisText);
