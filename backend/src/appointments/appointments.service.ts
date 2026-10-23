@@ -2768,8 +2768,30 @@ export class AppointmentsService implements OnModuleInit {
       4: ['09:15'],
     };
 
+    if (isGestalt) {
+      const targetDay = zoned.getDay();
+      if (targetDay !== 1 && targetDay !== 3) {
+        return [];
+      }
+      const gestaltWorkingHours: WorkingHourSlot[] = [
+        { day: 1, open: '09:00', close: '14:00' },
+        { day: 1, open: '16:00', close: '21:00' },
+        { day: 3, open: '09:00', close: '14:00' },
+        { day: 3, open: '16:00', close: '21:00' },
+      ];
+      // Para la disponibilidad de Gestalt, solo bloquean citas del mismo calendario o sesiones de terapia individual
+      const gestaltAppts = existing.filter(
+        (a) => a.calendarId === calendarId || /gestalt/i.test(a.service),
+      );
+      return computeFreeSlots(date, durationMinutes, gestaltWorkingHours, gestaltAppts, {
+        timezone,
+        now,
+        maxCapacity: 1,
+      });
+    }
+
     const effectiveTimetable =
-      targetService?.weeklySchedule && Object.keys(targetService.weeklySchedule).length > 0
+      !isGestalt && targetService?.weeklySchedule && Object.keys(targetService.weeklySchedule).length > 0
         ? targetService.weeklySchedule
         : isHathaYoga
         ? HATHA_YOGA_TIMETABLE
@@ -2813,28 +2835,6 @@ export class AppointmentsService implements OnModuleInit {
         }
       }
       return slots;
-    }
-
-    if (isGestalt) {
-      const targetDay = zoned.getDay();
-      if (targetDay !== 1 && targetDay !== 3) {
-        return [];
-      }
-      const gestaltWorkingHours: WorkingHourSlot[] = [
-        { day: 1, open: '09:00', close: '14:00' },
-        { day: 1, open: '16:00', close: '21:00' },
-        { day: 3, open: '09:00', close: '14:00' },
-        { day: 3, open: '16:00', close: '21:00' },
-      ];
-      // Para la disponibilidad de Gestalt, solo bloquean citas del mismo calendario o sesiones de terapia individual
-      const gestaltAppts = existing.filter(
-        (a) => a.calendarId === calendarId || /gestalt/i.test(a.service),
-      );
-      return computeFreeSlots(date, durationMinutes, gestaltWorkingHours, gestaltAppts, {
-        timezone,
-        now,
-        maxCapacity: 1,
-      });
     }
 
     // If targetService is an event, handle event editions or specific schedule

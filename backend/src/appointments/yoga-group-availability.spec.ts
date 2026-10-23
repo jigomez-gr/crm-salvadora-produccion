@@ -3,6 +3,7 @@ import { Appointment, AppointmentStatus } from '../common/entities/appointment.e
 import { Service } from '../common/entities/service.entity';
 import { Contact } from '../common/entities/contact.entity';
 import { ConflictException } from '@nestjs/common';
+import { TZDate } from '@date-fns/tz';
 
 describe('Yoga & Meditacion Group Availability (Aforo vs Agenda Profesor)', () => {
   let appointmentsService: AppointmentsService;
@@ -383,5 +384,34 @@ describe('Yoga & Meditacion Group Availability (Aforo vs Agenda Profesor)', () =
 
     const starts = slots.map((s) => s.startsAt.toISOString());
     expect(starts).not.toContain('2026-09-09T18:15:00.000Z');
+  });
+
+  it('Terapia Gestalt dispone de huecos los lunes a las 10:00 aunque el servicio tenga weeklySchedule residual en DB', async () => {
+    // Lunes 26 de octubre de 2026
+    const targetDate = new Date('2026-10-26T00:00:00.000Z');
+    const now = new Date('2026-10-23T05:00:00.000Z');
+
+    const gestaltSvc = inMemoryServices.find((s) => s.id === 'svc-gestalt')!;
+    (gestaltSvc as any).weeklySchedule = { 1: ['09:00'] };
+
+    const slots = await appointmentsService.getAvailableSlots(
+      targetDate,
+      60,
+      [],
+      'Europe/Madrid',
+      now,
+      'cal-gestalt',
+      'svc-gestalt',
+      'Terapia Gestalt (Sesión Individual)',
+    );
+
+    const slotStartsLocal = slots.map((s) => {
+      const d = new TZDate(s.startsAt.getTime(), 'Europe/Madrid');
+      return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+    });
+
+    expect(slotStartsLocal).toContain('09:00');
+    expect(slotStartsLocal).toContain('10:00');
+    expect(slotStartsLocal).toContain('11:00');
   });
 });

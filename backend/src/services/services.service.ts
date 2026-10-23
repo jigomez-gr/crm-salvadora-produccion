@@ -640,6 +640,10 @@ export class ServicesService implements OnModuleInit {
             s.requiresApproval = true;
             updated = true;
           }
+          if (s.weeklySchedule) {
+            s.weeklySchedule = null;
+            updated = true;
+          }
         } else if (/mujeres|femenino/i.test(s.name)) {
           s.sinfechadefinitiva = 'S';
           s.textosinfechadefinitiva = 'fecha por confirmar';
@@ -1358,7 +1362,9 @@ export class ServicesService implements OnModuleInit {
 
     const generatedCalendarId = `cal-${dto.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
     let weeklySchedule = dto.weeklySchedule;
-    if (!weeklySchedule && dto.scheduleText) {
+    if (/gestalt/i.test(dto.name)) {
+      weeklySchedule = undefined;
+    } else if (!weeklySchedule && dto.scheduleText) {
       weeklySchedule = parseWeeklyScheduleFromText(dto.scheduleText) || undefined;
     }
     const service = this.serviceRepo.create({
@@ -1367,7 +1373,7 @@ export class ServicesService implements OnModuleInit {
       serviceType: dto.serviceType,
       eventDatesText: dto.eventDatesText,
       scheduleText: dto.scheduleText,
-      weeklySchedule: dto.weeklySchedule,
+      weeklySchedule: /gestalt/i.test(dto.name) ? null : dto.weeklySchedule,
       eventStartDate: dto.eventStartDate ? new Date(dto.eventStartDate) : null,
       eventEndDate: dto.eventEndDate ? new Date(dto.eventEndDate) : null,
       maxCapacity: dto.maxCapacity,
@@ -1440,17 +1446,21 @@ export class ServicesService implements OnModuleInit {
     if (dto.eventDatesText !== undefined) service.eventDatesText = dto.eventDatesText;
     if (dto.scheduleText !== undefined) {
       service.scheduleText = dto.scheduleText;
-      if (dto.weeklySchedule !== undefined) {
+      if (/gestalt/i.test(service.name)) {
+        service.weeklySchedule = null;
+      } else if (dto.weeklySchedule !== undefined) {
         service.weeklySchedule = dto.weeklySchedule;
       } else {
         const parsed = parseWeeklyScheduleFromText(dto.scheduleText);
-        if (parsed) service.weeklySchedule = parsed;
+        service.weeklySchedule = parsed;
       }
     } else if (dto.weeklySchedule !== undefined) {
-      service.weeklySchedule = dto.weeklySchedule;
+      service.weeklySchedule = /gestalt/i.test(service.name) ? null : dto.weeklySchedule;
     } else if (dto.description !== undefined && (!service.weeklySchedule || Object.keys(service.weeklySchedule).length === 0)) {
-      const parsed = parseWeeklyScheduleFromText(dto.description);
-      if (parsed) service.weeklySchedule = parsed;
+      if (!/gestalt/i.test(service.name)) {
+        const parsed = parseWeeklyScheduleFromText(dto.description);
+        if (parsed) service.weeklySchedule = parsed;
+      }
     }
     if (dto.eventStartDate !== undefined)
       service.eventStartDate = dto.eventStartDate ? new Date(dto.eventStartDate) : null;
