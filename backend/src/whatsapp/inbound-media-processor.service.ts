@@ -45,6 +45,45 @@ export function detectEffectiveMediaType(media: InboundMedia): MediaType {
   return media.type;
 }
 
+
+function isGroqKey(key?: string | null): boolean {
+  return typeof key === 'string' && key.startsWith('gsk_');
+}
+
+function isOpenAiKey(key?: string | null): boolean {
+  return typeof key === 'string' && key.startsWith('sk-') && !key.startsWith('sk-or-');
+}
+
+export function sanitizeAudioFilenameForWhisper(filename?: string | null, mimeType?: string | null): string {
+  const cleanMime = (mimeType || '').split(';')[0].trim().toLowerCase();
+  const lowerName = (filename || '').toLowerCase().trim();
+  const validExtensions = ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm'];
+
+  let matchedExt = '';
+  for (const ext of validExtensions) {
+    if (lowerName.endsWith(`.${ext}`)) {
+      matchedExt = ext;
+      break;
+    }
+  }
+
+  if (!matchedExt) {
+    if (cleanMime.includes('ogg') || cleanMime.includes('opus')) matchedExt = 'ogg';
+    else if (cleanMime.includes('mpeg') || cleanMime.includes('mp3')) matchedExt = 'mp3';
+    else if (cleanMime.includes('wav')) matchedExt = 'wav';
+    else if (cleanMime.includes('m4a')) matchedExt = 'm4a';
+    else if (cleanMime.includes('webm')) matchedExt = 'webm';
+    else if (cleanMime.includes('flac')) matchedExt = 'flac';
+    else matchedExt = 'mp3';
+  }
+
+  const base = (lowerName || 'audio')
+    .replace(/\.[^/.]+$/, '')
+    .replace(/[^a-z0-9_-]/g, '_');
+
+  return `${base || 'audio'}.${matchedExt}`;
+}
+
 @Injectable()
 export class InboundMediaProcessorService {
   private readonly logger = new Logger(InboundMediaProcessorService.name);
@@ -310,8 +349,11 @@ export class InboundMediaProcessorService {
     const chosenProvider = (config?.transcriptionProvider || 'auto').toLowerCase();
     const apiKey = config?.transcriptionApiKey || null;
 
-    // 1. Groq Whisper (lightning fast & high accuracy)
-    const groqKey = chosenProvider === 'groq' ? (apiKey || process.env.GROQ_API_KEY) : (process.env.GROQ_API_KEY || (chosenProvider === 'auto' && apiKey ? apiKey : null));
+    // 1. Groq Whisper (lightning fast & high accuracy) — only with genuine Groq key
+    const groqKey =
+      chosenProvider === 'groq'
+        ? apiKey || process.env.GROQ_API_KEY
+        : process.env.GROQ_API_KEY || (chosenProvider === 'auto' && isGroqKey(apiKey) ? apiKey : null);
     if ((chosenProvider === 'groq' || chosenProvider === 'auto') && groqKey) {
       try {
         const text = await this.transcribeWithGroq(buffer, filename, mimeType, groqKey);
@@ -321,8 +363,11 @@ export class InboundMediaProcessorService {
       }
     }
 
-    // 2. OpenAI Whisper
-    const openaiKey = chosenProvider === 'whisper' ? (apiKey || process.env.OPENAI_API_KEY) : (process.env.OPENAI_API_KEY || (chosenProvider === 'auto' && apiKey ? apiKey : null));
+    // 2. OpenAI Whisper — with OpenAI key or fallback
+    const openaiKey =
+      chosenProvider === 'whisper'
+        ? apiKey || process.env.OPENAI_API_KEY
+        : process.env.OPENAI_API_KEY || (chosenProvider === 'auto' && (isOpenAiKey(apiKey) || !isGroqKey(apiKey)) ? apiKey : null);
     if ((chosenProvider === 'whisper' || chosenProvider === 'auto') && openaiKey) {
       try {
         const text = await this.transcribeWithOpenAi(buffer, filename, mimeType, openaiKey);
@@ -363,9 +408,12 @@ export class InboundMediaProcessorService {
     mimeType: string,
     apiKey: string,
   ): Promise<string | null> {
+    const cleanMime = (mimeType || 'audio/ogg').split(';')[0].trim();
+    const safeFilename = sanitizeAudioFilenameForWhisper(filename, mimeType);
+
     const formData = new FormData();
-    const blob = new Blob([new Uint8Array(buffer)], { type: mimeType });
-    formData.append('file', blob, filename || 'audio.ogg');
+    const blob = new Blob([new Uint8Array(buffer)], { type: cleanMime });
+    formData.append('file', blob, safeFilename);
     formData.append('model', 'whisper-large-v3');
     formData.append('language', 'es');
     formData.append('temperature', '0');
@@ -395,9 +443,12 @@ export class InboundMediaProcessorService {
     mimeType: string,
     apiKey: string,
   ): Promise<string | null> {
+    const cleanMime = (mimeType || 'audio/ogg').split(';')[0].trim();
+    const safeFilename = sanitizeAudioFilenameForWhisper(filename, mimeType);
+
     const formData = new FormData();
-    const blob = new Blob([new Uint8Array(buffer)], { type: mimeType });
-    formData.append('file', blob, filename || 'audio.ogg');
+    const blob = new Blob([new Uint8Array(buffer)], { type: cleanMime });
+    formData.append('file', blob, safeFilename);
     formData.append('model', 'whisper-1');
     formData.append('language', 'es');
 
