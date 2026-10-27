@@ -295,7 +295,7 @@ export class InboundMediaProcessorService {
 
       return {
         enrichedBody: `🎤 Audio: "${preview}"`,
-        enrichedAgentPrompt: `[Mensaje de voz / audio enviado por el cliente ("${filename}"). Transcripción exacta del audio:\n"${cleanTranscription}"]`,
+        enrichedAgentPrompt: `[Mensaje de voz / audio enviado por el cliente ("${filename}"). Transcripción exacta del audio:\n"${cleanTranscription}"\nResponde directamente y con naturalidad atendiendo a lo que dice o pregunta el cliente en su audio.]`,
         transcription: cleanTranscription,
       };
     }
