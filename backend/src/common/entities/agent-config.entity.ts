@@ -149,6 +149,22 @@ export class AgentConfig {
   @Column({ type: 'text', nullable: true })
   seoDescription: string | null;
 
+  // ─── Límites Multimedia y Transcripción (WhatsApp / Inbound Media) ───
+  @Column({ type: 'int', default: 100 })
+  maxAudioSizeMb: number;
+
+  @Column({ type: 'int', default: 100 })
+  maxDocSizeMb: number;
+
+  @Column({ type: 'int', default: 100 })
+  maxVideoSizeMb: number;
+
+  @Column({ type: 'varchar', length: 50, default: 'auto' })
+  transcriptionProvider: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  transcriptionApiKey: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }

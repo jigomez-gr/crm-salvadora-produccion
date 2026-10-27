@@ -19,6 +19,7 @@ import { AgentRunnerService } from '../agents/agent-runner.service';
 import { AgentsConfigService } from '../agents/agents-config.service';
 import { YCloudClient } from './ycloud-client.service';
 import { WhatsappGatewayService } from './whatsapp-gateway.service';
+import { InboundMediaProcessorService } from './inbound-media-processor.service';
 import { AgentConfig } from '../common/entities/agent-config.entity';
 import { MessageChannel, MessageStatus } from '../common/entities/message.entity';
 import { parseInboundMessage } from './inbound-parser';
@@ -50,6 +51,7 @@ export class YCloudWebhookController {
     private readonly ycloudClient: YCloudClient,
     private readonly eventEmitter: EventEmitter2,
     @Optional() private readonly whatsappGateway?: WhatsappGatewayService,
+    @Optional() private readonly mediaProcessor?: InboundMediaProcessorService,
   ) {}
 
   // Backward-compatible base route → routes to the default seeded 'booking' agent.
@@ -149,6 +151,22 @@ export class YCloudWebhookController {
         tags: ['lead_whatsapp', 'whatsapp'],
       },
     );
+
+    let finalBody = messageBody;
+    let finalPrompt = agentPrompt;
+
+    if (media && this.mediaProcessor) {
+      const payload = body?.whatsappInboundMessage?.[body?.whatsappInboundMessage?.type] ?? {};
+      const caption = payload.caption || null;
+      const processed = await this.mediaProcessor.processMedia(
+        'ycloud',
+        media,
+        config as AgentConfig,
+        caption,
+      );
+      finalBody = processed.enrichedBody;
+      finalPrompt = processed.enrichedAgentPrompt;
+    }
 
     // Run agent — persists messages (idempotently, by externalId) and emits SSE
     // events internally. Thread is scoped per agent so the same contact talking

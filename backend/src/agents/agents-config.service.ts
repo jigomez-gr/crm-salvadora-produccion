@@ -29,6 +29,7 @@ export const SECRET_FIELDS = [
   'metaAccessToken',
   'metaAppSecret',
   'metaVerifyToken',
+  'transcriptionApiKey',
 ] as const;
 
 /**
@@ -80,6 +81,11 @@ export class AgentsConfigService implements OnModuleInit {
         ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "metaAppSecret" character varying;
         ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "metaVerifyToken" character varying;
         ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "metaGraphVersion" character varying DEFAULT 'v21.0';
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "maxAudioSizeMb" integer NOT NULL DEFAULT 100;
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "maxDocSizeMb" integer NOT NULL DEFAULT 100;
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "maxVideoSizeMb" integer NOT NULL DEFAULT 100;
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "transcriptionProvider" character varying(50) NOT NULL DEFAULT 'auto';
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "transcriptionApiKey" character varying;
       `);
     } catch (err: any) {
       this.logger.warn(`Could not ensure agent_configs columns: ${err?.message || err}`);
@@ -248,9 +254,13 @@ export class AgentsConfigService implements OnModuleInit {
     const config = await this.findByKey(agentKey);
 
     if (dto.whatsappProvider === 'meta') {
-      throw new BadRequestException(
-        'Meta API Oficial — preparado / pendiente de activación. No puede seleccionarse como proveedor operativo todavía; utiliza Evolution API o YCloud.',
-      );
+      const willHavePhone = dto.metaPhoneNumberId || config.metaPhoneNumberId;
+      const willHaveToken = dto.metaAccessToken || config.metaAccessToken;
+      if (!willHavePhone || !willHaveToken) {
+        throw new BadRequestException(
+          'Meta API Oficial requiere configurar Phone Number ID y Access Token antes de activarse como proveedor operativo.',
+        );
+      }
     }
 
     // An empty/undefined secret means "leave it unchanged" — never overwrite a

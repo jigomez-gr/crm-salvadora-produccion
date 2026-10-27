@@ -7,6 +7,7 @@ import {
   Post,
   Req,
   Res,
+  Optional,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { SkipThrottle } from '@nestjs/throttler';
@@ -16,10 +17,12 @@ import { ContactsService } from '../contacts/contacts.service';
 import { AgentRunnerService } from '../agents/agent-runner.service';
 import { AgentsConfigService } from '../agents/agents-config.service';
 import { WhatsappGatewayService } from './whatsapp-gateway.service';
+import { InboundMediaProcessorService } from './inbound-media-processor.service';
 import { AgentConfig } from '../common/entities/agent-config.entity';
 import {
   MessageChannel,
   MessageStatus,
+  MediaType,
 } from '../common/entities/message.entity';
 import {
   normalizeEvolutionEvent,
@@ -41,6 +44,7 @@ export class EvolutionWebhookController {
     private readonly agentsConfigService: AgentsConfigService,
     private readonly whatsappGateway: WhatsappGatewayService,
     private readonly eventEmitter: EventEmitter2,
+    @Optional() private readonly mediaProcessor?: InboundMediaProcessorService,
   ) {}
 
   @Post(':agentKey')
@@ -156,10 +160,33 @@ export class EvolutionWebhookController {
         },
       );
 
+      let finalBody = messageBody;
+      let finalPrompt = parsed.agentPrompt || messageBody;
+
+      if (parsed.media && this.mediaProcessor) {
+        const processed = await this.mediaProcessor.processMedia(
+          'evolution',
+          parsed.media,
+          config,
+          parsed.media.type === MediaType.DOCUMENT ? parsed.media.filename : null,
+        );
+        finalBody = processed.enrichedBody;
+        finalPrompt = processed.enrichedAgentPrompt;
+      }
+
       const { reply, outbound } = await this.agentRunnerService.run({
         agentKey,
-        message: messageBody,
-        agentPrompt: messageBody,
+        message: finalBody,
+        agentPrompt: finalPrompt,
+        media: parsed.media
+          ? {
+              mediaType: parsed.media.type,
+              mediaUrl: parsed.media.url,
+              mediaId: parsed.media.mediaId,
+              mediaMimeType: parsed.media.mimeType,
+              mediaFilename: parsed.media.filename,
+            }
+          : undefined,
         threadId: `${agentKey}:${from}`,
         contactId: contact.id,
         phone: from,

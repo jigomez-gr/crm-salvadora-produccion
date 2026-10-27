@@ -1,12 +1,16 @@
 import * as crypto from 'crypto';
-import { MessageStatus } from '../common/entities/message.entity';
+import { MessageStatus, MediaType } from '../common/entities/message.entity';
+import { InboundMedia } from './inbound-parser';
 import { normalizePhoneLoose } from '../common/phone';
 
 export interface ParsedEvolutionInbound {
   externalId: string;
   from: string;
   body: string;
+  agentPrompt?: string;
   pushName?: string;
+  media?: InboundMedia | null;
+  rawItem?: Record<string, any>;
 }
 
 export interface ParsedEvolutionStatusUpdate {
@@ -212,12 +216,89 @@ export function parseEvolutionInboundMessages(
       continue;
     }
 
-    const textCandidate =
+    let textCandidate =
       typeof msg.conversation === 'string'
         ? msg.conversation
         : typeof msg.extendedTextMessage?.text === 'string'
           ? msg.extendedTextMessage.text
           : null;
+
+    let media: InboundMedia | null = null;
+    let agentPrompt: string | undefined = undefined;
+
+    if (!textCandidate || !textCandidate.trim()) {
+      if (msg.audioMessage) {
+        const audio = msg.audioMessage;
+        const mimeType = typeof audio.mimetype === 'string' ? audio.mimetype : 'audio/ogg; codecs=opus';
+        const filename = typeof audio.fileName === 'string' ? audio.fileName : (audio.ptt ? 'nota_de_voz.ogg' : 'audio.mp3');
+        const isVoiceNote = Boolean(audio.ptt);
+        textCandidate = isVoiceNote ? '🎤 Nota de voz' : '🎵 Audio';
+        agentPrompt = '[El cliente ha enviado un mensaje de voz o audio]';
+        media = {
+          type: MediaType.AUDIO,
+          url: typeof audio.url === 'string' ? audio.url : null,
+          mediaId: externalId,
+          mimeType,
+          filename,
+          base64: typeof audio.base64 === 'string' ? audio.base64 : (typeof item.base64 === 'string' ? item.base64 : null),
+          rawPayload: item,
+        };
+      } else if (msg.documentMessage) {
+        const doc = msg.documentMessage;
+        const mimeType = typeof doc.mimetype === 'string' ? doc.mimetype : 'application/pdf';
+        const filename = typeof doc.fileName === 'string' ? doc.fileName : (typeof doc.title === 'string' ? doc.title : 'documento.pdf');
+        const caption = typeof doc.caption === 'string' && doc.caption.trim().length > 0 ? doc.caption.trim() : null;
+        textCandidate = caption || (filename ? `📄 ${filename}` : '📄 Documento');
+        agentPrompt = caption
+          ? `[El cliente ha enviado el documento "${filename}" con el texto: "${caption}"]`
+          : `[El cliente ha enviado el documento "${filename}"]`;
+        media = {
+          type: MediaType.DOCUMENT,
+          url: typeof doc.url === 'string' ? doc.url : null,
+          mediaId: externalId,
+          mimeType,
+          filename,
+          base64: typeof doc.base64 === 'string' ? doc.base64 : (typeof item.base64 === 'string' ? item.base64 : null),
+          rawPayload: item,
+        };
+      } else if (msg.videoMessage) {
+        const vid = msg.videoMessage;
+        const mimeType = typeof vid.mimetype === 'string' ? vid.mimetype : 'video/mp4';
+        const filename = typeof vid.fileName === 'string' ? vid.fileName : 'video.mp4';
+        const caption = typeof vid.caption === 'string' && vid.caption.trim().length > 0 ? vid.caption.trim() : null;
+        textCandidate = caption || '🎬 Vídeo';
+        agentPrompt = caption
+          ? `[El cliente ha enviado un vídeo con el texto: "${caption}"]`
+          : '[El cliente ha enviado un vídeo]';
+        media = {
+          type: MediaType.VIDEO,
+          url: typeof vid.url === 'string' ? vid.url : null,
+          mediaId: externalId,
+          mimeType,
+          filename,
+          base64: typeof vid.base64 === 'string' ? vid.base64 : (typeof item.base64 === 'string' ? item.base64 : null),
+          rawPayload: item,
+        };
+      } else if (msg.imageMessage) {
+        const img = msg.imageMessage;
+        const mimeType = typeof img.mimetype === 'string' ? img.mimetype : 'image/jpeg';
+        const filename = typeof img.fileName === 'string' ? img.fileName : 'imagen.jpg';
+        const caption = typeof img.caption === 'string' && img.caption.trim().length > 0 ? img.caption.trim() : null;
+        textCandidate = caption || '📷 Imagen';
+        agentPrompt = caption
+          ? `[El cliente ha enviado una imagen con el texto: "${caption}"]`
+          : '[El cliente ha enviado una imagen]';
+        media = {
+          type: MediaType.IMAGE,
+          url: typeof img.url === 'string' ? img.url : null,
+          mediaId: externalId,
+          mimeType,
+          filename,
+          base64: typeof img.base64 === 'string' ? img.base64 : (typeof item.base64 === 'string' ? item.base64 : null),
+          rawPayload: item,
+        };
+      }
+    }
 
     if (!textCandidate || !textCandidate.trim()) {
       continue;
@@ -232,12 +313,20 @@ export function parseEvolutionInboundMessages(
         ? item.pushName.trim()
         : undefined;
 
-    results.push({
+    const entry: ParsedEvolutionInbound = {
       externalId,
       from,
       body: textCandidate.trim(),
-      pushName,
-    });
+    };
+    if (pushName) {
+      entry.pushName = pushName;
+    }
+    if (media) {
+      entry.media = media;
+      entry.agentPrompt = agentPrompt || textCandidate.trim();
+      entry.rawItem = item;
+    }
+    results.push(entry);
   }
 
   return results;

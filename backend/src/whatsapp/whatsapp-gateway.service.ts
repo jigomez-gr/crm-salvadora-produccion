@@ -18,11 +18,13 @@ import {
 } from './providers/whatsapp-provider.interface';
 import { YCloudProvider } from './providers/ycloud.provider';
 import { EvolutionProvider } from './providers/evolution.provider';
+import { MetaProvider } from './providers/meta.provider';
 
 @Injectable()
 export class WhatsappGatewayService {
   private readonly logger = new Logger(WhatsappGatewayService.name);
   private readonly fallbackEvolutionProvider = new EvolutionProvider();
+  private readonly fallbackMetaProvider = new MetaProvider();
 
   constructor(
     private readonly ycloudProvider: YCloudProvider,
@@ -34,6 +36,8 @@ export class WhatsappGatewayService {
     private readonly agentConfigRepo?: Repository<AgentConfig>,
     @Optional()
     private readonly evolutionProvider?: EvolutionProvider,
+    @Optional()
+    private readonly metaProvider?: MetaProvider,
   ) {}
 
   /**
@@ -89,6 +93,7 @@ export class WhatsappGatewayService {
       case 'evolution':
         return this.evolutionProvider ?? this.fallbackEvolutionProvider;
       case 'meta':
+        return this.metaProvider ?? this.fallbackMetaProvider;
       default:
         return null;
     }

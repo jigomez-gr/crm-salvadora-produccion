@@ -30,6 +30,10 @@ export interface InboundMedia {
   mimeType: string | null;
   /** Original filename (documents). */
   filename: string | null;
+  /** Base64 buffer when provided directly by webhook provider. */
+  base64?: string | null;
+  /** Raw webhook object/payload for providers that require it. */
+  rawPayload?: Record<string, any>;
 }
 
 export interface ParsedInbound {

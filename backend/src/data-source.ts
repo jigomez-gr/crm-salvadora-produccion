@@ -17,6 +17,7 @@ import { KnowledgeChunk } from './common/entities/knowledge-chunk.entity';
 import { EmailAccount } from './common/entities/email-account.entity';
 import { EmailMessage } from './common/entities/email-message.entity';
 import { Service } from './common/entities/service.entity';
+import { ServiceCategory } from './common/entities/service-category.entity';
 import { Call } from './common/entities/call.entity';
 import { VapiAccount } from './common/entities/vapi-account.entity';
 import { PaymentAccount } from './common/entities/payment-account.entity';
@@ -40,6 +41,7 @@ export const AppDataSource = new DataSource({
     Contact,
     Appointment,
     Service,
+    ServiceCategory,
     AgentConfig,
     Message,
     Conversation,

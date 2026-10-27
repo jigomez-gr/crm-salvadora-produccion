@@ -1683,6 +1683,121 @@ function ConfigTab({
         )}
       </div>
 
+      {/* Multimedia & Inbound Files (Audio, Documentos, Vídeo) */}
+      <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold text-neutral-800">
+            Procesamiento Multimedia y Límites de Archivo (WhatsApp)
+          </h2>
+          <p className="text-xs text-neutral-500 mt-0.5">
+            Configura los límites máximos permitidos en megabytes (MB) para archivos recibidos por WhatsApp (YCloud, Evolution API y Meta WhatsApp Cloud API), y el motor de transcripción automática de notas de voz.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              Límite Audio / Notas de voz (MB)
+            </label>
+            <Input
+              type="number"
+              min={1}
+              max={2000}
+              placeholder="100"
+              value={form.maxAudioSizeMb ?? 100}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  maxAudioSizeMb: parseInt(e.target.value) || 100,
+                }))
+              }
+            />
+            <p className="mt-1 text-xs text-neutral-400">Por defecto: 100 MB</p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              Límite Documentos (PDF, DOCX, XLSX, TXT) (MB)
+            </label>
+            <Input
+              type="number"
+              min={1}
+              max={2000}
+              placeholder="100"
+              value={form.maxDocSizeMb ?? 100}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  maxDocSizeMb: parseInt(e.target.value) || 100,
+                }))
+              }
+            />
+            <p className="mt-1 text-xs text-neutral-400">Por defecto: 100 MB</p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              Límite Vídeo (MP4) (MB)
+            </label>
+            <Input
+              type="number"
+              min={1}
+              max={2000}
+              placeholder="100"
+              value={form.maxVideoSizeMb ?? 100}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  maxVideoSizeMb: parseInt(e.target.value) || 100,
+                }))
+              }
+            />
+            <p className="mt-1 text-xs text-neutral-400">Por defecto: 100 MB</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-neutral-100">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              Motor de Transcripción de Audio
+            </label>
+            <select
+              className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              value={form.transcriptionProvider || "auto"}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  transcriptionProvider: e.target.value,
+                }))
+              }
+            >
+              <option value="auto">Automático (Groq / OpenAI / Deepgram / OpenRouter)</option>
+              <option value="groq">Groq Whisper (whisper-large-v3, ultra-rápido)</option>
+              <option value="whisper">OpenAI Whisper (whisper-1)</option>
+              <option value="deepgram">Deepgram (Nova-3 en español)</option>
+              <option value="openrouter">OpenRouter Multimodal (Gemini 2.0 Flash)</option>
+            </select>
+            <p className="mt-1 text-xs text-neutral-400">
+              En modo automático, utiliza la clave disponible con menor latencia.
+            </p>
+          </div>
+
+          <div>
+            <SecretInput
+              key={`transcription-${savedTick}`}
+              label="Clave API de Transcripción Dedicada (opcional)"
+              placeholder="Dejar en blanco para usar clave global / OpenRouter"
+              hasValue={!!form.hasTranscriptionApiKey}
+              value={form.transcriptionApiKey}
+              onChange={(val) =>
+                setForm((f) => ({ ...f, transcriptionApiKey: val }))
+              }
+              hint="Opcional. Si se deja vacía, se emplean las credenciales existentes."
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Voice Phone Agent (VAPI & Zadarma) */}
       <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-3">
         <div className="flex items-center justify-between">

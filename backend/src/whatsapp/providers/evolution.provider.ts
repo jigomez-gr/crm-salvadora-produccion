@@ -9,6 +9,8 @@ import { AgentConfig } from '../../common/entities/agent-config.entity';
 import { normalizePhoneLoose } from '../../common/phone';
 import {
   WhatsappConnectionStatus,
+  WhatsappFetchInboundMediaParams,
+  WhatsappInboundMediaResult,
   WhatsappProvider,
   WhatsappSendMediaParams,
   WhatsappSendResult,
@@ -237,6 +239,74 @@ export class EvolutionProvider implements WhatsappProvider {
       error:
         'Evolution API envía recordatorios como texto directo y requiere fallbackText o parámetros de cita.',
     };
+  }
+
+  /**
+   * Fetches inbound media from an HTTP URL hosted on Evolution API.
+   */
+  async fetchInboundMedia(
+    params: WhatsappFetchInboundMediaParams,
+  ): Promise<WhatsappInboundMediaResult> {
+    const config = params.config;
+    const apiKey = config?.evolutionApiKey?.trim();
+    const headers: Record<string, string> = {};
+    if (apiKey) {
+      headers.apikey = apiKey;
+    }
+
+    const upstream = await fetch(params.mediaUrl, {
+      signal: params.signal,
+      headers: Object.keys(headers).length > 0 ? headers : undefined,
+    });
+    if (!upstream.ok) {
+      this.logger.warn(`Evolution media fetch failed: ${upstream.status}`);
+      throw new HttpException(
+        'No se pudo obtener el archivo del proveedor Evolution',
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+    const contentType =
+      upstream.headers.get('content-type') || 'application/octet-stream';
+    return { buffer, contentType };
+  }
+
+  /**
+   * Fetches base64 media from Evolution API v2:
+   * POST /chat/getBase64FromMediaMessage/{instance}
+   */
+  async fetchMediaBase64(
+    config: AgentConfig | null | undefined,
+    messagePayload: Record<string, any>,
+  ): Promise<{ buffer: Buffer; contentType: string } | null> {
+    const baseUrl = this.normalizeBaseUrl(config?.evolutionApiUrl);
+    const instanceName = config?.evolutionInstanceName?.trim();
+    const apiKey = config?.evolutionApiKey?.trim();
+
+    if (!baseUrl || !instanceName || !apiKey) {
+      return null;
+    }
+
+    const res = await this.requestEvolution(
+      baseUrl,
+      apiKey,
+      'POST',
+      `/chat/getBase64FromMediaMessage/${encodeURIComponent(instanceName)}`,
+      {
+        message: messagePayload,
+        convertToMp4: false,
+      },
+      MEDIA_TIMEOUT_MS,
+    );
+
+    if (res.ok && res.data?.base64) {
+      const cleanBase64 = String(res.data.base64).replace(/^data:.*?;base64,/, '');
+      const buffer = Buffer.from(cleanBase64, 'base64');
+      const contentType = res.data.mimetype || 'application/octet-stream';
+      return { buffer, contentType };
+    }
+
+    return null;
   }
 
   /**

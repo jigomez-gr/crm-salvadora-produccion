@@ -373,6 +373,13 @@ export interface Agent {
   facebookUrl?: string | null;
   googleReviewUrl?: string | null;
   seoDescription?: string | null;
+  // Límites Multimedia y Transcripción (WhatsApp)
+  maxAudioSizeMb?: number;
+  maxDocSizeMb?: number;
+  maxVideoSizeMb?: number;
+  transcriptionProvider?: string;
+  transcriptionApiKey?: string | null;
+  hasTranscriptionApiKey?: boolean;
   // Secrets are NEVER sent by the API. The browser only learns whether each one
   // is set; send a new value in these fields to change it, or leave blank to
   // keep the stored secret unchanged.

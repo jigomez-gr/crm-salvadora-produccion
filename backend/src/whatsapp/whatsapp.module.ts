@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { YCloudModule } from './ycloud.module';
 import { YCloudWebhookController } from './ycloud-webhook.controller';
 import { EvolutionWebhookController } from './evolution-webhook.controller';
+import { MetaWebhookController } from './meta-webhook.controller';
 import { EvolutionAdminController } from './evolution-admin.controller';
 import { WhatsappSendController } from './whatsapp-send.controller';
 import { ConversationsModule } from '../conversations/conversations.module';
@@ -20,6 +21,7 @@ import { AuthModule } from '../auth/auth.module';
   controllers: [
     YCloudWebhookController,
     EvolutionWebhookController,
+    MetaWebhookController,
     EvolutionAdminController,
     WhatsappSendController,
   ],

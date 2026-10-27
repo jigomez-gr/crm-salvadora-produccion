@@ -95,6 +95,35 @@ export class CreateAgentConfigDto {
   @IsString()
   @MaxLength(4000)
   seoDescription?: string;
+
+  // ─── Límites Multimedia y Transcripción ───
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(2000)
+  maxAudioSizeMb?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(2000)
+  maxDocSizeMb?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(2000)
+  maxVideoSizeMb?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  transcriptionProvider?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  transcriptionApiKey?: string;
 }
 
 export class UpdateAgentConfigDto {
@@ -270,4 +299,33 @@ export class UpdateAgentConfigDto {
   @IsString()
   @MaxLength(4000)
   seoDescription?: string;
+
+  // ─── Límites Multimedia y Transcripción ───
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(2000)
+  maxAudioSizeMb?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(2000)
+  maxDocSizeMb?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(2000)
+  maxVideoSizeMb?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  transcriptionProvider?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  transcriptionApiKey?: string;
 }
