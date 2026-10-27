@@ -140,6 +140,30 @@ describe('InboundMediaProcessorService — Multi-format & Limit Testing', () => 
   });
 
   describe('3. Audio transcription and fallback handling', () => {
+    it('detects audio files (e.g. que_servicios_teneis.mp3) even when delivered with type DOCUMENT', async () => {
+      const audioBuffer = Buffer.from('mp3-audio-bytes');
+      mockEvolutionProvider.fetchInboundMedia.mockResolvedValue({
+        buffer: audioBuffer,
+        contentType: 'audio/mpeg',
+      });
+
+      jest.spyOn(service, 'transcribeAudio').mockResolvedValue('¿Qué servicios tenéis?');
+
+      const media: InboundMedia = {
+        type: MediaType.DOCUMENT, // sent as document by WhatsApp
+        url: 'http://evolution/que_servicios_teneis.mp3',
+        mediaId: 'doc_audio_1',
+        mimeType: 'audio/mpeg',
+        filename: 'que_servicios_teneis.mp3',
+      };
+
+      const result = await service.processMedia('evolution', media, mockAgentConfig);
+
+      expect(result.enrichedBody).toContain('🎤 Audio: "¿Qué servicios tenéis?"');
+      expect(result.enrichedAgentPrompt).toContain('¿Qué servicios tenéis?');
+      expect(result.transcription).toBe('¿Qué servicios tenéis?');
+    });
+
     it('returns structured audio prompt when transcription succeeds', async () => {
       const audioBuffer = Buffer.from('fake-audio-bytes');
       mockMetaProvider.fetchInboundMedia.mockResolvedValue({

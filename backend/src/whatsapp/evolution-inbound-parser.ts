@@ -248,12 +248,39 @@ export function parseEvolutionInboundMessages(
         const mimeType = typeof doc.mimetype === 'string' ? doc.mimetype : 'application/pdf';
         const filename = typeof doc.fileName === 'string' ? doc.fileName : (typeof doc.title === 'string' ? doc.title : 'documento.pdf');
         const caption = typeof doc.caption === 'string' && doc.caption.trim().length > 0 ? doc.caption.trim() : null;
-        textCandidate = caption || (filename ? `📄 ${filename}` : '📄 Documento');
-        agentPrompt = caption
-          ? `[El cliente ha enviado el documento "${filename}" con el texto: "${caption}"]`
-          : `[El cliente ha enviado el documento "${filename}"]`;
+
+        const lowerName = filename.toLowerCase();
+        const ext = lowerName.lastIndexOf('.') >= 0 ? lowerName.slice(lowerName.lastIndexOf('.') + 1) : '';
+        const isAudio = /^(mp3|ogg|opus|wav|m4a|aac|flac|amr|wma|aiff|mpga)$/.test(ext) || mimeType.startsWith('audio/') || mimeType === 'application/ogg';
+        const isVideo = /^(mp4|m4v|3gp|3gpp|mov|avi|mkv|webm)$/.test(ext) || mimeType.startsWith('video/');
+        const isImage = /^(jpg|jpeg|png|webp|gif|bmp|svg)$/.test(ext) || mimeType.startsWith('image/');
+
+        const mediaType = isAudio ? MediaType.AUDIO : isVideo ? MediaType.VIDEO : isImage ? MediaType.IMAGE : MediaType.DOCUMENT;
+
+        if (isAudio) {
+          textCandidate = caption || `🎵 ${filename}`;
+          agentPrompt = caption
+            ? `[El cliente ha enviado un audio ("${filename}") con el texto: "${caption}"]`
+            : `[El cliente ha enviado un mensaje de voz o audio ("${filename}")]`;
+        } else if (isVideo) {
+          textCandidate = caption || `🎬 ${filename}`;
+          agentPrompt = caption
+            ? `[El cliente ha enviado un vídeo ("${filename}") con el texto: "${caption}"]`
+            : `[El cliente ha enviado un vídeo ("${filename}")]`;
+        } else if (isImage) {
+          textCandidate = caption || `📷 ${filename}`;
+          agentPrompt = caption
+            ? `[El cliente ha enviado una imagen ("${filename}") con el texto: "${caption}"]`
+            : `[El cliente ha enviado una imagen ("${filename}")]`;
+        } else {
+          textCandidate = caption || (filename ? `📄 ${filename}` : '📄 Documento');
+          agentPrompt = caption
+            ? `[El cliente ha enviado el documento "${filename}" con el texto: "${caption}"]`
+            : `[El cliente ha enviado el documento "${filename}"]`;
+        }
+
         media = {
-          type: MediaType.DOCUMENT,
+          type: mediaType,
           url: typeof doc.url === 'string' ? doc.url : null,
           mediaId: externalId,
           mimeType,

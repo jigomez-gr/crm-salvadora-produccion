@@ -18,6 +18,33 @@ export interface ProcessedMediaResult {
 const DEFAULT_LIMIT_MB = 100;
 const MAX_PROMPT_DOC_CHARS = 12_000;
 
+const AUDIO_EXTENSIONS = new Set([
+  'mp3', 'ogg', 'opus', 'wav', 'm4a', 'aac', 'flac', 'amr', 'wma', 'aiff', 'mpga',
+]);
+const VIDEO_EXTENSIONS = new Set([
+  'mp4', 'm4v', '3gp', '3gpp', 'mov', 'avi', 'mkv', 'webm',
+]);
+const IMAGE_EXTENSIONS = new Set([
+  'jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg',
+]);
+
+export function detectEffectiveMediaType(media: InboundMedia): MediaType {
+  const filename = (media.filename || '').toLowerCase().trim();
+  const ext = filename.lastIndexOf('.') >= 0 ? filename.slice(filename.lastIndexOf('.') + 1) : '';
+  const mime = (media.mimeType || '').toLowerCase().trim();
+
+  if (AUDIO_EXTENSIONS.has(ext) || mime.startsWith('audio/') || mime === 'application/ogg') {
+    return MediaType.AUDIO;
+  }
+  if (VIDEO_EXTENSIONS.has(ext) || mime.startsWith('video/')) {
+    return MediaType.VIDEO;
+  }
+  if (IMAGE_EXTENSIONS.has(ext) || mime.startsWith('image/')) {
+    return MediaType.IMAGE;
+  }
+  return media.type;
+}
+
 @Injectable()
 export class InboundMediaProcessorService {
   private readonly logger = new Logger(InboundMediaProcessorService.name);
@@ -50,34 +77,37 @@ export class InboundMediaProcessorService {
 
       const sizeMb = mediaBuffer.length / (1024 * 1024);
 
-      // 2. Size limit checks per media type
-      const limitMb = this.getLimitForMediaType(media.type, config);
+      // 2. Detect real media category (e.g. MP3/OGG or MP4 sent as WhatsApp document)
+      const effectiveType = detectEffectiveMediaType(media);
+
+      // 3. Size limit checks per media type
+      const limitMb = this.getLimitForMediaType(effectiveType, config);
       if (sizeMb > limitMb) {
         const roundedSize = Math.round(sizeMb * 10) / 10;
         this.logger.warn(
-          `Inbound media ${media.type} rejected: size ${roundedSize} MB exceeds agent limit of ${limitMb} MB`,
+          `Inbound media ${effectiveType} rejected: size ${roundedSize} MB exceeds agent limit of ${limitMb} MB`,
         );
         return {
           isOverLimit: true,
-          enrichedBody: `⚠️ Archivo de ${this.getCategoryLabel(media.type)} (${roundedSize} MB) supera el límite de ${limitMb} MB`,
-          enrichedAgentPrompt: `[El cliente ha enviado un archivo de ${this.getCategoryLabel(media.type)} (${roundedSize} MB) que supera el límite máximo permitido de ${limitMb} MB configurado para este centro. Explícale amablemente y con cortesía que el archivo supera el límite de ${limitMb} MB y pídele si te puede enviar un resumen o el archivo en menor tamaño.]`,
+          enrichedBody: `⚠️ Archivo de ${this.getCategoryLabel(effectiveType)} (${roundedSize} MB) supera el límite de ${limitMb} MB`,
+          enrichedAgentPrompt: `[El cliente ha enviado un archivo de ${this.getCategoryLabel(effectiveType)} (${roundedSize} MB) que supera el límite máximo permitido de ${limitMb} MB configurado para este centro. Explícale amablemente y con cortesía que el archivo supera el límite de ${limitMb} MB y pídele si te puede enviar un resumen o el archivo en menor tamaño.]`,
         };
       }
 
-      // 3. Process according to media type
-      if (media.type === MediaType.DOCUMENT) {
-        return await this.processDocument(mediaBuffer, media, caption);
-      }
-
-      if (media.type === MediaType.AUDIO) {
+      // 4. Process according to real media type
+      if (effectiveType === MediaType.AUDIO) {
         return await this.processAudio(mediaBuffer, media, config);
       }
 
-      if (media.type === MediaType.VIDEO) {
+      if (effectiveType === MediaType.DOCUMENT) {
+        return await this.processDocument(mediaBuffer, media, caption);
+      }
+
+      if (effectiveType === MediaType.VIDEO) {
         return this.processVideo(media, caption, sizeMb);
       }
 
-      if (media.type === MediaType.IMAGE) {
+      if (effectiveType === MediaType.IMAGE) {
         const body = caption ? caption : '📷 Imagen';
         const prompt = caption
           ? `[El cliente ha enviado una imagen con el texto: "${caption}"]`
