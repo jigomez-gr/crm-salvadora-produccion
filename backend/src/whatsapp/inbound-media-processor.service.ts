@@ -203,11 +203,11 @@ export class InboundMediaProcessorService {
 
     // B. Evolution API
     if (provider === 'evolution') {
-      if (this.evolutionProvider && media.rawPayload?.message) {
-        const result = await this.evolutionProvider.fetchMediaBase64(config, media.rawPayload.message);
+      if (this.evolutionProvider && media.rawPayload) {
+        const result = await this.evolutionProvider.fetchMediaBase64(config, media.rawPayload);
         if (result?.buffer) return result.buffer;
       }
-      if (media.url && this.evolutionProvider) {
+      if (media.url && this.evolutionProvider && !media.url.includes('.enc')) {
         const res = await this.evolutionProvider.fetchInboundMedia({ config, mediaUrl: media.url });
         return res.buffer;
       }
@@ -228,8 +228,8 @@ export class InboundMediaProcessorService {
       }
     }
 
-    // E. Generic HTTP fetch fallback if an absolute public URL was supplied
-    if (media.url && /^https?:\/\//i.test(media.url)) {
+    // E. Generic HTTP fetch fallback if an absolute public URL was supplied (excluding WhatsApp raw .enc ciphertext)
+    if (media.url && /^https?:\/\//i.test(media.url) && !media.url.includes('.enc')) {
       const response = await fetch(media.url, { signal: AbortSignal.timeout(30_000) });
       if (response.ok) {
         return Buffer.from(await response.arrayBuffer());

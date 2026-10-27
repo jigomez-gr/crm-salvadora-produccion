@@ -287,13 +287,18 @@ export class EvolutionProvider implements WhatsappProvider {
       return null;
     }
 
+    // Evolution API v2 requires the full message object with `key` and `message` to locate & decrypt media
+    const payloadToSend = messagePayload?.key
+      ? messagePayload
+      : (messagePayload?.message?.key ? messagePayload.message : messagePayload);
+
     const res = await this.requestEvolution(
       baseUrl,
       apiKey,
       'POST',
       `/chat/getBase64FromMediaMessage/${encodeURIComponent(instanceName)}`,
       {
-        message: messagePayload,
+        message: payloadToSend,
         convertToMp4: false,
       },
       MEDIA_TIMEOUT_MS,
