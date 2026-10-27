@@ -347,7 +347,7 @@ export class InboundMediaProcessorService {
     const openrouterKey = config?.openrouterApiKey || process.env.OPENROUTER_API_KEY;
     if (openrouterKey) {
       try {
-        const text = await this.transcribeWithOpenRouter(buffer, mimeType, openrouterKey);
+        const text = await this.transcribeWithOpenRouter(buffer, filename, mimeType, openrouterKey);
         if (text) return text;
       } catch (err: any) {
         this.logger.warn(`OpenRouter transcription fallback failed: ${err?.message || err}`);
@@ -451,53 +451,83 @@ export class InboundMediaProcessorService {
 
   private async transcribeWithOpenRouter(
     buffer: Buffer,
+    filename: string,
     mimeType: string,
     apiKey: string,
   ): Promise<string | null> {
     const cleanMime = mimeType.split(';')[0].trim() || 'audio/ogg';
     const base64 = buffer.toString('base64');
-    const dataUri = `data:${cleanMime};base64,${base64}`;
-
-    const payload = {
-      model: 'google/gemini-2.0-flash-001',
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: 'Transcribe el siguiente audio en español palabra por palabra con máxima precisión. Devuelve ÚNICAMENTE el texto transcrito, sin comentarios adicionales ni comillas.',
-            },
-            {
-              type: 'image_url',
-              image_url: {
-                url: dataUri,
-              },
-            },
-          ],
-        },
-      ],
-      temperature: 0.1,
-    };
-
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(30_000),
-    });
-
-    if (!res.ok) {
-      const err = await res.text().catch(() => '');
-      this.logger.warn(`OpenRouter transcription returned HTTP ${res.status}: ${err}`);
-      return null;
+    const ext = (filename || '').split('.').pop()?.toLowerCase();
+    let format = 'mp3';
+    if (ext && ['mp3', 'ogg', 'wav', 'm4a', 'aac', 'flac'].includes(ext)) {
+      format = ext;
+    } else if (cleanMime.includes('ogg') || cleanMime.includes('opus')) {
+      format = 'ogg';
+    } else if (cleanMime.includes('wav')) {
+      format = 'wav';
+    } else if (cleanMime.includes('m4a')) {
+      format = 'm4a';
     }
 
-    const data: any = await res.json();
-    const content = data?.choices?.[0]?.message?.content;
-    return content ? String(content).trim() : null;
+    const candidateModels = [
+      'google/gemini-2.5-flash',
+      'google/gemini-2.5-flash-lite',
+      'google/gemini-3.5-flash',
+    ];
+
+    for (const model of candidateModels) {
+      try {
+        const payload = {
+          model,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: 'Transcribe el siguiente audio en español palabra por palabra con máxima precisión. Devuelve ÚNICAMENTE el texto transcrito, sin comentarios adicionales ni comillas.',
+                },
+                {
+                  type: 'input_audio',
+                  input_audio: {
+                    data: base64,
+                    format,
+                  },
+                },
+              ],
+            },
+          ],
+          temperature: 0.1,
+        };
+
+        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://centrodeyogasalvadoraconesa.es',
+            'X-Title': 'CRM Salvadora',
+          },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(30_000),
+        });
+
+        if (!res.ok) {
+          const err = await res.text().catch(() => '');
+          this.logger.warn(`OpenRouter (${model}) returned HTTP ${res.status}: ${err}`);
+          continue;
+        }
+
+        const data: any = await res.json();
+        const content = data?.choices?.[0]?.message?.content;
+        if (content && typeof content === 'string' && content.trim().length > 0) {
+          return content.trim().replace(/^["']|["']$/g, '');
+        }
+      } catch (err: any) {
+        this.logger.warn(`OpenRouter (${model}) transcription error: ${err?.message || err}`);
+      }
+    }
+
+    return null;
   }
 }
