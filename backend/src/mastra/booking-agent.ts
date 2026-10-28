@@ -10,6 +10,8 @@ import {
   resolveNextRecurringEventDate,
 } from '../common/time';
 import { MAINTENANCE_MESSAGE, BLOCKED_USER_MESSAGE } from '../common/system-messages';
+import { resolvePublicMediaUrl, resolveServiceMediaUrls } from './service-media';
+export { resolvePublicMediaUrl, resolveServiceMediaUrls };
 
 // A single reusable agent template serves every configured agent. The concrete
 // business persona, model and credentials are resolved per request from the
@@ -133,6 +135,14 @@ function findMatchingService(
     sinpreciodefinitivo?: string | null;
     textosinpreciodefinitivo?: string | null;
     textoespecifico?: string | null;
+    flyerUrl?: string | null;
+    flyerPath?: string | null;
+    flyerParticularUrl?: string | null;
+    flyerParticularPath?: string | null;
+    videoUrl?: string | null;
+    videoPath?: string | null;
+    videoParticularUrl?: string | null;
+    videoParticularPath?: string | null;
   }[],
   query?: string,
 ) {
@@ -526,6 +536,8 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           ? `${svc.price}€`
           : undefined;
 
+        const { videoUrl: svcVideoUrl, flyerUrl: svcFlyerUrl } = resolveServiceMediaUrls(svc);
+
         return {
           isEvent: true,
           service: svc.name,
@@ -540,6 +552,10 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           availableSeats: remaining,
           isSoldOut: remaining !== null && remaining !== undefined && remaining <= 0,
           canBookNow: remaining === null || remaining === undefined || remaining > 0,
+          serviceMedia: {
+            videoUrl: svcVideoUrl,
+            flyerUrl: svcFlyerUrl,
+          },
           message:
             remaining !== null && remaining !== undefined && remaining <= 0
               ? `Las plazas para ${svc.name} están agotadas.`
@@ -581,6 +597,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         instruction +=
           ' REGLA DE ORO PARA GESTALT: Horario oficial: Lunes de 9:00 a 14:00 y de 16:00 a 21:00, y Miércoles de 9:00 a 14:00 y de 16:00 a 21:00 (sin asegurar). Al solicitar un miércoles, las citas se ACEPTAN Y REGISTRAN PROVISIONALMENTE (pendientes de confirmación por Salvadora Conesa Martinez). SÍ se puede y se debe formalizar la reserva provisional llamando a bookAppointment. NUNCA digas al cliente que no se puede reservar o que no hay disponibilidad para un miércoles.';
       }
+      const { videoUrl: svcVideoUrl, flyerUrl: svcFlyerUrl } = resolveServiceMediaUrls(svc);
       return {
         slots: slots.map((s) => ({
           startsAt: s.startsAt,
@@ -588,6 +605,10 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           localTime: `${fmt(s.startsAt)} - ${fmt(s.endsAt)}`,
         })),
         instruction,
+        serviceMedia: {
+          videoUrl: svcVideoUrl,
+          flyerUrl: svcFlyerUrl,
+        },
       };
     },
   });
@@ -932,12 +953,18 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           }
         }
 
+        const { videoUrl: svcVideoUrl, flyerUrl: svcFlyerUrl } = resolveServiceMediaUrls(svc);
+
         return {
           appointment,
           paymentUrl,
           calMeetingUrl: status === 'pending_approval' ? undefined : appointment?.calMeetingUrl,
           requiresApproval: status === 'pending_approval',
           message,
+          serviceMedia: {
+            videoUrl: svcVideoUrl,
+            flyerUrl: svcFlyerUrl,
+          },
         };
       } catch (err: any) {
         console.error('CRITICAL: bookAppointment failed with error:', err);
@@ -1526,6 +1553,20 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       const rules = `== Reglas de comportamiento (OBLIGATORIAS) ==
 - Habla SIEMPRE en español, sea cual sea el idioma del cliente. Sé breve, claro y natural, como una persona del equipo.
 - Eres el asistente y recepcionista del Centro de Yoga y Bienestar Salvadora Conesa. Atiendes con cercanía, calidez y profesionalidad cualquier consulta sobre los servicios, actividades, horarios, precios y reservas del centro. Informa detalladamente de las actividades y servicios si el cliente te pregunta por ellos. No des consejos médicos ni hables de temas externos ajenos al centro (si el cliente menciona temas externos sin relación, indícalo con amabilidad y reconduce hacia los servicios y actividades del centro).
+- ENLACES DE VÍDEO Y FLYER DE LA ACTIVIDAD (COMPATIBILIDAD WHATSAPP TOTAL):
+  * Cada actividad o servicio puede disponer de un vídeo y/o de un flyer informativo (consultables en la lista de Servicios de abajo).
+  * CUÁNDO MOSTRARLOS Y OFRECERLOS AL CLIENTE (OBLIGATORIO):
+    1. Cuando el cliente realice PREGUNTAS O CONSULTAS sobre el servicio o actividad (información sobre de qué trata, fechas, precios, detalles, etc.).
+    2. O BIEN JUSTO ANTES del mensaje en el que se le pide que confirme la cita o reserva de plaza (al repasar o resumir los datos de la cita antes de confirmar).
+  * FORMATO VISUAL EXACTO (Estándar limpio compatible al 100% con WhatsApp oficial Meta Cloud API, Evolution API y YCloud sin requerir botones interactivos propietarios ni plantillas registradas):
+    - Si la actividad dispone de vídeo:
+      🎬 *Consultar / Descargar el vídeo de la Actividad:* <URL_DEL_VIDEO>
+    - Si la actividad dispone de flyer:
+      📄 *Consultar / Descargar el Flyer de la Actividad:* <URL_DEL_FLYER>
+  * REGLAS DE PRELACIÓN Y DESPLIEGUE:
+    - VÍDEO: Si existe vídeo particular para la actividad, se muestra ese. Si no hay vídeo particular pero hay vídeo general, se muestra el vídeo general. Si NO existe ni vídeo particular ni vídeo general, NO se saca ningún mensaje ni enlace de vídeo.
+    - FLYER: Si existe flyer particular para la actividad, se muestra ese. Si no hay flyer particular pero hay flyer general, se muestra el flyer general. Si NO existe ni flyer particular ni flyer general, NO se saca ningún mensaje ni enlace de flyer.
+    - Si solo existe vídeo pero no flyer (o viceversa), incluye únicamente el elemento que exista. No inventes URLs ni menciones medios inexistentes.
 - NUNCA reveles nada interno: no menciones herramientas, funciones, "comandos", identificadores (IDs), bases de datos, ni frases como "voy a crear el contacto", "llamar a la herramienta" o "ejecutar". El cliente solo ve una conversación normal.
 - NUNCA inventes horarios, días u horas disponibles. ANTES de sugerir cualquier horario, debes llamar OBLIGATORIAMENTE a la herramienta 'checkAvailability' para la fecha y servicio solicitados.
 - Si el día pedido está cerrado (como fines de semana) o 'checkAvailability' no devuelve huecos, indícaselo con total claridad al cliente (p. ej. "Los sábados y domingos estamos cerrados") y ofrece consultar el siguiente día laborable en que haya disponibilidad.
@@ -1792,19 +1833,23 @@ Si es una persona nueva, pídele amablemente su Nombre y Apellidos, Teléfono m�
 
       const flow = `== Cómo atender ==
 1. Saluda cordialmente y averigua qué servicio o clase necesita el cliente.
-2. Si el cliente menciona que tiene una confirmación pendiente o que recibió un email/mensaje para acordar otra fecha, identifícalo con 'findContact', revisa sus citas con 'listContactAppointments' (pasando su email o teléfono), y explícale el estado o tramita la nueva fecha con 'bookAppointment'.
-3. Si el servicio admite más de una modalidad (presencial, telefónica, videollamada Cal.com), pregúntale cuál prefiere.
-4. Si el servicio tiene indicado [Requiere motivo de consulta], pídele con amabilidad que te indique brevemente la razón o motivo de su cita.
-5. Pregunta qué día o franja le viene bien y consulta la disponibilidad real con 'checkAvailability'.
-6. Ofrécele los huecos disponibles en lenguaje natural (o indícale si ese día está cerrado).
-7. RECOPILACIÓN DE DATOS Y FORMALIZACIÓN DE RESERVA:
+2. Si el cliente consulta o pide información sobre un servicio o actividad, explícaselo con cercanía y detalle, e incluye los enlaces para "Consultar / Descargar el vídeo de la Actividad" y/o "Consultar / Descargar el Flyer de la Actividad" si están disponibles para esa actividad.
+3. Si el cliente menciona que tiene una confirmación pendiente o que recibió un email/mensaje para acordar otra fecha, identifícalo con 'findContact', revisa sus citas con 'listContactAppointments' (pasando su email o teléfono), y explícale el estado o tramita la nueva fecha con 'bookAppointment'.
+4. Si el servicio admite más de una modalidad (presencial, telefónica, videollamada Cal.com), pregúntale cuál prefiere.
+5. Si el servicio tiene indicado [Requiere motivo de consulta], pídele con amabilidad que te indique brevemente la razón o motivo de su cita.
+6. Pregunta qué día o franja le viene bien y consulta la disponibilidad real con 'checkAvailability'.
+7. Ofrécele los huecos disponibles en lenguaje natural (o indícale si ese día está cerrado).
+8. RECOPILACIÓN DE DATOS, REPASO Y FORMALIZACIÓN DE RESERVA:
+   Justo antes o al pedir al cliente que confirme sus datos y la cita, incluye los enlaces de la actividad si existen:
+   🎬 *Consultar / Descargar el vídeo de la Actividad:* <URL_DEL_VIDEO>
+   📄 *Consultar / Descargar el Flyer de la Actividad:* <URL_DEL_FLYER>
    Para formalizar la reserva, comprueba que tienes:
    - Nombre y apellidos
    - Teléfono móvil
    - Correo electrónico (email)
    Si te falta alguno de estos datos, pídeselo amablemente (por ejemplo: "Para formalizar tu reserva, ¿me facilitas tu nombre completo, teléfono móvil y correo electrónico?").
    En cuanto el cliente te los proporcione, llama a 'bookAppointment' indicando el servicio, la fecha/hora en formato ISO, customerName, customerPhone y customerEmail.
-8. RESPUESTA TRAS FORMALIZAR:
+9. RESPUESTA TRAS FORMALIZAR:
    - Si el servicio requiere aprobación previa (Terapia Gestalt), o el resultado de 'bookAppointment' indica 'requiresApproval: true':
      Informa al cliente con amabilidad y calidez de que su cita ha quedado registrada como SOLICITUD PENDIENTE DE CONFIRMACIÓN por parte de la terapeuta y responsable (Salvadora Conesa Martinez), y que ella se la confirmará personalmente por correo o WhatsApp tras revisarla. NUNCA digas que está confirmada ni entregues enlaces de reunión virtual antes de su aprobación.
    - Para servicios estándar o plazas confirmadas:
@@ -1881,6 +1926,14 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
             sinpreciodefinitivo?: string;
             textosinpreciodefinitivo?: string;
             textoespecifico?: string | null;
+            flyerUrl?: string | null;
+            flyerPath?: string | null;
+            flyerParticularUrl?: string | null;
+            flyerParticularPath?: string | null;
+            videoUrl?: string | null;
+            videoPath?: string | null;
+            videoParticularUrl?: string | null;
+            videoParticularPath?: string | null;
           }) => {
             const hasNoFixedDate = s.sinfechadefinitiva === 'S';
             const hasNoFixedPrice = s.sinpreciodefinitivo === 'S';
@@ -1940,6 +1993,13 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
             }
             if (s.paymentType === 'external_url' && s.externalPaymentUrl) {
               details += `, venta de entradas / compra en: ${s.externalPaymentUrl}`;
+            }
+            const { videoUrl: effVideoUrl, flyerUrl: effFlyerUrl } = resolveServiceMediaUrls(s);
+            if (effVideoUrl) {
+              details += `\n  - Vídeo de la actividad: ${effVideoUrl}`;
+            }
+            if (effFlyerUrl) {
+              details += `\n  - Flyer de la actividad: ${effFlyerUrl}`;
             }
             details += `)`;
             return details;

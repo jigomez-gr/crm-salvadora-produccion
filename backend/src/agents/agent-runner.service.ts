@@ -310,6 +310,14 @@ export class AgentRunnerService {
           textosinpreciodefinitivo: s.textosinpreciodefinitivo,
           textoespecifico: s.textoespecifico || null,
           editions: (s as any).editions || [],
+          flyerUrl: s.flyerUrl || null,
+          flyerPath: s.flyerPath || null,
+          flyerParticularUrl: s.flyerParticularUrl || null,
+          flyerParticularPath: s.flyerParticularPath || null,
+          videoUrl: s.videoUrl || null,
+          videoPath: s.videoPath || null,
+          videoParticularUrl: s.videoParticularUrl || null,
+          videoParticularPath: s.videoParticularPath || null,
         }));
       }
 
