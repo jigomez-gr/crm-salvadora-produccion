@@ -190,23 +190,28 @@ export class AgentRunnerService {
       return { reply, outbound };
     }
 
-    // 2. Blocked User Check ('S')
-    let isBlocked = false;
+    // 2. Blocked User Check ('S' - Bloqueo por restricción técnica)
+    let contactEntity: any = null;
     if (contactId) {
-      const c = await this.contactsService.findById(contactId).catch(() => null);
-      if (c?.bloqueado === 'S') isBlocked = true;
+      contactEntity = await this.contactsService.findById(contactId).catch(() => null);
     }
-    if (!isBlocked && phone) {
-      isBlocked = await this.contactsService.isContactBlocked(phone).catch(() => false);
+    if (!contactEntity && phone) {
+      contactEntity = await this.contactsService.findByPhone(phone).catch(() => null);
     }
+    const isBlocked =
+      contactEntity?.bloqueado === 'S' ||
+      (phone && this.contactsService.isContactBlocked
+        ? await Promise.resolve(this.contactsService.isContactBlocked(phone)).catch(() => false)
+        : false);
+
     if (isBlocked) {
-      this.logger.log(`Contact ${contactId || phone} is blocked ('S') — replying with blocked restriction message.`);
+      this.logger.log(`Contact ${contactId || phone} is blocked by technical restriction ('S') — replying with blocked restriction message.`);
       const reply = BLOCKED_USER_MESSAGE;
       const outbound = await this.emitOutbound(params, reply);
       return { reply, outbound };
     }
 
-    // Consent keywords (STOP/BAJA → opt-out, ALTA/START → opt-in). Honored on
+    // Consent keywords (STOP/BAJA/NO QUIERO SERVICIOS → opt-out, ALTA/START → opt-in). Honored on
     // WhatsApp BEFORE the disabled/handoff checks (a STOP must always be obeyed)
     // and instead of the agent: set the flag, audit it, and send one
     // confirmation. No LLM call.
@@ -214,11 +219,12 @@ export class AgentRunnerService {
       channel === MessageChannel.WHATSAPP
         ? detectConsentKeyword(message)
         : null;
-    if (consent && contactId) {
+    const targetContactId = contactId || contactEntity?.id;
+    if (consent && targetContactId) {
       await this.contactsService
-        .setOptOut(contactId, consent === 'opt_out')
+        .setOptOut(targetContactId, consent === 'opt_out')
         .catch((err) =>
-          this.logger.error(`Failed to set opt-out for ${contactId}: ${err}`),
+          this.logger.error(`Failed to set opt-out for ${targetContactId}: ${err}`),
         );
       this.eventEmitter.emit(AUDIT_EVENT, {
         actor: { id: null, email: null },
@@ -228,15 +234,29 @@ export class AgentRunnerService {
             : AuditAction.CONTACT_OPT_IN,
         summary:
           consent === 'opt_out'
-            ? `${contactName || phone} se dio de baja por WhatsApp (STOP/BAJA)`
-            : `${contactName || phone} reactivó los mensajes por WhatsApp`,
+            ? `${contactName || phone} se dio de baja por WhatsApp (solicitó no acceder a más servicios)`
+            : `${contactName || phone} reactivó los mensajes y acceso a servicios por WhatsApp`,
         targetType: 'contact',
-        targetId: contactId,
+        targetId: targetContactId,
       });
       const reply =
         consent === 'opt_out'
-          ? 'Hecho. No volverás a recibir mensajes automáticos. Escribe ALTA cuando quieras reactivarlos.'
-          : 'Listo, volverás a recibir nuestros mensajes. ¡Gracias!';
+          ? 'Hecho. Hemos registrado tu solicitud de no acceder a los servicios ni recibir comunicaciones automáticas del centro. Escribe ALTA cuando quieras reactivarlos.'
+          : '¡Bienvenido de nuevo! Hemos reactivado tu acceso a nuestros servicios y comunicaciones. ¿En qué podemos ayudarte hoy?';
+      const outbound = await this.emitOutbound(params, reply);
+      return { reply, outbound };
+    }
+
+    // 3. User previously requested opt-out / baja (ha pedido no acceder más a los servicios de la clínica)
+    const isOptedOut =
+      Boolean(contactEntity?.optedOut) ||
+      (phone && this.contactsService.isContactOptedOut
+        ? await Promise.resolve(this.contactsService.isContactOptedOut(phone)).catch(() => false)
+        : false);
+    if (channel === MessageChannel.WHATSAPP && isOptedOut) {
+      this.logger.log(`Contact ${contactId || phone} has previously opted out / requested baja from clinic services.`);
+      const reply =
+        'Consta en nuestro sistema que has solicitado no acceder a los servicios ni recibir comunicaciones del Centro de Yoga y Bienestar Salvadora Conesa. Si deseas volver a acceder a nuestros servicios y reactivar la atención automática, escribe ALTA en cualquier momento.';
       const outbound = await this.emitOutbound(params, reply);
       return { reply, outbound };
     }

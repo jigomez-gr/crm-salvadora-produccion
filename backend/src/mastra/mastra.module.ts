@@ -68,6 +68,12 @@ export { NestMastraModule };
           isContactBlocked: async (phoneOrEmailOrId: string) => {
             return contactsService.isContactBlocked(phoneOrEmailOrId);
           },
+          isContactOptedOut: async (phoneOrEmailOrId: string) => {
+            return contactsService.isContactOptedOut(phoneOrEmailOrId);
+          },
+          setContactOptOut: async (contactId: string, optedOut: boolean) => {
+            return contactsService.setOptOut(contactId, optedOut);
+          },
           isContactEmailErroneous: async (phoneOrEmailOrId: string) => {
             return contactsService.isContactEmailErroneous(phoneOrEmailOrId);
           },

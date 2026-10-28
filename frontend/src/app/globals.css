@@ -16,3 +16,10 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+/* Responsive typography: compact font size and spacing on mobile phones */
+@media (max-width: 768px) {
+  html {
+    font-size: 13.5px;
+  }
+}

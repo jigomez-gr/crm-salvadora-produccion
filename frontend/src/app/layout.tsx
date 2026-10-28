@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -9,9 +9,31 @@ import { SensitiveAccessProvider } from "@/contexts/SensitiveAccessContext";
 
 const geist = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+  themeColor: "#4f46e5",
+};
+
 export const metadata: Metadata = {
   title: "CRM Salvadora",
   description: "CRM Salvadora con Agentes de IA",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "CRM Salvadora",
+  },
+  icons: {
+    icon: "/icon.svg",
+    apple: "/icon.svg",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+  },
 };
 
 export default function RootLayout({

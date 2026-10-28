@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="112" fill="#4f46e5"/>
+  <g fill="none" stroke="#ffffff" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" transform="translate(64, 64) scale(0.75)">
+    <!-- Central lotus petal -->
+    <path d="M256 80 C230 160 210 260 256 340 C302 260 282 160 256 80 Z" fill="#ffffff" fill-opacity="0.95"/>
+    <!-- Left petal -->
+    <path d="M256 340 C170 320 100 240 120 160 C180 180 230 260 256 340 Z" fill="#ffffff" fill-opacity="0.8"/>
+    <!-- Right petal -->
+    <path d="M256 340 C342 320 412 240 392 160 C332 180 282 260 256 340 Z" fill="#ffffff" fill-opacity="0.8"/>
+    <!-- Far left outer petal -->
+    <path d="M256 340 C140 360 60 300 60 220 C120 220 200 280 256 340 Z" fill="#ffffff" fill-opacity="0.65"/>
+    <!-- Far right outer petal -->
+    <path d="M256 340 C372 360 452 300 452 220 C392 220 312 280 256 340 Z" fill="#ffffff" fill-opacity="0.65"/>
+    <!-- Base arc / water lily base -->
+    <path d="M140 370 Q256 420 372 370" stroke="#ffffff" stroke-width="24" fill="none"/>
+  </g>
+</svg>

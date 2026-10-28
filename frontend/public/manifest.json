@@ -1,0 +1,20 @@
+{
+  "name": "CRM Salvadora Conesa",
+  "short_name": "CRM Salvadora",
+  "description": "CRM Centro de Yoga y Bienestar Salvadora Conesa",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "fullscreen"],
+  "orientation": "any",
+  "background_color": "#f9fafb",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

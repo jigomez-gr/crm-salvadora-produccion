@@ -41,6 +41,8 @@ export interface BookingAgentDeps {
   ) => Promise<any>;
   findContact?: (phone?: string, email?: string) => Promise<any>;
   isContactBlocked?: (phoneOrEmailOrId: string) => Promise<boolean>;
+  isContactOptedOut?: (phoneOrEmailOrId: string) => Promise<boolean>;
+  setContactOptOut?: (contactId: string, optedOut: boolean) => Promise<any>;
   isContactEmailErroneous?: (phoneOrEmailOrId: string) => Promise<boolean>;
   getAvailableSlots: (
     date: string,
@@ -462,6 +464,15 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           };
         }
       }
+      if (customer?.contactId && deps.isContactOptedOut) {
+        const isOptedOut = await deps.isContactOptedOut(customer.contactId).catch(() => false);
+        if (isOptedOut) {
+          return {
+            error: 'El cliente tiene registrada la baja y solicitó no acceder a los servicios. Debe escribir ALTA para reactivar el servicio.',
+            message: 'Consta en nuestro sistema que has solicitado no acceder a los servicios del Centro de Yoga y Bienestar Salvadora Conesa. Si deseas volver a acceder y consultar disponibilidad, escribe ALTA para reactivar la atención.',
+          };
+        }
+      }
 
       const workingHours = config?.workingHours || [];
       const timezone = config?.timezone || 'Europe/Madrid';
@@ -749,6 +760,26 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           return {
             error: BLOCKED_USER_MESSAGE,
             message: BLOCKED_USER_MESSAGE,
+          };
+        }
+      }
+
+      // Check opted-out user (solicitud previa de baja de servicios)
+      if (contactId && deps.isContactOptedOut) {
+        const isOptedOut = await deps.isContactOptedOut(contactId).catch(() => false);
+        if (isOptedOut) {
+          return {
+            error: 'El cliente tiene registrada la baja y solicitó no acceder a los servicios. Debe escribir ALTA para reactivar el servicio.',
+            message: 'Consta en nuestro sistema que has solicitado la baja de nuestros servicios. Si deseas volver a acceder a los servicios del centro y pedir cita, escribe ALTA para reactivar tu cuenta.',
+          };
+        }
+      }
+      if (phoneToUse && deps.isContactOptedOut) {
+        const isOptedOut = await deps.isContactOptedOut(phoneToUse).catch(() => false);
+        if (isOptedOut) {
+          return {
+            error: 'El cliente tiene registrada la baja y solicitó no acceder a los servicios. Debe escribir ALTA para reactivar el servicio.',
+            message: 'Consta en nuestro sistema que has solicitado la baja de nuestros servicios. Si deseas volver a acceder a los servicios del centro y pedir cita, escribe ALTA para reactivar tu cuenta.',
           };
         }
       }
@@ -1478,6 +1509,27 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     },
   });
 
+  const solicitarBajaServiciosTool = createTool({
+    id: 'solicitarBajaServicios',
+    description:
+      'Llama a esta herramienta cuando el cliente solicite explícitamente darse de baja de los servicios del centro, no querer acceder más a los servicios o no querer recibir más comunicaciones (opt-out / baja de servicios). Registra la baja formalmente en el sistema.',
+    inputSchema: z.object({
+      motivo: z.string().optional().describe('Motivo de la baja si el cliente lo indica'),
+    }),
+    execute: async (inputData, context) => {
+      const customer = getCustomer(context);
+      const contactId = customer?.contactId;
+      if (contactId && deps.setContactOptOut) {
+        await deps.setContactOptOut(contactId, true).catch(() => null);
+      }
+      return {
+        success: true,
+        message:
+          'Se ha registrado tu solicitud de baja correctamente. No volverás a recibir mensajes ni comunicaciones de nuestros servicios. Si en el futuro deseas volver a acceder a los servicios del centro, solo tienes que escribirnos ALTA en cualquier momento.',
+      };
+    },
+  });
+
   return new Agent({
     id: TEMPLATE_AGENT_ID,
     name: 'Assistant',
@@ -1567,6 +1619,8 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     - VÍDEO: Si existe vídeo particular para la actividad, se muestra ese. Si no hay vídeo particular pero hay vídeo general, se muestra el vídeo general. Si NO existe ni vídeo particular ni vídeo general, NO se saca ningún mensaje ni enlace de vídeo.
     - FLYER: Si existe flyer particular para la actividad, se muestra ese. Si no hay flyer particular pero hay flyer general, se muestra el flyer general. Si NO existe ni flyer particular ni flyer general, NO se saca ningún mensaje ni enlace de flyer.
     - Si solo existe vídeo pero no flyer (o viceversa), incluye únicamente el elemento que exista. No inventes URLs ni menciones medios inexistentes.
+- SOLICITUD DE BAJA / NO DESEAR ACCEDER A MÁS SERVICIOS (OPT-OUT):
+  * Si un cliente te indica que desea darse de baja, no quiere recibir más comunicaciones o no desea acceder más a los servicios del centro, DEBES llamar a la herramienta 'solicitarBajaServicios'. Confírmale con total calidez y respeto que su baja queda registrada y que siempre podrá reactivarse escribiendo ALTA.
 - NUNCA reveles nada interno: no menciones herramientas, funciones, "comandos", identificadores (IDs), bases de datos, ni frases como "voy a crear el contacto", "llamar a la herramienta" o "ejecutar". El cliente solo ve una conversación normal.
 - NUNCA inventes horarios, días u horas disponibles. ANTES de sugerir cualquier horario, debes llamar OBLIGATORIAMENTE a la herramienta 'checkAvailability' para la fecha y servicio solicitados.
 - Si el día pedido está cerrado (como fines de semana) o 'checkAvailability' no devuelve huecos, indícaselo con total claridad al cliente (p. ej. "Los sábados y domingos estamos cerrados") y ofrece consultar el siguiente día laborable en que haya disponibilidad.
@@ -2088,6 +2142,7 @@ ${flow}`;
       rescheduleAppointment: rescheduleAppointmentTool,
       createPaymentLink: createPaymentLinkTool,
       solicitarAtencionHumana: solicitarAtencionHumanaTool,
+      solicitarBajaServicios: solicitarBajaServiciosTool,
     },
     memory,
   });

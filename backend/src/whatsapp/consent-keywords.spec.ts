@@ -7,6 +7,10 @@ describe('detectConsentKeyword', () => {
     expect(detectConsentKeyword('  Baja. ')).toBe('opt_out');
     expect(detectConsentKeyword('Cancelar suscripción')).toBe('opt_out');
     expect(detectConsentKeyword('darme de baja')).toBe('opt_out');
+    expect(detectConsentKeyword('no quiero acceder más a los servicios')).toBe('opt_out');
+    expect(detectConsentKeyword('no quiero acceder a los servicios de la clínica')).toBe('opt_out');
+    expect(detectConsentKeyword('no quiero más servicios')).toBe('opt_out');
+    expect(detectConsentKeyword('baja de servicios')).toBe('opt_out');
   });
 
   it('detects opt-in keywords', () => {

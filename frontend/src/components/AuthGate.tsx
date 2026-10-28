@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, LogOut } from "lucide-react";
+import { Menu, LogOut, Maximize, Minimize } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranding } from "@/contexts/BrandingContext";
 import { Sidebar } from "@/components/Sidebar";
@@ -38,6 +38,23 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const isPaymentPage = pathname?.startsWith("/payment-");
   const isPublicPage = isDemoLanding || isSimuladorIa || isPaymentPage;
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    function onFullscreenChange() {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    }
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  };
 
   useEffect(() => {
     if (loading) return;
@@ -90,17 +107,28 @@ export function AuthGate({ children }: { children: ReactNode }) {
             {branding.businessName}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={async () => {
-            await logout();
-            router.replace("/login");
-          }}
-          aria-label="Cerrar sesión"
-          className="rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700"
-        >
-          <LogOut className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            aria-label={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
+            title={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
+            className="rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700"
+          >
+            {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              await logout();
+              router.replace("/login");
+            }}
+            aria-label="Cerrar sesión"
+            className="rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        </div>
       </header>
 
       <Sidebar

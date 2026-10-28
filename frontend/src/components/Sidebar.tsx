@@ -22,6 +22,8 @@ import {
   CreditCard,
   X,
   Lock,
+  Maximize,
+  Minimize,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { readableTextColor } from "@/lib/color";
@@ -60,6 +62,18 @@ export function Sidebar({
   const branding = useBranding();
   const { isUnlocked: isSensitiveUnlocked, requestAccess: requestSensitiveAccess } = useSensitiveAccess();
   const [pwModalOpen, setPwModalOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen().catch(() => {});
+      setIsFullscreen(false);
+    }
+    onClose?.();
+  };
 
   // The role-specific navigation items
   let navItems = baseNavItems;
@@ -185,6 +199,22 @@ export function Sidebar({
             </p>
           </div>
         </div>
+        <button
+          onClick={toggleFullscreen}
+          className="mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900 md:hidden"
+        >
+          {isFullscreen ? (
+            <>
+              <Minimize className="h-4 w-4 flex-shrink-0" />
+              Salir de pantalla completa
+            </>
+          ) : (
+            <>
+              <Maximize className="h-4 w-4 flex-shrink-0" />
+              Pantalla completa móvil
+            </>
+          )}
+        </button>
         <button
           onClick={() => setPwModalOpen(true)}
           className="mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"

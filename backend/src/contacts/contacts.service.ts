@@ -715,6 +715,19 @@ export class ContactsService {
     return contact?.emailerroneo === 'S';
   }
 
+  async isContactOptedOut(phoneOrEmailOrId?: string | null): Promise<boolean> {
+    if (!phoneOrEmailOrId) return false;
+    const clean = phoneOrEmailOrId.trim();
+    let contact: Contact | null = null;
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean)) {
+      contact = await this.findById(clean).catch(() => null);
+    }
+    if (!contact) {
+      contact = await this.findByPhoneOrEmail(clean, clean).catch(() => null);
+    }
+    return Boolean(contact?.optedOut);
+  }
+
   /**
    * Formalize a contact as an active student of Centro de Yoga Salvadora Conesa.
    * - Sets isStudent = true
