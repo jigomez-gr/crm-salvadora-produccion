@@ -13,7 +13,8 @@ export type IdentityChangeType =
   | 'new_contact_email_verify'
   | 'email_error_recovery'
   | 'device_ownership_verify'
-  | 'contact_conflict_resolution';
+  | 'contact_conflict_resolution'
+  | 'baja_restriccion_tecnica';
 
 export type VerificationChannel = 'email' | 'sms' | 'whatsapp';
 

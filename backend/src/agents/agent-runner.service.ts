@@ -372,6 +372,8 @@ export class AgentRunnerService {
       }
     }
 
+    let effectiveContactadowassap: 'S' | 'N' =
+      contactEntity?.contactadowassap === 'S' ? 'S' : 'N';
     if (effectiveContactId) {
       const c = await this.contactsService
         .findById(effectiveContactId)
@@ -381,6 +383,7 @@ export class AgentRunnerService {
         effectiveName = effectiveName || c.name;
         effectiveEmail = c.email || undefined;
         effectiveEmailerroneo = c.emailerroneo === 'S' ? 'S' : 'N';
+        effectiveContactadowassap = c.contactadowassap === 'S' ? 'S' : 'N';
       }
     } else if (effectivePhone) {
       const c = await this.contactsService
@@ -391,6 +394,7 @@ export class AgentRunnerService {
         effectiveName = effectiveName || c.name;
         effectiveEmail = c.email || undefined;
         effectiveEmailerroneo = c.emailerroneo === 'S' ? 'S' : 'N';
+        effectiveContactadowassap = c.contactadowassap === 'S' ? 'S' : 'N';
       }
     }
 
@@ -428,6 +432,7 @@ export class AgentRunnerService {
         name: nameKnown ? effectiveName : undefined,
         email: effectiveEmail,
         emailerroneo: effectiveEmailerroneo,
+        contactadowassap: effectiveContactadowassap,
         nameKnown,
       });
     }
@@ -500,6 +505,19 @@ export class AgentRunnerService {
     // `delivered`/`read` via status webhooks). Playground replies have no
     // provider, so they're `sent` immediately.
     const outbound = await this.emitOutbound(params, reply);
+
+    if (
+      channel === MessageChannel.WHATSAPP &&
+      effectiveContactId &&
+      effectiveContactadowassap !== 'S' &&
+      typeof this.contactsService.update === 'function'
+    ) {
+      this.contactsService
+        .update(effectiveContactId, { contactadowassap: 'S' })
+        .catch((err) =>
+          this.logger.warn(`Could not set contactadowassap for ${effectiveContactId}: ${err}`),
+        );
+    }
 
     return { reply, outbound };
   }

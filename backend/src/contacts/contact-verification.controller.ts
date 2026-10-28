@@ -66,6 +66,40 @@ export class ContactVerificationController {
   }
 
   /**
+   * Request OTP code to unsubscribe / cancel services (baja por restricción técnica)
+   * based on email and mobile phone.
+   */
+  @Post('baja-restriccion-tecnica/request')
+  async requestBajaRestriccionTecnica(
+    @Body() dto: { email: string; phone: string },
+    @Req() req: Request,
+  ) {
+    const ip = req.ip || (req.headers['x-forwarded-for'] as string) || undefined;
+    return this.verificationService.requestBajaRestriccionTecnica({
+      email: dto.email,
+      phone: dto.phone,
+      ipAddress: ip,
+    });
+  }
+
+  /**
+   * Confirm OTP code to apply the baja por restricción técnica.
+   */
+  @Post('baja-restriccion-tecnica/confirm')
+  async confirmBajaRestriccionTecnica(
+    @Body() dto: { email: string; phone: string; code: string },
+    @Req() req: Request,
+  ) {
+    const ip = req.ip || (req.headers['x-forwarded-for'] as string) || undefined;
+    return this.verificationService.confirmBajaRestriccionTecnica({
+      email: dto.email,
+      phone: dto.phone,
+      code: dto.code,
+      ipAddress: ip,
+    });
+  }
+
+  /**
    * Check if provided phone/email/name contradict existing contact records.
    */
   @Post('verification/check-contradiction')

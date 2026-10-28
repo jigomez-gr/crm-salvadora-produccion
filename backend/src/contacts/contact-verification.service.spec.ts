@@ -276,4 +276,63 @@ describe('ContactVerificationService', () => {
       );
     });
   });
+
+  describe('Baja por Restricción Técnica (Email y Móvil con OTP)', () => {
+    it('requests OTP and dispatches SMS for baja', async () => {
+      mockContactsRepo.findOne.mockResolvedValue({
+        id: 'c-baja',
+        phone: '+34646000000',
+        email: 'user@salvadora.com',
+        bloqueado: 'N',
+      });
+
+      const res = await service.requestBajaRestriccionTecnica({
+        email: 'user@salvadora.com',
+        phone: '646 00 00 00',
+      });
+
+      expect(res.success).toBe(true);
+      expect(mockZadarmaSms.sendSms).toHaveBeenCalled();
+    });
+
+    it('confirms OTP and sets bloqueado = S and optedOut = true', async () => {
+      const plainCode = '888999';
+      const codeHash = crypto.createHash('sha256').update(plainCode).digest('hex');
+
+      mockIdentityChangeRepo.findOne.mockResolvedValue({
+        id: 'change-baja',
+        destination: '+34646000000',
+        codeHash,
+        status: 'pending',
+        changeType: 'baja_restriccion_tecnica',
+        contactId: 'c-baja',
+        attempts: 0,
+        expiresAt: new Date(Date.now() + 300000),
+      });
+
+      const contact: any = {
+        id: 'c-baja',
+        phone: '+34646000000',
+        email: 'user@salvadora.com',
+        bloqueado: 'N',
+        optedOut: false,
+      };
+      mockContactsRepo.find = jest.fn().mockResolvedValue([contact]);
+      mockContactsRepo.findOne.mockResolvedValue(contact);
+
+      const res = await service.confirmBajaRestriccionTecnica({
+        email: 'user@salvadora.com',
+        phone: '+34646000000',
+        code: plainCode,
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.bloqueado).toBe('S');
+      expect(contact.bloqueado).toBe('S');
+      expect(contact.optedOut).toBe(true);
+      expect(mockContactsRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ bloqueado: 'S', optedOut: true }),
+      );
+    });
+  });
 });

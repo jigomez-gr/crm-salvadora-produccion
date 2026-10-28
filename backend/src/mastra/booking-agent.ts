@@ -1554,6 +1554,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
             name?: string;
             email?: string;
             emailerroneo?: 'S' | 'N';
+            contactadowassap?: 'S' | 'N';
             nameKnown?: boolean;
           }
         | undefined;
@@ -1877,6 +1878,14 @@ ${
       // Who the agent is talking to.
       let customerBlock: string;
       const isEmailErroneous = customer?.emailerroneo === 'S';
+      const isFirstWhatsappContact = customer?.contactadowassap === 'N';
+      const whatsappConsentNotice = isFirstWhatsappContact
+        ? `\n📋 [CONSENTIMIENTO PREVIO OBLIGATORIO POR WHATSAPP (RGPD / LOPDGDD)]:
+- Este usuario accede por primera vez por WhatsApp (contactadowassap = 'N' o sin consultas previas registradas).
+- Conforme al Reglamento General de Protección de Datos (RGPD UE 2016/679, Artículos 6.1.a y 13) y a la Ley Orgánica 3/2018 (LOPDGDD), en tu PRIMER mensaje de bienvenida y respuesta DEBES informarle y recabar su consentimiento:
+  "¡Hola! Te damos la bienvenida a la Escuela de Yoga y Bienestar Salvadora Conesa. Conforme a la normativa de protección de datos (RGPD y LOPDGDD), te informamos de que trataremos tus datos de contacto exclusivamente para atender tus consultas, gestionar tus reservas y enviarte recordatorios. Al continuar la conversación o solicitar plaza aceptas este tratamiento. Puedes solicitar la baja técnica en cualquier momento."
+- A continuación, atiende con total cercanía y calidez su consulta concreta.`
+        : '';
       const emailErroneousNotice = isEmailErroneous
         ? `\n🚨 [ALERTA DE CORREO ERRÓNEO (emailerroneo = 'S')]: En la ficha de este cliente consta que su correo electrónico (${customer.email || 'no especificado'}) falló en la entrega o es incorrecto.
 - OBLIGATORIO: Debes advertirle amablemente en tu mensaje de que consta una incidencia con su correo electrónico y pedirle que te confirme su email correcto para que pueda recibir sus confirmaciones y recordatorios.
@@ -1893,14 +1902,14 @@ Estás hablando con tu cliente/alumno ${customer.name} (teléfono: ${customer.ph
             : ' NO le vuelvas a pedir su nombre ni su correo para nuevas reservas o consultas.'
         }
 - Si pide consultar sus citas o confirmar una nueva fecha, llama a 'listContactAppointments' pasando su teléfono (${customer.phone}) o email (${customer.email || ''}).
-- Si pide reservar una clase o cita, o si confirma una plaza que acabas de resumirle, llama directamente a 'bookAppointment' usando su nombre, teléfono y correo guardados.${emailErroneousNotice}`;
+- Si pide reservar una clase o cita, o si confirma una plaza que acabas de resumirle, llama directamente a 'bookAppointment' usando su nombre, teléfono y correo guardados.${emailErroneousNotice}${whatsappConsentNotice}`;
       } else if (customer?.phone) {
         customerBlock = `== Cliente actual ==
-Estás hablando con un cliente cuyo teléfono es ${customer.phone}, pero aún no tienes su nombre completo ni su correo electrónico. Antes de reservar la cita, pídele amablemente su nombre y apellidos y su email.${emailErroneousNotice}`;
+Estás hablando con un cliente cuyo teléfono es ${customer.phone}, pero aún no tienes su nombre completo ni su correo electrónico. Antes de reservar la cita, pídele amablemente su nombre y apellidos y su email.${emailErroneousNotice}${whatsappConsentNotice}`;
       } else {
         customerBlock = `== Visitante Web / No identificado ==
 Si el cliente menciona su número de móvil o correo electrónico, dice que ya es cliente, o indica que tiene una confirmación pendiente o recibió una propuesta de nueva fecha, busca sus datos con 'findContact' (pasando su teléfono y/o email) y llama a 'listContactAppointments' (pasando su teléfono o email) para ver sus citas de inmediato.
-Si es una persona nueva, pídele amablemente su Nombre y Apellidos, Teléfono móvil y Correo electrónico (email) para formalizar la reserva con 'bookAppointment'.`;
+Si es una persona nueva, pídele amablemente su Nombre y Apellidos, Teléfono móvil y Correo electrónico (email) para formalizar la reserva con 'bookAppointment'.` + whatsappConsentNotice;
       }
 
       const flow = `== Cómo atender ==

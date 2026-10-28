@@ -365,6 +365,12 @@ export class ContactVerificationService {
           contact.emailerroneo = 'N';
         }
 
+        if (pending.changeType === 'baja_restriccion_tecnica') {
+          contact.bloqueado = 'S';
+          contact.optedOut = true;
+          contact.optedOutAt = new Date();
+        }
+
         // Apply new values if possession was verified for identity conflict
         if (pending.newValues) {
           if (typeof pending.newValues.name === 'string' && pending.newValues.name.trim()) {
@@ -458,5 +464,122 @@ export class ContactVerificationService {
       message,
       config?.ycloudApiKey,
     );
+  }
+
+  /**
+   * Request OTP code to unsubscribe / cancel clinic services (baja por restricción técnica)
+   * based on email and mobile phone.
+   */
+  async requestBajaRestriccionTecnica(params: {
+    email: string;
+    phone: string;
+    ipAddress?: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    const cleanEmail = params.email.trim().toLowerCase();
+    const cleanPhone = normalizePhoneLoose(params.phone.trim());
+
+    // Locate contact by phone or email
+    let contact = await this.contactsRepo.findOne({
+      where: [{ phone: cleanPhone }, { email: cleanEmail }],
+    });
+
+    if (!contact) {
+      contact = this.contactsRepo.create({
+        phone: cleanPhone,
+        email: cleanEmail,
+        name: cleanEmail.split('@')[0],
+        source: 'baja_web',
+        tags: ['baja_solicitada'],
+        bloqueado: 'N',
+      });
+      await this.contactsRepo.save(contact);
+    }
+
+    const otpResult = await this.sendOtp({
+      contactId: contact.id,
+      destination: cleanPhone,
+      channel: 'sms',
+      changeType: 'baja_restriccion_tecnica',
+      newValues: {
+        email: cleanEmail,
+        phone: cleanPhone,
+      },
+      source: 'web_baja',
+      ipAddress: params.ipAddress,
+    });
+
+    // Also dispatch to email for deliverability
+    if (cleanEmail && this.emailService && typeof this.emailService.sendNotification === 'function') {
+      this.emailService
+        .sendNotification(
+          cleanEmail,
+          null,
+          `Solicitud de baja: Tu código de verificación`,
+          `<div style="font-family: Arial, sans-serif; padding: 20px;">
+            <h3>Solicitud de Baja de Servicios por Restricción Técnica</h3>
+            <p>Se ha solicitado la baja de los servicios de la clínica para este correo y el teléfono <strong>${cleanPhone}</strong>.</p>
+            <p>Introduce el código recibido por SMS para confirmar la baja por restricción técnica.</p>
+          </div>`,
+          `Solicitud de baja para ${cleanPhone} y ${cleanEmail}.`,
+        )
+        .catch(() => null);
+    }
+
+    return {
+      success: true,
+      message: `Código de verificación enviado por SMS a ${cleanPhone}. Válido por 7 minutos.`,
+    };
+  }
+
+  /**
+   * Confirm OTP code and apply baja por restricción técnica.
+   */
+  async confirmBajaRestriccionTecnica(params: {
+    email: string;
+    phone: string;
+    code: string;
+    ipAddress?: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    bloqueado: string;
+  }> {
+    const cleanEmail = params.email.trim().toLowerCase();
+    const cleanPhone = normalizePhoneLoose(params.phone.trim());
+
+    const verifyResult = await this.verifyOtp({
+      destination: cleanPhone,
+      code: params.code,
+      ipAddress: params.ipAddress,
+    });
+
+    if (!verifyResult.verified) {
+      throw new BadRequestException('Código de verificación incorrecto o expirado.');
+    }
+
+    let contactsToBlock = await this.contactsRepo.find({
+      where: [{ phone: cleanPhone }, { email: cleanEmail }],
+    });
+
+    if (contactsToBlock.length === 0 && verifyResult.contactId) {
+      const c = await this.contactsRepo.findOne({ where: { id: verifyResult.contactId } });
+      if (c) contactsToBlock = [c];
+    }
+
+    for (const contact of contactsToBlock) {
+      contact.bloqueado = 'S';
+      contact.optedOut = true;
+      contact.optedOutAt = new Date();
+      await this.contactsRepo.save(contact);
+    }
+
+    return {
+      success: true,
+      message: 'Baja tramitada con éxito por restricción técnica.',
+      bloqueado: 'S',
+    };
   }
 }
