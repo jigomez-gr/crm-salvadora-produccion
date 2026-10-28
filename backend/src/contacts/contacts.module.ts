@@ -12,6 +12,7 @@ import { EmailModule } from '../email/email.module';
 import { ZadarmaSmsModule } from '../sms/zadarma-sms.module';
 import { YCloudModule } from '../whatsapp/ycloud.module';
 import { AgentsConfigModule } from '../agents/agents-config.module';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { AgentsConfigModule } from '../agents/agents-config.module';
     ZadarmaSmsModule,
     YCloudModule,
     AgentsConfigModule,
+    SettingsModule,
   ],
   providers: [ContactsService, ContactVerificationService],
   controllers: [ContactsController, ContactVerificationController],

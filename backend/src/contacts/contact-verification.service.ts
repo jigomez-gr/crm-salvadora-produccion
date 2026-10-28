@@ -20,6 +20,8 @@ import { ZadarmaSmsService } from '../sms/zadarma-sms.service';
 import { YCloudClient } from '../whatsapp/ycloud-client.service';
 import { WhatsappGatewayService } from '../whatsapp/whatsapp-gateway.service';
 import { AgentsConfigService } from '../agents/agents-config.service';
+import { MAINTENANCE_MESSAGE, BLOCKED_USER_MESSAGE } from '../common/system-messages';
+import { SettingsService } from '../settings/settings.service';
 
 export interface ContradictionResult {
   hasContradiction: boolean;
@@ -51,6 +53,8 @@ export class ContactVerificationService {
     private readonly agentsConfigService?: AgentsConfigService,
     @Optional()
     private readonly whatsappGateway?: WhatsappGatewayService,
+    @Optional()
+    private readonly settingsService?: SettingsService,
   ) {}
 
   /**
@@ -164,6 +168,7 @@ export class ContactVerificationService {
     newValues?: Record<string, unknown>;
     source?: string;
     ipAddress?: string;
+    codeOverride?: string;
   }): Promise<{
     success: boolean;
     changeId: string;
@@ -171,6 +176,7 @@ export class ContactVerificationService {
     channel: VerificationChannel;
     destination: string;
     message: string;
+    code?: string;
   }> {
     const rawDestination = params.destination.trim();
     const destination =
@@ -184,8 +190,8 @@ export class ContactVerificationService {
         ? 'email_error_recovery'
         : 'device_ownership_verify');
 
-    // Generate random 6-digit OTP code
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate random 6-digit OTP code or use override
+    const code = params.codeOverride || Math.floor(100000 + Math.random() * 900000).toString();
     const codeHash = crypto.createHash('sha256').update(code).digest('hex');
 
     // Expiry: strict 7 minutes (420 seconds)
@@ -274,6 +280,7 @@ export class ContactVerificationService {
       expiresAt,
       channel: params.channel,
       destination,
+      code,
       message: `Código de verificación enviado a ${destination} por ${params.channel}. Válido por 7 minutos.`,
     };
   }
@@ -580,6 +587,236 @@ export class ContactVerificationService {
       success: true,
       message: 'Baja tramitada con éxito por restricción técnica.',
       bloqueado: 'S',
+    };
+  }
+
+  /**
+   * Evaluates if a web booking contact is already valid and known in CRM.
+   * If not found or contradictory ("cuando no acierte con un contacto valido"):
+   * Dispatches OTP via WhatsApp (if contactadowassap === 'S') or SMS (Zadarma),
+   * and to Email (if provided).
+   */
+  async requestBookingVerification(params: {
+    name?: string;
+    phone: string;
+    email?: string;
+    ipAddress?: string;
+  }): Promise<{
+    requiresOtp: boolean;
+    isValidContact: boolean;
+    contactId?: string;
+    channel?: VerificationChannel;
+    destinationPhone?: string;
+    destinationEmail?: string | null;
+    message: string;
+  }> {
+    const isMaintenance = await this.settingsService?.isMaintenanceActive().catch(() => false);
+    if (isMaintenance) {
+      throw new BadRequestException(MAINTENANCE_MESSAGE);
+    }
+
+    const cleanPhone = normalizePhoneLoose(params.phone?.trim() || '');
+    if (!cleanPhone || cleanPhone.length < 8) {
+      throw new BadRequestException('El número de teléfono móvil no es válido.');
+    }
+
+    const cleanEmail = params.email?.trim().toLowerCase() || null;
+    if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      throw new BadRequestException('El formato del correo electrónico no es válido.');
+    }
+    const cleanName = (params.name || '').trim();
+
+    const rawDigits = params.phone.replace(/\D/g, '');
+    const spanish9 = rawDigits.length === 9 ? rawDigits : (rawDigits.startsWith('34') && rawDigits.length === 11 ? rawDigits.slice(2) : '');
+
+    const query = this.contactsRepo.createQueryBuilder('c')
+      .where('c.phone = :cleanPhone', { cleanPhone })
+      .orWhere('c.phone = :cleanWithoutPlus', { cleanWithoutPlus: cleanPhone.replace(/^\+/, '') });
+    if (spanish9) {
+      query.orWhere('c.phone = :spanish9', { spanish9 });
+    }
+    const existingByPhone = await query.getOne();
+
+    const existingByEmail = cleanEmail
+      ? await this.contactsRepo
+          .createQueryBuilder('c')
+          .where('LOWER(TRIM(c.email)) = :cleanEmail', { cleanEmail })
+          .getOne()
+      : null;
+
+    if (existingByPhone?.bloqueado === 'S' || existingByEmail?.bloqueado === 'S') {
+      throw new BadRequestException(BLOCKED_USER_MESSAGE);
+    }
+
+    // Check if the contact already cleanly exists and matches
+    if (existingByPhone) {
+      const contradiction = await this.detectContradiction({
+        phone: cleanPhone,
+        email: cleanEmail || undefined,
+        name: cleanName || undefined,
+      });
+
+      if (!contradiction.hasContradiction) {
+        return {
+          requiresOtp: false,
+          isValidContact: true,
+          contactId: existingByPhone.id,
+          message: 'Contacto registrado y validado en el sistema.',
+        };
+      }
+    }
+
+    // Contact not found OR contradiction detected -> require OTP verification
+    const hasWhatsapp = existingByPhone?.contactadowassap === 'S';
+    const phoneChannel: VerificationChannel = hasWhatsapp ? 'whatsapp' : 'sms';
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Dispatch to phone
+    await this.sendOtp({
+      destination: cleanPhone,
+      channel: phoneChannel,
+      changeType: 'web_booking_verification',
+      newValues: { name: cleanName, phone: cleanPhone, email: cleanEmail },
+      source: 'web_booking',
+      ipAddress: params.ipAddress,
+      codeOverride: code,
+    });
+
+    // Dispatch to email if given
+    if (cleanEmail) {
+      await this.sendOtp({
+        destination: cleanEmail,
+        channel: 'email',
+        changeType: 'web_booking_verification',
+        newValues: { name: cleanName, phone: cleanPhone, email: cleanEmail },
+        source: 'web_booking',
+        ipAddress: params.ipAddress,
+        codeOverride: code,
+      });
+    }
+
+    const maskedPhone = cleanPhone.length > 6
+      ? `${cleanPhone.slice(0, 4)}***${cleanPhone.slice(-3)}`
+      : cleanPhone;
+    const maskedEmail = cleanEmail
+      ? cleanEmail.replace(/^(.{2})(.*)(@.*)$/, '$1***$3')
+      : null;
+
+    return {
+      requiresOtp: true,
+      isValidContact: false,
+      channel: phoneChannel,
+      destinationPhone: maskedPhone,
+      destinationEmail: maskedEmail,
+      message: `Código de verificación enviado por ${phoneChannel === 'whatsapp' ? 'WhatsApp' : 'SMS'}${cleanEmail ? ' y correo' : ''}. Válido por 7 minutos.`,
+    };
+  }
+
+  /**
+   * Confirms the OTP for a web booking.
+   * If correct: registers / creates the contact in CRM at that moment.
+   * If incorrect: blocks the user from proceeding ("no dejarle seguir").
+   */
+  async confirmBookingVerification(params: {
+    name?: string;
+    phone: string;
+    email?: string;
+    code: string;
+    ipAddress?: string;
+  }): Promise<{
+    verified: boolean;
+    contactId: string;
+    contact: {
+      id: string;
+      name: string;
+      phone: string;
+      email: string | null;
+    };
+    message: string;
+  }> {
+    const cleanPhone = normalizePhoneLoose(params.phone?.trim() || '');
+    const cleanEmail = params.email?.trim().toLowerCase() || null;
+    const cleanName = (params.name || '').trim();
+
+    let verified = false;
+    try {
+      const res = await this.verifyOtp({
+        destination: cleanPhone,
+        code: params.code,
+        ipAddress: params.ipAddress,
+      });
+      verified = res.verified;
+    } catch (err: any) {
+      if (cleanEmail) {
+        try {
+          const resEmail = await this.verifyOtp({
+            destination: cleanEmail,
+            code: params.code,
+            ipAddress: params.ipAddress,
+          });
+          verified = resEmail.verified;
+        } catch {
+          throw err;
+        }
+      } else {
+        throw err;
+      }
+    }
+
+    if (!verified) {
+      throw new BadRequestException('Código de verificación incorrecto o expirado.');
+    }
+
+    // "si lo acierta se le puede dar de alta en contactos en ese momento"
+    let contact = await this.contactsRepo
+      .createQueryBuilder('c')
+      .where('c.phone = :cleanPhone', { cleanPhone })
+      .orWhere('c.phone = :cleanWithoutPlus', { cleanWithoutPlus: cleanPhone.replace(/^\+/, '') })
+      .getOne();
+
+    if (!contact && cleanEmail) {
+      contact = await this.contactsRepo.findOne({ where: { email: cleanEmail } });
+    }
+
+    if (!contact) {
+      contact = this.contactsRepo.create({
+        phone: cleanPhone,
+        email: cleanEmail || null,
+        name: cleanName || cleanEmail?.split('@')[0] || cleanPhone,
+        source: 'landing_web',
+        tags: ['lead_landing_web', 'alta_web_verificada'],
+        bloqueado: 'N',
+        emailerroneo: 'N',
+        contactadowassap: 'N',
+        boardPosition: Date.now(),
+      });
+      contact = await this.contactsRepo.save(contact);
+      this.logger.log(`Nuevo contacto dado de alta tras verificar OTP web: ${contact.id} (${contact.phone})`);
+    } else {
+      if (cleanName && (!contact.name || contact.name === contact.phone)) {
+        contact.name = cleanName;
+      }
+      if (cleanEmail && !contact.email) {
+        contact.email = cleanEmail;
+      }
+      if (!contact.tags) contact.tags = [];
+      if (!contact.tags.includes('alta_web_verificada')) {
+        contact.tags.push('alta_web_verificada');
+      }
+      contact = await this.contactsRepo.save(contact);
+    }
+
+    return {
+      verified: true,
+      contactId: contact.id,
+      contact: {
+        id: contact.id,
+        name: contact.name,
+        phone: contact.phone,
+        email: contact.email,
+      },
+      message: 'Contacto verificado y dado de alta correctamente.',
     };
   }
 }

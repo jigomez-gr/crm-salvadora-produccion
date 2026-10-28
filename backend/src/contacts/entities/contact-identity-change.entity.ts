@@ -14,7 +14,8 @@ export type IdentityChangeType =
   | 'email_error_recovery'
   | 'device_ownership_verify'
   | 'contact_conflict_resolution'
-  | 'baja_restriccion_tecnica';
+  | 'baja_restriccion_tecnica'
+  | 'web_booking_verification';
 
 export type VerificationChannel = 'email' | 'sms' | 'whatsapp';
 

@@ -335,4 +335,151 @@ describe('ContactVerificationService', () => {
       );
     });
   });
+
+  describe('Web Booking Verification (Anti-Fraud & Contact Registration)', () => {
+    it('returns requiresOtp: false when a valid registered contact matches', async () => {
+      mockContactsRepo.createQueryBuilder = jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        orWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue({
+          id: 'c-valid',
+          name: 'Maria Yoga',
+          phone: '+34646111222',
+          email: 'maria@salvadora.com',
+          bloqueado: 'N',
+          contactadowassap: 'S',
+        }),
+      });
+
+      const res = await service.requestBookingVerification({
+        name: 'Maria Yoga',
+        phone: '646 11 12 22',
+        email: 'maria@salvadora.com',
+      });
+
+      expect(res.requiresOtp).toBe(false);
+      expect(res.isValidContact).toBe(true);
+      expect(res.contactId).toBe('c-valid');
+    });
+
+    it('rejects when contact is blocked with BLOCKED_USER_MESSAGE', async () => {
+      mockContactsRepo.createQueryBuilder = jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        orWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue({
+          id: 'c-blocked',
+          phone: '+34646111333',
+          bloqueado: 'S',
+        }),
+      });
+
+      await expect(
+        service.requestBookingVerification({
+          phone: '646 11 13 33',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('dispatches OTP via SMS and Email when contact is new/unknown', async () => {
+      mockContactsRepo.createQueryBuilder = jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        orWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(null),
+      });
+
+      const res = await service.requestBookingVerification({
+        name: 'Nuevo Alumno',
+        phone: '655 44 33 22',
+        email: 'nuevo@ejemplo.com',
+      });
+
+      expect(res.requiresOtp).toBe(true);
+      expect(res.isValidContact).toBe(false);
+      expect(res.channel).toBe('sms');
+      expect(mockZadarmaSms.sendSms).toHaveBeenCalled();
+      expect(mockEmailService.sendNotification).toHaveBeenCalled();
+    });
+
+    it('dispatches OTP via WhatsApp when phone has contactadowassap === S but details contradict', async () => {
+      mockContactsRepo.createQueryBuilder = jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        orWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue({
+          id: 'c-wassap',
+          name: 'Antiguo Nombre',
+          phone: '+34646999888',
+          email: 'antiguo@ejemplo.com',
+          bloqueado: 'N',
+          contactadowassap: 'S',
+        }),
+      });
+
+      const res = await service.requestBookingVerification({
+        name: 'Persona Totalmente Diferente',
+        phone: '646 99 98 88',
+        email: 'diferente@ejemplo.com',
+      });
+
+      expect(res.requiresOtp).toBe(true);
+      expect(res.isValidContact).toBe(false);
+      expect(res.channel).toBe('whatsapp');
+    });
+
+    it('fails confirmation if OTP code is wrong (no dejarle seguir)', async () => {
+      mockIdentityChangeRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.confirmBookingVerification({
+          phone: '655 44 33 22',
+          code: '000000',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('confirms OTP and creates contact in CRM at that moment', async () => {
+      const code = '777888';
+      const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+
+      mockIdentityChangeRepo.findOne.mockResolvedValue({
+        id: 'change-booking',
+        destination: '+34655443322',
+        codeHash,
+        status: 'pending',
+        changeType: 'web_booking_verification',
+        attempts: 0,
+        expiresAt: new Date(Date.now() + 300000),
+      });
+
+      mockContactsRepo.createQueryBuilder = jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        orWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(null),
+      });
+      mockContactsRepo.findOne = jest.fn().mockResolvedValue(null);
+      mockContactsRepo.create = jest.fn().mockImplementation((dto) => ({
+        id: 'new-contact-id',
+        ...dto,
+      }));
+
+      const res = await service.confirmBookingVerification({
+        name: 'Nuevo Alumno Confirmado',
+        phone: '655 44 33 22',
+        email: 'nuevo@salvadora.com',
+        code,
+      });
+
+      expect(res.verified).toBe(true);
+      expect(res.contactId).toBe('new-contact-id');
+      expect(mockContactsRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          phone: '+34655443322',
+          email: 'nuevo@salvadora.com',
+          name: 'Nuevo Alumno Confirmado',
+          source: 'landing_web',
+          tags: expect.arrayContaining(['alta_web_verificada']),
+        }),
+      );
+      expect(mockContactsRepo.save).toHaveBeenCalled();
+    });
+  });
 });

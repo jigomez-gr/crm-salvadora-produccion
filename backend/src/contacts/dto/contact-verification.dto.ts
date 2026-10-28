@@ -65,3 +65,36 @@ export class CheckContradictionDto {
   @IsString()
   name?: string;
 }
+
+export class RequestBookingVerificationDto {
+  @IsNotEmpty()
+  @IsString()
+  phone: string;
+
+  @IsOptional()
+  @IsString()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  name?: string;
+}
+
+export class ConfirmBookingVerificationDto {
+  @IsNotEmpty()
+  @IsString()
+  phone: string;
+
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(10)
+  code: string;
+
+  @IsOptional()
+  @IsString()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  name?: string;
+}

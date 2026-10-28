@@ -12,6 +12,8 @@ import {
   RequestVerificationDto,
   ConfirmVerificationDto,
   CheckContradictionDto,
+  RequestBookingVerificationDto,
+  ConfirmBookingVerificationDto,
 } from './dto/contact-verification.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Request } from 'express';
@@ -114,5 +116,46 @@ export class ContactVerificationController {
   @Get(':id/identity-history')
   async getIdentityHistory(@Param('id') id: string) {
     return this.verificationService.getIdentityHistory(id);
+  }
+
+  /**
+   * Request OTP verification for web booking.
+   * If contact is already valid and recognized in CRM, returns requiresOtp=false.
+   * Otherwise ("cuando no acierte con un contacto valido"):
+   * Sends 6-digit OTP code to WhatsApp (if contactadowassap === 'S') or SMS,
+   * plus to Email (if provided).
+   */
+  @Post('booking-verification/request')
+  async requestBookingVerification(
+    @Body() dto: RequestBookingVerificationDto,
+    @Req() req: Request,
+  ) {
+    const ip = req.ip || (req.headers['x-forwarded-for'] as string) || undefined;
+    return this.verificationService.requestBookingVerification({
+      name: dto.name,
+      phone: dto.phone,
+      email: dto.email,
+      ipAddress: ip,
+    });
+  }
+
+  /**
+   * Confirm OTP for web booking.
+   * If correct: registers / creates the contact in CRM at that moment.
+   * If incorrect: blocks the reservation ("no dejarle seguir").
+   */
+  @Post('booking-verification/confirm')
+  async confirmBookingVerification(
+    @Body() dto: ConfirmBookingVerificationDto,
+    @Req() req: Request,
+  ) {
+    const ip = req.ip || (req.headers['x-forwarded-for'] as string) || undefined;
+    return this.verificationService.confirmBookingVerification({
+      name: dto.name,
+      phone: dto.phone,
+      email: dto.email,
+      code: dto.code,
+      ipAddress: ip,
+    });
   }
 }
