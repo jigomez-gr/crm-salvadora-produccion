@@ -11,7 +11,8 @@ import {
 } from '../common/time';
 import { MAINTENANCE_MESSAGE, BLOCKED_USER_MESSAGE } from '../common/system-messages';
 import { resolvePublicMediaUrl, resolveServiceMediaUrls } from './service-media';
-export { resolvePublicMediaUrl, resolveServiceMediaUrls };
+import { isPagosOnlineEnabled, PAYMENT_IN_PERSON_ONLY_MSG } from '../common/payment-config';
+export { resolvePublicMediaUrl, resolveServiceMediaUrls, isPagosOnlineEnabled, PAYMENT_IN_PERSON_ONLY_MSG };
 
 // A single reusable agent template serves every configured agent. The concrete
 // business persona, model and credentials are resolved per request from the
@@ -921,12 +922,14 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           inputData.reason,
         );
 
+        const onlinePaymentsAllowed = isPagosOnlineEnabled();
         let paymentUrl: string | undefined;
         const priceNum = svc.price ? parseFloat(svc.price) : 0;
 
         if (svc.paymentType === 'external_url' && svc.externalPaymentUrl) {
           paymentUrl = svc.externalPaymentUrl;
         } else if (
+          onlinePaymentsAllowed &&
           deps.createPaymentLink &&
           priceNum > 0 &&
           appointment?.id &&
@@ -982,6 +985,8 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           } else {
             message += ` Puedes realizar el pago para confirmar tu reserva (Tarjeta, Bizum, Apple/Google Pay) aquí: ${paymentUrl}`;
           }
+        } else if (!onlinePaymentsAllowed && priceNum > 0 && svc.paymentType !== 'free') {
+          message += ` ${PAYMENT_IN_PERSON_ONLY_MSG}`;
         }
 
         const { videoUrl: svcVideoUrl, flyerUrl: svcFlyerUrl } = resolveServiceMediaUrls(svc);
@@ -1028,6 +1033,12 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         .describe('Title / concept of the payment (e.g. "Reserva Cita")'),
     }),
     execute: async (inputData, context) => {
+      if (!isPagosOnlineEnabled()) {
+        return {
+          error: 'Los pagos online están deshabilitados (PAGOSONLINE=N). El pago se realiza en el centro.',
+          message: PAYMENT_IN_PERSON_ONLY_MSG,
+        };
+      }
       const customer = getCustomer(context);
       if (!deps.createPaymentLink) {
         return { error: 'Pasarela de pago no disponible.' };
@@ -1534,6 +1545,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     id: TEMPLATE_AGENT_ID,
     name: 'Assistant',
     instructions: async ({ requestContext }) => {
+      const onlinePaymentsAllowed = isPagosOnlineEnabled();
       const config = (requestContext as any)?.get?.('agentConfig') as any;
       const customer = (requestContext as any)?.get?.('customer') as
         | {
@@ -1846,6 +1858,12 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * ¡DEBES EJECUTAR INMEDIATAMENTE la herramienta 'bookAppointment'!
   * Pasa el servicio, la fecha y hora acordadas (startsAt) y los datos del cliente (customerName, customerPhone, customerEmail).
   * ESTÁ ESTRICTAMENTE PROHIBIDO volver a saludarle como si fuera el primer mensaje, preguntarle de nuevo qué actividad desea o pedirle otra vez el día y la hora. La reserva está lista: ¡FORMALÍZALA DE INMEDIATO con 'bookAppointment' y felicítale dándole la bienvenida con calidez!
+- POLÍTICA DE PAGOS ONLINE (VARIABLE PAGOSONLINE):
+${
+  onlinePaymentsAllowed
+    ? '  * Pagos online HABILITADOS (PAGOSONLINE = S): Las reservas y citas que dispongan de pasarela online se ofrecen facilitando el enlace seguro generado. Si el cliente pregunta, indícale que puede pagar online con tarjeta, Bizum, Apple Pay / Google Pay a través del enlace, o en el centro presencialmente.'
+    : '  * Pagos online DESACTIVADOS (PAGOSONLINE = N): NUNCA ofrezcas enlaces de pago online, enlaces de Stripe (https://checkout.stripe.com/...) ni pasarelas virtuales. Si el servicio tiene coste o el cliente pregunta por el pago, o al formalizar la reserva, indica SIEMPRE y ÚNICAMENTE: "El pago se realiza en el centro." NUNCA saques texto como "También puedes hacerlo online mediante este enlace seguro: https://checkout.stripe.com/..." ni enlaces de pago.'
+}
 - ACTUALIZACIÓN Y VERIFICACIÓN OBLIGATORIA DE EMAIL:
   * Si en la conversación notas que el cliente tiene una incidencia con su correo electrónico (emailerroneo = 'S'), o si las herramientas te avisan de una incidencia de entrega de email:
     - DEBES advertirle amablemente al cliente sobre este problema con su correo y pedirle que te confirme su email correcto para que reciba sus confirmaciones y recordatorios.
@@ -1907,7 +1925,11 @@ Si es una persona nueva, pídele amablemente su Nombre y Apellidos, Teléfono m�
    - Si el servicio requiere aprobación previa (Terapia Gestalt), o el resultado de 'bookAppointment' indica 'requiresApproval: true':
      Informa al cliente con amabilidad y calidez de que su cita ha quedado registrada como SOLICITUD PENDIENTE DE CONFIRMACIÓN por parte de la terapeuta y responsable (Salvadora Conesa Martinez), y que ella se la confirmará personalmente por correo o WhatsApp tras revisarla. NUNCA digas que está confirmada ni entregues enlaces de reunión virtual antes de su aprobación.
    - Para servicios estándar o plazas confirmadas:
-     Informa al cliente de que su cita o plaza ha quedado confirmada, indicándole día y hora (y si corresponde, el enlace de la videollamada o pago).
+     Informa al cliente de que su cita o plaza ha quedado confirmada, indicándole día y hora${
+       onlinePaymentsAllowed
+         ? ' (y si corresponde, el enlace de la videollamada o pago).'
+         : ' (y si corresponde, el enlace de la videollamada; añade únicamente: "El pago se realiza en el centro." sin ningún enlace de pago).'
+     }
 
 Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pasado. Pasa las fechas a las herramientas en formato ISO.`;
 

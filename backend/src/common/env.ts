@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { isPagosOnlineEnabled } from './payment-config';
 
 const logger = new Logger('Env');
 
@@ -35,6 +36,13 @@ export function validateEnv(): void {
     warnings.push(
       `ADMIN_PASSWORD usa el valor por defecto "${DEFAULT_ADMIN_PASSWORD}" — se requerirá cambio de contraseña en el primer inicio de sesión`,
     );
+  }
+
+  // 5. Online payments configuration (PAGOSONLINE: 'S' | 'N')
+  if (!isPagosOnlineEnabled()) {
+    logger.log('PAGOSONLINE=N: Enlaces de pago online desactivados. El agente comunicará: "El pago se realiza en el centro."');
+  } else {
+    logger.log('PAGOSONLINE=S: Pagos online habilitados (Stripe Checkout).');
   }
 
   if (warnings.length > 0) {

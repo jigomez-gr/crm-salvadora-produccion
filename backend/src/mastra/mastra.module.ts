@@ -14,6 +14,7 @@ import { MessagesService } from '../conversations/messages.service';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { HumanHandoffNotificationService } from '../notifications/human-handoff-notification.service';
 import { createBookingAgent, TEMPLATE_AGENT_ID } from './booking-agent';
+import { isPagosOnlineEnabled } from '../common/payment-config';
 
 export { NestMastraModule };
 
@@ -172,6 +173,9 @@ export { NestMastraModule };
             return appointmentsService.rescheduleAppointment(appointmentId, newStartsAt, reason);
           },
           createPaymentLink: traced('createPaymentLink', async (params) => {
+            if (!isPagosOnlineEnabled()) {
+              return null;
+            }
             return paymentsService.createCheckoutSession({
               appointmentId: params.appointmentId,
               contactId: params.contactId,
