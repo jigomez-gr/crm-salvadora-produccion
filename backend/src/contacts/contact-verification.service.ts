@@ -474,7 +474,7 @@ export class ContactVerificationService {
   }
 
   /**
-   * Request OTP code to unsubscribe / cancel clinic services (baja por restricción técnica)
+   * Request OTP code to unsubscribe / cancel yoga school services (baja por restricción técnica)
    * based on email and mobile phone.
    */
   async requestBajaRestriccionTecnica(params: {
@@ -527,7 +527,7 @@ export class ContactVerificationService {
           `Solicitud de baja: Tu código de verificación`,
           `<div style="font-family: Arial, sans-serif; padding: 20px;">
             <h3>Solicitud de Baja de Servicios por Restricción Técnica</h3>
-            <p>Se ha solicitado la baja de los servicios de la clínica para este correo y el teléfono <strong>${cleanPhone}</strong>.</p>
+            <p>Se ha solicitado la baja de los servicios de la Escuela de Yoga para este correo y el teléfono <strong>${cleanPhone}</strong>.</p>
             <p>Introduce el código recibido por SMS para confirmar la baja por restricción técnica.</p>
           </div>`,
           `Solicitud de baja para ${cleanPhone} y ${cleanEmail}.`,
