@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useMemo } from "react";
-import { Plus, Edit2, Sparkles, Calendar, UserCheck, Clock, Tag, AlertCircle, ExternalLink, CreditCard, Compass, Users, CheckCircle2, Trash2, FolderTree, Image as ImageIcon, Layers, AlertTriangle, Copy, Video, BellRing, Send, CheckCircle, Mail, MessageSquare, Upload, Loader2, Play } from "lucide-react";
+import { Plus, Edit2, Sparkles, Calendar, UserCheck, Clock, Tag, AlertCircle, ExternalLink, CreditCard, Compass, Users, CheckCircle2, Trash2, FolderTree, Image as ImageIcon, Layers, AlertTriangle, Copy, Video, BellRing, Send, CheckCircle, Mail, MessageSquare, Upload, Loader2, Play, Lock } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { Service, ServiceCategory, User } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSensitiveAccess } from "@/contexts/SensitiveAccessContext";
 import { cn } from "@/lib/utils";
 import { FormattedTextWithLinks } from "@/components/FormattedTextWithLinks";
 
@@ -99,19 +100,22 @@ export default function ServicesPage() {
   const [syncingVapi, setSyncingVapi] = useState(false);
   const toast = useToast();
   const { user } = useAuth();
+  const { isUnlocked: isSensitiveUnlocked, requestAccess } = useSensitiveAccess();
 
   async function handleSyncVapi() {
-    setSyncingVapi(true);
-    try {
-      await apiFetch<{ assistantId: string }>("/api/vapi/publish", {
-        method: "POST",
-      });
-      toast.success("Asistente VAPI y catálogo telefónico sincronizados correctamente.");
-    } catch (err: any) {
-      toast.error(err?.message || "Error al sincronizar el asistente con VAPI.");
-    } finally {
-      setSyncingVapi(false);
-    }
+    requestAccess(async () => {
+      setSyncingVapi(true);
+      try {
+        await apiFetch<{ assistantId: string }>("/api/vapi/publish", {
+          method: "POST",
+        });
+        toast.success("Asistente VAPI y catálogo telefónico sincronizados correctamente.");
+      } catch (err: any) {
+        toast.error(err?.message || "Error al sincronizar el asistente con VAPI.");
+      } finally {
+        setSyncingVapi(false);
+      }
+    });
   }
 
   const [form, setForm] = useState<ServiceFormData>({
@@ -400,121 +404,135 @@ export default function ServicesPage() {
       setCategoryError("El código y nombre de categoría son obligatorios.");
       return;
     }
-    setSavingCategory(true);
-    setCategoryError("");
-    try {
-      if (editingCategory) {
-        await apiFetch(`/api/categories/${editingCategory.id}`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            code: categoryForm.code.trim().toLowerCase(),
-            name: categoryForm.name.trim(),
-            description: categoryForm.description.trim() || undefined,
-            displayOrder: Number(categoryForm.displayOrder) || 0,
-            isActive: categoryForm.isActive,
-          }),
+    requestAccess(async () => {
+      setSavingCategory(true);
+      setCategoryError("");
+      try {
+        if (editingCategory) {
+          await apiFetch(`/api/categories/${editingCategory.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              code: categoryForm.code.trim().toLowerCase(),
+              name: categoryForm.name.trim(),
+              description: categoryForm.description.trim() || undefined,
+              displayOrder: Number(categoryForm.displayOrder) || 0,
+              isActive: categoryForm.isActive,
+            }),
+          });
+          toast.success("Categoría actualizada");
+        } else {
+          await apiFetch("/api/categories", {
+            method: "POST",
+            body: JSON.stringify({
+              code: categoryForm.code.trim().toLowerCase(),
+              name: categoryForm.name.trim(),
+              description: categoryForm.description.trim() || undefined,
+              displayOrder: Number(categoryForm.displayOrder) || 0,
+              isActive: categoryForm.isActive,
+            }),
+          });
+          toast.success("Categoría creada");
+        }
+        setEditingCategory(null);
+        setCategoryForm({
+          code: "",
+          name: "",
+          description: "",
+          displayOrder: 0,
+          isActive: true,
         });
-        toast.success("Categoría actualizada");
-      } else {
-        await apiFetch("/api/categories", {
-          method: "POST",
-          body: JSON.stringify({
-            code: categoryForm.code.trim().toLowerCase(),
-            name: categoryForm.name.trim(),
-            description: categoryForm.description.trim() || undefined,
-            displayOrder: Number(categoryForm.displayOrder) || 0,
-            isActive: categoryForm.isActive,
-          }),
-        });
-        toast.success("Categoría creada");
+        await refreshData();
+      } catch (err) {
+        setCategoryError(err instanceof ApiError ? err.message : "Error al guardar la categoría");
+      } finally {
+        setSavingCategory(false);
       }
-      setEditingCategory(null);
-      setCategoryForm({
-        code: "",
-        name: "",
-        description: "",
-        displayOrder: 0,
-        isActive: true,
-      });
-      await refreshData();
-    } catch (err) {
-      setCategoryError(err instanceof ApiError ? err.message : "Error al guardar la categoría");
-    } finally {
-      setSavingCategory(false);
-    }
+    });
   }
 
   async function handleDeleteCategory(id: string) {
-    if (!confirm("¿Eliminar esta categoría? Los servicios asociados quedarán sin categoría.")) return;
-    try {
-      await apiFetch(`/api/categories/${id}`, { method: "DELETE" });
-      toast.success("Categoría eliminada");
-      if (editingCategory?.id === id) {
-        setEditingCategory(null);
+    requestAccess(async () => {
+      if (!confirm("¿Eliminar esta categoría? Los servicios asociados quedarán sin categoría.")) return;
+      try {
+        await apiFetch(`/api/categories/${id}`, { method: "DELETE" });
+        toast.success("Categoría eliminada");
+        if (editingCategory?.id === id) {
+          setEditingCategory(null);
+        }
+        await refreshData();
+      } catch (err) {
+        toast.error(err instanceof ApiError ? err.message : "Error al eliminar categoría");
       }
-      await refreshData();
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Error al eliminar categoría");
-    }
+    });
   }
 
   function confirmDeleteService(svc: Service) {
-    setServiceToDelete(svc);
-    setDeleteModalOpen(true);
+    requestAccess(() => {
+      setServiceToDelete(svc);
+      setDeleteModalOpen(true);
+    });
   }
 
   async function handleDeleteService() {
-    if (!serviceToDelete?.id) return;
-    setDeletingService(true);
-    try {
-      await apiFetch(`/api/services/${serviceToDelete.id}`, { method: "DELETE" });
-      apiFetch("/api/vapi/publish", { method: "POST" }).catch(() => null);
-      toast.success(`Servicio "${serviceToDelete.name}" eliminado correctamente.`);
-      setDeleteModalOpen(false);
-      setServiceToDelete(null);
-      setSelectedIds((prev) => prev.filter((id) => id !== serviceToDelete.id));
-      await refreshData();
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Error al eliminar el servicio");
-    } finally {
-      setDeletingService(false);
-    }
+    const serviceToDeleteNow = serviceToDelete;
+    if (!serviceToDeleteNow?.id) return;
+    requestAccess(async () => {
+      setDeletingService(true);
+      try {
+        await apiFetch(`/api/services/${serviceToDeleteNow.id}`, { method: "DELETE" });
+        apiFetch("/api/vapi/publish", { method: "POST" }).catch(() => null);
+        toast.success(`Servicio "${serviceToDeleteNow.name}" eliminado correctamente.`);
+        setDeleteModalOpen(false);
+        setServiceToDelete(null);
+        setSelectedIds((prev) => prev.filter((id) => id !== serviceToDeleteNow.id));
+        await refreshData();
+      } catch (err) {
+        toast.error(err instanceof ApiError ? err.message : "Error al eliminar el servicio");
+      } finally {
+        setDeletingService(false);
+      }
+    });
   }
 
   async function handleBulkDelete() {
     if (selectedIds.length === 0) return;
-    setDeletingBulk(true);
-    try {
-      const res = await apiFetch<{ deletedCount: number }>("/api/services/bulk-delete", {
-        method: "POST",
-        body: JSON.stringify({ ids: selectedIds }),
-      });
-      apiFetch("/api/vapi/publish", { method: "POST" }).catch(() => null);
-      toast.success(`Se han eliminado ${res.deletedCount || selectedIds.length} servicios correctamente.`);
-      setSelectedIds([]);
-      setBulkDeleteModalOpen(false);
-      await refreshData();
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Error al eliminar servicios seleccionados");
-    } finally {
-      setDeletingBulk(false);
-    }
+    requestAccess(async () => {
+      setDeletingBulk(true);
+      try {
+        const res = await apiFetch<{ deletedCount: number }>("/api/services/bulk-delete", {
+          method: "POST",
+          body: JSON.stringify({ ids: selectedIds }),
+        });
+        apiFetch("/api/vapi/publish", { method: "POST" }).catch(() => null);
+        toast.success(`Se han eliminado ${res.deletedCount || selectedIds.length} servicios correctamente.`);
+        setSelectedIds([]);
+        setBulkDeleteModalOpen(false);
+        await refreshData();
+      } catch (err) {
+        toast.error(err instanceof ApiError ? err.message : "Error al eliminar servicios seleccionados");
+      } finally {
+        setDeletingBulk(false);
+      }
+    });
   }
 
   async function handleDuplicate(svc: Service) {
-    if (!svc.id) return;
-    setDuplicatingId(svc.id);
-    try {
-      const duplicated = await apiFetch<Service>(`/api/services/${svc.id}/duplicate`, {
-        method: "POST",
-      });
-      toast.success(`Servicio "${duplicated.name}" duplicado con éxito.`);
-      await refreshData();
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Error al duplicar el servicio");
-    } finally {
-      setDuplicatingId(null);
-    }
+    const serviceId = svc.id;
+    if (!serviceId) return;
+    requestAccess(async () => {
+      setDuplicatingId(serviceId);
+      try {
+        const duplicated = await apiFetch<Service>(`/api/services/${serviceId}/duplicate`, {
+          method: "POST",
+        });
+        toast.success(`Servicio "${duplicated.name}" duplicado con éxito.`);
+        await refreshData();
+      } catch (err) {
+        toast.error(err instanceof ApiError ? err.message : "Error al duplicar el servicio");
+      } finally {
+        setDuplicatingId(null);
+      }
+    });
   }
 
   async function handleOpenNotify(s: Service) {
@@ -559,20 +577,22 @@ export default function ServicesPage() {
 
   async function handleSendPrebookedNotifications() {
     if (!serviceToNotify) return;
-    setSendingNotification(true);
-    try {
-      const res = await apiFetch<any>(`/api/services/${serviceToNotify.id}/notify-prebooked`, {
-        method: "POST",
-        body: JSON.stringify(notifyForm),
-      });
-      toast.success(res.message || "Notificaciones enviadas a los pre-inscritos con éxito.");
-      setNotifyModalOpen(false);
-      await refreshData();
-    } catch (err: any) {
-      toast.error(err instanceof ApiError ? err.message : "Error al enviar las notificaciones");
-    } finally {
-      setSendingNotification(false);
-    }
+    requestAccess(async () => {
+      setSendingNotification(true);
+      try {
+        const res = await apiFetch<any>(`/api/services/${serviceToNotify.id}/notify-prebooked`, {
+          method: "POST",
+          body: JSON.stringify(notifyForm),
+        });
+        toast.success(res.message || "Notificaciones enviadas a los pre-inscritos con éxito.");
+        setNotifyModalOpen(false);
+        await refreshData();
+      } catch (err: any) {
+        toast.error(err instanceof ApiError ? err.message : "Error al enviar las notificaciones");
+      } finally {
+        setSendingNotification(false);
+      }
+    });
   }
 
   function toggleSelect(id: string) {
@@ -706,7 +726,8 @@ export default function ServicesPage() {
     slot: "flyer-general" | "video-general" | "flyer-particular" | "video-particular",
     file: File
   ) {
-    if (!editingService?.id) {
+    const serviceId = editingService?.id;
+    if (!serviceId) {
       toast.error("Guarda primero el servicio para subir archivos de vídeo o imágenes.");
       return;
     }
@@ -716,39 +737,42 @@ export default function ServicesPage() {
       return;
     }
 
-    setUploadingSlot(slot);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
+    requestAccess(async () => {
+      setUploadingSlot(slot);
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
 
-      const updatedSvc = await apiFetch<Service>(`/api/services/${editingService.id}/media/${slot}`, {
-        method: "POST",
-        body: formData,
-      });
+        const updatedSvc = await apiFetch<Service>(`/api/services/${serviceId}/media/${slot}`, {
+          method: "POST",
+          body: formData,
+        });
 
-      if (slot === "flyer-general") {
-        setForm((f) => ({ ...f, flyerUrl: updatedSvc.flyerUrl || "", flyerPath: updatedSvc.flyerPath || "" }));
-      } else if (slot === "video-general") {
-        setForm((f) => ({ ...f, videoUrl: updatedSvc.videoUrl || "", videoPath: updatedSvc.videoPath || "" }));
-      } else if (slot === "flyer-particular") {
-        setForm((f) => ({ ...f, flyerParticularUrl: updatedSvc.flyerParticularUrl || "", flyerParticularPath: updatedSvc.flyerParticularPath || "" }));
-      } else if (slot === "video-particular") {
-        setForm((f) => ({ ...f, videoParticularUrl: updatedSvc.videoParticularUrl || "", videoParticularPath: updatedSvc.videoParticularPath || "" }));
+        if (slot === "flyer-general") {
+          setForm((f) => ({ ...f, flyerUrl: updatedSvc.flyerUrl || "", flyerPath: updatedSvc.flyerPath || "" }));
+        } else if (slot === "video-general") {
+          setForm((f) => ({ ...f, videoUrl: updatedSvc.videoUrl || "", videoPath: updatedSvc.videoPath || "" }));
+        } else if (slot === "flyer-particular") {
+          setForm((f) => ({ ...f, flyerParticularUrl: updatedSvc.flyerParticularUrl || "", flyerParticularPath: updatedSvc.flyerParticularPath || "" }));
+        } else if (slot === "video-particular") {
+          setForm((f) => ({ ...f, videoParticularUrl: updatedSvc.videoParticularUrl || "", videoParticularPath: updatedSvc.videoParticularPath || "" }));
+        }
+
+        toast.success("Archivo subido y asignado al servicio correctamente.");
+        await refreshData();
+      } catch (err: any) {
+        toast.error(err instanceof ApiError ? err.message : "Error al subir el archivo multimedia");
+      } finally {
+        setUploadingSlot(null);
       }
-
-      toast.success("Archivo subido y asignado al servicio correctamente.");
-      await refreshData();
-    } catch (err: any) {
-      toast.error(err instanceof ApiError ? err.message : "Error al subir el archivo multimedia");
-    } finally {
-      setUploadingSlot(null);
-    }
+    });
   }
 
   async function handleMediaDelete(
     slot: "flyer-general" | "video-general" | "flyer-particular" | "video-particular"
   ) {
-    if (!editingService?.id) {
+    const serviceId = editingService?.id;
+    if (!serviceId) {
       if (slot === "flyer-general") setForm((f) => ({ ...f, flyerUrl: "", flyerPath: "" }));
       else if (slot === "video-general") setForm((f) => ({ ...f, videoUrl: "", videoPath: "" }));
       else if (slot === "flyer-particular") setForm((f) => ({ ...f, flyerParticularUrl: "", flyerParticularPath: "" }));
@@ -756,91 +780,103 @@ export default function ServicesPage() {
       return;
     }
 
-    if (!confirm("¿Eliminar este archivo multimedia del servicio?")) return;
+    requestAccess(async () => {
+      if (!confirm("¿Eliminar este archivo multimedia del servicio?")) return;
 
-    try {
-      await apiFetch(`/api/services/${editingService.id}/media/${slot}`, {
-        method: "DELETE",
-      });
+      try {
+        await apiFetch(`/api/services/${serviceId}/media/${slot}`, {
+          method: "DELETE",
+        });
 
-      if (slot === "flyer-general") {
-        setForm((f) => ({ ...f, flyerUrl: "", flyerPath: "" }));
-      } else if (slot === "video-general") {
-        setForm((f) => ({ ...f, videoUrl: "", videoPath: "" }));
-      } else if (slot === "flyer-particular") {
-        setForm((f) => ({ ...f, flyerParticularUrl: "", flyerParticularPath: "" }));
-      } else if (slot === "video-particular") {
-        setForm((f) => ({ ...f, videoParticularUrl: "", videoParticularPath: "" }));
+        if (slot === "flyer-general") {
+          setForm((f) => ({ ...f, flyerUrl: "", flyerPath: "" }));
+        } else if (slot === "video-general") {
+          setForm((f) => ({ ...f, videoUrl: "", videoPath: "" }));
+        } else if (slot === "flyer-particular") {
+          setForm((f) => ({ ...f, flyerParticularUrl: "", flyerParticularPath: "" }));
+        } else if (slot === "video-particular") {
+          setForm((f) => ({ ...f, videoParticularUrl: "", videoParticularPath: "" }));
+        }
+
+        toast.success("Archivo multimedia eliminado.");
+        await refreshData();
+      } catch (err: any) {
+        toast.error(err instanceof ApiError ? err.message : "Error al eliminar el archivo multimedia");
       }
-
-      toast.success("Archivo multimedia eliminado.");
-      await refreshData();
-    } catch (err: any) {
-      toast.error(err instanceof ApiError ? err.message : "Error al eliminar el archivo multimedia");
-    }
+    });
   }
 
   async function handleCreateEdition(e: React.FormEvent) {
     e.preventDefault();
-    if (!editingService?.id) return;
-    try {
-      await apiFetch(`/api/services/${editingService.id}/editions`, {
-        method: "POST",
-        body: JSON.stringify(newEditionForm),
-      });
-      toast.success("Convocatoria creada con éxito.");
-      setEditionModalOpen(false);
-      setNewEditionForm({
-        title: '',
-        isDateDefinite: false,
-        tentativeDateText: '',
-        startsAt: '',
-        endsAt: '',
-        isPriceDefinite: false,
-        tentativePriceText: '',
-        price: '',
-        minParticipants: 10,
-        maxCapacity: 30,
-        conditionsText: '',
-      });
-      await loadServiceEditions(editingService.id);
-    } catch (err: any) {
-      toast.error(err instanceof ApiError ? err.message : "Error al crear convocatoria");
-    }
+    const serviceId = editingService?.id;
+    if (!serviceId) return;
+    requestAccess(async () => {
+      try {
+        await apiFetch(`/api/services/${serviceId}/editions`, {
+          method: "POST",
+          body: JSON.stringify(newEditionForm),
+        });
+        toast.success("Convocatoria creada con éxito.");
+        setEditionModalOpen(false);
+        setNewEditionForm({
+          title: '',
+          isDateDefinite: false,
+          tentativeDateText: '',
+          startsAt: '',
+          endsAt: '',
+          isPriceDefinite: false,
+          tentativePriceText: '',
+          price: '',
+          minParticipants: 10,
+          maxCapacity: 30,
+          conditionsText: '',
+        });
+        await loadServiceEditions(serviceId);
+      } catch (err: any) {
+        toast.error(err instanceof ApiError ? err.message : "Error al crear convocatoria");
+      }
+    });
   }
 
   async function handleConfirmEditionSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedEdition?.id) return;
-    try {
-      const res = await apiFetch<any>(`/api/event-editions/${selectedEdition.id}/confirm`, {
-        method: "POST",
-        body: JSON.stringify(confirmEditionForm),
-      });
-      toast.success(res.message || "Convocatoria confirmada y alumnos notificados.");
-      setConfirmEditionModalOpen(false);
-      setSelectedEdition(null);
-      if (editingService?.id) await loadServiceEditions(editingService.id);
-      await refreshData();
-    } catch (err: any) {
-      toast.error(err instanceof ApiError ? err.message : "Error al confirmar convocatoria");
-    }
+    const edition = selectedEdition;
+    const serviceId = editingService?.id;
+    if (!edition?.id) return;
+    requestAccess(async () => {
+      try {
+        const res = await apiFetch<any>(`/api/event-editions/${edition.id}/confirm`, {
+          method: "POST",
+          body: JSON.stringify(confirmEditionForm),
+        });
+        toast.success(res.message || "Convocatoria confirmada y alumnos notificados.");
+        setConfirmEditionModalOpen(false);
+        setSelectedEdition(null);
+        if (serviceId) await loadServiceEditions(serviceId);
+        await refreshData();
+      } catch (err: any) {
+        toast.error(err instanceof ApiError ? err.message : "Error al confirmar convocatoria");
+      }
+    });
   }
 
   async function handleCancelEdition(editionId: string) {
     const reason = prompt("Motivo de la cancelación para notificar a los alumnos:");
     if (!reason) return;
-    try {
-      await apiFetch(`/api/event-editions/${editionId}/cancel`, {
-        method: "POST",
-        body: JSON.stringify({ reason }),
-      });
-      toast.success("Convocatoria cancelada y reservas provisionales anuladas.");
-      if (editingService?.id) await loadServiceEditions(editingService.id);
-      await refreshData();
-    } catch (err: any) {
-      toast.error(err instanceof ApiError ? err.message : "Error al cancelar convocatoria");
-    }
+    const serviceId = editingService?.id;
+    requestAccess(async () => {
+      try {
+        await apiFetch(`/api/event-editions/${editionId}/cancel`, {
+          method: "POST",
+          body: JSON.stringify({ reason }),
+        });
+        toast.success("Convocatoria cancelada y reservas provisionales anuladas.");
+        if (serviceId) await loadServiceEditions(serviceId);
+        await refreshData();
+      } catch (err: any) {
+        toast.error(err instanceof ApiError ? err.message : "Error al cancelar convocatoria");
+      }
+    });
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -858,82 +894,84 @@ export default function ServicesPage() {
       return;
     }
 
-    setSaving(true);
-    setError("");
+    requestAccess(async () => {
+      setSaving(true);
+      setError("");
 
-    const payload = {
-      name: form.name.trim(),
-      description: form.description.trim() || undefined,
-      serviceType: form.serviceType,
-      eventDatesText: form.eventDatesText.trim() || undefined,
-      scheduleText: form.scheduleText.trim() || undefined,
-      maxCapacity: form.maxCapacity ? Number(form.maxCapacity) : (editingService ? null : undefined),
-      minQuorum: form.minQuorum ? Number(form.minQuorum) : undefined,
-      durationMinutes: Number(form.durationMinutes),
-      price: form.price.trim() || undefined,
-      paymentType: form.paymentType,
-      externalPaymentUrl: form.externalPaymentUrl.trim() || (editingService ? null : undefined),
-      calendarId: form.calendarId.trim() || (editingService ? null : undefined),
-      managerId: form.managerId || (editingService ? null : undefined),
-      categoryId: form.categoryId || (editingService ? null : undefined),
-      flyerPath: form.flyerPath.trim() || (editingService ? null : undefined),
-      flyerUrl: form.flyerUrl.trim() || (editingService ? null : undefined),
-      flyerParticularPath: form.flyerParticularPath.trim() || (editingService ? null : undefined),
-      flyerParticularUrl: form.flyerParticularUrl.trim() || (editingService ? null : undefined),
-      videoPath: form.videoPath.trim() || (editingService ? null : undefined),
-      videoUrl: form.videoUrl.trim() || (editingService ? null : undefined),
-      textoespecifico: form.textoespecifico.trim(),
-      videoParticularPath: form.videoParticularPath.trim() || (editingService ? null : undefined),
-      videoParticularUrl: form.videoParticularUrl.trim() || (editingService ? null : undefined),
-      fechaDesde: form.fechaDesde.trim() || "2000-01-01",
-      fechaHasta: form.fechaHasta.trim() || "2099-12-31",
-      requiresApproval: form.requiresApproval,
-      allowedModalities: form.allowedModalities,
-      requiresReason: form.requiresReason,
-      calEventTypeId: form.calEventTypeId.trim() ? Number(form.calEventTypeId) : undefined,
-      reminderNotes: form.reminderNotes.trim(),
-      displayOrder: Number(form.displayOrder) || 0,
-      isActive: form.isActive,
-      notifyByEmail: form.notifyByEmail,
-      notifyByWhatsapp: form.notifyByWhatsapp,
-      notifyBySms: form.notifyBySms,
-      reminderWhatsapp: form.reminderWhatsapp,
-      reminderEmail: form.reminderEmail,
-      reminderVoice: form.reminderVoice,
-      reminderSms: form.reminderSms,
-      reminderHoursEnabled: form.reminderHoursEnabled,
-      reminderHours: Number(form.reminderHours) || 24,
-      reminderMinutesEnabled: form.reminderMinutesEnabled,
-      reminderMinutes: Number(form.reminderMinutes) || 120,
-      sinfechadefinitiva: form.sinfechadefinitiva,
-      textosinfechadefinitiva: form.textosinfechadefinitiva.trim(),
-      sinpreciodefinitivo: form.sinpreciodefinitivo,
-      textosinpreciodefinitivo: form.textosinpreciodefinitivo.trim(),
-    };
+      const payload = {
+        name: form.name.trim(),
+        description: form.description.trim() || undefined,
+        serviceType: form.serviceType,
+        eventDatesText: form.eventDatesText.trim() || undefined,
+        scheduleText: form.scheduleText.trim() || undefined,
+        maxCapacity: form.maxCapacity ? Number(form.maxCapacity) : (editingService ? null : undefined),
+        minQuorum: form.minQuorum ? Number(form.minQuorum) : undefined,
+        durationMinutes: Number(form.durationMinutes),
+        price: form.price.trim() || undefined,
+        paymentType: form.paymentType,
+        externalPaymentUrl: form.externalPaymentUrl.trim() || (editingService ? null : undefined),
+        calendarId: form.calendarId.trim() || (editingService ? null : undefined),
+        managerId: form.managerId || (editingService ? null : undefined),
+        categoryId: form.categoryId || (editingService ? null : undefined),
+        flyerPath: form.flyerPath.trim() || (editingService ? null : undefined),
+        flyerUrl: form.flyerUrl.trim() || (editingService ? null : undefined),
+        flyerParticularPath: form.flyerParticularPath.trim() || (editingService ? null : undefined),
+        flyerParticularUrl: form.flyerParticularUrl.trim() || (editingService ? null : undefined),
+        videoPath: form.videoPath.trim() || (editingService ? null : undefined),
+        videoUrl: form.videoUrl.trim() || (editingService ? null : undefined),
+        textoespecifico: form.textoespecifico.trim(),
+        videoParticularPath: form.videoParticularPath.trim() || (editingService ? null : undefined),
+        videoParticularUrl: form.videoParticularUrl.trim() || (editingService ? null : undefined),
+        fechaDesde: form.fechaDesde.trim() || "2000-01-01",
+        fechaHasta: form.fechaHasta.trim() || "2099-12-31",
+        requiresApproval: form.requiresApproval,
+        allowedModalities: form.allowedModalities,
+        requiresReason: form.requiresReason,
+        calEventTypeId: form.calEventTypeId.trim() ? Number(form.calEventTypeId) : undefined,
+        reminderNotes: form.reminderNotes.trim(),
+        displayOrder: Number(form.displayOrder) || 0,
+        isActive: form.isActive,
+        notifyByEmail: form.notifyByEmail,
+        notifyByWhatsapp: form.notifyByWhatsapp,
+        notifyBySms: form.notifyBySms,
+        reminderWhatsapp: form.reminderWhatsapp,
+        reminderEmail: form.reminderEmail,
+        reminderVoice: form.reminderVoice,
+        reminderSms: form.reminderSms,
+        reminderHoursEnabled: form.reminderHoursEnabled,
+        reminderHours: Number(form.reminderHours) || 24,
+        reminderMinutesEnabled: form.reminderMinutesEnabled,
+        reminderMinutes: Number(form.reminderMinutes) || 120,
+        sinfechadefinitiva: form.sinfechadefinitiva,
+        textosinfechadefinitiva: form.textosinfechadefinitiva.trim(),
+        sinpreciodefinitivo: form.sinpreciodefinitivo,
+        textosinpreciodefinitivo: form.textosinpreciodefinitivo.trim(),
+      };
 
-    try {
-      if (editingService) {
-        await apiFetch(`/api/services/${editingService.id}`, {
-          method: "PATCH",
-          body: JSON.stringify(payload),
-        });
-        apiFetch("/api/vapi/publish", { method: "POST" }).catch(() => null);
-        toast.success("Servicio actualizado correctamente");
-      } else {
-        await apiFetch("/api/services", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
-        apiFetch("/api/vapi/publish", { method: "POST" }).catch(() => null);
-        toast.success("Servicio creado correctamente");
+      try {
+        if (editingService) {
+          await apiFetch(`/api/services/${editingService.id}`, {
+            method: "PATCH",
+            body: JSON.stringify(payload),
+          });
+          apiFetch("/api/vapi/publish", { method: "POST" }).catch(() => null);
+          toast.success("Servicio actualizado correctamente");
+        } else {
+          await apiFetch("/api/services", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+          apiFetch("/api/vapi/publish", { method: "POST" }).catch(() => null);
+          toast.success("Servicio creado correctamente");
+        }
+        setModalOpen(false);
+        await refreshData();
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : "Error al guardar el servicio");
+      } finally {
+        setSaving(false);
       }
-      setModalOpen(false);
-      await refreshData();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error al guardar el servicio");
-    } finally {
-      setSaving(false);
-    }
+    });
   }
 
   return (
@@ -1443,6 +1481,7 @@ export default function ServicesPage() {
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     Eliminar
+                    {!isSensitiveUnlocked && <Lock className="h-3 w-3 text-red-400 ml-0.5" />}
                   </Button>
                 ) : (
                   <span />
@@ -1470,6 +1509,7 @@ export default function ServicesPage() {
                   >
                     <Copy className="h-3 w-3" />
                     {duplicatingId === s.id ? "Duplicando..." : "Duplicar"}
+                    {!isSensitiveUnlocked && <Lock className="h-3 w-3 text-neutral-400 ml-0.5" />}
                   </Button>
 
                   <Button
@@ -1764,6 +1804,7 @@ export default function ServicesPage() {
                       <Upload className="h-3.5 w-3.5" />
                     )}
                     <span>Cambiar Flyer General</span>
+                    {!isSensitiveUnlocked && <Lock className="h-3 w-3 text-neutral-300 ml-0.5" />}
                     <input
                       type="file"
                       accept="image/*"
@@ -1780,9 +1821,11 @@ export default function ServicesPage() {
                     <button
                       type="button"
                       onClick={() => handleMediaDelete("flyer-general")}
-                      className="px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded text-xs font-medium transition"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded text-xs font-medium transition"
                     >
+                      <Trash2 className="h-3 w-3" />
                       Eliminar
+                      {!isSensitiveUnlocked && <Lock className="h-3 w-3 text-red-400" />}
                     </button>
                   )}
                 </div>
@@ -1862,6 +1905,7 @@ export default function ServicesPage() {
                       <Video className="h-3.5 w-3.5" />
                     )}
                     <span>Cambiar Vídeo General MP4</span>
+                    {!isSensitiveUnlocked && <Lock className="h-3 w-3 text-purple-200 ml-0.5" />}
                     <input
                       type="file"
                       accept="video/mp4,video/*"
@@ -1878,9 +1922,11 @@ export default function ServicesPage() {
                     <button
                       type="button"
                       onClick={() => handleMediaDelete("video-general")}
-                      className="px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded text-xs font-medium transition"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded text-xs font-medium transition"
                     >
+                      <Trash2 className="h-3 w-3" />
                       Eliminar Vídeo
+                      {!isSensitiveUnlocked && <Lock className="h-3 w-3 text-red-400" />}
                     </button>
                   )}
                 </div>
@@ -1963,6 +2009,7 @@ export default function ServicesPage() {
                       <Upload className="h-3.5 w-3.5" />
                     )}
                     <span>Cambiar Flyer Particular</span>
+                    {!isSensitiveUnlocked && <Lock className="h-3 w-3 text-neutral-300 ml-0.5" />}
                     <input
                       type="file"
                       accept="image/*"
@@ -1979,9 +2026,11 @@ export default function ServicesPage() {
                     <button
                       type="button"
                       onClick={() => handleMediaDelete("flyer-particular")}
-                      className="px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded text-xs font-medium transition"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded text-xs font-medium transition"
                     >
+                      <Trash2 className="h-3 w-3" />
                       Eliminar
+                      {!isSensitiveUnlocked && <Lock className="h-3 w-3 text-red-400" />}
                     </button>
                   )}
                 </div>
@@ -2061,6 +2110,7 @@ export default function ServicesPage() {
                       <Video className="h-3.5 w-3.5" />
                     )}
                     <span>Cambiar Vídeo Particular MP4</span>
+                    {!isSensitiveUnlocked && <Lock className="h-3 w-3 text-purple-200 ml-0.5" />}
                     <input
                       type="file"
                       accept="video/mp4,video/*"
@@ -2077,9 +2127,11 @@ export default function ServicesPage() {
                     <button
                       type="button"
                       onClick={() => handleMediaDelete("video-particular")}
-                      className="px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded text-xs font-medium transition"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded text-xs font-medium transition"
                     >
+                      <Trash2 className="h-3 w-3" />
                       Eliminar Vídeo
+                      {!isSensitiveUnlocked && <Lock className="h-3 w-3 text-red-400" />}
                     </button>
                   )}
                 </div>
@@ -2814,8 +2866,9 @@ export default function ServicesPage() {
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={saving}>
-              {saving ? "Guardando…" : "Guardar Servicio"}
+            <Button type="submit" disabled={saving} className="flex items-center gap-1.5">
+              {!isSensitiveUnlocked && <Lock className="h-3.5 w-3.5 mr-0.5 text-white/80" />}
+              {saving ? "Guardando…" : (editingService ? "Guardar Cambios" : "Guardar Servicio")}
             </Button>
           </div>
         </form>
@@ -2922,7 +2975,8 @@ export default function ServicesPage() {
               </div>
 
               <div className="mt-4">
-                <Button type="submit" size="sm" disabled={savingCategory} className="text-xs">
+                <Button type="submit" size="sm" disabled={savingCategory} className="text-xs flex items-center gap-1">
+                  {!isSensitiveUnlocked && <Lock className="h-3 w-3 mr-0.5 text-white/80" />}
                   {savingCategory ? "Guardando…" : editingCategory ? "Actualizar Categoría" : "Añadir Categoría"}
                 </Button>
               </div>
@@ -2977,9 +3031,11 @@ export default function ServicesPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDeleteCategory(c.id)}
-                          className="text-[11px] p-1 h-7 text-red-600 hover:bg-red-50"
+                          className="text-[11px] p-1 h-7 text-red-600 hover:bg-red-50 flex items-center gap-0.5"
+                          title="Eliminar categoría"
                         >
                           <Trash2 className="h-3 w-3" />
+                          {!isSensitiveUnlocked && <Lock className="h-2.5 w-2.5 text-red-400" />}
                         </Button>
                       )}
                     </div>
@@ -3044,8 +3100,9 @@ export default function ServicesPage() {
               variant="danger"
               disabled={deletingService}
               onClick={handleDeleteService}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-1.5"
             >
+              {!isSensitiveUnlocked && <Lock className="h-3.5 w-3.5 text-white/80" />}
               {deletingService ? "Eliminando…" : "Sí, Eliminar Definitivamente"}
             </Button>
           </div>
@@ -3104,8 +3161,9 @@ export default function ServicesPage() {
               variant="danger"
               disabled={deletingBulk}
               onClick={handleBulkDelete}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-1.5"
             >
+              {!isSensitiveUnlocked && <Lock className="h-3.5 w-3.5 text-white/80" />}
               {deletingBulk ? "Eliminando en lote…" : `Sí, Eliminar ${selectedIds.length} Servicios`}
             </Button>
           </div>
@@ -3425,7 +3483,8 @@ export default function ServicesPage() {
             <Button type="button" variant="secondary" size="sm" onClick={() => setEditionModalOpen(false)}>
               Cancelar
             </Button>
-            <Button type="submit" size="sm">
+            <Button type="submit" size="sm" className="flex items-center gap-1">
+              {!isSensitiveUnlocked && <Lock className="h-3 w-3 mr-0.5 text-white/80" />}
               Crear Convocatoria
             </Button>
           </div>
@@ -3509,7 +3568,8 @@ export default function ServicesPage() {
             <Button type="button" variant="secondary" size="sm" onClick={() => setConfirmEditionModalOpen(false)}>
               Cancelar
             </Button>
-            <Button type="submit" variant="primary" size="sm" className="bg-emerald-600 hover:bg-emerald-700">
+            <Button type="submit" variant="primary" size="sm" className="bg-emerald-600 hover:bg-emerald-700 flex items-center gap-1">
+              {!isSensitiveUnlocked && <Lock className="h-3 w-3 mr-0.5 text-white/80" />}
               Confirmar y Notificar
             </Button>
           </div>

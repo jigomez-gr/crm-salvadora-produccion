@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
 import { PASSWORD_RULES, isPasswordStrong } from "@/lib/password";
+import { SensitiveAccessGate } from "@/contexts/SensitiveAccessContext";
 
 const selectClass =
   "block w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500";
@@ -323,7 +324,11 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="p-4 sm:p-8">
+    <SensitiveAccessGate
+      title="Gestión de Usuarios"
+      description="Para acceder a la administración de usuarios, roles y permisos del sistema, introduce la contraseña de seguridad adicional."
+    >
+      <div className="p-4 sm:p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-neutral-900">Usuarios</h1>
@@ -496,5 +501,6 @@ export default function UsersPage() {
         </div>
       </Modal>
     </div>
+    </SensitiveAccessGate>
   );
 }

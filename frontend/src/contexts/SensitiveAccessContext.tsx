@@ -124,7 +124,7 @@ export function SensitiveAccessProvider({ children }: { children: ReactNode }) {
                 Información confidencial y sensible
               </p>
               <p className="mt-0.5">
-                Para acceder a esta sección (Ajustes, Agentes o Telefonía / VAPI),
+                Para acceder a esta sección o autorizar esta modificación (Ajustes, Agentes, Usuarios o Servicios),
                 introduce la contraseña de seguridad adicional.
               </p>
             </div>

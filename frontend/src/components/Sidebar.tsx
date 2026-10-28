@@ -132,7 +132,7 @@ export function Sidebar({
         {navItems.map(({ href, label, icon: Icon }) => {
           const active =
             href === "/" ? pathname === "/" : pathname.startsWith(href);
-          const isSensitive = href === "/settings" || href === "/agents";
+          const isSensitive = href === "/settings" || href === "/agents" || href === "/users";
           const isLocked = isSensitive && !isSensitiveUnlocked;
 
           return (
