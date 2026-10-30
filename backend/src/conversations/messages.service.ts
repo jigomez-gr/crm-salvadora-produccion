@@ -195,6 +195,15 @@ export class MessagesService implements OnModuleInit {
     });
   }
 
+  /** Recent messages in descending order (newest first). Used by anti-loop checks. */
+  async getRecentMessages(threadId: string, limit = 10): Promise<Message[]> {
+    return this.messagesRepo.find({
+      where: { threadId },
+      order: { createdAt: 'DESC' },
+      take: limit,
+    });
+  }
+
   /** Full message row by id — used by the media proxy (needs `mediaUrl`). */
   async getMessageById(id: string): Promise<Message | null> {
     return this.messagesRepo.findOne({ where: { id } });

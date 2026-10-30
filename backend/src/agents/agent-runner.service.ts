@@ -21,11 +21,19 @@ import { normalizeColloquialSpanishTimes } from '../common/time';
 import { ServicesService } from '../services/services.service';
 import { SettingsService } from '../settings/settings.service';
 import { MAINTENANCE_MESSAGE, BLOCKED_USER_MESSAGE } from '../common/system-messages';
+import {
+  isPureClosingOrFarewell,
+  isBotFarewell,
+} from '../whatsapp/farewell-detector';
 
 // Hard cap on tool-call/generation steps per turn — bounds the agent loop so a
 // misbehaving model (or a prompt-injection loop) can't rack up unbounded
 // OpenRouter cost on a single message.
 const AGENT_MAX_STEPS = 8;
+
+// Safety circuit breaker thresholds to prevent rapid bot-to-bot ping-pong loops
+const RAPID_BURST_WINDOW_MS = 3 * 60 * 1000; // 3 minutes
+const RAPID_BURST_MAX_OUTBOUND = 5;
 
 // Reasoning models (e.g. minimax-m3) may emit <think> blocks inline in text
 function stripReasoning(text: string): string {
@@ -293,6 +301,49 @@ export class AgentRunnerService {
           `Thread '${threadId}' is in human handoff — auto-reply skipped.`,
         );
         return { reply: '', outbound: null };
+      }
+
+      // Anti-loop protection for WhatsApp traffic:
+      const recentMessages =
+        typeof this.messagesService.getRecentMessages === 'function'
+          ? await this.messagesService
+              .getRecentMessages(threadId, 12)
+              .catch(() => [])
+          : [];
+
+      // 1. Circuit breaker: if the bot has sent 5+ outbound messages in the last 3 minutes,
+      // trip the circuit breaker and enable handoff to prevent rapid bot-to-bot ping-pong loops.
+      const now = Date.now();
+      const recentOutboundsInWindow = recentMessages.filter(
+        (m) =>
+          m.direction === MessageDirection.OUTBOUND &&
+          now - new Date(m.createdAt).getTime() <= RAPID_BURST_WINDOW_MS,
+      ).length;
+
+      if (recentOutboundsInWindow >= RAPID_BURST_MAX_OUTBOUND) {
+        this.logger.warn(
+          `Circuit breaker triggered on thread '${threadId}': ${recentOutboundsInWindow} rapid outbound messages in window. Enabling handoff to stop loop.`,
+        );
+        await this.messagesService.setHandoff(threadId, true).catch(() => null);
+        return { reply: '', outbound: null };
+      }
+
+      // 2. Anti-loop courtesy / farewell suppressor:
+      // If the incoming message is purely a courtesy/farewell/closing message and our bot
+      // has ALREADY issued a farewell in its previous outbound reply, do not reply again.
+      // The incoming message is safely persisted in the CRM for visibility, but auto-reply is suppressed.
+      if (isPureClosingOrFarewell(message)) {
+        const lastOutbound = recentMessages.find(
+          (m) =>
+            m.direction === MessageDirection.OUTBOUND &&
+            m.id !== inbound?.id,
+        );
+        if (lastOutbound && isBotFarewell(lastOutbound.body)) {
+          this.logger.log(
+            `Thread '${threadId}' received subsequent farewell/closing after bot already said farewell. Auto-reply suppressed to prevent loop.`,
+          );
+          return { reply: '', outbound: null };
+        }
       }
     }
 
