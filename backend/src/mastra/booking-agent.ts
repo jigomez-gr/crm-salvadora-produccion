@@ -91,6 +91,7 @@ export interface BookingAgentDeps {
     customerEmail?: string;
     reason?: string;
     threadId?: string;
+    isUrgent?: boolean;
   }) => Promise<any>;
   setConversationHandoff?: (threadId: string, handoff: boolean) => Promise<any>;
 }
@@ -1465,11 +1466,11 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   const solicitarAtencionHumanaTool = createTool({
     id: 'solicitarAtencionHumana',
     description:
-      'Llama a esta herramienta cuando el cliente solicite hablar con una persona humana del equipo o ser contactado directamente por el personal del centro, y haya confirmado su petición. Dispara inmediatamente los avisos configurados (email, SMS, llamada) al responsable del centro.',
+      'Llama a esta herramienta cuando el cliente solicite hablar con una persona humana del equipo o ser contactado directamente por el personal del centro, o exponga una emergencia médica/personal o urgencia. Dispara inmediatamente los avisos configurados (WhatsApp prioritario a los móviles de aviso, email, SMS, llamada VAPI) al responsable del centro.',
     inputSchema: z.object({
       motivo: z
         .string()
-        .describe('Motivo, consulta o razón por la que el cliente desea hablar con una persona'),
+        .describe('Motivo, consulta o razón por la que el cliente desea hablar con una persona o descripción de la emergencia/urgencia'),
       customerName: z
         .string()
         .optional()
@@ -1482,6 +1483,10 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         .string()
         .optional()
         .describe('Correo electrónico del cliente si se conoce'),
+      isUrgent: z
+        .boolean()
+        .optional()
+        .describe('true si se trata de una emergencia médica/personal, dolor severo, crisis, accidente o cancelación urgente'),
     }),
     execute: async (inputData, context) => {
       const customer = getCustomer(context);
@@ -1494,6 +1499,9 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       const nameToUse = inputData.customerName || customer?.name || undefined;
       const phoneToUse = inputData.customerPhone || customer?.phone || undefined;
       const emailToUse = inputData.customerEmail || (customer as any)?.email || undefined;
+      const isUrgent =
+        Boolean(inputData.isUrgent) ||
+        /urgente|emergencia|dolor severo|crisis|accidente/i.test(inputData.motivo || '');
 
       if (threadId && deps.setConversationHandoff) {
         await deps.setConversationHandoff(threadId, true).catch(() => null);
@@ -1508,6 +1516,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
             customerEmail: emailToUse,
             reason: inputData.motivo,
             threadId,
+            isUrgent,
           })
           .catch((err) => console.error('Error in notifyHumanRequest:', err));
       }
@@ -1845,18 +1854,20 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   3. En cuanto el cliente te pida o confirme la hora acordada (ej. las 11:00): DEBES LLAMAR INMEDIATAMENTE a 'rescheduleAppointment' (o 'bookAppointment') pasando el servicio, la nueva fecha y hora convenida (11:00) y sus datos de contacto.
   4. La herramienta actualizará y guardará la cita para el nuevo horario acordado en el sistema.
   5. NUNCA respondas repitiendo el horario antiguo descartado (como las 10:00).
-- SOLICITUD DE ATENCIÓN HUMANA / HABLAR CON UNA PERSONA (ESCALADO A HUMANO):
-  * Si el cliente o usuario pide explícitamente hablar con una persona humana, un agente humano, el responsable o el equipo del centro (por ejemplo: "quiero hablar con una persona", "pásame con un humano", "quiero hablar con alguien", "atención humana", "hablar con Jose Ignacio", etc.):
+- SOLICITUD DE ATENCIÓN HUMANA / HABLAR CON UNA PERSONA (ESCALADO A HUMANO) O EMERGENCIA:
+  * Si el cliente expone una emergencia médica o personal, dolor agudo sobrevenido, crisis o situación urgente: NO le hagas esperar confirmaciones complejas. Llama INMEDIATAMENTE a 'solicitarAtencionHumana' marcando 'isUrgent: true' y explicando la situación en 'motivo' para disparar el aviso prioritario por WhatsApp al equipo.
+  * Si el cliente o usuario pide hablar con una persona humana, un agente humano, el responsable o el equipo del centro (por ejemplo: "quiero hablar con una persona", "pásame con un humano", "quiero hablar con alguien", "atención humana", "hablar con Jose Ignacio", etc.):
   * CONFIRMACIÓN REQUERIDA: Si el cliente aún no ha confirmado claramente que desea que le contacte una persona, pregúntale cordialmente para confirmar (por ejemplo: "¿Deseas que avise a nuestro equipo para que una persona se ponga en contacto contigo directamente?").
   * DATOS DE CONTACTO: Comprueba que dispones de su nombre y su teléfono móvil o email. Si falta su teléfono o forma de contacto preferida, pídeselo amablemente para que el equipo pueda llamarle o escribirle.
   * EN CUANTO EL CLIENTE LO CONFIRME (o si ya ha dicho claramente que sí y facilitado sus datos):
     Llama INMEDIATAMENTE a la herramienta 'solicitarAtencionHumana' pasando:
     - 'confirmado': true
-    - 'nombre': su nombre completo (si se conoce)
-    - 'telefono': su teléfono móvil (si se conoce)
-    - 'email': su email (si se conoce)
+    - 'customerName': su nombre completo (si se conoce)
+    - 'customerPhone': su teléfono móvil (si se conoce)
+    - 'customerEmail': su email (si se conoce)
     - 'motivo': breve resumen de lo que necesita o por qué solicita atención humana.
-  * Tras ejecutar 'solicitarAtencionHumana', confirma al cliente con cercanía y tranquilidad que se ha notificado de inmediato al equipo y que una persona se pondrá en contacto con él a la mayor brevedad.
+    - 'isUrgent': false (o true si es urgente)
+  * Tras ejecutar 'solicitarAtencionHumana', confirma al cliente con cercanía y tranquilidad que se ha notificado de inmediato al equipo (por WhatsApp y canales directos) y que una persona se pondrá en contacto con él a la mayor brevedad.
 - Confirma SIEMPRE con el cliente el servicio, el día, la hora y sus datos de contacto ANTES de reservar en firme.
 - CIERRE DE RESERVA TRAS CONFIRMACIÓN DEL CLIENTE (OBLIGATORIO):
   * Cuando el cliente responda afirmativamente ("sí", "si", "confirmo", "confirmo la plaza", "adelante", "de acuerdo", "perfecto", "vale") después de que le hayas pedido confirmación o resumido su servicio, fecha y hora:

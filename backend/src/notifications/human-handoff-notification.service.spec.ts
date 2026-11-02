@@ -2,15 +2,18 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { HumanHandoffNotificationService } from './human-handoff-notification.service';
 import { AppSettings } from '../common/entities/app-settings.entity';
+import { AgentConfig } from '../common/entities/agent-config.entity';
 import { EmailService } from '../email/email.service';
 import { ZadarmaSmsService } from '../sms/zadarma-sms.service';
 import { VapiService } from '../vapi/vapi.service';
+import { WhatsappGatewayService } from '../whatsapp/whatsapp-gateway.service';
 
 describe('HumanHandoffNotificationService', () => {
   let service: HumanHandoffNotificationService;
   let emailService: jest.Mocked<EmailService>;
   let smsService: jest.Mocked<ZadarmaSmsService>;
   let vapiService: jest.Mocked<VapiService>;
+  let whatsappGateway: jest.Mocked<WhatsappGatewayService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -22,6 +25,7 @@ describe('HumanHandoffNotificationService', () => {
             find: jest.fn().mockResolvedValue([
               {
                 id: 'settings-1',
+                humanNoticeWhatsappEnabled: false,
                 humanNoticeEmailEnabled: true,
                 humanNoticeEmail: 'admin@salvadora.com',
                 humanNoticeSmsEnabled: true,
@@ -29,6 +33,16 @@ describe('HumanHandoffNotificationService', () => {
                 humanNoticeVapiEnabled: true,
               },
             ]),
+          },
+        },
+        {
+          provide: getRepositoryToken(AgentConfig),
+          useValue: {
+            findOne: jest.fn().mockResolvedValue({
+              agentKey: 'booking',
+              whatsappNumber: '+34644034231',
+              whatsappProvider: 'evolution',
+            }),
           },
         },
         {
@@ -49,6 +63,18 @@ describe('HumanHandoffNotificationService', () => {
             startOutboundCall: jest.fn().mockResolvedValue({ ok: true, callId: 'vapi-123' }),
           },
         },
+        {
+          provide: WhatsappGatewayService,
+          useValue: {
+            resolveAgentConfig: jest.fn().mockResolvedValue({
+              agentKey: 'booking',
+              whatsappNumber: '+34644034231',
+              whatsappProvider: 'evolution',
+            }),
+            resolveProviderType: jest.fn().mockReturnValue('evolution'),
+            sendManualTextMessage: jest.fn().mockResolvedValue({ ok: true, providerMessageId: 'wa-123' }),
+          },
+        },
       ],
     }).compile();
 
@@ -56,6 +82,7 @@ describe('HumanHandoffNotificationService', () => {
     emailService = module.get(EmailService);
     smsService = module.get(ZadarmaSmsService);
     vapiService = module.get(VapiService);
+    whatsappGateway = module.get(WhatsappGatewayService);
   });
 
   it('skips SMS and VAPI calls for non-urgent email handoffs', async () => {
@@ -113,11 +140,11 @@ describe('HumanHandoffNotificationService', () => {
   });
 
   it('notifies multiple email addresses and multiple phone numbers when configured with semicolon', async () => {
-    // Reconfigure settings mock with multiple emails and phones
     const settingsRepo = (service as any).settingsRepo;
     settingsRepo.find.mockResolvedValueOnce([
       {
         id: 'settings-1',
+        humanNoticeWhatsappEnabled: false,
         humanNoticeEmailEnabled: true,
         humanNoticeEmail: 'primero@salvadora.com; segundo@salvadora.com ; tercero@salvadora.com',
         humanNoticeSmsEnabled: true,
@@ -192,5 +219,86 @@ describe('HumanHandoffNotificationService', () => {
     expect(result.results?.email.sentCount).toBe(3);
     expect(result.results?.sms.sentCount).toBe(2);
     expect(result.results?.vapi.sentCount).toBe(2);
+  });
+
+  describe('Priority WhatsApp Notifications', () => {
+    it('dispatches priority WhatsApp alerts to all configured mobile phones (+34 649453996; +34 695172625)', async () => {
+      const settingsRepo = (service as any).settingsRepo;
+      settingsRepo.find.mockResolvedValueOnce([
+        {
+          id: 'settings-1',
+          humanNoticeWhatsappEnabled: true,
+          humanNoticeEmailEnabled: true,
+          humanNoticeEmail: 'salvadora@crm.local',
+          humanNoticeSmsEnabled: false,
+          humanNoticePhone: '+34 649453996; +34 695172625',
+          humanNoticeVapiEnabled: false,
+        },
+      ]);
+
+      const result = await service.notifyHumanRequest({
+        channel: 'landing',
+        customerName: 'Carlos Martinez',
+        customerPhone: '+34655443322',
+        customerEmail: 'carlos@example.com',
+        reason: 'Desea consultar sobre clases particulares de yoga y hablar con una persona',
+        isUrgent: false,
+      });
+
+      expect(result.whatsappSent).toBe(true);
+      expect(result.emailSent).toBe(true);
+      expect(result.smsSent).toBe(false);
+      expect(result.vapiSent).toBe(false);
+
+      // Verify WhatsApp Gateway called for both mobile numbers
+      expect(whatsappGateway.sendManualTextMessage).toHaveBeenCalledTimes(2);
+      expect(whatsappGateway.sendManualTextMessage).toHaveBeenNthCalledWith(1, {
+        config: expect.any(Object),
+        from: '+34644034231',
+        to: '+34649453996',
+        body: expect.stringContaining('SOLICITUD DE ATENCIÓN HUMANA'),
+        apiKeyOverride: undefined,
+      });
+      expect(whatsappGateway.sendManualTextMessage).toHaveBeenNthCalledWith(2, {
+        config: expect.any(Object),
+        from: '+34644034231',
+        to: '+34695172625',
+        body: expect.stringContaining('Carlos Martinez'),
+        apiKeyOverride: undefined,
+      });
+
+      expect(result.results?.whatsapp.sentCount).toBe(2);
+      expect(result.results?.whatsapp.totalCount).toBe(2);
+      expect(result.results?.whatsapp.success).toBe(true);
+    });
+
+    it('formats WhatsApp message with urgent alert header when isUrgent is true or emergency detected', async () => {
+      const settingsRepo = (service as any).settingsRepo;
+      settingsRepo.find.mockResolvedValueOnce([
+        {
+          id: 'settings-1',
+          humanNoticeWhatsappEnabled: true,
+          humanNoticeEmailEnabled: false,
+          humanNoticeSmsEnabled: false,
+          humanNoticePhone: '+34649453996',
+          humanNoticeVapiEnabled: false,
+        },
+      ]);
+
+      const result = await service.notifyHumanRequest({
+        channel: 'whatsapp',
+        customerName: 'Ana Gomez',
+        customerPhone: '+34677889900',
+        reason: 'Tengo una emergencia médica tras una caída y no puedo asistir hoy',
+        isUrgent: true,
+      });
+
+      expect(result.whatsappSent).toBe(true);
+      expect(whatsappGateway.sendManualTextMessage).toHaveBeenCalledTimes(1);
+      const sentBody = (whatsappGateway.sendManualTextMessage as any).mock.calls[0][0].body;
+      expect(sentBody).toContain('🚨 *AVISO URGENTE CRM - ATENCIÓN REQUERIDA*');
+      expect(sentBody).toContain('Ana Gomez');
+      expect(sentBody).toContain('emergencia médica');
+    });
   });
 });

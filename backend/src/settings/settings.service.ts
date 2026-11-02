@@ -25,6 +25,7 @@ export class SettingsService implements OnModuleInit {
         ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticePhone" text;
         ALTER TABLE "app_settings" ALTER COLUMN "humanNoticeEmail" TYPE text;
         ALTER TABLE "app_settings" ALTER COLUMN "humanNoticePhone" TYPE text;
+        ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticeWhatsappEnabled" boolean DEFAULT true;
         ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticeEmailEnabled" boolean DEFAULT false;
         ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticeSmsEnabled" boolean DEFAULT false;
         ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "humanNoticeVapiEnabled" boolean DEFAULT false;
@@ -85,6 +86,8 @@ export class SettingsService implements OnModuleInit {
       settings.humanNoticeEmail = dto.humanNoticeEmail ? dto.humanNoticeEmail.trim() : null;
     if (dto.humanNoticePhone !== undefined)
       settings.humanNoticePhone = dto.humanNoticePhone ? dto.humanNoticePhone.trim() : null;
+    if (dto.humanNoticeWhatsappEnabled !== undefined)
+      settings.humanNoticeWhatsappEnabled = Boolean(dto.humanNoticeWhatsappEnabled);
     if (dto.humanNoticeEmailEnabled !== undefined)
       settings.humanNoticeEmailEnabled = Boolean(dto.humanNoticeEmailEnabled);
     if (dto.humanNoticeSmsEnabled !== undefined)

@@ -1021,6 +1021,7 @@ function HumanNoticeCard() {
 
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [whatsappEnabled, setWhatsappEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(true);
   const [smsEnabled, setSmsEnabled] = useState(true);
   const [vapiEnabled, setVapiEnabled] = useState(false);
@@ -1030,6 +1031,7 @@ function HumanNoticeCard() {
       .then((data) => {
         setPhone(data.humanNoticePhone ?? "");
         setEmail(data.humanNoticeEmail ?? "");
+        setWhatsappEnabled(data.humanNoticeWhatsappEnabled ?? true);
         setEmailEnabled(data.humanNoticeEmailEnabled ?? true);
         setSmsEnabled(data.humanNoticeSmsEnabled ?? true);
         setVapiEnabled(data.humanNoticeVapiEnabled ?? false);
@@ -1045,6 +1047,7 @@ function HumanNoticeCard() {
         method: "PUT",
         body: JSON.stringify({
           humanNoticePhone: phone.trim(),
+          humanNoticeWhatsappEnabled: whatsappEnabled,
           humanNoticeEmail: email.trim(),
           humanNoticeEmailEnabled: emailEnabled,
           humanNoticeSmsEnabled: smsEnabled,
@@ -1066,11 +1069,13 @@ function HumanNoticeCard() {
     try {
       const res = await apiFetch<{
         ok?: boolean;
+        whatsappSent?: boolean;
         emailSent?: boolean;
         smsSent?: boolean;
         vapiSent?: boolean;
         errors?: string[];
         results?: {
+          whatsapp?: { attempted: boolean; success: boolean; sentCount: number; totalCount: number; errors: string[] };
           email?: { attempted: boolean; success: boolean; sentCount: number; totalCount: number; errors: string[] };
           sms?: { attempted: boolean; success: boolean; sentCount: number; totalCount: number; errors: string[] };
           vapi?: { attempted: boolean; success: boolean; sentCount: number; totalCount: number; errors: string[] };
@@ -1080,6 +1085,15 @@ function HumanNoticeCard() {
       });
 
       const parts: string[] = [];
+      const whatsappDetail = res.results?.whatsapp;
+      if (whatsappDetail?.attempted) {
+        parts.push(
+          `WhatsApp: ${whatsappDetail.success ? `✓ Enviado (${whatsappDetail.sentCount}/${whatsappDetail.totalCount})` : "✗ Falló"}`
+        );
+      } else if (res.whatsappSent) {
+        parts.push("WhatsApp: ✓ Enviado");
+      }
+
       const emailDetail = res.results?.email;
       if (emailDetail?.attempted) {
         parts.push(
@@ -1140,16 +1154,16 @@ function HumanNoticeCard() {
       <div className="mt-4 space-y-4">
         <div>
           <label className="mb-1 block text-xs font-medium text-neutral-700">
-            Móviles de aviso (SMS y llamadas salientes VAPI)
+            Móviles de aviso (WhatsApp, SMS y llamadas salientes VAPI)
           </label>
           <Input
             type="text"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            placeholder="+34 649453996; +34 600112233"
+            placeholder="+34 649453996; +34 695172625"
           />
           <p className="mt-1 text-[11px] text-neutral-400">
-            Números a los que se enviará el SMS urgente y/o donde llamará la IA de VAPI al responsable (puedes indicar varios separados por punto y coma «;»).
+            Números a los que se enviará el WhatsApp prioritario, SMS urgente y/o donde llamará la IA de VAPI al responsable (puedes indicar varios separados por punto y coma «;»).
           </p>
         </div>
 
@@ -1172,6 +1186,28 @@ function HumanNoticeCard() {
           <span className="block text-xs font-semibold text-neutral-700">
             Canales de aviso habilitados:
           </span>
+
+          <label className="flex items-start gap-2.5 cursor-pointer rounded-lg border border-emerald-200 bg-emerald-50/70 p-2.5">
+            <input
+              type="checkbox"
+              checked={whatsappEnabled}
+              onChange={(e) => setWhatsappEnabled(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500"
+            />
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-emerald-950">
+                  Aviso por WhatsApp
+                </span>
+                <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                  Canal Prioritario
+                </span>
+              </div>
+              <p className="text-[11px] text-emerald-800/90 mt-0.5">
+                Envía un WhatsApp inmediato al móvil del responsable con el cliente, motivo y datos completos cuando se escale hablar con un humano o una emergencia.
+              </p>
+            </div>
+          </label>
 
           <label className="flex items-start gap-2.5 cursor-pointer">
             <input

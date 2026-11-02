@@ -52,6 +52,10 @@ export class UpdateSettingsDto {
 
   @IsOptional()
   @IsBoolean()
+  humanNoticeWhatsappEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   humanNoticeEmailEnabled?: boolean;
 
   @IsOptional()

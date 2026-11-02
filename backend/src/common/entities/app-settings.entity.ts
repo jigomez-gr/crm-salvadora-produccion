@@ -41,6 +41,9 @@ export class AppSettings {
   @Column({ type: 'text', nullable: true })
   humanNoticePhone: string | null;
 
+  @Column({ type: 'boolean', default: true })
+  humanNoticeWhatsappEnabled: boolean;
+
   @Column({ type: 'boolean', default: false })
   humanNoticeEmailEnabled: boolean;
 

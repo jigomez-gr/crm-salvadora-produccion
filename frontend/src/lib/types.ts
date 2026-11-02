@@ -490,6 +490,7 @@ export interface AppSettings {
   onboardingCompleted: boolean;
   humanNoticeEmail?: string | null;
   humanNoticePhone?: string | null;
+  humanNoticeWhatsappEnabled?: boolean;
   humanNoticeEmailEnabled?: boolean;
   humanNoticeSmsEnabled?: boolean;
   humanNoticeVapiEnabled?: boolean;

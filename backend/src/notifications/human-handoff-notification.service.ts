@@ -1,11 +1,14 @@
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef, Optional } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AppSettings } from '../common/entities/app-settings.entity';
+import { AgentConfig } from '../common/entities/agent-config.entity';
 import { EmailService } from '../email/email.service';
 import { ZadarmaSmsService } from '../sms/zadarma-sms.service';
 import { VapiService } from '../vapi/vapi.service';
+import { WhatsappGatewayService } from '../whatsapp/whatsapp-gateway.service';
+import { normalizePhoneLoose } from '../common/phone';
 
 export interface HumanNoticePayload {
   channel: 'landing' | 'whatsapp' | 'vapi' | 'email';
@@ -29,11 +32,13 @@ export interface ChannelNoticeDetail {
 
 export interface HumanNoticeResult {
   ok?: boolean;
+  whatsappSent: boolean;
   emailSent: boolean;
   smsSent: boolean;
   vapiSent: boolean;
   errors: string[];
   results?: {
+    whatsapp: ChannelNoticeDetail;
     email: ChannelNoticeDetail;
     sms: ChannelNoticeDetail;
     vapi: ChannelNoticeDetail;
@@ -54,13 +59,22 @@ export function parseRecipientEmails(raw: string | null | undefined): string[] {
 
 /**
  * Split and parse a list of recipient phone numbers separated by semicolon, comma, or newline.
+ * Automatically normalizes phones to standard format without whitespace.
  */
 export function parseRecipientPhones(raw: string | null | undefined): string[] {
   if (!raw) return [];
   const list = raw
     .split(/[;,\n]+/)
     .map((p) => p.trim())
-    .filter((p) => p.length > 0);
+    .filter((p) => p.length > 0)
+    .map((p) => {
+      try {
+        const norm = normalizePhoneLoose(p);
+        return norm || p.replace(/\s+/g, '');
+      } catch {
+        return p.replace(/\s+/g, '');
+      }
+    });
   return Array.from(new Set(list));
 }
 
@@ -71,10 +85,16 @@ export class HumanHandoffNotificationService {
   constructor(
     @InjectRepository(AppSettings)
     private readonly settingsRepo: Repository<AppSettings>,
+    @Optional()
+    @InjectRepository(AgentConfig)
+    private readonly agentConfigRepo: Repository<AgentConfig>,
     private readonly emailService: EmailService,
     private readonly zadarmaSmsService: ZadarmaSmsService,
     @Inject(forwardRef(() => VapiService))
     private readonly vapiService: VapiService,
+    @Optional()
+    @Inject(forwardRef(() => WhatsappGatewayService))
+    private readonly whatsappGateway?: WhatsappGatewayService,
   ) {}
 
   @OnEvent('human_handoff.requested')
@@ -93,12 +113,22 @@ export class HumanHandoffNotificationService {
   }
 
   /**
-   * Dispatch notifications across enabled channels (Email, SMS, VAPI call)
+   * Dispatch notifications across enabled channels.
+   * Priority channel: WhatsApp (dispatched first), followed by Email, SMS, and VAPI call.
    */
   async notifyHumanRequest(payload: HumanNoticePayload): Promise<HumanNoticeResult> {
     const settings = await this.getSettings();
     const recipientEmails = parseRecipientEmails(settings?.humanNoticeEmail);
     const recipientPhones = parseRecipientPhones(settings?.humanNoticePhone);
+
+    const whatsappDetail: ChannelNoticeDetail = {
+      attempted: false,
+      success: false,
+      recipients: recipientPhones,
+      sentCount: 0,
+      totalCount: recipientPhones.length,
+      errors: [],
+    };
 
     const emailDetail: ChannelNoticeDetail = {
       attempted: false,
@@ -129,11 +159,13 @@ export class HumanHandoffNotificationService {
 
     const result: HumanNoticeResult = {
       ok: true,
+      whatsappSent: false,
       emailSent: false,
       smsSent: false,
       vapiSent: false,
       errors: [],
       results: {
+        whatsapp: whatsappDetail,
         email: emailDetail,
         sms: smsDetail,
         vapi: vapiDetail,
@@ -157,7 +189,10 @@ export class HumanHandoffNotificationService {
     const clientPhone = payload.customerPhone?.trim() || 'No facilitado';
     const clientEmail = payload.customerEmail?.trim() || 'No facilitado';
     const reasonText = payload.reason?.trim() || 'Desea atención directa por una persona del equipo';
-    const isUrgent = Boolean(payload.isUrgent);
+    const isUrgent =
+      Boolean(payload.isUrgent) ||
+      /urgente|emergencia|dolor severo|crisis|accidente/i.test(payload.reason || '') ||
+      /urgente|emergencia/i.test(payload.extraNotes || '');
 
     const nowFormatted = new Date().toLocaleString('es-ES', {
       timeZone: 'Europe/Madrid',
@@ -169,7 +204,81 @@ export class HumanHandoffNotificationService {
       `🔔 Disparando aviso de atención humana desde [${channelLabel}] para ${clientName} (${clientPhone}) - Urgente: ${isUrgent}`,
     );
 
-    // 1. Envío por Correo Electrónico (Email) a todos los destinatarios configurados
+    // 1. Envío PRIORITARIO por WhatsApp a todos los teléfonos móviles configurados
+    if (settings.humanNoticeWhatsappEnabled && recipientPhones.length > 0) {
+      whatsappDetail.attempted = true;
+      const urgencyHeader = isUrgent
+        ? '🚨 *AVISO URGENTE CRM - ATENCIÓN REQUERIDA*'
+        : '📋 *AVISO CRM - SOLICITUD DE ATENCIÓN HUMANA*';
+
+      const whatsappText = `${urgencyHeader}
+━━━━━━━━━━━━━━━━━━
+👤 *Cliente:* ${clientName}
+📱 *Teléfono:* ${clientPhone}
+📧 *Email:* ${clientEmail}
+📍 *Canal de origen:* ${channelLabel}
+⏰ *Fecha y hora:* ${nowFormatted}
+
+📝 *Motivo / Solicitud:*
+${reasonText}
+━━━━━━━━━━━━━━━━━━
+👉 _Por favor, atiende al cliente o revisa el CRM lo antes posible._`;
+
+      let agentConfig: AgentConfig | null = null;
+      if (this.whatsappGateway) {
+        agentConfig =
+          (await this.whatsappGateway.resolveAgentConfig('booking')) ||
+          (this.agentConfigRepo
+            ? (await this.agentConfigRepo.findOne({ where: {} }))
+            : null);
+      }
+
+      const fromNumber =
+        agentConfig?.whatsappNumber ||
+        (agentConfig?.whatsappProvider === 'evolution'
+          ? agentConfig?.evolutionInstanceName
+          : undefined) ||
+        process.env.YCLOUD_WHATSAPP_NUMBER ||
+        process.env.YCLOUD_FROM_PHONE ||
+        'booking';
+
+      for (const targetPhone of recipientPhones) {
+        try {
+          if (this.whatsappGateway) {
+            const sendRes = await this.whatsappGateway.sendManualTextMessage({
+              config: agentConfig || undefined,
+              from: fromNumber,
+              to: targetPhone,
+              body: whatsappText,
+              apiKeyOverride: agentConfig?.ycloudApiKey,
+            });
+            if (sendRes.ok) {
+              whatsappDetail.sentCount++;
+              this.logger.log(`✅ WhatsApp de aviso de escalado enviado a ${targetPhone}`);
+            } else {
+              const err = `WhatsApp error (${targetPhone}): ${sendRes.error}`;
+              whatsappDetail.errors.push(err);
+              result.errors.push(err);
+            }
+          } else {
+            const err = `WhatsApp Gateway no está disponible para notificar a ${targetPhone}`;
+            whatsappDetail.errors.push(err);
+            result.errors.push(err);
+          }
+        } catch (err: any) {
+          const errLog = `Error enviando WhatsApp de aviso a ${targetPhone}: ${err.message}`;
+          this.logger.error(errLog);
+          whatsappDetail.errors.push(errLog);
+          result.errors.push(errLog);
+        }
+      }
+      if (whatsappDetail.sentCount > 0) {
+        whatsappDetail.success = true;
+        result.whatsappSent = true;
+      }
+    }
+
+    // 2. Envío por Correo Electrónico (Email) a todos los destinatarios configurados
     if (settings.humanNoticeEmailEnabled && recipientEmails.length > 0) {
       emailDetail.attempted = true;
       try {
@@ -265,7 +374,7 @@ export class HumanHandoffNotificationService {
       }
     }
 
-    // 2. Envío por SMS (Zadarma) a todos los teléfonos móviles configurados
+    // 3. Envío por SMS (Zadarma) a todos los teléfonos móviles configurados
     // NUNCA enviar SMS salvo que el aviso requiera atención urgente (política del centro para no interrumpir al responsable)
     if (settings.humanNoticeSmsEnabled && recipientPhones.length > 0) {
       if (!isUrgent) {
@@ -304,7 +413,7 @@ export class HumanHandoffNotificationService {
       }
     }
 
-    // 3. Llamada de Voz Saliente (VAPI Outbound) a todos los teléfonos configurados
+    // 4. Llamada de Voz Saliente (VAPI Outbound) a todos los teléfonos configurados
     // NUNCA llamar por teléfono salvo que la solicitud requiera atención urgente
     if (settings.humanNoticeVapiEnabled && recipientPhones.length > 0) {
       if (!isUrgent) {
@@ -346,12 +455,17 @@ export class HumanHandoffNotificationService {
       }
     }
 
-    result.ok = result.errors.length === 0 || result.emailSent || result.smsSent || result.vapiSent;
+    result.ok =
+      result.errors.length === 0 ||
+      result.whatsappSent ||
+      result.emailSent ||
+      result.smsSent ||
+      result.vapiSent;
     return result;
   }
 
   /**
-   * Test sending a sample alert to the configured phone and email
+   * Test sending a sample alert to the configured phone and email across all enabled channels
    */
   async testNotice(): Promise<HumanNoticeResult> {
     return this.notifyHumanRequest({
