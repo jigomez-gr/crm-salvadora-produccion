@@ -9,7 +9,7 @@
  */
 
 // Prefixes commonly added by third-party WhatsApp bots / auto-responders
-const BOT_PREFIX_REGEX = /^(?:[a-zA-Z0-9_\-]{1,15}\s*:\s*)+/;
+const BOT_PREFIX_REGEX = /^(?:[a-zA-Z0-9_-]{1,15}\s*:\s*)+/;
 
 // Accents and diacritics stripping
 function stripAccents(str: string): string {
