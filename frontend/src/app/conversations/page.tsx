@@ -488,18 +488,20 @@ function ConversationsPageInner() {
     if (!selected) return;
     setSelectedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+
+    // Opening the thread reads it: clear unread locally + notify server immediately
+    setThreads((prev) =>
+      prev.map((t) =>
+        t.threadId === selected ? { ...t, unreadCount: 0 } : t
+      )
+    );
+    markRead(selected);
+
     let cancelled = false;
     loadMessages(selected).then((data) => {
       if (cancelled) return;
       setMessages(data);
       setLoadedThread(selected);
-      // Opening the thread reads it: clear unread locally + on the server.
-      setThreads((prev) =>
-        prev.map((t) =>
-          t.threadId === selected ? { ...t, unreadCount: 0 } : t
-        )
-      );
-      markRead(selected);
 
       // If email thread, pre-populate composer with the latest AI draft
       if (selected.includes(":email:") || threads.find((t) => t.threadId === selected)?.channel === "email") {

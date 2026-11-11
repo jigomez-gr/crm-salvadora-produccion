@@ -27,6 +27,9 @@ export class ZadarmaSmsLog {
   @Column({ type: 'varchar', length: 50 })
   status: string;
 
+  @Column({ type: 'boolean', default: false })
+  leido: boolean;
+
   @Column({ type: 'int', default: 1 })
   messages: number;
 

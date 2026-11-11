@@ -108,6 +108,7 @@ export class ZadarmaSmsService implements OnModuleInit {
         CREATE INDEX IF NOT EXISTS "IDX_zadarmasms_contact" ON "zadarma_sms_respuesta" ("contact_id");
         CREATE INDEX IF NOT EXISTS "IDX_zadarmasms_call" ON "zadarma_sms_respuesta" ("call_id");
         CREATE INDEX IF NOT EXISTS "IDX_zadarmasms_appointment" ON "zadarma_sms_respuesta" ("appointment_id");
+        ALTER TABLE "zadarma_sms_respuesta" ADD COLUMN IF NOT EXISTS "leido" boolean DEFAULT false;
       `);
     } catch (err: any) {
       this.logger.warn(`Could not ensure zadarma_sms_respuesta schema: ${err?.message || err}`);

@@ -125,6 +125,14 @@ export class MessagesService implements OnModuleInit {
     } catch {
       // Ignore if DB does not use enum or running under test
     }
+
+    try {
+      await this.smsRepo.query(`
+        ALTER TABLE "zadarma_sms_respuesta" ADD COLUMN IF NOT EXISTS "leido" boolean DEFAULT false;
+      `);
+    } catch {
+      // Ignore if table does not exist or running under test
+    }
   }
 
   async saveMessage(dto: SaveMessageDto): Promise<Message> {
@@ -384,7 +392,7 @@ export class MessagesService implements OnModuleInit {
       agentKey: 'zadarma',
       channel: 'sms',
       handoff: false,
-      unreadCount: sms.status !== 'success' ? 1 : 0,
+      unreadCount: sms.leido ? 0 : 1,
       contact: {
         id: sms.contact?.id || String(sms.id),
         name: contactName,
@@ -580,9 +588,9 @@ export class MessagesService implements OnModuleInit {
       }
 
       if (readStatus === 'unread') {
-        qb.andWhere('sms.status != :success', { success: 'success' });
+        qb.andWhere('(sms.leido = false OR sms.leido IS NULL)');
       } else if (readStatus === 'read') {
-        qb.andWhere('sms.status = :success', { success: 'success' });
+        qb.andWhere('sms.leido = true');
       }
 
       if (search) {
@@ -659,7 +667,7 @@ export class MessagesService implements OnModuleInit {
         contact: sms.contact as any,
         channel: 'sms',
         handoff: false,
-        unreadCount: sms.status !== 'success' ? 1 : 0,
+        unreadCount: sms.leido ? 0 : 1,
         lastMessageAt: sms.fecha || sms.fecharegistro,
         lastInboundAt: null,
         lastMessageBody: sms.message || sms.mensaje || '',
@@ -720,8 +728,15 @@ export class MessagesService implements OnModuleInit {
       // ignore
     }
 
+    let unreadSms = 0;
+    try {
+      unreadSms = await this.smsRepo.count({ where: { leido: false } });
+    } catch {
+      // ignore
+    }
+
     return {
-      unread: Number(row?.unread ?? 0) + unreadCalls,
+      unread: Number(row?.unread ?? 0) + unreadCalls + unreadSms,
       handoff: Number(row?.handoff ?? 0),
     };
   }
@@ -739,6 +754,8 @@ export class MessagesService implements OnModuleInit {
   /** Operator opened the thread — clear its unread counter. */
   async markRead(threadId: string): Promise<void> {
     if (threadId.startsWith('sms:')) {
+      const smsId = Number(threadId.slice('sms:'.length));
+      await this.smsRepo.update(smsId, { leido: true });
       return;
     }
     if (threadId.startsWith('call:')) {
