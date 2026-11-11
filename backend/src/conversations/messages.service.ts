@@ -10,6 +10,7 @@ import {
 } from '../common/entities/message.entity';
 import { Conversation } from '../common/entities/conversation.entity';
 import { Call, CallDirection } from '../common/entities/call.entity';
+import { ZadarmaSmsLog } from '../sms/zadarma-sms-log.entity';
 
 export interface SaveMessageDto {
   contactId?: string;
@@ -101,6 +102,8 @@ export class MessagesService implements OnModuleInit {
     private readonly conversationsRepo: Repository<Conversation>,
     @InjectRepository(Call)
     private readonly callsRepo: Repository<Call>,
+    @InjectRepository(ZadarmaSmsLog)
+    private readonly smsRepo: Repository<ZadarmaSmsLog>,
   ) {}
 
   async onModuleInit() {
@@ -196,6 +199,42 @@ export class MessagesService implements OnModuleInit {
   }
 
   async getThreadMessages(threadId: string): Promise<Message[]> {
+    if (threadId.startsWith('sms:')) {
+      const smsId = Number(threadId.slice('sms:'.length));
+      const sms = await this.smsRepo.findOne({
+        where: { id: smsId },
+        relations: ['contact'],
+      });
+      if (!sms) return [];
+
+      const smsTime = sms.fecha || sms.fecharegistro || new Date();
+      const text = sms.message || sms.mensaje || 'Mensaje SMS';
+
+      return [
+        {
+          id: String(sms.id),
+          threadId,
+          contactId: sms.contactId,
+          contact: sms.contact as any,
+          direction: MessageDirection.OUTBOUND,
+          channel: 'sms' as any,
+          body: text,
+          status:
+            sms.status === 'success'
+              ? MessageStatus.DELIVERED
+              : MessageStatus.FAILED,
+          providerMessageId: String(sms.id),
+          externalId: String(sms.id),
+          mediaType: null,
+          mediaUrl: null,
+          mediaId: null,
+          mediaMimeType: null,
+          mediaFilename: null,
+          createdAt: smsTime,
+        } as Message,
+      ];
+    }
+
     if (threadId.startsWith('call:')) {
       const callId = threadId.slice('call:'.length);
       const call = await this.callsRepo.findOne({
@@ -325,6 +364,43 @@ export class MessagesService implements OnModuleInit {
     };
   }
 
+  private smsToSummary(sms: ZadarmaSmsLog): ThreadSummary {
+    const contactName =
+      sms.contact?.name ||
+      (sms.phone ? `SMS: +${sms.phone}` : 'Mensaje SMS');
+
+    const phone =
+      sms.contact?.phone ||
+      sms.numerodestino ||
+      sms.phone ||
+      '';
+
+    const email = sms.contact?.email || '';
+    const text = sms.message || sms.mensaje || 'Mensaje SMS';
+    const date = sms.fecha || sms.fecharegistro || new Date();
+
+    return {
+      threadId: `sms:${sms.id}`,
+      agentKey: 'zadarma',
+      channel: 'sms',
+      handoff: false,
+      unreadCount: sms.status !== 'success' ? 1 : 0,
+      contact: {
+        id: sms.contact?.id || String(sms.id),
+        name: contactName,
+        phone,
+        email,
+      },
+      lastMessage: {
+        body: text,
+        direction: MessageDirection.OUTBOUND,
+        createdAt: date,
+      },
+      lastInboundAt: null,
+      messageCount: 1,
+    };
+  }
+
   /**
    * Inbox list — unified query over `conversations` and `calls` (joined to contact).
    * Ordered most-recent-first, paginated (limit/offset) with multi-criteria filters.
@@ -350,6 +426,9 @@ export class MessagesService implements OnModuleInit {
       channels.includes('call') ||
       channels.includes('llamadas') ||
       channels.includes('llamada');
+    const wantsSms =
+      isAllChannels ||
+      channels.includes('sms');
     const wantsConversations =
       isAllChannels ||
       channels.some((c) =>
@@ -406,7 +485,7 @@ export class MessagesService implements OnModuleInit {
 
       qb.orderBy('c.lastMessageAt', 'DESC', 'NULLS LAST');
 
-      if (!wantsCall) {
+      if (!wantsCall && !wantsSms) {
         const [rows, total] = await qb.skip(offset).take(limit).getManyAndCount();
         return {
           items: rows.map((c) => this.conversationToSummary(c)),
@@ -470,7 +549,7 @@ export class MessagesService implements OnModuleInit {
       qb.orderBy('call.startedAt', 'DESC', 'NULLS LAST');
       qb.addOrderBy('call.createdAt', 'DESC', 'NULLS LAST');
 
-      if (!wantsConversations) {
+      if (!wantsConversations && !wantsSms) {
         const [rows, total] = await qb.skip(offset).take(limit).getManyAndCount();
         return {
           items: rows.map((call) => this.callToSummary(call)),
@@ -485,8 +564,72 @@ export class MessagesService implements OnModuleInit {
       callTotal = total;
     }
 
-    // Merge both lists sorted by date DESC
-    const merged = [...convItems, ...callItems].sort((a, b) => {
+    let smsItems: ThreadSummary[] = [];
+    let smsTotal = 0;
+
+    if (wantsSms) {
+      const qb = this.smsRepo
+        .createQueryBuilder('sms')
+        .leftJoinAndSelect('sms.contact', 'contact');
+
+      if (days === '7') {
+        qb.andWhere(
+          '(sms.fecha >= :sevenDaysAgo OR sms.fecharegistro >= :sevenDaysAgo)',
+          { sevenDaysAgo },
+        );
+      }
+
+      if (readStatus === 'unread') {
+        qb.andWhere('sms.status != :success', { success: 'success' });
+      } else if (readStatus === 'read') {
+        qb.andWhere('sms.status = :success', { success: 'success' });
+      }
+
+      if (search) {
+        const s = `%${search.toLowerCase()}%`;
+        if (searchField === 'phone' || searchField === 'movil') {
+          qb.andWhere(
+            '(LOWER(sms.phone) LIKE :s OR LOWER(sms.numerodestino) LIKE :s OR LOWER(contact.phone) LIKE :s)',
+            { s },
+          );
+        } else if (searchField === 'email') {
+          qb.andWhere(
+            '(LOWER(contact.email) LIKE :s OR LOWER(sms.message) LIKE :s OR LOWER(sms.mensaje) LIKE :s)',
+            { s },
+          );
+        } else if (searchField === 'name' || searchField === 'nombre') {
+          qb.andWhere(
+            '(LOWER(contact.name) LIKE :s OR LOWER(sms.message) LIKE :s OR LOWER(sms.mensaje) LIKE :s)',
+            { s },
+          );
+        } else {
+          qb.andWhere(
+            '(LOWER(contact.name) LIKE :s OR LOWER(contact.phone) LIKE :s OR LOWER(contact.email) LIKE :s OR LOWER(sms.phone) LIKE :s OR LOWER(sms.numerodestino) LIKE :s OR LOWER(sms.message) LIKE :s OR LOWER(sms.mensaje) LIKE :s)',
+            { s },
+          );
+        }
+      }
+
+      qb.orderBy('sms.fecha', 'DESC', 'NULLS LAST');
+      qb.addOrderBy('sms.fecharegistro', 'DESC', 'NULLS LAST');
+
+      if (!wantsConversations && !wantsCall) {
+        const [rows, total] = await qb.skip(offset).take(limit).getManyAndCount();
+        return {
+          items: rows.map((sms) => this.smsToSummary(sms)),
+          total,
+          limit,
+          offset,
+        };
+      }
+
+      const [rows, total] = await qb.take(Math.max(offset + limit, 100)).getManyAndCount();
+      smsItems = rows.map((sms) => this.smsToSummary(sms));
+      smsTotal = total;
+    }
+
+    // Merge all lists sorted by date DESC
+    const merged = [...convItems, ...callItems, ...smsItems].sort((a, b) => {
       const timeA = a.lastMessage.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
       const timeB = b.lastMessage.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
       return timeB - timeA;
@@ -495,13 +638,38 @@ export class MessagesService implements OnModuleInit {
     const paged = merged.slice(offset, offset + limit);
     return {
       items: paged,
-      total: convTotal + callTotal,
+      total: convTotal + callTotal + smsTotal,
       limit,
       offset,
     };
   }
 
   async getConversation(threadId: string): Promise<Conversation | null> {
+    if (threadId.startsWith('sms:')) {
+      const smsId = Number(threadId.slice('sms:'.length));
+      const sms = await this.smsRepo.findOne({
+        where: { id: smsId },
+        relations: ['contact'],
+      });
+      if (!sms) return null;
+      return {
+        threadId,
+        agentKey: 'zadarma',
+        contactId: sms.contactId,
+        contact: sms.contact as any,
+        channel: 'sms',
+        handoff: false,
+        unreadCount: sms.status !== 'success' ? 1 : 0,
+        lastMessageAt: sms.fecha || sms.fecharegistro,
+        lastInboundAt: null,
+        lastMessageBody: sms.message || sms.mensaje || '',
+        lastMessageDirection: MessageDirection.OUTBOUND,
+        messageCount: 1,
+        createdAt: sms.fecharegistro || sms.fecha,
+        updatedAt: sms.fecha || sms.fecharegistro,
+      } as Conversation;
+    }
+
     if (threadId.startsWith('call:')) {
       const callId = threadId.slice('call:'.length);
       const call = await this.callsRepo.findOne({
@@ -560,7 +728,7 @@ export class MessagesService implements OnModuleInit {
 
   /** Toggle human handoff (agent auto-reply paused) for a thread. */
   async setHandoff(threadId: string, handoff: boolean): Promise<Conversation> {
-    if (threadId.startsWith('call:')) {
+    if (threadId.startsWith('call:') || threadId.startsWith('sms:')) {
       return (await this.getConversation(threadId)) as Conversation;
     }
     await this.ensureConversation(threadId);
@@ -570,6 +738,9 @@ export class MessagesService implements OnModuleInit {
 
   /** Operator opened the thread — clear its unread counter. */
   async markRead(threadId: string): Promise<void> {
+    if (threadId.startsWith('sms:')) {
+      return;
+    }
     if (threadId.startsWith('call:')) {
       const callId = threadId.slice('call:'.length);
       await this.callsRepo.update(callId, { needsReview: false });

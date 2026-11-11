@@ -29,6 +29,7 @@ import {
   Search,
   User,
   RefreshCw,
+  Smartphone,
 } from "lucide-react";
 import { apiFetch, apiUrl, ApiError } from "@/lib/api";
 import {
@@ -369,7 +370,7 @@ function ConversationsPageInner() {
   // Multi-criteria filters & search
   const [days, setDays] = useState<"all" | "7">("all");
   const [readStatus, setReadStatus] = useState<"all" | "unread" | "read">("all");
-  const [channelFilter, setChannelFilter] = useState<"all" | "whatsapp" | "email" | "widget" | "call">("all");
+  const [channelFilter, setChannelFilter] = useState<"all" | "whatsapp" | "email" | "widget" | "call" | "sms">("all");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [searchField, setSearchField] = useState<"all" | "phone" | "email" | "name">("all");
@@ -397,7 +398,7 @@ function ConversationsPageInner() {
     async (overrides?: {
       days?: "all" | "7";
       readStatus?: "all" | "unread" | "read";
-      channel?: "all" | "whatsapp" | "email" | "widget" | "call";
+      channel?: "all" | "whatsapp" | "email" | "widget" | "call" | "sms";
       search?: string;
       searchField?: "all" | "phone" | "email" | "name";
       offset?: number;
@@ -559,12 +560,18 @@ function ConversationsPageInner() {
   const isCall =
     selectedThread?.channel === "call" ||
     Boolean(selectedThread?.threadId?.startsWith("call:"));
+  const isSms =
+    !isCall &&
+    (selectedThread?.channel === "sms" ||
+      Boolean(selectedThread?.threadId?.startsWith("sms:")));
   const isEmail =
     !isCall &&
+    !isSms &&
     (selectedThread?.channel === "email" ||
       Boolean(selectedThread?.threadId?.includes(":email:")));
   const isWhatsapp =
     !isCall &&
+    !isSms &&
     !isEmail &&
     (selectedThread?.channel === "whatsapp" || !selectedThread?.channel);
 
@@ -576,6 +583,13 @@ function ConversationsPageInner() {
       return (
         <Badge variant="info" className="gap-1 bg-blue-50 text-blue-700 border border-blue-200">
           <PhoneCall className="h-3 w-3 text-blue-600" /> Llamada
+        </Badge>
+      );
+    }
+    if (channel === "sms" || threadId?.startsWith("sms:")) {
+      return (
+        <Badge variant="default" className="gap-1 bg-teal-50 text-teal-800 border border-teal-200">
+          <Smartphone className="h-3 w-3 text-teal-700" /> SMS
         </Badge>
       );
     }
@@ -918,6 +932,7 @@ function ConversationsPageInner() {
                   { id: "email", label: "Email" },
                   { id: "widget", label: "Web Landing" },
                   { id: "call", label: "Llamadas" },
+                  { id: "sms", label: "SMS" },
                 ] as const
               ).map((c) => (
                 <button
@@ -953,6 +968,7 @@ function ConversationsPageInner() {
             threads.map((t) => {
               const unread = t.unreadCount > 0;
               const isCallItem = t.channel === "call" || t.threadId.startsWith("call:");
+              const isSmsItem = t.channel === "sms" || t.threadId.startsWith("sms:");
               return (
                 <button
                   key={t.threadId}
@@ -969,7 +985,7 @@ function ConversationsPageInner() {
                         unread ? "font-semibold" : "font-medium"
                       )}
                     >
-                      {t.contact?.name ?? (isCallItem ? "Llamada telefónica" : t.threadId)}
+                      {t.contact?.name ?? (isCallItem ? "Llamada telefónica" : isSmsItem ? "Mensaje SMS" : t.threadId)}
                     </span>
                     <div className="flex flex-shrink-0 items-center gap-1">
                       {t.handoff && (
@@ -1006,6 +1022,10 @@ function ConversationsPageInner() {
                             <PhoneIncoming className="h-2.5 w-2.5 inline" /> Entrante:
                           </span>
                         )
+                      ) : isSmsItem ? (
+                        <span className="text-teal-700 font-medium mr-1 inline-flex items-center gap-0.5">
+                          <Smartphone className="h-2.5 w-2.5 inline" /> SMS:
+                        </span>
                       ) : (
                         t.lastMessage.direction === "outbound" ? "↑ " : "↓ "
                       )}
@@ -1092,18 +1112,22 @@ function ConversationsPageInner() {
                   "flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold",
                   isCall
                     ? "bg-blue-100 text-blue-700"
+                    : isSms
+                    ? "bg-teal-100 text-teal-700"
                     : "bg-indigo-100 text-indigo-700"
                 )}
               >
                 {isCall ? (
                   <PhoneCall className="h-4 w-4" />
+                ) : isSms ? (
+                  <Smartphone className="h-4 w-4" />
                 ) : (
                   (selectedThread?.contact?.name ?? "?")[0].toUpperCase()
                 )}
               </div>
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-neutral-900">
-                  {selectedThread?.contact?.name ?? (isCall ? "Llamada telefónica" : selected)}
+                  {selectedThread?.contact?.name ?? (isCall ? "Llamada telefónica" : isSms ? "Mensaje SMS" : selected)}
                 </p>
                 <div className="flex flex-wrap items-center gap-x-2 text-xs text-neutral-500">
                   {selectedThread?.contact?.email && (
@@ -1128,6 +1152,11 @@ function ConversationsPageInner() {
                       <PhoneIncoming className="h-3 w-3" /> Entrante
                     </Badge>
                   )
+                )}
+                {isSms && selectedThread && (
+                  <Badge variant="default" className="gap-1 bg-teal-50 text-teal-800 border border-teal-200">
+                    <Smartphone className="h-3 w-3 text-teal-700" /> Saliente
+                  </Badge>
                 )}
                 {isWhatsapp && selectedThread && (
                   <Button
@@ -1272,6 +1301,98 @@ function ConversationsPageInner() {
                     </h3>
                     <div className="rounded-xl border border-neutral-200 bg-neutral-50/60 p-4 text-sm text-neutral-800 whitespace-pre-wrap leading-relaxed font-sans">
                       {selectedThread?.lastMessage.body || "No hay texto disponible para esta llamada."}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : isSms ? (
+              /* Dedicated SMS View: solo fecha, texto, saliente, teléfono móvil, nombre y apellido, email */
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+                <div className="rounded-2xl border border-neutral-200 bg-white p-5 sm:p-6 shadow-sm space-y-5 max-w-3xl">
+                  {/* SMS Header */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 pb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-800 border border-teal-200">
+                        <Smartphone className="h-3.5 w-3.5 text-teal-700" />
+                        <span>SMS Saliente</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-neutral-500">
+                      <Clock className="h-3.5 w-3.5 text-neutral-400" />
+                      <span>
+                        {selectedThread?.lastMessage.createdAt
+                          ? format(parseISO(selectedThread.lastMessage.createdAt), "EEEE d 'de' MMMM 'de' yyyy, HH:mm", { locale: es })
+                          : "Fecha no registrada"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Contact Info */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-xl bg-neutral-50 p-4 border border-neutral-200/70">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                        Nombre y Apellidos
+                      </span>
+                      {selectedThread?.contact?.id ? (
+                        <Link
+                          href={`/contacts/${selectedThread.contact.id}`}
+                          className="mt-1 text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-1"
+                        >
+                          <span>{selectedThread.contact.name}</span>
+                          <ChevronRight className="h-3.5 w-3.5 text-indigo-500" />
+                        </Link>
+                      ) : (
+                        <p className="mt-1 text-sm font-semibold text-neutral-900">
+                          {selectedThread?.contact?.name || "Sin contacto vinculado"}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                        Teléfono Móvil
+                      </span>
+                      <p className="mt-1 text-sm font-semibold text-neutral-900">
+                        {selectedThread?.contact?.phone ? (
+                          <a
+                            href={`tel:${selectedThread.contact.phone}`}
+                            className="text-indigo-600 hover:underline inline-flex items-center gap-1"
+                          >
+                            <Smartphone className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
+                            <span>{selectedThread.contact.phone}</span>
+                          </a>
+                        ) : (
+                          <span className="text-neutral-400">Sin teléfono</span>
+                        )}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                        Correo Electrónico
+                      </span>
+                      <p className="mt-1 text-sm font-semibold text-neutral-900 truncate">
+                        {selectedThread?.contact?.email ? (
+                          <a
+                            href={`mailto:${selectedThread.contact.email}`}
+                            className="text-indigo-600 hover:underline inline-flex items-center gap-1 truncate"
+                          >
+                            <Mail className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
+                            <span className="truncate">{selectedThread.contact.email}</span>
+                          </a>
+                        ) : (
+                          <span className="text-neutral-400">Sin email</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* SMS Text */}
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-700 mb-2 flex items-center gap-1.5">
+                      <FileText className="h-3.5 w-3.5 text-neutral-500" />
+                      Texto del SMS
+                    </h3>
+                    <div className="rounded-xl border border-neutral-200 bg-neutral-50/60 p-4 text-sm text-neutral-800 whitespace-pre-wrap leading-relaxed font-sans">
+                      {selectedThread?.lastMessage.body || "No hay texto disponible para este SMS."}
                     </div>
                   </div>
                 </div>

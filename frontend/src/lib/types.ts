@@ -455,7 +455,7 @@ export type MessageStatus =
 
 export interface Conversation {
   threadId: string;
-  channel: "whatsapp" | "playground" | "widget" | "email" | "call" | string;
+  channel: "whatsapp" | "playground" | "widget" | "email" | "call" | "sms" | string;
   // Human handoff: the agent stops auto-replying on this thread.
   handoff: boolean;
   // Inbound messages the operator hasn't opened yet (inbox badge).
