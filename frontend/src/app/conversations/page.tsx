@@ -28,6 +28,7 @@ import {
   PhoneOutgoing,
   Search,
   User,
+  RefreshCw,
 } from "lucide-react";
 import { apiFetch, apiUrl, ApiError } from "@/lib/api";
 import {
@@ -391,34 +392,54 @@ function ConversationsPageInner() {
   // Spinner shown while the selected thread's messages haven't loaded yet.
   const loadingMessages = selected !== null && selected !== loadedThread;
 
-  // Pure loader — fetches the CURRENT page with active filters & search
-  const loadThreads = useCallback(async (): Promise<ConversationPage | null> => {
-    try {
-      const params = new URLSearchParams();
-      params.set("limit", String(PAGE_SIZE));
-      params.set("offset", String(offset));
-      if (days !== "all") params.set("days", days);
-      if (readStatus !== "all") params.set("readStatus", readStatus);
-      if (channelFilter !== "all") params.set("channel", channelFilter);
-      if (search.trim()) {
-        params.set("search", search.trim());
-        if (searchField !== "all") params.set("searchField", searchField);
+  // Centralized thread fetcher that immediately applies any new filter/search overrides
+  const fetchThreads = useCallback(
+    async (overrides?: {
+      days?: "all" | "7";
+      readStatus?: "all" | "unread" | "read";
+      channel?: "all" | "whatsapp" | "email" | "widget" | "call";
+      search?: string;
+      searchField?: "all" | "phone" | "email" | "name";
+      offset?: number;
+    }) => {
+      const effDays = overrides?.days ?? days;
+      const effReadStatus = overrides?.readStatus ?? readStatus;
+      const effChannel = overrides?.channel ?? channelFilter;
+      const effSearch = overrides?.search !== undefined ? overrides.search : search;
+      const effSearchField = overrides?.searchField ?? searchField;
+      const effOffset = overrides?.offset !== undefined ? overrides.offset : offset;
+
+      try {
+        setLoadingThreads(true);
+        const params = new URLSearchParams();
+        params.set("limit", String(PAGE_SIZE));
+        params.set("offset", String(effOffset));
+        if (effDays !== "all") params.set("days", effDays);
+        if (effReadStatus !== "all") params.set("readStatus", effReadStatus);
+        if (effChannel !== "all") params.set("channel", effChannel);
+        if (effSearch.trim()) {
+          params.set("search", effSearch.trim());
+          if (effSearchField !== "all") params.set("searchField", effSearchField);
+        }
+        const data = await apiFetch<ConversationPage>(
+          `/api/conversations?${params.toString()}`
+        );
+        setThreads(data.items);
+        setTotal(data.total);
+      } catch (err: any) {
+        toast.error("Error al cargar conversaciones: " + (err?.message || ""));
+        setThreads([]);
+        setTotal(0);
+      } finally {
+        setLoadingThreads(false);
       }
-      return await apiFetch<ConversationPage>(
-        `/api/conversations?${params.toString()}`
-      );
-    } catch {
-      return null; // mantener lista actual
-    }
-  }, [offset, days, readStatus, channelFilter, search, searchField]);
+    },
+    [days, readStatus, channelFilter, search, searchField, offset, toast]
+  );
 
   const refreshThreads = useCallback(async () => {
-    const page = await loadThreads();
-    if (page) {
-      setThreads(page.items);
-      setTotal(page.total);
-    }
-  }, [loadThreads]);
+    await fetchThreads();
+  }, [fetchThreads]);
 
   const loadMessages = useCallback(
     async (threadId: string): Promise<Message[]> => {
@@ -443,26 +464,24 @@ function ConversationsPageInner() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    loadThreads().then((page) => {
-      if (cancelled) return;
-      if (page) {
-        setThreads(page.items);
-        setTotal(page.total);
-      }
-      setLoadingThreads(false);
-    });
+    fetchThreads();
     apiFetch<AppSettings>("/api/settings")
-      .then((s) => {
-        if (!cancelled) {
-          setWhatsappAutomationPaused(Boolean(s.whatsappAutomationPaused));
-        }
-      })
+      .then((s) => setWhatsappAutomationPaused(Boolean(s.whatsappAutomationPaused)))
       .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [loadThreads]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Debounce search input so typing naturally triggers the search after 350ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput !== search) {
+        setSearch(searchInput);
+        setOffset(0);
+        fetchThreads({ search: searchInput, offset: 0 });
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchInput, search, fetchThreads]);
 
   useEffect(() => {
     if (!selected) return;
@@ -729,6 +748,14 @@ function ConversationsPageInner() {
                   setReadStatus("all");
                   setChannelFilter("all");
                   setOffset(0);
+                  fetchThreads({
+                    search: "",
+                    searchField: "all",
+                    days: "all",
+                    readStatus: "all",
+                    channel: "all",
+                    offset: 0,
+                  });
                 }}
                 className="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium"
               >
@@ -746,38 +773,63 @@ function ConversationsPageInner() {
             </div>
           )}
 
-          {/* Search bar & search scope: buscador por móvil, email, trozo de nombre o todos */}
+          {/* Search bar, scope & Reejecutar button */}
           <div className="space-y-1.5">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-neutral-400" />
-              <input
-                type="text"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                placeholder={
-                  searchField === "phone"
-                    ? "Buscar por teléfono..."
-                    : searchField === "email"
-                    ? "Buscar por email..."
-                    : searchField === "name"
-                    ? "Buscar por trozo de nombre..."
-                    : "Buscar por móvil, email, nombre..."
-                }
-                className="w-full rounded-lg border border-neutral-300 bg-white py-1.5 pl-8 pr-7 text-xs text-neutral-900 placeholder-neutral-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-              {searchInput && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchInput("");
-                    setSearch("");
-                    setOffset(0);
+            <div className="flex items-center gap-1.5">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-neutral-400" />
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      setSearch(searchInput);
+                      setOffset(0);
+                      fetchThreads({ search: searchInput, offset: 0 });
+                    }
                   }}
-                  className="absolute right-2 top-2 text-neutral-400 hover:text-neutral-600"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
+                  placeholder={
+                    searchField === "phone"
+                      ? "Buscar por teléfono..."
+                      : searchField === "email"
+                      ? "Buscar por email..."
+                      : searchField === "name"
+                      ? "Buscar por trozo de nombre..."
+                      : "Buscar por móvil, email, nombre..."
+                  }
+                  className="w-full rounded-lg border border-neutral-300 bg-white py-1.5 pl-8 pr-7 text-xs text-neutral-900 placeholder-neutral-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+                {searchInput && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchInput("");
+                      setSearch("");
+                      setOffset(0);
+                      fetchThreads({ search: "", offset: 0 });
+                    }}
+                    className="absolute right-2 top-2 text-neutral-400 hover:text-neutral-600"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch(searchInput);
+                  setOffset(0);
+                  fetchThreads({ search: searchInput, offset: 0 });
+                }}
+                disabled={loadingThreads}
+                className="flex items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors shrink-0 shadow-sm"
+                title="Reejecutar búsqueda y refrescar lista"
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5", loadingThreads && "animate-spin")} />
+                <span>Reejecutar</span>
+              </button>
             </div>
 
             {/* Scope selector */}
@@ -797,11 +849,12 @@ function ConversationsPageInner() {
                   onClick={() => {
                     setSearchField(f.id);
                     setOffset(0);
+                    fetchThreads({ searchField: f.id, offset: 0 });
                   }}
                   className={cn(
                     "rounded px-1.5 py-0.5 font-medium transition-colors",
                     searchField === f.id
-                      ? "bg-indigo-100 text-indigo-700"
+                      ? "bg-indigo-100 text-indigo-700 font-semibold"
                       : "text-neutral-500 hover:bg-neutral-200/60"
                   )}
                 >
@@ -820,8 +873,10 @@ function ConversationsPageInner() {
               <select
                 value={days}
                 onChange={(e) => {
-                  setDays(e.target.value as "all" | "7");
+                  const next = e.target.value as "all" | "7";
+                  setDays(next);
                   setOffset(0);
+                  fetchThreads({ days: next, offset: 0 });
                 }}
                 className="w-full rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs text-neutral-800 focus:border-indigo-500 focus:outline-none"
               >
@@ -836,8 +891,10 @@ function ConversationsPageInner() {
               <select
                 value={readStatus}
                 onChange={(e) => {
-                  setReadStatus(e.target.value as "all" | "unread" | "read");
+                  const next = e.target.value as "all" | "unread" | "read";
+                  setReadStatus(next);
                   setOffset(0);
+                  fetchThreads({ readStatus: next, offset: 0 });
                 }}
                 className="w-full rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs text-neutral-800 focus:border-indigo-500 focus:outline-none"
               >
@@ -869,6 +926,7 @@ function ConversationsPageInner() {
                   onClick={() => {
                     setChannelFilter(c.id);
                     setOffset(0);
+                    fetchThreads({ channel: c.id, offset: 0 });
                   }}
                   className={cn(
                     "rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors",
@@ -977,7 +1035,11 @@ function ConversationsPageInner() {
               <button
                 className="rounded-md border border-neutral-300 p-1 disabled:opacity-40"
                 disabled={offset === 0 || loadingThreads}
-                onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
+                onClick={() => {
+                  const next = Math.max(0, offset - PAGE_SIZE);
+                  setOffset(next);
+                  fetchThreads({ offset: next });
+                }}
                 aria-label="Página anterior"
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
@@ -985,7 +1047,11 @@ function ConversationsPageInner() {
               <button
                 className="rounded-md border border-neutral-300 p-1 disabled:opacity-40"
                 disabled={to >= total || loadingThreads}
-                onClick={() => setOffset((o) => o + PAGE_SIZE)}
+                onClick={() => {
+                  const next = offset + PAGE_SIZE;
+                  setOffset(next);
+                  fetchThreads({ offset: next });
+                }}
                 aria-label="Página siguiente"
               >
                 <ChevronRight className="h-3.5 w-3.5" />

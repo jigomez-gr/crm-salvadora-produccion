@@ -431,7 +431,7 @@ export class MessagesService implements OnModuleInit {
 
       if (days === '7') {
         qb.andWhere(
-          '(call.startedAt >= :sevenDaysAgo OR (call.startedAt IS NULL AND call.createdAt >= :sevenDaysAgo))',
+          '(call.startedAt >= :sevenDaysAgo OR call.createdAt >= :sevenDaysAgo)',
           { sevenDaysAgo },
         );
       }
@@ -450,18 +450,25 @@ export class MessagesService implements OnModuleInit {
             { s },
           );
         } else if (searchField === 'email') {
-          qb.andWhere('LOWER(contact.email) LIKE :s', { s });
+          qb.andWhere(
+            '(LOWER(contact.email) LIKE :s OR LOWER(call.summary) LIKE :s OR LOWER(call.transcript) LIKE :s)',
+            { s },
+          );
         } else if (searchField === 'name' || searchField === 'nombre') {
-          qb.andWhere('LOWER(contact.name) LIKE :s', { s });
+          qb.andWhere(
+            '(LOWER(contact.name) LIKE :s OR LOWER(call.summary) LIKE :s OR LOWER(call.transcript) LIKE :s)',
+            { s },
+          );
         } else {
           qb.andWhere(
-            '(LOWER(contact.name) LIKE :s OR LOWER(contact.phone) LIKE :s OR LOWER(contact.email) LIKE :s OR LOWER(call.fromNumber) LIKE :s OR LOWER(call.toNumber) LIKE :s OR LOWER(call.summary) LIKE :s)',
+            '(LOWER(contact.name) LIKE :s OR LOWER(contact.phone) LIKE :s OR LOWER(contact.email) LIKE :s OR LOWER(call.fromNumber) LIKE :s OR LOWER(call.toNumber) LIKE :s OR LOWER(call.summary) LIKE :s OR LOWER(call.transcript) LIKE :s)',
             { s },
           );
         }
       }
 
-      qb.orderBy('COALESCE(call.startedAt, call.createdAt)', 'DESC');
+      qb.orderBy('call.startedAt', 'DESC', 'NULLS LAST');
+      qb.addOrderBy('call.createdAt', 'DESC', 'NULLS LAST');
 
       if (!wantsConversations) {
         const [rows, total] = await qb.skip(offset).take(limit).getManyAndCount();
