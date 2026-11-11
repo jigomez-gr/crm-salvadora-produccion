@@ -9,6 +9,7 @@ import {
   MessageStatus,
 } from '../common/entities/message.entity';
 import { Conversation } from '../common/entities/conversation.entity';
+import { Call, CallDirection } from '../common/entities/call.entity';
 
 export interface SaveMessageDto {
   contactId?: string;
@@ -77,6 +78,11 @@ export interface ThreadSummary {
 export interface ThreadsQuery {
   limit: number;
   offset: number;
+  days?: string;
+  readStatus?: string;
+  channel?: string;
+  search?: string;
+  searchField?: string;
 }
 
 export interface ThreadPage {
@@ -93,6 +99,8 @@ export class MessagesService implements OnModuleInit {
     private readonly messagesRepo: Repository<Message>,
     @InjectRepository(Conversation)
     private readonly conversationsRepo: Repository<Conversation>,
+    @InjectRepository(Call)
+    private readonly callsRepo: Repository<Call>,
   ) {}
 
   async onModuleInit() {
@@ -188,6 +196,47 @@ export class MessagesService implements OnModuleInit {
   }
 
   async getThreadMessages(threadId: string): Promise<Message[]> {
+    if (threadId.startsWith('call:')) {
+      const callId = threadId.slice('call:'.length);
+      const call = await this.callsRepo.findOne({
+        where: { id: callId },
+        relations: ['contact'],
+      });
+      if (!call) return [];
+
+      const callTime = call.startedAt || call.createdAt || new Date();
+      const text =
+        call.summary ||
+        call.transcript ||
+        (call.direction === CallDirection.OUTBOUND
+          ? 'Llamada telefónica saliente'
+          : 'Llamada telefónica entrante');
+
+      return [
+        {
+          id: call.id,
+          threadId,
+          contactId: call.contactId,
+          contact: call.contact as any,
+          direction:
+            call.direction === CallDirection.OUTBOUND
+              ? MessageDirection.OUTBOUND
+              : MessageDirection.INBOUND,
+          channel: 'call' as any,
+          body: text,
+          status: MessageStatus.DELIVERED,
+          providerMessageId: call.vapiCallId || null,
+          externalId: call.id,
+          mediaType: null,
+          mediaUrl: null,
+          mediaId: null,
+          mediaMimeType: null,
+          mediaFilename: null,
+          createdAt: callTime,
+        } as Message,
+      ];
+    }
+
     return this.messagesRepo.find({
       where: { threadId },
       relations: ['contact'],
@@ -209,21 +258,8 @@ export class MessagesService implements OnModuleInit {
     return this.messagesRepo.findOne({ where: { id } });
   }
 
-  /**
-   * Inbox list — one query over `conversations` (joined to its contact), no
-   * N+1. Ordered most-recent-first, paginated (limit/offset) so the inbox fetches
-   * one page at a time instead of every thread on each SSE refresh.
-   */
-  async listThreads(query: ThreadsQuery): Promise<ThreadPage> {
-    const [rows, total] = await this.conversationsRepo
-      .createQueryBuilder('c')
-      .leftJoinAndSelect('c.contact', 'contact')
-      .orderBy('c.lastMessageAt', 'DESC', 'NULLS LAST')
-      .skip(query.offset)
-      .take(query.limit)
-      .getManyAndCount();
-
-    const items = rows.map((c) => ({
+  private conversationToSummary(c: Conversation): ThreadSummary {
+    return {
       threadId: c.threadId,
       agentKey: c.agentKey,
       channel: c.channel,
@@ -239,11 +275,251 @@ export class MessagesService implements OnModuleInit {
       },
       lastInboundAt: c.lastInboundAt ?? null,
       messageCount: c.messageCount,
-    }));
-    return { items, total, limit: query.limit, offset: query.offset };
+    };
+  }
+
+  private callToSummary(call: Call): ThreadSummary {
+    const contactName =
+      call.contact?.name ||
+      (call.direction === CallDirection.OUTBOUND
+        ? (call.toNumber ? `Tel: ${call.toNumber}` : 'Llamada saliente')
+        : (call.fromNumber ? `Tel: ${call.fromNumber}` : 'Llamada entrante'));
+
+    const phone =
+      call.contact?.phone ||
+      (call.direction === CallDirection.OUTBOUND
+        ? (call.toNumber || call.fromNumber || '')
+        : (call.fromNumber || call.toNumber || ''));
+
+    const email = call.contact?.email || '';
+    const text =
+      call.summary ||
+      call.transcript ||
+      (call.direction === CallDirection.OUTBOUND
+        ? 'Llamada saliente'
+        : 'Llamada entrante');
+    const date = call.startedAt || call.createdAt || new Date();
+
+    return {
+      threadId: `call:${call.id}`,
+      agentKey: 'vapi',
+      channel: 'call',
+      handoff: false,
+      unreadCount: call.needsReview ? 1 : 0,
+      contact: {
+        id: call.contact?.id || call.id,
+        name: contactName,
+        phone,
+        email,
+      },
+      lastMessage: {
+        body: text,
+        direction:
+          call.direction === CallDirection.OUTBOUND
+            ? MessageDirection.OUTBOUND
+            : MessageDirection.INBOUND,
+        createdAt: date,
+      },
+      lastInboundAt: call.direction === CallDirection.INBOUND ? date : null,
+      messageCount: 1,
+    };
+  }
+
+  /**
+   * Inbox list — unified query over `conversations` and `calls` (joined to contact).
+   * Ordered most-recent-first, paginated (limit/offset) with multi-criteria filters.
+   */
+  async listThreads(query: ThreadsQuery): Promise<ThreadPage> {
+    const limit = query.limit;
+    const offset = query.offset;
+    const days = query.days || 'all';
+    const readStatus = query.readStatus || 'all';
+    const rawChannel = (query.channel || 'all').toLowerCase().trim();
+    const search = query.search?.trim() || '';
+    const searchField = query.searchField || 'all';
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    // Channel matching: support single or comma-separated channels
+    const channels = rawChannel.split(',').map((s) => s.trim().toLowerCase());
+    const isAllChannels = channels.includes('all') || channels.includes('todas') || rawChannel === '';
+
+    const wantsCall =
+      isAllChannels ||
+      channels.includes('call') ||
+      channels.includes('llamadas') ||
+      channels.includes('llamada');
+    const wantsConversations =
+      isAllChannels ||
+      channels.some((c) =>
+        ['whatsapp', 'wassap', 'email', 'widget', 'web landing', 'web', 'playground'].includes(c),
+      );
+
+    let convItems: ThreadSummary[] = [];
+    let convTotal = 0;
+
+    if (wantsConversations) {
+      const qb = this.conversationsRepo
+        .createQueryBuilder('c')
+        .leftJoinAndSelect('c.contact', 'contact');
+
+      if (!isAllChannels) {
+        const allowedChannels: string[] = [];
+        if (channels.some((c) => c === 'whatsapp' || c === 'wassap')) allowedChannels.push('whatsapp');
+        if (channels.some((c) => c === 'email')) allowedChannels.push('email');
+        if (channels.some((c) => c === 'widget' || c === 'web landing' || c === 'web')) allowedChannels.push('widget');
+        if (channels.some((c) => c === 'playground')) allowedChannels.push('playground');
+
+        if (allowedChannels.length > 0) {
+          qb.andWhere('c.channel IN (:...allowedChannels)', { allowedChannels });
+        } else {
+          qb.andWhere('1 = 0');
+        }
+      }
+
+      if (days === '7') {
+        qb.andWhere('c.lastMessageAt >= :sevenDaysAgo', { sevenDaysAgo });
+      }
+
+      if (readStatus === 'unread') {
+        qb.andWhere('c.unreadCount > 0');
+      } else if (readStatus === 'read') {
+        qb.andWhere('c.unreadCount = 0');
+      }
+
+      if (search) {
+        const s = `%${search.toLowerCase()}%`;
+        if (searchField === 'phone' || searchField === 'movil') {
+          qb.andWhere('(LOWER(contact.phone) LIKE :s OR LOWER(c.threadId) LIKE :s)', { s });
+        } else if (searchField === 'email') {
+          qb.andWhere('(LOWER(contact.email) LIKE :s OR LOWER(c.threadId) LIKE :s)', { s });
+        } else if (searchField === 'name' || searchField === 'nombre') {
+          qb.andWhere('LOWER(contact.name) LIKE :s', { s });
+        } else {
+          qb.andWhere(
+            '(LOWER(contact.name) LIKE :s OR LOWER(contact.phone) LIKE :s OR LOWER(contact.email) LIKE :s OR LOWER(c.threadId) LIKE :s OR LOWER(c.lastMessageBody) LIKE :s)',
+            { s },
+          );
+        }
+      }
+
+      qb.orderBy('c.lastMessageAt', 'DESC', 'NULLS LAST');
+
+      if (!wantsCall) {
+        const [rows, total] = await qb.skip(offset).take(limit).getManyAndCount();
+        return {
+          items: rows.map((c) => this.conversationToSummary(c)),
+          total,
+          limit,
+          offset,
+        };
+      }
+
+      const [rows, total] = await qb.take(Math.max(offset + limit, 100)).getManyAndCount();
+      convItems = rows.map((c) => this.conversationToSummary(c));
+      convTotal = total;
+    }
+
+    let callItems: ThreadSummary[] = [];
+    let callTotal = 0;
+
+    if (wantsCall) {
+      const qb = this.callsRepo
+        .createQueryBuilder('call')
+        .leftJoinAndSelect('call.contact', 'contact');
+
+      if (days === '7') {
+        qb.andWhere(
+          '(call.startedAt >= :sevenDaysAgo OR (call.startedAt IS NULL AND call.createdAt >= :sevenDaysAgo))',
+          { sevenDaysAgo },
+        );
+      }
+
+      if (readStatus === 'unread') {
+        qb.andWhere('call.needsReview = true');
+      } else if (readStatus === 'read') {
+        qb.andWhere('call.needsReview = false');
+      }
+
+      if (search) {
+        const s = `%${search.toLowerCase()}%`;
+        if (searchField === 'phone' || searchField === 'movil') {
+          qb.andWhere(
+            '(LOWER(call.fromNumber) LIKE :s OR LOWER(call.toNumber) LIKE :s OR LOWER(contact.phone) LIKE :s)',
+            { s },
+          );
+        } else if (searchField === 'email') {
+          qb.andWhere('LOWER(contact.email) LIKE :s', { s });
+        } else if (searchField === 'name' || searchField === 'nombre') {
+          qb.andWhere('LOWER(contact.name) LIKE :s', { s });
+        } else {
+          qb.andWhere(
+            '(LOWER(contact.name) LIKE :s OR LOWER(contact.phone) LIKE :s OR LOWER(contact.email) LIKE :s OR LOWER(call.fromNumber) LIKE :s OR LOWER(call.toNumber) LIKE :s OR LOWER(call.summary) LIKE :s)',
+            { s },
+          );
+        }
+      }
+
+      qb.orderBy('COALESCE(call.startedAt, call.createdAt)', 'DESC');
+
+      if (!wantsConversations) {
+        const [rows, total] = await qb.skip(offset).take(limit).getManyAndCount();
+        return {
+          items: rows.map((call) => this.callToSummary(call)),
+          total,
+          limit,
+          offset,
+        };
+      }
+
+      const [rows, total] = await qb.take(Math.max(offset + limit, 100)).getManyAndCount();
+      callItems = rows.map((call) => this.callToSummary(call));
+      callTotal = total;
+    }
+
+    // Merge both lists sorted by date DESC
+    const merged = [...convItems, ...callItems].sort((a, b) => {
+      const timeA = a.lastMessage.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
+      const timeB = b.lastMessage.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
+      return timeB - timeA;
+    });
+
+    const paged = merged.slice(offset, offset + limit);
+    return {
+      items: paged,
+      total: convTotal + callTotal,
+      limit,
+      offset,
+    };
   }
 
   async getConversation(threadId: string): Promise<Conversation | null> {
+    if (threadId.startsWith('call:')) {
+      const callId = threadId.slice('call:'.length);
+      const call = await this.callsRepo.findOne({
+        where: { id: callId },
+        relations: ['contact'],
+      });
+      if (!call) return null;
+      return {
+        threadId,
+        agentKey: 'vapi',
+        contactId: call.contactId,
+        contact: call.contact as any,
+        channel: 'call',
+        handoff: false,
+        unreadCount: call.needsReview ? 1 : 0,
+        lastMessageAt: call.startedAt || call.createdAt,
+        lastInboundAt:
+          call.direction === CallDirection.INBOUND ? call.startedAt : null,
+        lastMessageBody: call.summary || call.transcript || '',
+        lastMessageDirection: call.direction,
+        messageCount: 1,
+        createdAt: call.createdAt,
+        updatedAt: call.updatedAt || call.createdAt,
+      } as Conversation;
+    }
     return this.conversationsRepo.findOne({ where: { threadId } });
   }
 
@@ -261,14 +537,25 @@ export class MessagesService implements OnModuleInit {
         'handoff',
       )
       .getRawOne<{ unread: string; handoff: string }>();
+
+    let unreadCalls = 0;
+    try {
+      unreadCalls = await this.callsRepo.count({ where: { needsReview: true } });
+    } catch {
+      // ignore
+    }
+
     return {
-      unread: Number(row?.unread ?? 0),
+      unread: Number(row?.unread ?? 0) + unreadCalls,
       handoff: Number(row?.handoff ?? 0),
     };
   }
 
   /** Toggle human handoff (agent auto-reply paused) for a thread. */
   async setHandoff(threadId: string, handoff: boolean): Promise<Conversation> {
+    if (threadId.startsWith('call:')) {
+      return (await this.getConversation(threadId)) as Conversation;
+    }
     await this.ensureConversation(threadId);
     await this.conversationsRepo.update({ threadId }, { handoff });
     return (await this.getConversation(threadId)) as Conversation;
@@ -276,6 +563,11 @@ export class MessagesService implements OnModuleInit {
 
   /** Operator opened the thread — clear its unread counter. */
   async markRead(threadId: string): Promise<void> {
+    if (threadId.startsWith('call:')) {
+      const callId = threadId.slice('call:'.length);
+      await this.callsRepo.update(callId, { needsReview: false });
+      return;
+    }
     await this.conversationsRepo.update({ threadId }, { unreadCount: 0 });
   }
 

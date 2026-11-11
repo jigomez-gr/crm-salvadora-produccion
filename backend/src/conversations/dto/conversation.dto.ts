@@ -30,6 +30,26 @@ export class QueryThreadsDto {
   @IsInt()
   @Min(0)
   offset?: number;
+
+  @IsOptional()
+  @IsString()
+  days?: string;
+
+  @IsOptional()
+  @IsString()
+  readStatus?: string;
+
+  @IsOptional()
+  @IsString()
+  channel?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsString()
+  searchField?: string;
 }
 
 /** Operator sends a manual reply (WhatsApp or Email) on a thread. */

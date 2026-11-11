@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Message } from '../common/entities/message.entity';
 import { Conversation } from '../common/entities/conversation.entity';
+import { Call } from '../common/entities/call.entity';
 import { MessagesService } from './messages.service';
 import { ConversationsController } from './conversations.controller';
 import { AuthModule } from '../auth/auth.module';
@@ -13,7 +14,7 @@ import { WhatsappAdminSendService } from '../whatsapp/whatsapp-admin-send.servic
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Message, Conversation]),
+    TypeOrmModule.forFeature([Message, Conversation, Call]),
     AuthModule,
     // For the inbox manual-send endpoint (operator replies by hand): the YCloud
     // client to send + the agent config for credentials/number. Both are

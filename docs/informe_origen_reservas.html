@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Trazabilidad de Origen y Atribución de Reservas y Contactos</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 18mm 20mm 18mm;
+      @bottom-right {
+        content: counter(page);
+      }
+    }
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #1c1917;
+      background: #ffffff;
+      line-height: 1.55;
+      font-size: 13px;
+      margin: 0;
+      padding: 0;
+    }
+    .header {
+      border-bottom: 2px solid #800020;
+      padding-bottom: 14px;
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .brand-title {
+      font-size: 20px;
+      font-weight: 800;
+      color: #800020;
+      letter-spacing: -0.02em;
+      margin: 0;
+    }
+    .brand-sub {
+      font-size: 11px;
+      color: #78716c;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 4px;
+    }
+    .meta-box {
+      text-align: right;
+      font-size: 11px;
+      color: #57534e;
+    }
+    h1 {
+      font-size: 18px;
+      font-weight: 800;
+      color: #0f172a;
+      margin: 0 0 8px 0;
+      line-height: 1.25;
+    }
+    h2 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #800020;
+      border-bottom: 1px solid #e7e5e4;
+      padding-bottom: 4px;
+      margin: 22px 0 10px 0;
+      page-break-after: avoid;
+    }
+    h3 {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #0B4A72;
+      margin: 14px 0 6px 0;
+      page-break-after: avoid;
+    }
+    p {
+      margin: 0 0 10px 0;
+      color: #334155;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 10.5px;
+      font-weight: 600;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .badge-green { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .badge-blue { background: #e0f2fe; color: #075985; border: 1px solid #bae6fd; }
+    .badge-purple { background: #f3e8ff; color: #6b21a8; border: 1px solid #e9d5ff; }
+    .badge-amber { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    .badge-gray { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 18px 0;
+      font-size: 11.5px;
+      page-break-inside: avoid;
+    }
+    th, td {
+      border: 1px solid #e2e8f0;
+      padding: 7px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #f8fafc;
+      font-weight: 700;
+      color: #334155;
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: 0.04em;
+    }
+    tr:nth-child(even) td {
+      background: #fafaf9;
+    }
+    .callout {
+      background: #fffbeb;
+      border-left: 4px solid #f59e0b;
+      padding: 10px 14px;
+      margin: 14px 0;
+      border-radius: 0 6px 6px 0;
+      font-size: 12px;
+    }
+    .callout-info {
+      background: #f0fdf4;
+      border-left: 4px solid #16a34a;
+      padding: 10px 14px;
+      margin: 14px 0;
+      border-radius: 0 6px 6px 0;
+      font-size: 12px;
+    }
+    .card-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin: 12px 0;
+      page-break-inside: avoid;
+    }
+    .card {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px;
+      background: #ffffff;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .card-title {
+      font-weight: 700;
+      font-size: 12px;
+      color: #0f172a;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .page-break {
+      page-break-before: always;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      background: #f1f5f9;
+      padding: 1px 4px;
+      border-radius: 3px;
+      color: #0f172a;
+    }
+    .footer {
+      margin-top: 30px;
+      padding-top: 10px;
+      border-top: 1px solid #e2e8f0;
+      font-size: 10px;
+      color: #94a3b8;
+      display: flex;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <div class="brand-title">CRM SALVADORA CONESA</div>
+      <div class="brand-sub">Centro de Yoga, Meditación y Terapias · Sistema de Gestión e Inteligencia</div>
+    </div>
+    <div class="meta-box">
+      <strong>INFORME TÉCNICO Y OPERATIVO</strong><br>
+      Fecha: 24 de Octubre de 2026<br>
+      Versión: 2.4.0 (ADR 0025)
+    </div>
+  </div>
+
+  <h1>Trazabilidad de Origen y Atribución de Reservas y Contactos</h1>
+  <p>Este informe describe con detalle técnico y funcional cómo el sistema CRM identifica, almacena y audita la procedencia exacta de cada usuario y reserva generada a través de los distintos canales comerciales (<strong>WhatsApp</strong>, <strong>Landing Web</strong>, <strong>Agente de Voz VAPI</strong>, <strong>Alta Manual</strong> o <strong>Importación</strong>).</p>
+
+  <div class="callout-info">
+    <strong>Respuesta directa:</strong> Sí, el sistema registra de forma inequívoca el origen de cada reserva y si el contacto se registró inicialmente por WhatsApp o por otro canal. La trazabilidad opera a dos niveles: en la entidad <strong>Contacto</strong> (canal de adquisición) y en la entidad <strong>Cita/Reserva</strong> (canal de agendamiento y agente responsable).
+  </div>
+
+  <h2>1. Trazabilidad a Nivel de Contacto (Canal de Captación Inicial)</h2>
+  <p>Cuando una persona contacta por primera vez con el centro, se crea su ficha de cliente en la tabla <code>contacts</code>. En ese mismo instante se fijan tres campos esenciales que identifican permanentemente su canal de adquisición:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Canal Comercial</th>
+        <th>Campo <code>source</code></th>
+        <th>Etiquetas Automáticas (<code>tags</code>)</th>
+        <th><code>contactadowassap</code></th>
+        <th>Momento del Registro</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>WhatsApp</strong> (Agente IA YCloud / Evolution)</td>
+        <td><span class="badge badge-green">whatsapp</span></td>
+        <td><code>lead_whatsapp</code>, <code>whatsapp</code></td>
+        <td><span class="badge badge-green">S</span> (Sí)</td>
+        <td>Primer mensaje entrante del cliente por WhatsApp.</td>
+      </tr>
+      <tr>
+        <td><strong>Landing Web</strong> (Formulario o Consulta)</td>
+        <td><span class="badge badge-blue">landing</span></td>
+        <td><code>lead_landing_web</code></td>
+        <td><span class="badge badge-gray">N</span></td>
+        <td>Envío del formulario web en la landing.</td>
+      </tr>
+      <tr>
+        <td><strong>Simulador IA Web</strong></td>
+        <td><span class="badge badge-purple">simulador_ia_landing</span></td>
+        <td><code>lead_landing_web</code>, <code>simulador</code></td>
+        <td><span class="badge badge-gray">N</span></td>
+        <td>Diagnóstico/test realizado en la web.</td>
+      </tr>
+      <tr>
+        <td><strong>Agente de Voz IA</strong> (Llamada telefónica VAPI)</td>
+        <td><span class="badge badge-amber">agente_voz</span></td>
+        <td><code>lead_landing_vapi</code>, <code>vapi_call</code></td>
+        <td>Según registro móvil</td>
+        <td>Al recibirse la llamada entrante o llamada desde botón web.</td>
+      </tr>
+      <tr>
+        <td><strong>Alta Manual</strong> (Mostrador / Recepción)</td>
+        <td><span class="badge badge-gray">manual</span></td>
+        <td>(Configurables por el operador)</td>
+        <td><span class="badge badge-gray">N</span></td>
+        <td>Operador pulsa "Nuevo Contacto" en el CRM.</td>
+      </tr>
+      <tr>
+        <td><strong>Importación</strong> (Google Contacts / CSV)</td>
+        <td><span class="badge badge-gray">google_contacts</span></td>
+        <td><code>google_contacts</code></td>
+        <td>Según base de datos</td>
+        <td>Sincronización o importación masiva.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Visualización en el CRM:</h3>
+  <p>Al acceder a la ficha de cualquier cliente (ruta <code>/contacts/[id]</code>), la cabecera superior destaca de forma automática:</p>
+  <ul>
+    <li>Fecha exacta de registro: <code>Registrado el [día, mes, año]</code>.</li>
+    <li>Origen del lead: <code>· Origen: whatsapp</code> (o <code>landing</code>, <code>agente_voz</code>, <code>manual</code>).</li>
+    <li>Insignias de etiquetas de canal para filtrado rápido y segmentación.</li>
+  </ul>
+
+  <div class="page-break"></div>
+
+  <h2>2. Trazabilidad a Nivel de Reserva / Cita (Mecanismo de Agendamiento)</h2>
+  <p>Cada vez que se formaliza una reserva (tabla <code>appointments</code>), el registro se enlaza con el contacto mediante <code>contactId</code> y almacena los metadatos específicos de la transacción:</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title">
+        <span class="badge badge-green">WhatsApp</span> Reserva por Agente IA
+      </div>
+      <p>Cuando el cliente solicita y confirma cita en la conversación de WhatsApp con el modelo de IA:</p>
+      <ul>
+        <li><strong>Campo <code>agentKey</code>:</strong> Registra la clave del agente que cerró la cita (ej. <code>salvadora_es</code> o <code>default</code>).</li>
+        <li><strong>Pipeline:</strong> La etapa del contacto avanza de inmediato a <code>Cita agendada</code> (ADR 0023).</li>
+        <li><strong>Conversación:</strong> La cita queda vinculada al hilo de chat correspondiente en la bandeja de entrada.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span class="badge badge-amber">Voz VAPI</span> Reserva por Asistente Telefónico
+      </div>
+      <p>Cuando la reserva se pacta en llamada con el agente de voz interactivo:</p>
+      <ul>
+        <li><strong>Campo <code>notes</code>:</strong> Se graba automáticamente: <em>«Cita reservada por el asistente de voz VAPI»</em> junto con notas adicionales.</li>
+        <li><strong>Tabla <code>calls</code>:</strong> Se guarda el <code>vapiCallId</code>, duración, grabación y transcripción íntegra enlazada al contacto.</li>
+        <li><strong>SMS Zadarma:</strong> Se dispara confirmación inmediata por SMS al teléfono móvil.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span class="badge badge-blue">Landing Web</span> Reserva / Pago Online
+      </div>
+      <p>Cuando el usuario formaliza la reserva desde la pasarela o catálogo web:</p>
+      <ul>
+        <li><strong>Campos de pago:</strong> Se registra el <code>paymentStatus</code> (<code>paid</code> o <code>pending</code>) e identificador de pasarela <code>stripeSessionId</code>.</li>
+        <li><strong>Modalidad:</strong> Queda reflejado si la asistencia es presencial u online (con enlace Cal.com / videoconferencia).</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span class="badge badge-gray">Manual</span> Cita Directa en Mostrador
+      </div>
+      <p>Cuando un terapeuta u operador da de alta la cita en el calendario del CRM:</p>
+      <ul>
+        <li><strong>Campo <code>agentKey</code>:</strong> Se almacena como <code>null</code>, denotando intervención humana directa.</li>
+        <li><strong>Auditoría (ADR 0013):</strong> Se anota en <code>audit_logs</code> el usuario administrativo logueado que creó la cita.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>3. Panel de Atribución y Métricas de Conversión (ADR 0025)</h2>
+  <p>En el módulo de <strong>Informes</strong> (<code>/reports</code>), el CRM procesa de forma nativa la atribución de fuentes en tiempo real:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Métrica del Informe</th>
+        <th>Descripción y Comportamiento</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Volumen por Canal</strong></td>
+        <td>Contabiliza el total de leads captados por WhatsApp, Web, Voz, etc., en la ventana temporal seleccionada (últimos 7, 30, 90 días o rango libre).</td>
+      </tr>
+      <tr>
+        <td><strong>Tasa de Conversión a Cita</strong></td>
+        <td>Porcentaje de contactos procedentes de cada canal que alcanzan el estado <code>booked</code> (Con cita) o <code>won</code> (Cliente activo).</td>
+      </tr>
+      <tr>
+        <td><strong>Embudo de Conversión (Funnel)</strong></td>
+        <td>Muestra el paso de <code>LEAD</code> &rarr; <code>CONTACTADO</code> &rarr; <code>CUALIFICADO</code> &rarr; <code>CON CITA</code> &rarr; <code>CLIENTE</code>, permitiendo evaluar el canal más rentable.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>4. Resumen Técnico de Campos en Base de Datos</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Tabla</th>
+        <th>Columna</th>
+        <th>Tipo</th>
+        <th>Finalidad</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>contacts</code></td>
+        <td><code>source</code></td>
+        <td>varchar</td>
+        <td>Canal de origen (<code>whatsapp</code>, <code>landing</code>, <code>agente_voz</code>, <code>manual</code>).</td>
+      </tr>
+      <tr>
+        <td><code>contacts</code></td>
+        <td><code>tags</code></td>
+        <td>text[]</td>
+        <td>Etiquetas de segmentación automática (<code>lead_whatsapp</code>, <code>lead_landing_web</code>).</td>
+      </tr>
+      <tr>
+        <td><code>contacts</code></td>
+        <td><code>contactadowassap</code></td>
+        <td>char(1)</td>
+        <td>Marca binaria (<code>S</code> / <code>N</code>) de interacción por WhatsApp.</td>
+      </tr>
+      <tr>
+        <td><code>appointments</code></td>
+        <td><code>agentKey</code></td>
+        <td>varchar</td>
+        <td>Clave del agente IA si fue reservada por WhatsApp; <code>null</code> si es manual.</td>
+      </tr>
+      <tr>
+        <td><code>appointments</code></td>
+        <td><code>notes</code></td>
+        <td>text</td>
+        <td>Contiene la traza de reserva si intervino el Asistente de Voz VAPI.</td>
+      </tr>
+      <tr>
+        <td><code>appointments</code></td>
+        <td><code>contactId</code></td>
+        <td>uuid</td>
+        <td>Clave foránea que asocia la cita a los datos y canal del contacto.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <span>CRM Salvadora Conesa · Escuela de Yoga y Bienestar</span>
+    <span>Documento generado para referencia operativa y técnica</span>
+  </div>
+
+</body>
+</html>

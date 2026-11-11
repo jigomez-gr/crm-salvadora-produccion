@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import {
   MessageSquare,
   Globe,
@@ -22,6 +23,11 @@ import {
   TrendingUp,
   Paperclip,
   X,
+  PhoneCall,
+  PhoneIncoming,
+  PhoneOutgoing,
+  Search,
+  User,
 } from "lucide-react";
 import { apiFetch, apiUrl, ApiError } from "@/lib/api";
 import {
@@ -52,6 +58,35 @@ const MEDIA_PLACEHOLDERS = new Set([
 ]);
 function isMediaPlaceholder(body: string): boolean {
   return MEDIA_PLACEHOLDERS.has(body) || body.startsWith("📄 ");
+}
+
+function formatConversationDate(dateStr: string | null): string {
+  if (!dateStr) return "";
+  try {
+    const d = parseISO(dateStr);
+    const now = new Date();
+    const isSameDay =
+      d.getDate() === now.getDate() &&
+      d.getMonth() === now.getMonth() &&
+      d.getFullYear() === now.getFullYear();
+
+    if (isSameDay) {
+      return format(d, "HH:mm", { locale: es });
+    }
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday =
+      d.getDate() === yesterday.getDate() &&
+      d.getMonth() === yesterday.getMonth() &&
+      d.getFullYear() === yesterday.getFullYear();
+
+    if (isYesterday) {
+      return `Ayer ${format(d, "HH:mm", { locale: es })}`;
+    }
+    return format(d, "dd/MM HH:mm", { locale: es });
+  } catch {
+    return "";
+  }
 }
 
 function parseEmailInboundMessage(body: string) {
@@ -330,6 +365,23 @@ function ConversationsPageInner() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
 
+  // Multi-criteria filters & search
+  const [days, setDays] = useState<"all" | "7">("all");
+  const [readStatus, setReadStatus] = useState<"all" | "unread" | "read">("all");
+  const [channelFilter, setChannelFilter] = useState<"all" | "whatsapp" | "email" | "widget" | "call">("all");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [searchField, setSearchField] = useState<"all" | "phone" | "email" | "name">("all");
+
+  // Debounce search input to avoid re-fetching on each keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchInput);
+      setOffset(0);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
   // Email thread composer state (AI prepared draft, custom editing, SMTP send)
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
@@ -339,17 +391,26 @@ function ConversationsPageInner() {
   // Spinner shown while the selected thread's messages haven't loaded yet.
   const loadingMessages = selected !== null && selected !== loadedThread;
 
-  // Pure loader — fetches the CURRENT page (so an SSE refresh re-pulls just this
-  // page, not every thread).
+  // Pure loader — fetches the CURRENT page with active filters & search
   const loadThreads = useCallback(async (): Promise<ConversationPage | null> => {
     try {
+      const params = new URLSearchParams();
+      params.set("limit", String(PAGE_SIZE));
+      params.set("offset", String(offset));
+      if (days !== "all") params.set("days", days);
+      if (readStatus !== "all") params.set("readStatus", readStatus);
+      if (channelFilter !== "all") params.set("channel", channelFilter);
+      if (search.trim()) {
+        params.set("search", search.trim());
+        if (searchField !== "all") params.set("searchField", searchField);
+      }
       return await apiFetch<ConversationPage>(
-        `/api/conversations?limit=${PAGE_SIZE}&offset=${offset}`
+        `/api/conversations?${params.toString()}`
       );
     } catch {
       return null; // mantener lista actual
     }
-  }, [offset]);
+  }, [offset, days, readStatus, channelFilter, search, searchField]);
 
   const refreshThreads = useCallback(async () => {
     const page = await loadThreads();
@@ -470,20 +531,35 @@ function ConversationsPageInner() {
     "conversation.updated": () => {
       refreshThreads();
     },
+    "call.ended": () => {
+      refreshThreads();
+    },
   });
 
   const selectedThread = threads.find((t) => t.threadId === selected);
+  const isCall =
+    selectedThread?.channel === "call" ||
+    Boolean(selectedThread?.threadId?.startsWith("call:"));
   const isEmail =
-    selectedThread?.channel === "email" ||
-    Boolean(selectedThread?.threadId?.includes(":email:"));
+    !isCall &&
+    (selectedThread?.channel === "email" ||
+      Boolean(selectedThread?.threadId?.includes(":email:")));
   const isWhatsapp =
-    (selectedThread?.channel === "whatsapp" || !selectedThread?.channel) &&
-    !isEmail;
+    !isCall &&
+    !isEmail &&
+    (selectedThread?.channel === "whatsapp" || !selectedThread?.channel);
 
   const from = total === 0 ? 0 : offset + 1;
   const to = Math.min(offset + PAGE_SIZE, total);
 
   function ChannelBadge({ channel, threadId }: { channel: string; threadId?: string }) {
+    if (channel === "call" || threadId?.startsWith("call:")) {
+      return (
+        <Badge variant="info" className="gap-1 bg-blue-50 text-blue-700 border border-blue-200">
+          <PhoneCall className="h-3 w-3 text-blue-600" /> Llamada
+        </Badge>
+      );
+    }
     if (channel === "email" || threadId?.includes(":email:")) {
       return (
         <Badge variant="warning" className="gap-1 bg-amber-50 text-amber-800 border border-amber-200">
@@ -502,13 +578,6 @@ function ConversationsPageInner() {
       return (
         <Badge variant="info" className="gap-1 bg-purple-50 text-purple-700 border border-purple-200">
           <Globe className="h-3 w-3 text-purple-600" /> Web Landing
-        </Badge>
-      );
-    }
-    if (channel === "email") {
-      return (
-        <Badge variant="warning" className="gap-1 bg-amber-50 text-amber-800 border border-amber-200">
-          <Mail className="h-3 w-3 text-amber-600" /> Email
         </Badge>
       );
     }
@@ -635,40 +704,204 @@ function ConversationsPageInner() {
           mobile once a thread is open (the message pane takes over). */}
       <div
         className={cn(
-          "w-full flex-col border-r border-neutral-200 bg-white md:flex md:w-72",
+          "w-full flex-col border-r border-neutral-200 bg-white md:flex md:w-80 lg:w-96",
           selected ? "hidden md:flex" : "flex"
         )}
       >
-        <div className="border-b border-neutral-100 px-4 py-3">
-          <h1 className="text-sm font-semibold text-neutral-900">
-            Conversaciones
-          </h1>
+        <div className="border-b border-neutral-100 p-3.5 space-y-2.5 bg-neutral-50/50">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-semibold text-neutral-900">
+                Conversaciones
+              </h1>
+              <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-[11px] font-medium text-neutral-700">
+                {total}
+              </span>
+            </div>
+            {(searchInput || search || days !== "all" || readStatus !== "all" || channelFilter !== "all" || searchField !== "all") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchInput("");
+                  setSearch("");
+                  setSearchField("all");
+                  setDays("all");
+                  setReadStatus("all");
+                  setChannelFilter("all");
+                  setOffset(0);
+                }}
+                className="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium"
+              >
+                Limpiar filtros
+              </button>
+            )}
+          </div>
+
           {whatsappAutomationPaused && (
-            <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-900">
+            <div className="flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-900">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
               <span>
                 WhatsApp automático: <strong>PAUSADO</strong>. Solo respuestas manuales.
               </span>
             </div>
           )}
+
+          {/* Search bar & search scope: buscador por móvil, email, trozo de nombre o todos */}
+          <div className="space-y-1.5">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-neutral-400" />
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder={
+                  searchField === "phone"
+                    ? "Buscar por teléfono..."
+                    : searchField === "email"
+                    ? "Buscar por email..."
+                    : searchField === "name"
+                    ? "Buscar por trozo de nombre..."
+                    : "Buscar por móvil, email, nombre..."
+                }
+                className="w-full rounded-lg border border-neutral-300 bg-white py-1.5 pl-8 pr-7 text-xs text-neutral-900 placeholder-neutral-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+              {searchInput && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchInput("");
+                    setSearch("");
+                    setOffset(0);
+                  }}
+                  className="absolute right-2 top-2 text-neutral-400 hover:text-neutral-600"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Scope selector */}
+            <div className="flex items-center gap-1 text-[11px]">
+              <span className="text-neutral-400 text-[10px] mr-0.5">Buscar en:</span>
+              {(
+                [
+                  { id: "all", label: "Todos" },
+                  { id: "phone", label: "Móvil" },
+                  { id: "email", label: "Email" },
+                  { id: "name", label: "Nombre" },
+                ] as const
+              ).map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => {
+                    setSearchField(f.id);
+                    setOffset(0);
+                  }}
+                  className={cn(
+                    "rounded px-1.5 py-0.5 font-medium transition-colors",
+                    searchField === f.id
+                      ? "bg-indigo-100 text-indigo-700"
+                      : "text-neutral-500 hover:bg-neutral-200/60"
+                  )}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Filter Row 1: Fecha (7 días / Todas) & Estado (Todas / Sin leer / Leídas) */}
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <label className="block text-[10px] font-semibold text-neutral-500 uppercase tracking-wider mb-1">
+                Periodo
+              </label>
+              <select
+                value={days}
+                onChange={(e) => {
+                  setDays(e.target.value as "all" | "7");
+                  setOffset(0);
+                }}
+                className="w-full rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs text-neutral-800 focus:border-indigo-500 focus:outline-none"
+              >
+                <option value="all">Todas las fechas</option>
+                <option value="7">Últimos 7 días</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-neutral-500 uppercase tracking-wider mb-1">
+                Estado
+              </label>
+              <select
+                value={readStatus}
+                onChange={(e) => {
+                  setReadStatus(e.target.value as "all" | "unread" | "read");
+                  setOffset(0);
+                }}
+                className="w-full rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs text-neutral-800 focus:border-indigo-500 focus:outline-none"
+              >
+                <option value="all">Todas</option>
+                <option value="unread">Sin leer</option>
+                <option value="read">Leídas</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Filter Row 2: Canal (email, web landing, wassap, llamadas ó todas) */}
+          <div>
+            <label className="block text-[10px] font-semibold text-neutral-500 uppercase tracking-wider mb-1">
+              Canal
+            </label>
+            <div className="flex flex-wrap gap-1">
+              {(
+                [
+                  { id: "all", label: "Todas" },
+                  { id: "whatsapp", label: "WhatsApp" },
+                  { id: "email", label: "Email" },
+                  { id: "widget", label: "Web Landing" },
+                  { id: "call", label: "Llamadas" },
+                ] as const
+              ).map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => {
+                    setChannelFilter(c.id);
+                    setOffset(0);
+                  }}
+                  className={cn(
+                    "rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors",
+                    channelFilter === c.id
+                      ? "border-indigo-600 bg-indigo-50 text-indigo-700 font-semibold"
+                      : "border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-100"
+                  )}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
+
         <div className="flex-1 overflow-y-auto">
           {loadingThreads ? (
             <div className="p-4 text-xs text-neutral-400">Cargando…</div>
           ) : threads.length === 0 ? (
             <div className="p-6 text-center text-xs text-neutral-400">
-              Aún no hay conversaciones
+              No se encontraron conversaciones
             </div>
           ) : (
             threads.map((t) => {
               const unread = t.unreadCount > 0;
+              const isCallItem = t.channel === "call" || t.threadId.startsWith("call:");
               return (
                 <button
                   key={t.threadId}
                   onClick={() => setSelected(t.threadId)}
                   className={cn(
-                    "w-full border-b border-neutral-50 px-4 py-3 text-left hover:bg-neutral-50",
-                    selected === t.threadId && "bg-indigo-50"
+                    "w-full border-b border-neutral-50 px-3.5 py-3 text-left hover:bg-neutral-50 transition-colors",
+                    selected === t.threadId && "bg-indigo-50/80"
                   )}
                 >
                   <div className="flex items-center justify-between gap-1">
@@ -678,7 +911,7 @@ function ConversationsPageInner() {
                         unread ? "font-semibold" : "font-medium"
                       )}
                     >
-                      {t.contact?.name ?? t.threadId}
+                      {t.contact?.name ?? (isCallItem ? "Llamada telefónica" : t.threadId)}
                     </span>
                     <div className="flex flex-shrink-0 items-center gap-1">
                       {t.handoff && (
@@ -689,14 +922,35 @@ function ConversationsPageInner() {
                       <ChannelBadge channel={t.channel} threadId={t.threadId} />
                     </div>
                   </div>
-                  <div className="mt-0.5 flex items-center justify-between gap-1">
+
+                  {(t.contact?.phone || t.contact?.email) && (
+                    <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-neutral-500 truncate">
+                      {t.contact?.phone && <span>{t.contact.phone}</span>}
+                      {t.contact?.phone && t.contact?.email && <span>•</span>}
+                      {t.contact?.email && <span className="truncate">{t.contact.email}</span>}
+                    </div>
+                  )}
+
+                  <div className="mt-1 flex items-center justify-between gap-1">
                     <p
                       className={cn(
                         "flex-1 truncate text-xs",
                         unread ? "text-neutral-700" : "text-neutral-500"
                       )}
                     >
-                      {t.lastMessage.direction === "outbound" ? "↑ " : "↓ "}
+                      {isCallItem ? (
+                        t.lastMessage.direction === "outbound" ? (
+                          <span className="text-blue-600 font-medium mr-1 inline-flex items-center gap-0.5">
+                            <PhoneOutgoing className="h-2.5 w-2.5 inline" /> Saliente:
+                          </span>
+                        ) : (
+                          <span className="text-emerald-600 font-medium mr-1 inline-flex items-center gap-0.5">
+                            <PhoneIncoming className="h-2.5 w-2.5 inline" /> Entrante:
+                          </span>
+                        )
+                      ) : (
+                        t.lastMessage.direction === "outbound" ? "↑ " : "↓ "
+                      )}
                       {t.lastMessage.body}
                     </p>
                     {unread ? (
@@ -705,9 +959,7 @@ function ConversationsPageInner() {
                       </span>
                     ) : t.lastMessage.createdAt ? (
                       <span className="flex-shrink-0 text-[10px] text-neutral-400">
-                        {format(parseISO(t.lastMessage.createdAt), "HH:mm", {
-                          locale: es,
-                        })}
+                        {formatConversationDate(t.lastMessage.createdAt)}
                       </span>
                     ) : null}
                   </div>
@@ -769,12 +1021,23 @@ function ConversationsPageInner() {
               >
                 <ChevronLeft className="h-5 w-5" />
               </button>
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
-                {(selectedThread?.contact?.name ?? "?")[0].toUpperCase()}
+              <div
+                className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold",
+                  isCall
+                    ? "bg-blue-100 text-blue-700"
+                    : "bg-indigo-100 text-indigo-700"
+                )}
+              >
+                {isCall ? (
+                  <PhoneCall className="h-4 w-4" />
+                ) : (
+                  (selectedThread?.contact?.name ?? "?")[0].toUpperCase()
+                )}
               </div>
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-neutral-900">
-                  {selectedThread?.contact?.name ?? selected}
+                  {selectedThread?.contact?.name ?? (isCall ? "Llamada telefónica" : selected)}
                 </p>
                 <div className="flex flex-wrap items-center gap-x-2 text-xs text-neutral-500">
                   {selectedThread?.contact?.email && (
@@ -789,6 +1052,17 @@ function ConversationsPageInner() {
                 </div>
               </div>
               <div className="ml-auto flex items-center gap-2">
+                {isCall && selectedThread && (
+                  selectedThread.lastMessage.direction === "outbound" ? (
+                    <Badge variant="info" className="gap-1 bg-blue-50 text-blue-700 border border-blue-200">
+                      <PhoneOutgoing className="h-3 w-3" /> Saliente
+                    </Badge>
+                  ) : (
+                    <Badge variant="success" className="gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <PhoneIncoming className="h-3 w-3" /> Entrante
+                    </Badge>
+                  )
+                )}
                 {isWhatsapp && selectedThread && (
                   <Button
                     variant={selectedThread.handoff ? "primary" : "secondary"}
@@ -837,8 +1111,109 @@ function ConversationsPageInner() {
               </div>
             )}
 
-            {/* Messages */}
-            <div className="flex-1 space-y-2 overflow-y-auto px-5 py-4">
+            {isCall ? (
+              /* Dedicated Call View: solo fecha, texto, saliente/entrante, teléfono móvil, nombre y apellido, email */
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+                <div className="rounded-2xl border border-neutral-200 bg-white p-5 sm:p-6 shadow-sm space-y-5 max-w-3xl">
+                  {/* Call Header */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 pb-4">
+                    <div className="flex items-center gap-2">
+                      {selectedThread?.lastMessage.direction === "outbound" ? (
+                        <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 border border-blue-200">
+                          <PhoneOutgoing className="h-3.5 w-3.5" />
+                          <span>Llamada Saliente</span>
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
+                          <PhoneIncoming className="h-3.5 w-3.5" />
+                          <span>Llamada Entrante</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-neutral-500">
+                      <Clock className="h-3.5 w-3.5 text-neutral-400" />
+                      <span>
+                        {selectedThread?.lastMessage.createdAt
+                          ? format(parseISO(selectedThread.lastMessage.createdAt), "EEEE d 'de' MMMM 'de' yyyy, HH:mm", { locale: es })
+                          : "Fecha no registrada"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Contact Info */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-xl bg-neutral-50 p-4 border border-neutral-200/70">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                        Nombre y Apellidos
+                      </span>
+                      {selectedThread?.contact?.id ? (
+                        <Link
+                          href={`/contacts/${selectedThread.contact.id}`}
+                          className="mt-1 text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-1"
+                        >
+                          <span>{selectedThread.contact.name}</span>
+                          <ChevronRight className="h-3.5 w-3.5 text-indigo-500" />
+                        </Link>
+                      ) : (
+                        <p className="mt-1 text-sm font-semibold text-neutral-900">
+                          {selectedThread?.contact?.name || "Llamada sin contacto"}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                        Teléfono Móvil
+                      </span>
+                      <p className="mt-1 text-sm font-semibold text-neutral-900">
+                        {selectedThread?.contact?.phone ? (
+                          <a
+                            href={`tel:${selectedThread.contact.phone}`}
+                            className="text-indigo-600 hover:underline inline-flex items-center gap-1"
+                          >
+                            <PhoneCall className="h-3.5 w-3.5 shrink-0" />
+                            <span>{selectedThread.contact.phone}</span>
+                          </a>
+                        ) : (
+                          <span className="text-neutral-400">Sin teléfono</span>
+                        )}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                        Correo Electrónico
+                      </span>
+                      <p className="mt-1 text-sm font-semibold text-neutral-900 truncate">
+                        {selectedThread?.contact?.email ? (
+                          <a
+                            href={`mailto:${selectedThread.contact.email}`}
+                            className="text-indigo-600 hover:underline inline-flex items-center gap-1 truncate"
+                          >
+                            <Mail className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">{selectedThread.contact.email}</span>
+                          </a>
+                        ) : (
+                          <span className="text-neutral-400">Sin email</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Call Text / Summary */}
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-700 mb-2 flex items-center gap-1.5">
+                      <FileText className="h-3.5 w-3.5 text-neutral-500" />
+                      Texto de la Llamada
+                    </h3>
+                    <div className="rounded-xl border border-neutral-200 bg-neutral-50/60 p-4 text-sm text-neutral-800 whitespace-pre-wrap leading-relaxed font-sans">
+                      {selectedThread?.lastMessage.body || "No hay texto disponible para esta llamada."}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Messages */}
+                <div className="flex-1 space-y-2 overflow-y-auto px-5 py-4">
               {loadingMessages ? (
                 <div className="text-xs text-neutral-400">Cargando…</div>
               ) : messages.length === 0 ? (
@@ -1081,8 +1456,10 @@ function ConversationsPageInner() {
             )}
           </>
         )}
-      </div>
-    </div>
+      </>
+    )}
+  </div>
+</div>
   );
 }
 

@@ -75,7 +75,15 @@ export class ConversationsController {
   async listThreads(@Query() query: QueryThreadsDto) {
     const limit = Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
     const offset = query.offset ?? 0;
-    const page = await this.messagesService.listThreads({ limit, offset });
+    const page = await this.messagesService.listThreads({
+      limit,
+      offset,
+      days: query.days,
+      readStatus: query.readStatus,
+      channel: query.channel,
+      search: query.search,
+      searchField: query.searchField,
+    });
     // Frontend Conversation contract, wrapped in the {items,total,limit,offset}
     // pagination envelope (mirrors the contacts/audit lists).
     return {
@@ -85,14 +93,22 @@ export class ConversationsController {
         handoff: t.handoff,
         unreadCount: t.unreadCount,
         contact: t.contact
-          ? { name: t.contact.name, phone: t.contact.phone, email: t.contact.email }
+          ? { id: t.contact.id, name: t.contact.name, phone: t.contact.phone, email: t.contact.email }
           : undefined,
         lastMessage: {
           body: t.lastMessage.body,
           direction: t.lastMessage.direction,
-          createdAt: t.lastMessage.createdAt ?? new Date().toISOString(),
+          createdAt: t.lastMessage.createdAt
+            ? (t.lastMessage.createdAt instanceof Date
+                ? t.lastMessage.createdAt.toISOString()
+                : new Date(t.lastMessage.createdAt).toISOString())
+            : new Date().toISOString(),
         },
-        lastInboundAt: t.lastInboundAt,
+        lastInboundAt: t.lastInboundAt
+          ? (t.lastInboundAt instanceof Date
+              ? t.lastInboundAt.toISOString()
+              : new Date(t.lastInboundAt).toISOString())
+          : null,
       })),
       total: page.total,
       limit: page.limit,
