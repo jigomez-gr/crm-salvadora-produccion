@@ -778,3 +778,28 @@ export interface VapiCatalog {
   platformCostPerMinUsd: number;
 }
 
+
+export interface ContactGroup {
+  grupocontacto: string;
+  descripciongrupo: string | null;
+  fechacreacion: string;
+  memberCount: number;
+}
+
+export interface ContactGroupMember {
+  id: number;
+  grupocontacto: string;
+  movil: string;
+  campofechayhora: string;
+  contactId: string | null;
+  nombre: string;
+  email: string;
+}
+
+export interface ContactGroupMembership {
+  id: number;
+  grupocontacto: string;
+  descripciongrupo: string | null;
+  movil: string;
+  campofechayhora: string;
+}

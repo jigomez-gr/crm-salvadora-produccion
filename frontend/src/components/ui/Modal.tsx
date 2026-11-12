@@ -5,7 +5,8 @@ import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ModalProps {
-  open: boolean;
+  open?: boolean;
+  isOpen?: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
@@ -15,12 +16,20 @@ interface ModalProps {
 const FOCUSABLE =
   'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
-export function Modal({ open, onClose, title, children, className }: ModalProps) {
+export function Modal({
+  open,
+  isOpen,
+  onClose,
+  title,
+  children,
+  className,
+}: ModalProps) {
+  const isActualOpen = open ?? isOpen ?? false;
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
   // Keep the latest onClose in a ref so the focus effect below can depend ONLY
-  // on `open`. If the effect depended on `onClose` too, a parent that re-renders
+  // on `isActualOpen`. If the effect depended on `onClose` too, a parent that re-renders
   // while the modal is open with an inline `onClose={() => …}` (a new function
   // each render) would re-run the effect on every keystroke and yank focus back
   // to the first field — you couldn't type two letters in a row.
@@ -33,7 +42,7 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
   // dialog, close on Escape, and restore focus to the trigger on close. Runs
   // once per open (not per render) — see the ref note above.
   useEffect(() => {
-    if (!open) return;
+    if (!isActualOpen) return;
     const previouslyFocused = document.activeElement as HTMLElement | null;
     const dialog = dialogRef.current;
 
@@ -68,9 +77,9 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
       document.removeEventListener("keydown", onKey);
       previouslyFocused?.focus?.();
     };
-  }, [open]);
+  }, [isActualOpen]);
 
-  if (!open) return null;
+  if (!isActualOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

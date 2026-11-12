@@ -23,6 +23,8 @@ import { VapiAccount } from './common/entities/vapi-account.entity';
 import { PaymentAccount } from './common/entities/payment-account.entity';
 import { CalcomAccount } from './common/entities/calcom-account.entity';
 import { ZadarmaSmsLog } from './sms/zadarma-sms-log.entity';
+import { GrupoContacto } from './contact-groups/grupo-contacto.entity';
+import { MiembroGrupo } from './contact-groups/miembro-grupo.entity';
 
 /**
  * Standalone TypeORM DataSource used ONLY by the migration CLI
@@ -58,6 +60,8 @@ export const AppDataSource = new DataSource({
     Call,
     VapiAccount,
     ZadarmaSmsLog,
+    GrupoContacto,
+    MiembroGrupo,
   ],
   // When run through ts-node (CLI) __dirname is src/, matching *.ts; at runtime
   // it is dist/, matching the compiled *.js.

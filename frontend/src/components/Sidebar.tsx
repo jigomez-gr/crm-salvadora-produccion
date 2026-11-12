@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
+  UsersRound,
   KanbanSquare,
   CalendarDays,
   Sparkles,
@@ -39,6 +40,7 @@ const baseNavItems = [
   { href: "/calendar", label: "Citas y Calendario", icon: CalendarDays },
   { href: "/payments", label: "Pagos", icon: CreditCard },
   { href: "/contacts", label: "Contactos", icon: Users },
+  { href: "/contact-groups", label: "Grupos de Contactos", icon: UsersRound },
   { href: "/pipeline", label: "Embudo", icon: KanbanSquare },
   { href: "/services", label: "Servicios", icon: Sparkles },
   { href: "/conversations", label: "Conversaciones", icon: MessageSquare },

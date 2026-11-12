@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { join } from 'path';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -30,7 +29,10 @@ import { MediaModule } from './media/media.module';
 import { Call } from './common/entities/call.entity';
 import { VapiAccount } from './common/entities/vapi-account.entity';
 import { ZadarmaSmsLog } from './sms/zadarma-sms-log.entity';
+import { GrupoContacto } from './contact-groups/grupo-contacto.entity';
+import { MiembroGrupo } from './contact-groups/miembro-grupo.entity';
 import { ZadarmaSmsModule } from './sms/zadarma-sms.module';
+import { ContactGroupsModule } from './contact-groups/contact-groups.module';
 import { ContactsModule } from './contacts/contacts.module';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { ServicesModule } from './services/services.module';
@@ -89,6 +91,8 @@ import { AgentsModule } from './agents/agents.module';
         Call,
         VapiAccount,
         ZadarmaSmsLog,
+        GrupoContacto,
+        MiembroGrupo,
       ],
       synchronize: false,
       migrationsRun: false,
@@ -102,6 +106,7 @@ import { AgentsModule } from './agents/agents.module';
       },
     }),
     ContactsModule,
+    ContactGroupsModule,
     AppointmentsModule,
     ServicesModule,
     CategoriesModule,

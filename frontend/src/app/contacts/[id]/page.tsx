@@ -25,6 +25,8 @@ import {
   AlertTriangle,
   History,
   MessageSquare,
+  UsersRound,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { apiFetch, ApiError, apiUrl } from "@/lib/api";
@@ -35,6 +37,8 @@ import {
   EmailMessage,
   EmailStatus,
   ContactIdentityChange,
+  ContactGroupMembership,
+  ContactGroup,
 } from "@/lib/types";
 import { CONTACT_STATUS_META } from "@/lib/contacts";
 import { useToast } from "@/contexts/ToastContext";
@@ -83,6 +87,12 @@ export default function ContactDetailPage({
   const [smsOpen, setSmsOpen] = useState(false);
   const [smsMessage, setSmsMessage] = useState("");
   const [smsSending, setSmsSending] = useState(false);
+
+  const [contactGroups, setContactGroups] = useState<ContactGroupMembership[]>([]);
+  const [allGroups, setAllGroups] = useState<ContactGroup[]>([]);
+  const [groupsModalOpen, setGroupsModalOpen] = useState(false);
+  const [selectedGroupToAdd, setSelectedGroupToAdd] = useState("");
+  const [addingToGroup, setAddingToGroup] = useState(false);
 
   const [whatsappOpen, setWhatsappOpen] = useState(false);
   const [whatsappMessage, setWhatsappMessage] = useState("");
@@ -196,7 +206,69 @@ export default function ContactDetailPage({
     apiFetch<ContactIdentityChange[]>(`/api/contacts/${id}/identity-history`)
       .then(setIdentityHistory)
       .catch(() => {});
+    apiFetch<ContactGroupMembership[]>(`/api/contact-groups/contact/${id}`)
+      .then(setContactGroups)
+      .catch(() => {});
+    apiFetch<ContactGroup[]>("/api/contact-groups")
+      .then(setAllGroups)
+      .catch(() => {});
   }, [id]);
+
+  async function reloadContactGroups() {
+    try {
+      const g = await apiFetch<ContactGroupMembership[]>(`/api/contact-groups/contact/${id}`);
+      setContactGroups(g || []);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function handleRemoveContactFromGroup(grupocontacto: string, movil: string) {
+    if (!confirm(`¿Eliminar al contacto del grupo "${grupocontacto}"?`)) return;
+    try {
+      await apiFetch(
+        `/api/contact-groups/${encodeURIComponent(grupocontacto)}/members/by-phone/${encodeURIComponent(movil)}`,
+        {
+          method: "DELETE",
+        }
+      );
+      toast.success(`Eliminado del grupo "${grupocontacto}".`);
+      await reloadContactGroups();
+    } catch (err: any) {
+      toast.error(err?.message || "Error al eliminar del grupo");
+    }
+  }
+
+  async function handleAddContactToGroup() {
+    if (!selectedGroupToAdd) {
+      toast.error("Selecciona un grupo al que añadir");
+      return;
+    }
+    if (!contact?.phone) {
+      toast.error("El contacto no tiene teléfono móvil registrado");
+      return;
+    }
+    setAddingToGroup(true);
+    try {
+      await apiFetch(
+        `/api/contact-groups/${encodeURIComponent(selectedGroupToAdd)}/members`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            movil: contact.phone,
+            contactId: id,
+          }),
+        }
+      );
+      toast.success(`Añadido al grupo "${selectedGroupToAdd}".`);
+      setSelectedGroupToAdd("");
+      await reloadContactGroups();
+    } catch (err: any) {
+      toast.error(err?.message || "Error al añadir al grupo");
+    } finally {
+      setAddingToGroup(false);
+    }
+  }
 
   async function sendSms() {
     if (!smsMessage.trim() || !contact?.phone) return;
@@ -1049,16 +1121,31 @@ export default function ContactDetailPage({
               SMS enviados — Zadarma ({smsList.length})
             </h2>
           </div>
-          {contact.phone && !contact.anonymizedAt && (
+          <div className="flex items-center gap-2">
             <Button
               size="sm"
               variant="secondary"
-              onClick={() => setSmsOpen(true)}
+              onClick={() => {
+                reloadContactGroups();
+                setGroupsModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+              title="Consultar y gestionar los grupos de contactos a los que pertenece este usuario"
             >
-              <Phone className="h-3.5 w-3.5 text-[#800020]" />
-              Nuevo SMS
+              <UsersRound className="h-3.5 w-3.5 text-indigo-600" />
+              Grupos de Contacto ({contactGroups.length})
             </Button>
-          )}
+            {contact.phone && !contact.anonymizedAt && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setSmsOpen(true)}
+              >
+                <Phone className="h-3.5 w-3.5 text-[#800020]" />
+                Nuevo SMS
+              </Button>
+            )}
+          </div>
         </div>
         {smsList.length === 0 ? (
           <div className="rounded-xl border border-neutral-200 bg-white p-6 text-center text-sm text-neutral-400">
@@ -1398,6 +1485,110 @@ export default function ContactDetailPage({
           </Button>
           <Button variant="danger" onClick={anonymize} disabled={busy}>
             {busy ? "Anonimizando…" : "Anonimizar"}
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Modal: Grupos del Contacto */}
+      <Modal
+        open={groupsModalOpen}
+        onClose={() => setGroupsModalOpen(false)}
+        title={`Grupos de Contactos: ${contact.name || contact.phone}`}
+      >
+        <div className="space-y-5">
+          <div className="text-xs text-neutral-500 bg-neutral-50 border border-neutral-200 rounded-lg p-3">
+            Consulta los grupos a los que pertenece este usuario y añade o elimina su suscripción. Los miembros pueden exportarse en formato VCF para listas de distribución de WhatsApp desde la pantalla principal de grupos.
+          </div>
+
+          {/* Current groups */}
+          <div>
+            <h3 className="text-sm font-semibold text-neutral-800 mb-2 flex items-center justify-between">
+              <span>Grupos asignados ({contactGroups.length})</span>
+              <Link
+                href="/contact-groups"
+                className="text-xs text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1"
+                target="_blank"
+              >
+                Ver todos los grupos <ExternalLink className="w-3 h-3" />
+              </Link>
+            </h3>
+
+            {contactGroups.length === 0 ? (
+              <div className="rounded-lg border border-neutral-200 bg-neutral-50/50 p-4 text-center text-xs text-neutral-500">
+                Este contacto aún no forma parte de ningún grupo.
+              </div>
+            ) : (
+              <div className="divide-y divide-neutral-100 border border-neutral-200 rounded-lg overflow-hidden max-h-56 overflow-y-auto">
+                {contactGroups.map((g) => (
+                  <div
+                    key={g.id}
+                    className="p-3 flex items-center justify-between gap-3 bg-white hover:bg-neutral-50/70 text-xs"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-neutral-900 flex items-center gap-1.5">
+                        <UsersRound className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                        <span className="truncate">{g.grupocontacto}</span>
+                      </div>
+                      {g.descripciongrupo && (
+                        <p className="text-[11px] text-neutral-500 truncate mt-0.5">
+                          {g.descripciongrupo}
+                        </p>
+                      )}
+                      <div className="text-[11px] text-neutral-400 mt-1 flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-neutral-400" />
+                        Añadido: {format(parseISO(g.campofechayhora), "EEEE, dd/MM/yyyy HH:mm", { locale: es })}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleRemoveContactFromGroup(g.grupocontacto, g.movil)}
+                      className="text-red-600 hover:bg-red-50 hover:border-red-200 p-1.5 h-auto text-xs shrink-0"
+                      title="Eliminar de este grupo"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Add to group section */}
+          <div className="pt-2 border-t border-neutral-200">
+            <h4 className="text-xs font-semibold text-neutral-700 mb-2">
+              Añadir a otro grupo
+            </h4>
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedGroupToAdd}
+                onChange={(e) => setSelectedGroupToAdd(e.target.value)}
+                className="flex-1 text-xs px-2.5 py-1.5 border border-neutral-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+              >
+                <option value="">-- Seleccionar grupo --</option>
+                {allGroups
+                  .filter((ag) => !contactGroups.some((cg) => cg.grupocontacto === ag.grupocontacto))
+                  .map((ag) => (
+                    <option key={ag.grupocontacto} value={ag.grupocontacto}>
+                      {ag.grupocontacto} {ag.descripciongrupo ? `(${ag.descripciongrupo})` : ""}
+                    </option>
+                  ))}
+              </select>
+              <Button
+                size="sm"
+                onClick={handleAddContactToGroup}
+                disabled={addingToGroup || !selectedGroupToAdd || !contact.phone}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs whitespace-nowrap"
+              >
+                {addingToGroup ? "Añadiendo..." : "Añadir al grupo"}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5 flex justify-end">
+          <Button variant="secondary" onClick={() => setGroupsModalOpen(false)}>
+            Cerrar
           </Button>
         </div>
       </Modal>
