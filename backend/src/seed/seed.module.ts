@@ -10,15 +10,29 @@ import { Service } from '../common/entities/service.entity';
 import { User } from '../common/entities/user.entity';
 import { Call } from '../common/entities/call.entity';
 import { VapiAccount } from '../common/entities/vapi-account.entity';
+import { GrupoContacto } from '../contact-groups/grupo-contacto.entity';
+import { MiembroGrupo } from '../contact-groups/miembro-grupo.entity';
+import { YogaInitialLoadService } from './yoga-initial-load.service';
 
 // Seeds demo data on first run (empty DB only). See SeedService.
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Contact, Appointment, Message, Service, User, Call, VapiAccount]),
+    TypeOrmModule.forFeature([
+      Contact,
+      Appointment,
+      Message,
+      Service,
+      User,
+      Call,
+      VapiAccount,
+      GrupoContacto,
+      MiembroGrupo,
+    ]),
     // For MessagesService.rebuildAllConversations() — seeded messages are
     // inserted directly, so we build their conversation rows afterwards.
     ConversationsModule,
   ],
-  providers: [SeedService],
+  providers: [SeedService, YogaInitialLoadService],
+  exports: [YogaInitialLoadService],
 })
 export class SeedModule {}

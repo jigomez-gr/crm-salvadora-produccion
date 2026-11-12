@@ -6,11 +6,13 @@ import { Contact } from '../common/entities/contact.entity';
 import { ContactGroupsService } from './contact-groups.service';
 import { ContactGroupsController } from './contact-groups.controller';
 import { AuthModule } from '../auth/auth.module';
+import { SeedModule } from '../seed/seed.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([GrupoContacto, MiembroGrupo, Contact]),
     AuthModule,
+    SeedModule,
   ],
   controllers: [ContactGroupsController],
   providers: [ContactGroupsService],

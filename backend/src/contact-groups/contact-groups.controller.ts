@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { ContactGroupsService } from './contact-groups.service';
+import { YogaInitialLoadService } from '../seed/yoga-initial-load.service';
 import {
   CreateGrupoContactoDto,
   UpdateGrupoContactoDto,
@@ -22,7 +23,15 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 @Controller('contact-groups')
 @UseGuards(JwtAuthGuard)
 export class ContactGroupsController {
-  constructor(private readonly contactGroupsService: ContactGroupsService) {}
+  constructor(
+    private readonly contactGroupsService: ContactGroupsService,
+    private readonly yogaInitialLoadService: YogaInitialLoadService,
+  ) {}
+
+  @Post('run-yoga-initial-load')
+  async runYogaInitialLoad() {
+    return this.yogaInitialLoadService.runInitialLoad();
+  }
 
   @Get()
   async findAll() {

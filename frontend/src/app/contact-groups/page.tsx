@@ -18,6 +18,7 @@ import {
   MessageCircle,
   AlertCircle,
   CheckCircle2,
+  Sparkles,
 } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { ContactGroup, ContactGroupMember, Contact } from "@/lib/types";
@@ -57,6 +58,7 @@ export default function ContactGroupsPage() {
   const [savingMember, setSavingMember] = useState(false);
 
   const [exportingVcf, setExportingVcf] = useState(false);
+  const [runningInitialLoad, setRunningInitialLoad] = useState(false);
 
   // Load groups
   const fetchGroups = useCallback(async () => {
@@ -329,6 +331,33 @@ export default function ContactGroupsPage() {
     }
   };
 
+  const handleRunInitialLoad = async () => {
+    if (
+      !confirm(
+        "¿Deseas procesar/actualizar la carga inicial de suscripciones de Yoga Terapéutico (115 alumnos)? Se crearán o actualizarán los contactos con email 'cargainicial', se creará su cita semanal correspondiente y se añadirán al grupo YOGA_TERAPEUTICO_1."
+      )
+    ) {
+      return;
+    }
+    setRunningInitialLoad(true);
+    try {
+      const res = await apiFetch<any>("/api/contact-groups/run-yoga-initial-load", {
+        method: "POST",
+      });
+      toast.success(
+        `Carga inicial procesada: ${res.totalProcessed} alumnos (${res.contactsCreated} nuevos, ${res.contactsUpdated} actualizados, ${res.appointmentsCreated} citas creadas).`
+      );
+      await fetchGroups();
+      if (selectedGroup) {
+        await fetchMembers(selectedGroup);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Error al ejecutar la carga inicial");
+    } finally {
+      setRunningInitialLoad(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -343,6 +372,16 @@ export default function ContactGroupsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            onClick={handleRunInitialLoad}
+            disabled={runningInitialLoad}
+            className="flex items-center gap-1.5 border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+            title="Ejecutar/actualizar carga inicial de suscripciones de Yoga Terapéutico"
+          >
+            <Sparkles className="w-4 h-4 text-emerald-600" />
+            {runningInitialLoad ? "Cargando..." : "Carga Inicial Yoga (115)"}
+          </Button>
           <Button
             variant="secondary"
             onClick={fetchGroups}
