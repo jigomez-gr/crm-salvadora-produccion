@@ -14,6 +14,7 @@ import { GrupoContacto } from '../contact-groups/grupo-contacto.entity';
 import { MiembroGrupo } from '../contact-groups/miembro-grupo.entity';
 import { YogaInitialLoadService } from './yoga-initial-load.service';
 import { ExalumnosLoadService } from './exalumnos-load.service';
+import { GongLoadService } from './gong-load.service';
 
 // Seeds demo data on first run (empty DB only). See SeedService.
 @Module({
@@ -33,7 +34,12 @@ import { ExalumnosLoadService } from './exalumnos-load.service';
     // inserted directly, so we build their conversation rows afterwards.
     ConversationsModule,
   ],
-  providers: [SeedService, YogaInitialLoadService, ExalumnosLoadService],
-  exports: [YogaInitialLoadService, ExalumnosLoadService],
+  providers: [
+    SeedService,
+    YogaInitialLoadService,
+    ExalumnosLoadService,
+    GongLoadService,
+  ],
+  exports: [YogaInitialLoadService, ExalumnosLoadService, GongLoadService],
 })
 export class SeedModule {}
