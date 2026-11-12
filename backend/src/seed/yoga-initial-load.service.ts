@@ -145,7 +145,7 @@ export class YogaInitialLoadService implements OnModuleInit {
     }
 
     // 2. Find or match yoga service
-    let yogaService = await this.servicesRepo
+    const yogaService = await this.servicesRepo
       .createQueryBuilder('s')
       .where('s.name ILIKE :q', { q: '%yoga%terap%' })
       .orderBy('s.id', 'ASC')
@@ -316,7 +316,7 @@ export class YogaInitialLoadService implements OnModuleInit {
     }
 
     // 2. Find or match 2-class yoga service
-    let yoga2Service = await this.servicesRepo
+    const yoga2Service = await this.servicesRepo
       .createQueryBuilder('s')
       .where('s.name ILIKE :q', { q: '%2%clase%' })
       .orWhere('s.name ILIKE :q2', { q2: '%dos%clase%' })
