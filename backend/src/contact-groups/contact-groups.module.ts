@@ -5,10 +5,12 @@ import { MiembroGrupo } from './miembro-grupo.entity';
 import { Contact } from '../common/entities/contact.entity';
 import { ContactGroupsService } from './contact-groups.service';
 import { ContactGroupsController } from './contact-groups.controller';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([GrupoContacto, MiembroGrupo, Contact]),
+    AuthModule,
   ],
   controllers: [ContactGroupsController],
   providers: [ContactGroupsService],
