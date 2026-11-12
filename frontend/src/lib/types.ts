@@ -470,6 +470,7 @@ export interface Conversation {
   };
   // When the customer last wrote — outside 24h, WhatsApp free-text is blocked.
   lastInboundAt?: string | null;
+  createdAt?: string | null;
 }
 
 // Paginated inbox list (server-side: limit/offset).

@@ -109,6 +109,11 @@ export class ConversationsController {
               ? t.lastInboundAt.toISOString()
               : new Date(t.lastInboundAt).toISOString())
           : null,
+        createdAt: t.createdAt
+          ? (t.createdAt instanceof Date
+              ? t.createdAt.toISOString()
+              : new Date(t.createdAt).toISOString())
+          : null,
       })),
       total: page.total,
       limit: page.limit,

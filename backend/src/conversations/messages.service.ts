@@ -74,6 +74,7 @@ export interface ThreadSummary {
   };
   lastInboundAt: Date | null;
   messageCount: number;
+  createdAt: Date | null;
 }
 
 export interface ThreadsQuery {
@@ -322,6 +323,7 @@ export class MessagesService implements OnModuleInit {
       },
       lastInboundAt: c.lastInboundAt ?? null,
       messageCount: c.messageCount,
+      createdAt: c.createdAt ?? c.lastMessageAt ?? null,
     };
   }
 
@@ -369,6 +371,7 @@ export class MessagesService implements OnModuleInit {
       },
       lastInboundAt: call.direction === CallDirection.INBOUND ? date : null,
       messageCount: 1,
+      createdAt: date,
     };
   }
 
@@ -406,6 +409,7 @@ export class MessagesService implements OnModuleInit {
       },
       lastInboundAt: null,
       messageCount: 1,
+      createdAt: date,
     };
   }
 

@@ -62,33 +62,53 @@ function isMediaPlaceholder(body: string): boolean {
   return MEDIA_PLACEHOLDERS.has(body) || body.startsWith("📄 ");
 }
 
-function formatConversationDate(dateStr: string | null): string {
+function formatThreadDatePrefix(dateStr: string | null | undefined): string {
   if (!dateStr) return "";
   try {
-    const d = parseISO(dateStr);
-    const now = new Date();
-    const isSameDay =
-      d.getDate() === now.getDate() &&
-      d.getMonth() === now.getMonth() &&
-      d.getFullYear() === now.getFullYear();
-
-    if (isSameDay) {
-      return format(d, "HH:mm", { locale: es });
-    }
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const isYesterday =
-      d.getDate() === yesterday.getDate() &&
-      d.getMonth() === yesterday.getMonth() &&
-      d.getFullYear() === yesterday.getFullYear();
-
-    if (isYesterday) {
-      return `Ayer ${format(d, "HH:mm", { locale: es })}`;
-    }
-    return format(d, "dd/MM HH:mm", { locale: es });
+    const d = typeof dateStr === "string" ? parseISO(dateStr) : new Date(dateStr);
+    return format(d, "ddMMyyyy_HHmm", { locale: es });
   } catch {
     return "";
   }
+}
+
+function formatMessageDateWithDay(dateStr: string | null | undefined): string {
+  if (!dateStr) return "";
+  try {
+    const d = typeof dateStr === "string" ? parseISO(dateStr) : new Date(dateStr);
+    const day = format(d, "EEEE", { locale: es });
+    const capitalizedDay = day.charAt(0).toUpperCase() + day.slice(1);
+    const datePart = format(d, "dd/MM/yyyy HH:mm", { locale: es });
+    return `${capitalizedDay} ${datePart}`;
+  } catch {
+    return "";
+  }
+}
+
+function formatConversationDate(dateStr: string | null): string {
+  if (!dateStr) return "";
+  try {
+    const d = typeof dateStr === "string" ? parseISO(dateStr) : new Date(dateStr);
+    return format(d, "dd/MM/yyyy HH:mm", { locale: es });
+  } catch {
+    return "";
+  }
+}
+
+function getThreadDisplayName(t: Conversation): string {
+  const isCallItem = t.channel === "call" || t.threadId.startsWith("call:");
+  const isSmsItem = t.channel === "sms" || t.threadId.startsWith("sms:");
+  const baseName =
+    t.contact?.name ?? (isCallItem ? "Llamada telefónica" : isSmsItem ? "Mensaje SMS" : t.threadId);
+  const dateRef = t.createdAt || t.lastMessage?.createdAt;
+  const prefix = formatThreadDatePrefix(dateRef);
+  return prefix ? `${prefix} - ${baseName}` : baseName;
+}
+
+function compareThreadsDescending(a: Conversation, b: Conversation): number {
+  const nameA = getThreadDisplayName(a);
+  const nameB = getThreadDisplayName(b);
+  return nameB.localeCompare(nameA, undefined, { numeric: true });
 }
 
 function parseEmailInboundMessage(body: string) {
@@ -425,7 +445,8 @@ function ConversationsPageInner() {
         const data = await apiFetch<ConversationPage>(
           `/api/conversations?${params.toString()}`
         );
-        setThreads(data.items);
+        const itemsSorted = [...(data.items || [])].sort(compareThreadsDescending);
+        setThreads(itemsSorted);
         setTotal(data.total);
       } catch (err: any) {
         toast.error("Error al cargar conversaciones: " + (err?.message || ""));
@@ -983,11 +1004,12 @@ function ConversationsPageInner() {
                   <div className="flex items-center justify-between gap-1">
                     <span
                       className={cn(
-                        "truncate text-sm text-neutral-900",
-                        unread ? "font-semibold" : "font-medium"
+                        "truncate text-sm text-neutral-900 font-semibold tracking-tight",
+                        unread ? "text-indigo-950 font-bold" : "text-neutral-900"
                       )}
+                      title={getThreadDisplayName(t)}
                     >
-                      {t.contact?.name ?? (isCallItem ? "Llamada telefónica" : isSmsItem ? "Mensaje SMS" : t.threadId)}
+                      {getThreadDisplayName(t)}
                     </span>
                     <div className="flex flex-shrink-0 items-center gap-1">
                       {t.handoff && (
@@ -999,13 +1021,16 @@ function ConversationsPageInner() {
                     </div>
                   </div>
 
-                  {(t.contact?.phone || t.contact?.email) && (
-                    <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-neutral-500 truncate">
-                      {t.contact?.phone && <span>{t.contact.phone}</span>}
-                      {t.contact?.phone && t.contact?.email && <span>•</span>}
-                      {t.contact?.email && <span className="truncate">{t.contact.email}</span>}
-                    </div>
-                  )}
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-neutral-500 truncate">
+                    {(t.createdAt || t.lastMessage.createdAt) && (
+                      <span className="inline-flex items-center gap-1 font-medium text-indigo-700 bg-indigo-50/70 px-1.5 py-0.2 rounded border border-indigo-100/60">
+                        <Clock className="h-3 w-3 text-indigo-500" />
+                        {formatMessageDateWithDay(t.createdAt || t.lastMessage.createdAt)}
+                      </span>
+                    )}
+                    {t.contact?.phone && !t.contact.phone.startsWith("+34000") && <span>• {t.contact.phone}</span>}
+                    {t.contact?.email && <span className="truncate">• {t.contact.email}</span>}
+                  </div>
 
                   <div className="mt-1 flex items-center justify-between gap-1">
                     <p
@@ -1128,10 +1153,16 @@ function ConversationsPageInner() {
                 )}
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-neutral-900">
-                  {selectedThread?.contact?.name ?? (isCall ? "Llamada telefónica" : isSms ? "Mensaje SMS" : selected)}
+                <p className="truncate text-sm font-semibold text-neutral-900 tracking-tight" title={selectedThread ? getThreadDisplayName(selectedThread) : selected ?? ""}>
+                  {selectedThread ? getThreadDisplayName(selectedThread) : (isCall ? "Llamada telefónica" : isSms ? "Mensaje SMS" : selected)}
                 </p>
                 <div className="flex flex-wrap items-center gap-x-2 text-xs text-neutral-500">
+                  {(selectedThread?.createdAt || selectedThread?.lastMessage.createdAt) && (
+                    <span className="inline-flex items-center gap-1 font-medium text-indigo-700 bg-indigo-50/70 px-1.5 py-0.2 rounded text-[11px] border border-indigo-100/60">
+                      <Clock className="h-3 w-3 text-indigo-500" />
+                      Inicio: {formatMessageDateWithDay(selectedThread.createdAt || selectedThread.lastMessage.createdAt)}
+                    </span>
+                  )}
                   {selectedThread?.contact?.email && (
                     <span className="truncate">{selectedThread.contact.email}</span>
                   )}
@@ -1227,11 +1258,11 @@ function ConversationsPageInner() {
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs text-neutral-500">
-                      <Clock className="h-3.5 w-3.5 text-neutral-400" />
+                    <div className="flex items-center gap-1.5 text-xs text-neutral-600 font-medium">
+                      <Clock className="h-3.5 w-3.5 text-neutral-500" />
                       <span>
                         {selectedThread?.lastMessage.createdAt
-                          ? format(parseISO(selectedThread.lastMessage.createdAt), "EEEE d 'de' MMMM 'de' yyyy, HH:mm", { locale: es })
+                          ? formatMessageDateWithDay(selectedThread.lastMessage.createdAt)
                           : "Fecha no registrada"}
                       </span>
                     </div>
@@ -1319,11 +1350,11 @@ function ConversationsPageInner() {
                         <span>SMS Saliente</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs text-neutral-500">
-                      <Clock className="h-3.5 w-3.5 text-neutral-400" />
+                    <div className="flex items-center gap-1.5 text-xs text-neutral-600 font-medium">
+                      <Clock className="h-3.5 w-3.5 text-neutral-500" />
                       <span>
                         {selectedThread?.lastMessage.createdAt
-                          ? format(parseISO(selectedThread.lastMessage.createdAt), "EEEE d 'de' MMMM 'de' yyyy, HH:mm", { locale: es })
+                          ? formatMessageDateWithDay(selectedThread.lastMessage.createdAt)
                           : "Fecha no registrada"}
                       </span>
                     </div>
@@ -1408,7 +1439,9 @@ function ConversationsPageInner() {
               ) : messages.length === 0 ? (
                 <div className="text-xs text-neutral-400">Sin mensajes aún</div>
               ) : (
-                messages.map((m) => (
+                [...messages]
+                  .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+                  .map((m) => (
                   <div
                     key={m.id}
                     className={cn(
@@ -1440,16 +1473,14 @@ function ConversationsPageInner() {
                       )}
                       <div
                         className={cn(
-                          "mt-1 flex items-center justify-end gap-1 text-[10px]",
+                          "mt-1.5 flex flex-wrap items-center justify-end gap-1.5 text-[11px]",
                           m.direction === "outbound"
-                            ? "text-indigo-200"
-                            : "text-neutral-400"
+                            ? "text-indigo-100"
+                            : "text-neutral-500 font-medium"
                         )}
                       >
-                        <span>
-                          {format(parseISO(m.createdAt), "HH:mm", {
-                            locale: es,
-                          })}
+                        <span className="font-medium">
+                          {formatMessageDateWithDay(m.createdAt)}
                         </span>
                         {m.direction === "outbound" && isWhatsapp && (
                           <StatusTicks status={m.status} />
