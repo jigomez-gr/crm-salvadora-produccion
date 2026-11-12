@@ -452,6 +452,10 @@ export class VapiWebhookService {
           return await this.toolReprogramarCita(params, ctx);
         case 'anular_cita':
           return await this.toolAnularCita(params, ctx);
+        case 'anular_suscripcion_yoga':
+          return await this.toolAnularSuscripcionYoga(params, ctx);
+        case 'cambiar_suscripcion_yoga':
+          return await this.toolCambiarSuscripcionYoga(params, ctx);
         case 'datos_del_negocio':
           return await this.toolDatosDelNegocio(params, ctx);
         case 'registrar_handoff':
@@ -1698,6 +1702,64 @@ export class VapiWebhookService {
     }
 
     return `Tu cita de ${appt.service} del ${spokenDate} ha sido cancelada correctamente. El hueco queda liberado.${recoveryNotice} Confírmaselo amablemente al cliente y despídete con calidez.`;
+  }
+
+  // ─── ANULAR SUSCRIPCIÓN YOGA ───
+  private async toolAnularSuscripcionYoga(params: any, ctx: ToolExecutionContext): Promise<string> {
+    const contact = await this.findContactByPhoneOrEmail(ctx.callerNumber);
+    if (!contact) {
+      return 'Para anular tu suscripción de yoga necesito localizar tu ficha. ¿Podrías confirmarme tu nombre y apellidos o tu número de teléfono móvil?';
+    }
+
+    const rawMotivo = params?.motivo || params?.reason || 'Solicitud de baja de yoga por teléfono Vapi';
+    try {
+      await this.appointmentsService.cancelYogaSubscription(contact.id, rawMotivo, 'vapi_voice_agent');
+      return `He tramitado la baja de tu suscripción de yoga terapéutico y cancelado tus próximas citas. Se te ha asignado la condición de exalumno en nuestro sistema, por lo que si en el futuro deseas reincorporarte, estaremos encantados de darte la bienvenida. ¿Hay alguna otra consulta en la que pueda ayudarte?`;
+    } catch (err: any) {
+      this.logger.error(`Error en toolAnularSuscripcionYoga: ${err?.message || err}`);
+      return 'No he podido completar la anulación de la suscripción en este momento. He tomado nota de tu solicitud para que nuestro equipo se ponga en contacto contigo.';
+    }
+  }
+
+  // ─── CAMBIAR SUSCRIPCIÓN YOGA ───
+  private async toolCambiarSuscripcionYoga(params: any, ctx: ToolExecutionContext): Promise<string> {
+    const contact = await this.findContactByPhoneOrEmail(ctx.callerNumber);
+    if (!contact) {
+      return 'Para cambiar tu suscripción de yoga necesito localizar tu ficha. ¿Podrías confirmarme tu nombre y apellidos o tu número de teléfono móvil?';
+    }
+
+    let rawSlots: Array<{ day: any; time: string }> = [];
+    if (Array.isArray(params.slots) && params.slots.length > 0) {
+      rawSlots = params.slots;
+    } else {
+      if (params.dia1 || params.hora1) {
+        rawSlots.push({ day: params.dia1 || params.day1, time: params.hora1 || params.time1 });
+      }
+      if (params.dia2 || params.hora2) {
+        rawSlots.push({ day: params.dia2 || params.day2, time: params.hora2 || params.time2 });
+      }
+    }
+
+    if (rawSlots.length === 0) {
+      return 'Para cambiar tu suscripción de yoga, indícame qué turnos prefieres. Los horarios oficiales son Martes a las 9:45, 11:15, 17:00, 18:30 y 20:00; Miércoles a las 20:15; y Jueves a las 9:45, 11:15, 16:00, 17:30 y 19:00. ¿Prefieres 1 clase o 2 clases a la semana?';
+    }
+
+    try {
+      const res = await this.appointmentsService.changeYogaSubscription(
+        contact.id,
+        {
+          schedule: rawSlots,
+          modality: params.modalidad || params.modality,
+          reason: params.motivo || 'Cambio de suscripción de yoga solicitado por teléfono Vapi',
+        },
+        'vapi_voice_agent',
+      );
+      const modDesc = res.modality === '2_clases_semanales' ? '2 clases semanales por 42 euros al mes' : '1 clase semanal por 25 euros al mes';
+      return `He actualizado tu suscripción de yoga terapéutico a ${modDesc}. Tus próximas clases han quedado ajustadas a partir de hoy y recibirás la confirmación oficial. ¿Deseas consultar alguna otra cosa?`;
+    } catch (err: any) {
+      this.logger.error(`Error en toolCambiarSuscripcionYoga: ${err?.message || err}`);
+      return `No he podido realizar el cambio de suscripción: ${err?.message || 'verifica los días y horas indicados'}. ¿Quieres que revise otro horario?`;
+    }
   }
 
   // ─── 6. DATOS DEL NEGOCIO ───

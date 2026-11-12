@@ -8,9 +8,9 @@ import {
   Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, ILike, In, Not } from 'typeorm';
+import { Repository, Between, ILike, In, Not, MoreThanOrEqual } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { Contact } from '../common/entities/contact.entity';
+import { Contact, ContactStatus } from '../common/entities/contact.entity';
 import {
   Appointment,
   AppointmentStatus,
@@ -73,6 +73,33 @@ export function getAnonymizedMeetingUrl(rawUrl?: string | null): string {
     trimmed = trimmed.replace(/[()]/g, '');
   }
   return trimmed;
+}
+
+export const OFFICIAL_YOGA_SLOTS_MAP: Record<number, string[]> = {
+  2: ['09:45', '11:15', '17:00', '18:30', '20:00'], // Martes
+  3: ['20:15'],                                     // Miércoles
+  4: ['09:45', '11:15', '16:00', '16:30', '17:30', '19:00'], // Jueves
+};
+
+export function getSpanishDayName(day: number): string {
+  switch (day) {
+    case 1:
+      return 'Lunes';
+    case 2:
+      return 'Martes';
+    case 3:
+      return 'Miércoles';
+    case 4:
+      return 'Jueves';
+    case 5:
+      return 'Viernes';
+    case 6:
+      return 'Sábado';
+    case 0:
+      return 'Domingo';
+    default:
+      return `Día ${day}`;
+  }
 }
 
 // Advisory-lock key that serializes all booking writes (single bookable
@@ -3477,6 +3504,348 @@ export class AppointmentsService implements OnModuleInit {
       studentsProcessed: activeStudents.length,
       createdCount: totalCreated,
       details,
+    };
+  }
+
+  /**
+   * Cancela la suscripción de yoga de un contacto:
+   * - Cancela todas sus citas activas y futuras de yoga a partir de hoy (con notificación por email/whatsapp/sms).
+   * - Elimina al contacto de los grupos YOGA_TERAPEUTICO_1 y YOGA_TERAPEUTICO_2 en miembrosgrupo.
+   * - Añade al contacto al grupo EXALUMNOS en miembrosgrupo.
+   * - Actualiza el contacto: isStudent = false, studentModality = null, studentSchedule = null,
+   *   elimina tag 'alumno' y añade tag 'exalumno'.
+   */
+  async cancelYogaSubscription(
+    contactId: string,
+    reason?: string,
+    actor: string = 'admin',
+  ): Promise<{
+    contact: Contact;
+    cancelledAppointments: Appointment[];
+  }> {
+    const contact = await this.contactsRepo.findOne({ where: { id: contactId } });
+    if (!contact) {
+      throw new NotFoundException(`No se encontró el contacto con ID ${contactId}`);
+    }
+
+    const now = new Date();
+    const todayMadrid = new TZDate(now.getTime(), 'Europe/Madrid');
+    const startOfToday = new TZDate(todayMadrid.getFullYear(), todayMadrid.getMonth(), todayMadrid.getDate(), 0, 0, 0, 'Europe/Madrid');
+
+    // 1. Encontrar citas de yoga activas a partir del inicio de hoy
+    const activeAppts = await this.appointmentsRepo.find({
+      where: {
+        contactId: contact.id,
+        status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.PENDING_APPROVAL]),
+        startsAt: MoreThanOrEqual(startOfToday),
+      },
+      order: { startsAt: 'ASC' },
+    });
+
+    const yogaAppts = activeAppts.filter((a) => /yoga|hatha/i.test(a.service || ''));
+    const cancelled: Appointment[] = [];
+    const cancelReason = reason || 'Anulación de suscripción de yoga';
+
+    for (const appt of yogaAppts) {
+      try {
+        const c = await this.cancel(appt.id, actor, cancelReason);
+        cancelled.push(c);
+      } catch (err: any) {
+        this.logger.warn(`Could not cancel appointment ${appt.id} in cancelYogaSubscription: ${err?.message || err}`);
+      }
+    }
+
+    // 2. Gestión de miembrosgrupo: quitar de grupos de yoga y añadir a EXALUMNOS
+    const cleanPhone = (contact.phone || '').replace(/[\s\-().]/g, '').trim();
+    try {
+      await this.contactsRepo.query(
+        `DELETE FROM miembrosgrupo
+         WHERE (grupocontacto = 'YOGA_TERAPEUTICO_1' OR grupocontacto = 'YOGA_TERAPEUTICO_2')
+           AND (contact_id = $1 OR movil = $2 OR movil = $3 OR ($3 != '' AND movil LIKE '%' || $3))`,
+        [contact.id, contact.phone || '', cleanPhone],
+      );
+
+      if (cleanPhone || contact.phone) {
+        const phoneToUse = contact.phone || cleanPhone;
+        await this.contactsRepo.query(
+          `INSERT INTO miembrosgrupo (grupocontacto, movil, campofechayhora, contact_id)
+           SELECT 'EXALUMNOS', $1, NOW(), $2
+           WHERE NOT EXISTS (
+             SELECT 1 FROM miembrosgrupo WHERE grupocontacto = 'EXALUMNOS' AND (contact_id = $2 OR movil = $1)
+           )`,
+          [phoneToUse, contact.id],
+        );
+      }
+    } catch (err: any) {
+      this.logger.warn(`Error updating miembrosgrupo in cancelYogaSubscription: ${err?.message || err}`);
+    }
+
+    // 3. Actualizar entidad Contact
+    contact.isStudent = false;
+    contact.studentModality = null;
+    contact.studentSchedule = null;
+    contact.studentEnrolledAt = null;
+    if (!contact.tags) contact.tags = [];
+    contact.tags = contact.tags.filter((t) => t !== 'alumno');
+    if (!contact.tags.includes('exalumno')) {
+      contact.tags.push('exalumno');
+    }
+
+    const saved = await this.contactsRepo.save(contact);
+    this.eventEmitter.emit('contact.updated', saved);
+
+    return {
+      contact: saved,
+      cancelledAppointments: cancelled,
+    };
+  }
+
+  /**
+   * Cambia o formaliza la suscripción de yoga de un contacto:
+   * - Verifica la coherencia de los días y horas con los horarios oficiales de Hatha Yoga Terapéutico.
+   * - Ajusta la modalidad según el número de turnos (1 turno -> 1_clase_semanal / 2 turnos -> 2_clases_semanales).
+   * - Gestiona miembrosgrupo: sincroniza con YOGA_TERAPEUTICO_1 o YOGA_TERAPEUTICO_2 y elimina de EXALUMNOS.
+   * - Actualiza el contacto: isStudent = true, studentModality, studentSchedule, tag alumno.
+   * - Ajusta citas a partir de hoy:
+   *   * Cancela citas futuras de yoga que no correspondan a los nuevos días/horas seleccionados.
+   *   * Asegura la creación y confirmación de las citas para los turnos asignados en el ciclo inmediato/próximo.
+   *   * Despacha notificaciones oficiales por Email / WhatsApp / SMS.
+   */
+  async changeYogaSubscription(
+    contactId: string,
+    dto: {
+      modality?: string;
+      schedule: Array<{ day: number | string; time: string }>;
+      reason?: string;
+    },
+    actor: string = 'admin',
+  ): Promise<{
+    contact: Contact;
+    modality: string;
+    schedule: Array<{ day: number; time: string }>;
+    cancelledCount: number;
+    createdCount: number;
+  }> {
+    const contact = await this.contactsRepo.findOne({ where: { id: contactId } });
+    if (!contact) {
+      throw new NotFoundException(`No se encontró el contacto con ID ${contactId}`);
+    }
+
+    if (!dto.schedule || !Array.isArray(dto.schedule) || dto.schedule.length === 0 || dto.schedule.length > 2) {
+      throw new BadRequestException('Debes indicar 1 turno semanal (1 clase/semana) o 2 turnos semanales (2 clases/semana).');
+    }
+
+    // Verificación de coherencia de horarios oficiales
+    const normalizedSlots: Array<{ day: number; time: string }> = [];
+    for (const slot of dto.schedule) {
+      const dayNum = typeof slot.day === 'number' ? slot.day : parseInt(String(slot.day), 10);
+      const timeStr = String(slot.time || '').trim().padStart(5, '0');
+      const validTimes = OFFICIAL_YOGA_SLOTS_MAP[dayNum];
+      if (!validTimes) {
+        throw new BadRequestException(`El día ${getSpanishDayName(dayNum)} no tiene clases oficiales de Hatha Yoga Terapéutico.`);
+      }
+      const matches = validTimes.some((t) => t === timeStr || (t.slice(0, 2) === timeStr.slice(0, 2) && (timeStr === '16:00' || timeStr === '16:30')));
+      if (!matches) {
+        throw new BadRequestException(
+          `La hora ${timeStr} no es válida para ${getSpanishDayName(dayNum)}. Horarios disponibles: ${validTimes.join(', ')}.`,
+        );
+      }
+      normalizedSlots.push({ day: dayNum, time: timeStr });
+    }
+
+    if (normalizedSlots.length === 2) {
+      if (normalizedSlots[0].day === normalizedSlots[1].day && normalizedSlots[0].time === normalizedSlots[1].time) {
+        throw new BadRequestException('Los dos turnos semanales no pueden ser el mismo día a la misma hora.');
+      }
+    }
+
+    const modality = normalizedSlots.length === 2 ? '2_clases_semanales' : '1_clase_semanal';
+    const targetGroup = modality === '2_clases_semanales' ? 'YOGA_TERAPEUTICO_2' : 'YOGA_TERAPEUTICO_1';
+    const oppositeGroup = modality === '2_clases_semanales' ? 'YOGA_TERAPEUTICO_1' : 'YOGA_TERAPEUTICO_2';
+
+    // 1. Actualizar miembrosgrupo
+    const cleanPhone = (contact.phone || '').replace(/[\s\-().]/g, '').trim();
+    try {
+      await this.contactsRepo.query(
+        `DELETE FROM miembrosgrupo
+         WHERE (grupocontacto = $1 OR grupocontacto = 'EXALUMNOS')
+           AND (contact_id = $2 OR movil = $3 OR movil = $4 OR ($4 != '' AND movil LIKE '%' || $4))`,
+        [oppositeGroup, contact.id, contact.phone || '', cleanPhone],
+      );
+
+      if (cleanPhone || contact.phone) {
+        const phoneToUse = contact.phone || cleanPhone;
+        await this.contactsRepo.query(
+          `INSERT INTO miembrosgrupo (grupocontacto, movil, campofechayhora, contact_id)
+           SELECT $1, $2, NOW(), $3
+           WHERE NOT EXISTS (
+             SELECT 1 FROM miembrosgrupo WHERE grupocontacto = $1 AND (contact_id = $3 OR movil = $2)
+           )`,
+          [targetGroup, phoneToUse, contact.id],
+        );
+      }
+    } catch (err: any) {
+      this.logger.warn(`Error updating miembrosgrupo in changeYogaSubscription: ${err?.message || err}`);
+    }
+
+    // 2. Actualizar entidad Contact
+    contact.isStudent = true;
+    contact.studentModality = modality;
+    contact.studentSchedule = normalizedSlots;
+    contact.studentEnrolledAt = contact.studentEnrolledAt || new Date();
+    contact.status = ContactStatus.ACTIVE;
+    if (!contact.tags) contact.tags = [];
+    contact.tags = contact.tags.filter((t) => t !== 'exalumno');
+    if (!contact.tags.includes('alumno')) contact.tags.push('alumno');
+    if (!contact.tags.includes('cliente')) contact.tags.push('cliente');
+    const savedContact = await this.contactsRepo.save(contact);
+
+    // 3. Ajustar citas de yoga a partir de hoy
+    const now = new Date();
+    const todayMadrid = new TZDate(now.getTime(), 'Europe/Madrid');
+    const startOfToday = new TZDate(todayMadrid.getFullYear(), todayMadrid.getMonth(), todayMadrid.getDate(), 0, 0, 0, 'Europe/Madrid');
+
+    const futureAppts = await this.appointmentsRepo.find({
+      where: {
+        contactId: contact.id,
+        status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.PENDING_APPROVAL]),
+        startsAt: MoreThanOrEqual(startOfToday),
+      },
+      order: { startsAt: 'ASC' },
+    });
+
+    const futureYogaAppts = futureAppts.filter((a) => /yoga|hatha/i.test(a.service || ''));
+    let cancelledCount = 0;
+
+    for (const appt of futureYogaAppts) {
+      const zoned = new TZDate(new Date(appt.startsAt).getTime(), 'Europe/Madrid');
+      const day = zoned.getDay();
+      const time = format(zoned, 'HH:mm');
+      const matches = normalizedSlots.some((s) => s.day === day && s.time === time);
+
+      if (!matches) {
+        await this.cancel(appt.id, actor, dto.reason || 'Ajuste por cambio de suscripción de yoga');
+        cancelledCount++;
+      } else {
+        const targetServiceName =
+          modality === '2_clases_semanales'
+            ? 'Hatha Yoga Terapéutico (2 clases semanales)'
+            : 'Hatha Yoga Terapéutico (1 clase semanal)';
+        if (appt.service !== targetServiceName) {
+          appt.service = targetServiceName;
+          await this.appointmentsRepo.save(appt);
+        }
+      }
+    }
+
+    // 4. Asegurar creación y confirmación de citas para los turnos asignados en las próximas 2 semanas
+    let createdCount = 0;
+    const targetServiceName =
+      modality === '2_clases_semanales'
+        ? 'Hatha Yoga Terapéutico (2 clases semanales)'
+        : 'Hatha Yoga Terapéutico (1 clase semanal)';
+
+    for (let offset = 0; offset <= 14; offset++) {
+      const checkDate = addDays(todayMadrid, offset);
+      const checkDay = checkDate.getDay();
+      const matchingSlot = normalizedSlots.find((s) => s.day === checkDay);
+      if (!matchingSlot) continue;
+
+      const [hours, minutes] = matchingSlot.time.split(':').map(Number);
+      const apptStart = new TZDate(
+        checkDate.getFullYear(),
+        checkDate.getMonth(),
+        checkDate.getDate(),
+        hours,
+        minutes,
+        0,
+        'Europe/Madrid',
+      );
+
+      // Debe ser estrictamente futura
+      if (apptStart.getTime() <= now.getTime()) continue;
+
+      const exists = await this.appointmentsRepo.findOne({
+        where: {
+          contactId: contact.id,
+          status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.PENDING_APPROVAL]),
+          startsAt: Between(
+            new Date(apptStart.getTime() - 15 * 60_000),
+            new Date(apptStart.getTime() + 15 * 60_000),
+          ),
+        },
+      });
+
+      if (!exists) {
+        const apptEnd = new Date(apptStart.getTime() + 90 * 60_000);
+        try {
+          const created = await this.create({
+            contactId: contact.id,
+            service: targetServiceName,
+            startsAt: apptStart.toISOString(),
+            endsAt: apptEnd.toISOString(),
+            price: '0.00',
+            paymentStatus: PaymentStatus.EXEMPT,
+            notes: 'Cita generada automáticamente por cambio de suscripción de yoga.',
+          });
+          createdCount++;
+          await this.sendAppointmentConfirmationNotification(created.id, undefined, false).catch((err) => {
+            this.logger.warn(`Could not send notification for created appointment ${created.id}: ${err?.message || err}`);
+          });
+        } catch (err: any) {
+          this.logger.warn(`Could not create appointment at ${apptStart.toISOString()}: ${err?.message || err}`);
+        }
+      }
+    }
+
+    this.eventEmitter.emit('contact.updated', savedContact);
+
+    return {
+      contact: savedContact,
+      modality,
+      schedule: normalizedSlots,
+      cancelledCount,
+      createdCount,
+    };
+  }
+
+  /**
+   * Obtiene los datos detallados de la suscripción de yoga de un contacto,
+   * sus grupos asignados y sus citas futuras de yoga.
+   */
+  async getYogaSubscription(contactId: string): Promise<{
+    contact: Contact;
+    groups: string[];
+    futureYogaAppointments: Appointment[];
+  }> {
+    const contact = await this.contactsRepo.findOne({ where: { id: contactId } });
+    if (!contact) {
+      throw new NotFoundException(`No se encontró el contacto con ID ${contactId}`);
+    }
+
+    const cleanPhone = (contact.phone || '').replace(/[\s\-().]/g, '').trim();
+    const groupRows = await this.contactsRepo.query(
+      `SELECT DISTINCT grupocontacto FROM miembrosgrupo
+       WHERE contact_id = $1 OR movil = $2 OR movil = $3 OR ($3 != '' AND movil LIKE '%' || $3)`,
+      [contact.id, contact.phone || '', cleanPhone],
+    );
+    const groups = groupRows.map((r: any) => r.grupocontacto);
+
+    const now = new Date();
+    const futureAppts = await this.appointmentsRepo.find({
+      where: {
+        contactId: contact.id,
+        status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.PENDING_APPROVAL]),
+        startsAt: MoreThanOrEqual(now),
+      },
+      order: { startsAt: 'ASC' },
+    });
+    const futureYogaAppointments = futureAppts.filter((a) => /yoga|hatha/i.test(a.service || ''));
+
+    return {
+      contact,
+      groups,
+      futureYogaAppointments,
     };
   }
 

@@ -13,12 +13,14 @@ import { ZadarmaSmsModule } from '../sms/zadarma-sms.module';
 import { YCloudModule } from '../whatsapp/ycloud.module';
 import { AgentsConfigModule } from '../agents/agents-config.module';
 import { SettingsModule } from '../settings/settings.module';
+import { AppointmentsModule } from '../appointments/appointments.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Contact, Appointment, ContactIdentityChange]),
     AuthModule,
     forwardRef(() => EmailModule),
+    forwardRef(() => AppointmentsModule),
     ZadarmaSmsModule,
     YCloudModule,
     AgentsConfigModule,

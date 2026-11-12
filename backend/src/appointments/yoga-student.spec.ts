@@ -426,4 +426,75 @@ describe('Yoga Appointments & Student Lifecycle', () => {
     expect(apptConstel).toBeDefined();
     expect(apptConstel.service).toBe('Constelaciones Familiares (Participante / Representante)');
   });
+
+  describe('Gestión Integral de Suscripción de Yoga (Cambio y Anulación)', () => {
+    it('changeYogaSubscription actualiza correctamente a 2 clases semanales con turnos válidos', async () => {
+      inMemoryContacts[0].isStudent = true;
+      inMemoryContacts[0].studentModality = '1_clase_semanal';
+      inMemoryContacts[0].studentSchedule = [{ day: 2, time: '09:45' }];
+
+      const res = await appointmentsService.changeYogaSubscription('contact-ana-1', {
+        schedule: [
+          { day: 2, time: '09:45' },
+          { day: 4, time: '17:30' },
+        ],
+        reason: 'Ampliación a dos clases semanales',
+      });
+
+      expect(res.modality).toBe('2_clases_semanales');
+      expect(res.schedule).toHaveLength(2);
+      expect(res.contact.studentModality).toBe('2_clases_semanales');
+      expect(res.contact.studentSchedule).toEqual([
+        { day: 2, time: '09:45' },
+        { day: 4, time: '17:30' },
+      ]);
+      expect(res.contact.tags).toContain('alumno');
+      expect(res.contact.tags).not.toContain('exalumno');
+    });
+
+    it('changeYogaSubscription rechaza horarios no oficiales o turnos duplicados', async () => {
+      // 1. Horario inválido (ej. lunes que no hay yoga, o hora inexistente)
+      await expect(
+        appointmentsService.changeYogaSubscription('contact-ana-1', {
+          schedule: [{ day: 1, time: '10:00' }],
+        }),
+      ).rejects.toThrow();
+
+      // 2. Turnos duplicados (mismo día y misma hora)
+      await expect(
+        appointmentsService.changeYogaSubscription('contact-ana-1', {
+          schedule: [
+            { day: 2, time: '09:45' },
+            { day: 2, time: '09:45' },
+          ],
+        }),
+      ).rejects.toThrow(/mismo día a la misma hora/i);
+    });
+
+    it('cancelYogaSubscription da de baja al alumno, cancela citas de yoga y lo traslada a EXALUMNOS', async () => {
+      inMemoryContacts[0].isStudent = true;
+      inMemoryContacts[0].studentModality = '2_clases_semanales';
+      inMemoryContacts[0].tags = ['alumno'];
+
+      // Cita futura de yoga
+      inMemoryAppointments.push({
+        id: 'appt-yoga-futura-1',
+        contactId: 'contact-ana-1',
+        service: 'Hatha Yoga Terapéutico (2 clases semanales)',
+        startsAt: new Date('2026-09-08T07:45:00.000Z'),
+        endsAt: new Date('2026-09-08T09:15:00.000Z'),
+        status: AppointmentStatus.SCHEDULED,
+      });
+
+      const res = await appointmentsService.cancelYogaSubscription('contact-ana-1', 'Baja voluntaria');
+
+      expect(res.contact.isStudent).toBe(false);
+      expect(res.contact.studentModality).toBeNull();
+      expect(res.contact.studentSchedule).toBeNull();
+      expect(res.contact.tags).toContain('exalumno');
+      expect(res.contact.tags).not.toContain('alumno');
+      expect(res.cancelledAppointments).toHaveLength(1);
+      expect(res.cancelledAppointments[0].status).toBe(AppointmentStatus.CANCELLED);
+    });
+  });
 });

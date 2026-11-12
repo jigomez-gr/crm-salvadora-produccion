@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   MessageSquare,
+  Sparkles,
 } from "lucide-react";
 import { apiFetch, apiUrl, ApiError } from "@/lib/api";
 import { Contact, ContactPage, ContactStatus, ImportResult } from "@/lib/types";
@@ -32,6 +33,7 @@ const selectClass =
 
 import { ContactModal, ContactFormData } from "@/components/ContactModal";
 import { GoogleImportModal } from "@/components/GoogleImportModal";
+import { YogaSubscriptionModal } from "@/components/YogaSubscriptionModal";
 
 const PAGE_SIZE = 50;
 
@@ -169,6 +171,8 @@ function ContactsPageInner() {
   const [editingContact, setEditingContact] = useState<Contact | undefined>();
   const [deleteTarget, setDeleteTarget] = useState<Contact | undefined>();
   const [deleting, setDeleting] = useState(false);
+  const [yogaModalOpen, setYogaModalOpen] = useState(false);
+  const [selectedYogaContact, setSelectedYogaContact] = useState<Contact | null>(null);
 
   // Debounce the search fields (server-side) so we don't fire a request per
   // keystroke; jump back to the first page whenever any query changes.
@@ -466,8 +470,20 @@ function ContactsPageInner() {
                         {CONTACT_STATUS_META[c.status].label}
                       </Badge>
                       {c.isStudent && (
-                        <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">
-                          🧘 Alumno ({c.studentModality === "2_clases_semanales" ? "2 clases/sem" : "1 clase/sem"})
+                        <div className="flex flex-col gap-0.5">
+                          <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">
+                            🧘 Alumno ({c.studentModality === "2_clases_semanales" ? "2 clases/sem" : "1 clase/sem"})
+                          </span>
+                          {c.studentSchedule && c.studentSchedule.length > 0 && (
+                            <span className="text-[10px] text-emerald-700 font-medium">
+                              🗓️ {c.studentSchedule.map((s) => `${s.day === 2 ? "Mar" : s.day === 3 ? "Mié" : "Jue"} (${s.time})`).join(" · ")}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {c.tags?.includes("exalumno") && !c.isStudent && (
+                        <span className="inline-flex items-center gap-0.5 rounded bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                          🎓 Exalumno
                         </span>
                       )}
                     </div>
@@ -508,6 +524,20 @@ function ContactsPageInner() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="h-8 px-2.5 rounded-md text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 flex items-center gap-1 shadow-xs"
+                        title="Cambio o anulación de suscripción de yoga"
+                        onClick={() => {
+                          setSelectedYogaContact(c);
+                          setYogaModalOpen(true);
+                        }}
+                      >
+                        <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                        <span className="hidden sm:inline">Cambio suscripción yoga</span>
+                        <span className="sm:hidden">Yoga</span>
+                      </Button>
                       <Link
                         href={`/contacts/${c.id}`}
                         className="inline-flex items-center justify-center h-8 px-2 rounded-md text-xs font-medium text-indigo-600 hover:bg-indigo-50 gap-1"
@@ -586,6 +616,17 @@ function ContactsPageInner() {
         open={googleImportOpen}
         onClose={() => setGoogleImportOpen(false)}
         onImported={refreshContacts}
+      />
+
+      <YogaSubscriptionModal
+        key={selectedYogaContact ? `yoga-${selectedYogaContact.id}` : "yoga-none"}
+        contact={selectedYogaContact}
+        open={yogaModalOpen}
+        onClose={() => {
+          setYogaModalOpen(false);
+          setSelectedYogaContact(null);
+        }}
+        onSuccess={refreshContacts}
       />
 
       <Modal

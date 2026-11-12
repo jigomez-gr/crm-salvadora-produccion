@@ -93,6 +93,37 @@ export class AppointmentsController {
     return this.appointmentsService.generateWeeklyStudentAppointments();
   }
 
+  @Post('yoga-subscription/:contactId/cancel')
+  async cancelYogaSubscription(
+    @Param('contactId') contactId: string,
+    @Body() dto: { reason?: string },
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.appointmentsService.cancelYogaSubscription(
+      contactId,
+      dto?.reason,
+      user?.name || user?.email || 'admin',
+    );
+  }
+
+  @Post('yoga-subscription/:contactId/change')
+  async changeYogaSubscription(
+    @Param('contactId') contactId: string,
+    @Body() dto: { modality?: string; schedule: Array<{ day: number; time: string }>; reason?: string },
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.appointmentsService.changeYogaSubscription(
+      contactId,
+      dto,
+      user?.name || user?.email || 'admin',
+    );
+  }
+
+  @Get('yoga-subscription/:contactId')
+  async getYogaSubscription(@Param('contactId') contactId: string) {
+    return this.appointmentsService.getYogaSubscription(contactId);
+  }
+
   @Get('payments')
   getPayments(@Query() query: QueryAppointmentPaymentsDto) {
     return this.appointmentsService.getAppointmentPayments(query);

@@ -12,9 +12,14 @@ import {
   Ip,
   Query,
   UseGuards,
+  Inject,
+  Optional,
+  forwardRef,
+  BadRequestException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ContactsService } from './contacts.service';
+import { AppointmentsService } from '../appointments/appointments.service';
 import {
   CreateContactDto,
   UpdateContactDto,
@@ -38,6 +43,9 @@ export class ContactsController {
   constructor(
     private readonly contactsService: ContactsService,
     private readonly events: EventEmitter2,
+    @Optional()
+    @Inject(forwardRef(() => AppointmentsService))
+    private readonly appointmentsService?: AppointmentsService,
   ) {}
 
   private audit(record: AuditRecord): void {
@@ -219,6 +227,68 @@ export class ContactsController {
       ip,
     });
     return contact;
+  }
+
+  @Post(':id/yoga-subscription/cancel')
+  async cancelYogaSubscription(
+    @Param('id') id: string,
+    @Body() dto: { reason?: string },
+    @CurrentUser() actor: AuthUser,
+    @Ip() ip: string,
+  ) {
+    if (!this.appointmentsService) {
+      throw new BadRequestException('AppointmentsService no está disponible.');
+    }
+    const result = await this.appointmentsService.cancelYogaSubscription(
+      id,
+      dto?.reason,
+      actor?.name || actor?.email || 'admin',
+    );
+    this.audit({
+      actor: { id: actor.id, email: actor.email },
+      action: AuditAction.CONTACT_UPDATE,
+      summary: `Anuló la suscripción de yoga de ${result.contact.name}`,
+      targetType: 'contact',
+      targetId: result.contact.id,
+      ip,
+      metadata: { reason: dto?.reason, cancelledCount: result.cancelledAppointments.length },
+    });
+    return result;
+  }
+
+  @Post(':id/yoga-subscription/change')
+  async changeYogaSubscription(
+    @Param('id') id: string,
+    @Body() dto: { modality?: string; schedule: Array<{ day: number; time: string }>; reason?: string },
+    @CurrentUser() actor: AuthUser,
+    @Ip() ip: string,
+  ) {
+    if (!this.appointmentsService) {
+      throw new BadRequestException('AppointmentsService no está disponible.');
+    }
+    const result = await this.appointmentsService.changeYogaSubscription(
+      id,
+      dto,
+      actor?.name || actor?.email || 'admin',
+    );
+    this.audit({
+      actor: { id: actor.id, email: actor.email },
+      action: AuditAction.CONTACT_UPDATE,
+      summary: `Cambió la suscripción de yoga de ${result.contact.name} a ${result.modality}`,
+      targetType: 'contact',
+      targetId: result.contact.id,
+      ip,
+      metadata: { modality: result.modality, schedule: result.schedule },
+    });
+    return result;
+  }
+
+  @Get(':id/yoga-subscription')
+  async getYogaSubscription(@Param('id') id: string) {
+    if (!this.appointmentsService) {
+      throw new BadRequestException('AppointmentsService no está disponible.');
+    }
+    return this.appointmentsService.getYogaSubscription(id);
   }
 
   @Post(':id/consent')

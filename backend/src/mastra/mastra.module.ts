@@ -172,6 +172,15 @@ export { NestMastraModule };
           rescheduleAppointment: async (appointmentId: string, newStartsAt: string, reason?: string) => {
             return appointmentsService.rescheduleAppointment(appointmentId, newStartsAt, reason);
           },
+          cancelYogaSubscription: async (contactId: string, reason?: string) => {
+            return appointmentsService.cancelYogaSubscription(contactId, reason, 'agent');
+          },
+          changeYogaSubscription: async (
+            contactId: string,
+            dto: { modality?: string; schedule: Array<{ day: number | string; time: string }>; reason?: string },
+          ) => {
+            return appointmentsService.changeYogaSubscription(contactId, dto, 'agent');
+          },
           createPaymentLink: traced('createPaymentLink', async (params) => {
             if (!isPagosOnlineEnabled()) {
               return null;

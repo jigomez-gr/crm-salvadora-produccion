@@ -73,6 +73,11 @@ export interface BookingAgentDeps {
     newStartsAt: string,
     reason?: string,
   ) => Promise<any>;
+  cancelYogaSubscription?: (contactId: string, reason?: string) => Promise<any>;
+  changeYogaSubscription?: (
+    contactId: string,
+    dto: { modality?: string; schedule: Array<{ day: number | string; time: string }>; reason?: string },
+  ) => Promise<any>;
   linkThreadContact?: (threadId: string, contactId: string) => Promise<void>;
   getThreadContact?: (threadId: string) => Promise<any>;
   createPaymentLink?: (params: {
@@ -1550,6 +1555,125 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     },
   });
 
+  const cancelYogaSubscriptionTool = createTool({
+    id: 'cancelYogaSubscription',
+    description:
+      'Anular o dar de baja la suscripción mensual/recurrente de clases de Hatha Yoga Terapéutico de un alumno. Cancela sus citas futuras de yoga, lo desasigna de los grupos de alumnos de yoga (YOGA_TERAPEUTICO_1 o YOGA_TERAPEUTICO_2) y lo traslada al grupo de exalumnos (EXALUMNOS). Pide confirmación al alumno antes de ejecutarla.',
+    inputSchema: z.object({
+      customerPhone: z
+        .string()
+        .optional()
+        .describe('Teléfono móvil del alumno para localizar su ficha si no se conoce'),
+      customerEmail: z
+        .string()
+        .optional()
+        .describe('Email del alumno para localizar su ficha si no se conoce'),
+      reason: z
+        .string()
+        .optional()
+        .describe('Motivo de la anulación o baja de la suscripción indicado por el alumno'),
+    }),
+    execute: async (inputData, context) => {
+      const customer = getCustomer(context);
+      let contactId = customer?.contactId;
+      if (!contactId && (inputData.customerPhone || inputData.customerEmail)) {
+        const found = deps.findContact
+          ? await deps.findContact(inputData.customerPhone, inputData.customerEmail)
+          : inputData.customerPhone
+          ? await deps.findContactByPhone(normalizePhoneLoose(inputData.customerPhone))
+          : null;
+        if (found?.id) contactId = found.id;
+      }
+      if (!contactId) {
+        return {
+          success: false,
+          error: 'No se pudo identificar la ficha del alumno. Por favor, indícame tu número de teléfono móvil o correo.',
+        };
+      }
+      if (!deps.cancelYogaSubscription) {
+        return { success: false, error: 'Función de anulación de suscripción no disponible temporalmente.' };
+      }
+      try {
+        const res = await deps.cancelYogaSubscription(contactId, inputData.reason);
+        return {
+          success: true,
+          message: `La suscripción de yoga ha quedado anulada correctamente. Se han cancelado ${res.cancelledAppointments?.length || 0} citas futuras de yoga y se ha actualizado tu estado a exalumno en el sistema.`,
+        };
+      } catch (err: any) {
+        return {
+          success: false,
+          error: err?.message || 'Error al anular la suscripción de yoga.',
+        };
+      }
+    },
+  });
+
+  const changeYogaSubscriptionTool = createTool({
+    id: 'changeYogaSubscription',
+    description:
+      'Cambiar la modalidad u horario fijo de la suscripción de Hatha Yoga Terapéutico de un alumno (pasar de 1 clase semanal [25€/mes] a 2 clases semanales [42€/mes], o viceversa, o cambiar de día/hora fija). Horarios oficiales válidos: Martes (09:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15) y Jueves (09:45, 11:15, 16:00, 17:30, 19:00). Reorganiza las citas automáticamente a partir de hoy y actualiza el grupo en el CRM.',
+    inputSchema: z.object({
+      customerPhone: z.string().optional().describe('Teléfono móvil del alumno si no se conoce'),
+      customerEmail: z.string().optional().describe('Email del alumno si no se conoce'),
+      slots: z
+        .array(
+          z.object({
+            day: z.union([z.number(), z.string()]).describe('Día de la semana: 2 (Martes), 3 (Miércoles), 4 (Jueves) o nombre del día'),
+            time: z.string().describe('Hora en formato HH:mm (ej: "09:45", "17:00", "20:15", "17:30")'),
+          }),
+        )
+        .min(1)
+        .max(2)
+        .describe('Turnos semanales elegidos: 1 turno para 1 clase/sem o 2 turnos para 2 clases/sem'),
+      modality: z
+        .string()
+        .optional()
+        .describe('"1_clase_semanal" o "2_clases_semanales"'),
+      reason: z.string().optional().describe('Motivo del cambio de suscripción'),
+    }),
+    execute: async (inputData, context) => {
+      const customer = getCustomer(context);
+      let contactId = customer?.contactId;
+      if (!contactId && (inputData.customerPhone || inputData.customerEmail)) {
+        const found = deps.findContact
+          ? await deps.findContact(inputData.customerPhone, inputData.customerEmail)
+          : inputData.customerPhone
+          ? await deps.findContactByPhone(normalizePhoneLoose(inputData.customerPhone))
+          : null;
+        if (found?.id) contactId = found.id;
+      }
+      if (!contactId) {
+        return {
+          success: false,
+          error: 'No se pudo identificar la ficha del alumno. Por favor, indícame tu número de teléfono móvil o correo.',
+        };
+      }
+      if (!deps.changeYogaSubscription) {
+        return { success: false, error: 'Función de cambio de suscripción no disponible temporalmente.' };
+      }
+      try {
+        const res = await deps.changeYogaSubscription(contactId, {
+          modality: inputData.modality,
+          schedule: inputData.slots,
+          reason: inputData.reason,
+        });
+        const fee = res.modality === '2_clases_semanales' ? '42€/mes' : '25€/mes';
+        const modLabel = res.modality === '2_clases_semanales' ? '2 clases semanales' : '1 clase semanal';
+        return {
+          success: true,
+          modality: res.modality,
+          schedule: res.schedule,
+          message: `Suscripción de yoga actualizada con éxito a ${modLabel} (${fee}). Tus citas han quedado ajustadas a partir de hoy y te hemos enviado la confirmación oficial.`,
+        };
+      } catch (err: any) {
+        return {
+          success: false,
+          error: err?.message || 'Error al cambiar la suscripción de yoga.',
+        };
+      }
+    },
+  });
+
   return new Agent({
     id: TEMPLATE_AGENT_ID,
     name: 'Assistant',
@@ -1834,6 +1958,23 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   7. Si el cliente ya te ha pedido cambiar o reprogramar la cita para un día u hora concreto, NO le vuelvas a preguntar "¿Quieres que cancele la del martes para poner la del jueves?"; EJECÚTALO DIRECTAMENTE con 'rescheduleAppointment' y confírmale que ha quedado reprogramada con éxito.
   8. Si la cita es para una clase de prueba gratuita (regalo del centro) o modalidad de alumno, 'rescheduleAppointment' mantiene automáticamente la gratuidad y las condiciones originales.
   9. Para servicios que requieren aprobación previa del instructor/terapeuta (como Terapia Gestalt), al reprogramar la cita entra de nuevo en estado de revisión y avísale al cliente con amabilidad.
+- GESTIÓN DE SUSCRIPCIONES DE HATHA YOGA TERAPÉUTICO (ANULACIÓN Y CAMBIO DE 1 O 2 CLASES / HORARIOS):
+  * ANULACIÓN DE SUSCRIPCIÓN DE YOGA (BAJA DE ALUMNO):
+    1. Si un alumno solicita anular o darse de baja de sus clases regulares o suscripción mensual de yoga terapéutico:
+    2. Identifícalo (pídele teléfono o correo si aún no se conoce en la sesión).
+    3. Pregúntale amablemente el motivo y confírmale antes de ejecutar.
+    4. Ejecuta 'cancelYogaSubscription' pasando 'customerPhone' / 'customerEmail' y el 'reason'.
+    5. Confírmale que sus citas futuras de yoga quedan dadas de baja, que pasa a condición de exalumno y que siempre será bienvenido si desea volver.
+  * CAMBIO DE SUSCRIPCIÓN DE YOGA (1 CLASE <-> 2 CLASES O CAMBIO DE TURNOS FIJOS):
+    1. Si un alumno solicita cambiar de modalidad (por ejemplo: pasar de 1 clase a 2 clases semanales, o de 2 a 1 clase) o cambiar sus días/horas fijas de clase:
+    2. Verifica los turnos elegidos con el horario oficial del centro:
+       - Martes: 09:45, 11:15, 17:00, 18:30, 20:00
+       - Miércoles: 20:15
+       - Jueves: 09:45, 11:15, 16:00, 17:30, 19:00
+    3. Informa de las cuotas mensuales: 1 clase semanal = 25€/mes; 2 clases semanales = 42€/mes.
+    4. Confirma los nuevos turnos semanales y ejecuta 'changeYogaSubscription' pasando 'slots' (con el día y hora de cada turno), 'customerPhone' / 'customerEmail' y el motivo.
+    5. 'changeYogaSubscription' reorganiza automáticamente sus citas a partir de hoy, actualiza el grupo del CRM (YOGA_TERAPEUTICO_1 o YOGA_TERAPEUTICO_2) y envía las notificaciones correspondientes.
+    6. Confírmale el cambio con calidez indicándole sus nuevos días y horas fijas.
 - PREVENCIÓN DE DUPLICADOS Y RESERVAS SIMULTÁNEAS PARA LA MISMA PERSONA:
   * Un mismo alumno/contacto NO puede tener dos citas o plazas reservadas simultáneas en el mismo horario con fecha confirmada.
   * Por ejemplo: no puede inscribirse a la vez en 1 clase semanal y 2 clases semanales a la misma hora, ni como 'Constelar' y como 'Participante' en el mismo taller de Constelaciones Familiares, ni en dos servicios distintos en el mismo intervalo de tiempo en una fecha confirmada.
@@ -2194,6 +2335,8 @@ ${flow}`;
       createPaymentLink: createPaymentLinkTool,
       solicitarAtencionHumana: solicitarAtencionHumanaTool,
       solicitarBajaServicios: solicitarBajaServiciosTool,
+      cancelYogaSubscription: cancelYogaSubscriptionTool,
+      changeYogaSubscription: changeYogaSubscriptionTool,
     },
     memory,
   });
