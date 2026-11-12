@@ -12,7 +12,11 @@ import { Service } from '../common/entities/service.entity';
 import { GrupoContacto } from '../contact-groups/grupo-contacto.entity';
 import { MiembroGrupo } from '../contact-groups/miembro-grupo.entity';
 import { PipelineStage } from '../contacts/pipeline';
-import { parseYogaInitialLoad, YogaInitialLoadItem } from './yoga-initial-load.data';
+import {
+  parseYogaInitialLoad,
+  YogaInitialLoadItem,
+  YOGA_2_CLASSES_DATA,
+} from './yoga-initial-load.data';
 
 const TZ = 'Europe/Madrid';
 
@@ -75,7 +79,8 @@ export class YogaInitialLoadService implements OnModuleInit {
   }
 
   /**
-   * Executes the initial load of contacts and appointments for Yoga Terapéutico (1 clase semanal).
+   * Executes the full initial load of contacts and appointments for Yoga Terapéutico
+   * (both 1 weekly class and 2 weekly classes).
    */
   async runInitialLoad(): Promise<{
     totalProcessed: number;
@@ -84,7 +89,35 @@ export class YogaInitialLoadService implements OnModuleInit {
     appointmentsCreated: number;
     groupMembersAdded: number;
   }> {
-    this.logger.log('Starting initial load of Yoga Terapéutico (1 clase semanal) subscriptions...');
+    const res1 = await this.run1ClassInitialLoad();
+    const res2 = await this.run2ClassesInitialLoad();
+
+    const total = {
+      totalProcessed: res1.totalProcessed + res2.totalProcessed,
+      contactsCreated: res1.contactsCreated + res2.contactsCreated,
+      contactsUpdated: res1.contactsUpdated + res2.contactsUpdated,
+      appointmentsCreated: res1.appointmentsCreated + res2.appointmentsCreated,
+      groupMembersAdded: res1.groupMembersAdded + res2.groupMembersAdded,
+    };
+
+    this.logger.log(
+      `Full Yoga initial load completed: ${total.totalProcessed} total processed (${total.contactsCreated} created, ${total.contactsUpdated} updated, ${total.appointmentsCreated} appointments created, ${total.groupMembersAdded} group members added).`,
+    );
+
+    return total;
+  }
+
+  /**
+   * Executes initial load for students with 1 weekly class (YOGA_TERAPEUTICO_1).
+   */
+  async run1ClassInitialLoad(): Promise<{
+    totalProcessed: number;
+    contactsCreated: number;
+    contactsUpdated: number;
+    appointmentsCreated: number;
+    groupMembersAdded: number;
+  }> {
+    this.logger.log('Processing Yoga Terapéutico (1 clase semanal) subscriptions...');
 
     // 1. Ensure target group YOGA_TERAPEUTICO_1 exists
     let group = await this.gruposRepo.findOne({
@@ -230,11 +263,183 @@ export class YogaInitialLoadService implements OnModuleInit {
     }
 
     this.logger.log(
-      `Yoga initial load completed: ${items.length} processed (${contactsCreated} created, ${contactsUpdated} updated, ${appointmentsCreated} appointments, ${groupMembersAdded} group members added).`,
+      `Yoga (1 clase semanal) initial load completed: ${items.length} processed (${contactsCreated} created, ${contactsUpdated} updated, ${appointmentsCreated} appointments, ${groupMembersAdded} group members added).`,
     );
 
     return {
       totalProcessed: items.length,
+      contactsCreated,
+      contactsUpdated,
+      appointmentsCreated,
+      groupMembersAdded,
+    };
+  }
+
+  /**
+   * Executes initial load for students with 2 weekly classes (YOGA_TERAPEUTICO_2).
+   */
+  async run2ClassesInitialLoad(): Promise<{
+    totalProcessed: number;
+    contactsCreated: number;
+    contactsUpdated: number;
+    appointmentsCreated: number;
+    groupMembersAdded: number;
+  }> {
+    this.logger.log('Processing Yoga Terapéutico (2 clases semanales) subscriptions...');
+
+    // 1. Ensure target group YOGA_TERAPEUTICO_2 exists
+    let group = await this.gruposRepo.findOne({
+      where: { grupocontacto: 'YOGA_TERAPEUTICO_2' },
+    });
+    if (!group) {
+      group = await this.gruposRepo.save(
+        this.gruposRepo.create({
+          grupocontacto: 'YOGA_TERAPEUTICO_2',
+          descripciongrupo: 'Grupo Hatha Yoga Terapéutico (Modalidad 2 clases semanales)',
+        }),
+      );
+    }
+
+    // 2. Find or match 2-class yoga service
+    let yoga2Service = await this.servicesRepo
+      .createQueryBuilder('s')
+      .where('s.name ILIKE :q', { q: '%2%clase%' })
+      .orWhere('s.name ILIKE :q2', { q2: '%dos%clase%' })
+      .orderBy('s.id', 'ASC')
+      .getOne();
+
+    const serviceName =
+      yoga2Service?.name || 'Hatha Yoga Terapéutico (2 clases semanales)';
+    const serviceId = yoga2Service?.id || null;
+    const calendarId = yoga2Service?.calendarId || 'cal-hatha-yoga';
+    const durationMinutes = yoga2Service?.durationMinutes || 90;
+
+    let contactsCreated = 0;
+    let contactsUpdated = 0;
+    let appointmentsCreated = 0;
+    let groupMembersAdded = 0;
+
+    for (const item of YOGA_2_CLASSES_DATA) {
+      const cleanDigits = item.movil.replace(/\D/g, '');
+      const last9 = cleanDigits.slice(-9);
+      if (!last9 || last9.length < 9) {
+        this.logger.warn(`Skipping invalid phone for 2-classes student ${item.nombre}: ${item.movil}`);
+        continue;
+      }
+      const formattedPhone = `+34${last9}`;
+
+      // Convert classes to student schedule array
+      const scheduleSlots = item.clases.map((c) => {
+        const dLower = c.dia.toLowerCase().trim();
+        const dayTarget = dLower.includes('mar')
+          ? 2
+          : dLower.includes('mi')
+          ? 3
+          : 4;
+        return { day: dayTarget, time: c.hora };
+      });
+
+      // Identify by mobile if contact already exists
+      let contact = await this.contactsRepo
+        .createQueryBuilder('c')
+        .where('c.phone LIKE :last9', { last9: `%${last9}%` })
+        .getOne();
+
+      if (contact) {
+        contact.name = item.nombre;
+        contact.email = 'cargainicial';
+        contact.isStudent = true;
+        contact.studentModality = '2_clases_semanales';
+        contact.studentSchedule = scheduleSlots;
+        contact.status = ContactStatus.ACTIVE;
+        contact.pipelineStage = PipelineStage.WON;
+        contact.notes = item.observaciones;
+        if (!contact.tags) contact.tags = [];
+        for (const t of ['alumno', 'cliente', 'cargainicial', 'yoga', '2_clases']) {
+          if (!contact.tags.includes(t)) contact.tags.push(t);
+        }
+        await this.contactsRepo.save(contact);
+        contactsUpdated++;
+      } else {
+        contact = this.contactsRepo.create({
+          name: item.nombre,
+          phone: formattedPhone,
+          email: 'cargainicial',
+          status: ContactStatus.ACTIVE,
+          pipelineStage: PipelineStage.WON,
+          isStudent: true,
+          studentModality: '2_clases_semanales',
+          studentSchedule: scheduleSlots,
+          studentEnrolledAt: new Date(),
+          source: 'cargainicial',
+          notes: item.observaciones,
+          tags: ['alumno', 'cliente', 'cargainicial', 'yoga', '2_clases'],
+        });
+        contact = await this.contactsRepo.save(contact);
+        contactsCreated++;
+      }
+
+      // Create appointments for both weekly classes
+      for (const c of item.clases) {
+        const startsAt = this.getNextOccurrenceDate(c.dia, c.hora);
+        const endsAt = new Date(startsAt.getTime() + durationMinutes * 60 * 1000);
+
+        const existingAppt = await this.appointmentsRepo
+          .createQueryBuilder('a')
+          .where('a.contactId = :contactId', { contactId: contact.id })
+          .andWhere('a.startsAt = :startsAt', { startsAt })
+          .getOne();
+
+        if (!existingAppt) {
+          const newAppt = this.appointmentsRepo.create({
+            contactId: contact.id,
+            service: serviceName,
+            serviceId,
+            calendarId,
+            startsAt,
+            endsAt,
+            status: AppointmentStatus.SCHEDULED,
+            paymentStatus: PaymentStatus.EXEMPT,
+            modality: 'in_person',
+            notes: `Carga inicial suscripción Yoga Terapéutico (2 clases semanales). ${item.observaciones}`.trim(),
+          });
+          await this.appointmentsRepo.save(newAppt);
+          appointmentsCreated++;
+        }
+      }
+
+      // Add to YOGA_TERAPEUTICO_2 group
+      const existingMiembro2 = await this.miembrosRepo.findOne({
+        where: {
+          grupocontacto: 'YOGA_TERAPEUTICO_2',
+          movil: formattedPhone,
+        },
+      });
+
+      if (!existingMiembro2) {
+        const miembro = this.miembrosRepo.create({
+          grupocontacto: 'YOGA_TERAPEUTICO_2',
+          movil: formattedPhone,
+          contactId: contact.id,
+          campofechayhora: new Date(),
+        });
+        await this.miembrosRepo.save(miembro);
+        groupMembersAdded++;
+      }
+
+      // Remove from YOGA_TERAPEUTICO_1 to ensure strict modality segmentation
+      await this.miembrosRepo.delete({
+        grupocontacto: 'YOGA_TERAPEUTICO_1',
+        movil: formattedPhone,
+      });
+    }
+
+    this.logger.log(
+      `Yoga (2 clases semanales) initial load completed: ${YOGA_2_CLASSES_DATA.length} processed (${contactsCreated} created, ${contactsUpdated} updated, ${appointmentsCreated} appointments, ${groupMembersAdded} group members added).`,
+    );
+
+    return {
+      totalProcessed: YOGA_2_CLASSES_DATA.length,
       contactsCreated,
       contactsUpdated,
       appointmentsCreated,

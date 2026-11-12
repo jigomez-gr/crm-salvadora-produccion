@@ -133,6 +133,87 @@ Zulema#696531792#cargainicial#jueves#16:00#Horarios en listados: jueves 16:00; R
 Ángela de Concha#678651314#cargainicial#martes#17:00#Horarios en listados: martes 17:00; REVISAR MODALIDAD
 Ángela nueva#605997357#cargainicial#jueves#16:00#Horarios en listados: jueves 16:00; REVISAR MODALIDAD`;
 
+export interface Yoga2ClassesItem {
+  nombre: string;
+  movil: string;
+  email: string;
+  clases: Array<{ dia: string; hora: string }>;
+  observaciones: string;
+}
+
+export const YOGA_2_CLASSES_DATA: Yoga2ClassesItem[] = [
+  {
+    nombre: 'Felicidad',
+    movil: '657788932',
+    email: 'cargainicial',
+    clases: [
+      { dia: 'martes', hora: '17:00' },
+      { dia: 'jueves', hora: '16:00' },
+    ],
+    observaciones: 'REVISAR DOBLE CLASE: martes 17:00 y jueves 16:00. Confirmar modalidad 42 EUR/mes',
+  },
+  {
+    nombre: 'Mercedes Maseda',
+    movil: '658463238',
+    email: 'cargainicial',
+    clases: [
+      { dia: 'martes', hora: '11:15' },
+      { dia: 'jueves', hora: '11:15' },
+    ],
+    observaciones: 'REVISAR DOBLE CLASE: martes 11:15 y jueves 11:15. Confirmar modalidad 42 EUR/mes',
+  },
+  {
+    nombre: 'Montse nueva',
+    movil: '626929128',
+    email: 'cargainicial',
+    clases: [
+      { dia: 'martes', hora: '17:00' },
+      { dia: 'jueves', hora: '17:30' },
+    ],
+    observaciones: 'REVISAR DOBLE CLASE: martes 17:00 y jueves 17:30. Confirmar modalidad 42 EUR/mes',
+  },
+  {
+    nombre: 'Pilar de Baba',
+    movil: '659555043',
+    email: 'cargainicial',
+    clases: [
+      { dia: 'martes', hora: '11:15' },
+      { dia: 'jueves', hora: '11:15' },
+    ],
+    observaciones: 'REVISAR DOBLE CLASE: martes 11:15 y jueves 11:15. Confirmar modalidad 42 EUR/mes',
+  },
+  {
+    nombre: 'Raceli antigua',
+    movil: '639176347',
+    email: 'cargainicial',
+    clases: [
+      { dia: 'martes', hora: '09:45' },
+      { dia: 'jueves', hora: '16:00' },
+    ],
+    observaciones: 'REVISAR DOBLE CLASE: martes 09:45 y jueves 16:00. Confirmar modalidad 42 EUR/mes',
+  },
+  {
+    nombre: 'Telma',
+    movil: '670040698',
+    email: 'cargainicial',
+    clases: [
+      { dia: 'martes', hora: '17:00' },
+      { dia: 'martes', hora: '18:30' },
+    ],
+    observaciones: 'REVISAR HORARIOS: martes 17:00 y martes 18:30. Confirmar si son alternativos',
+  },
+  {
+    nombre: 'Paz Alonso Briceño',
+    movil: '619331478',
+    email: 'cargainicial',
+    clases: [
+      { dia: 'martes', hora: '09:45' },
+      { dia: 'jueves', hora: '11:15' },
+    ],
+    observaciones: 'REVISAR TRES HORARIOS: martes 09:45; martes 11:15; jueves 11:15. Confirmar los horarios fijos',
+  },
+];
+
 export function parseYogaInitialLoad(): YogaInitialLoadItem[] {
   return YOGA_INITIAL_LOAD_RAW.split(/\r?\n/)
     .map((line) => line.trim())

@@ -334,7 +334,7 @@ export default function ContactGroupsPage() {
   const handleRunInitialLoad = async () => {
     if (
       !confirm(
-        "¿Deseas procesar/actualizar la carga inicial de suscripciones de Yoga Terapéutico (115 alumnos)? Se crearán o actualizarán los contactos con email 'cargainicial', se creará su cita semanal correspondiente y se añadirán al grupo YOGA_TERAPEUTICO_1."
+        "¿Deseas procesar/actualizar la carga inicial de suscripciones de Yoga Terapéutico (modalidades 1 y 2 clases semanales)? Se crearán o actualizarán los contactos con email 'cargainicial', se crearán sus citas semanales y se asignarán a los grupos YOGA_TERAPEUTICO_1 y YOGA_TERAPEUTICO_2."
       )
     ) {
       return;
@@ -377,10 +377,10 @@ export default function ContactGroupsPage() {
             onClick={handleRunInitialLoad}
             disabled={runningInitialLoad}
             className="flex items-center gap-1.5 border-emerald-300 text-emerald-800 hover:bg-emerald-50"
-            title="Ejecutar/actualizar carga inicial de suscripciones de Yoga Terapéutico"
+            title="Ejecutar/actualizar carga inicial de suscripciones de Yoga Terapéutico (1 y 2 clases)"
           >
             <Sparkles className="w-4 h-4 text-emerald-600" />
-            {runningInitialLoad ? "Cargando..." : "Carga Inicial Yoga (115)"}
+            {runningInitialLoad ? "Cargando..." : "Carga Inicial Yoga (1 y 2 clases)"}
           </Button>
           <Button
             variant="secondary"
