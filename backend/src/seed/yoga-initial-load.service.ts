@@ -89,6 +89,18 @@ export class YogaInitialLoadService implements OnModuleInit {
     appointmentsCreated: number;
     groupMembersAdded: number;
   }> {
+    // Clean up any emailerroneo flag mistakenly set on placeholder 'cargainicial' contacts
+    try {
+      await this.contactsRepo.query(`
+        UPDATE "contacts"
+        SET "emailerroneo" = 'N', "tags" = array_remove("tags", 'emailerroneo')
+        WHERE "email" = 'cargainicial' OR "email" IS NULL;
+      `);
+      this.logger.log('Reset emailerroneo to N for cargainicial contacts.');
+    } catch (e: any) {
+      this.logger.warn(`Could not reset emailerroneo in contacts: ${e?.message || e}`);
+    }
+
     const res1 = await this.run1ClassInitialLoad();
     const res2 = await this.run2ClassesInitialLoad();
 
@@ -178,6 +190,7 @@ export class YogaInitialLoadService implements OnModuleInit {
         // Contact already exists: update name, set email to cargainicial, mark as student
         contact.name = item.nombre;
         contact.email = 'cargainicial';
+        contact.emailerroneo = 'N';
         contact.isStudent = true;
         contact.studentModality = '1_clase_semanal';
         contact.studentSchedule = [{ day: dayTarget, time: item.hora }];
@@ -189,6 +202,7 @@ export class YogaInitialLoadService implements OnModuleInit {
             : item.observaciones;
         }
         if (!contact.tags) contact.tags = [];
+        contact.tags = contact.tags.filter((t) => t !== 'emailerroneo');
         for (const t of ['alumno', 'cliente', 'cargainicial', 'yoga']) {
           if (!contact.tags.includes(t)) contact.tags.push(t);
         }
@@ -200,6 +214,7 @@ export class YogaInitialLoadService implements OnModuleInit {
           name: item.nombre,
           phone: formattedPhone,
           email: 'cargainicial',
+          emailerroneo: 'N',
           status: ContactStatus.ACTIVE,
           pipelineStage: PipelineStage.WON,
           isStudent: true,
@@ -348,6 +363,7 @@ export class YogaInitialLoadService implements OnModuleInit {
       if (contact) {
         contact.name = item.nombre;
         contact.email = 'cargainicial';
+        contact.emailerroneo = 'N';
         contact.isStudent = true;
         contact.studentModality = '2_clases_semanales';
         contact.studentSchedule = scheduleSlots;
@@ -355,6 +371,7 @@ export class YogaInitialLoadService implements OnModuleInit {
         contact.pipelineStage = PipelineStage.WON;
         contact.notes = item.observaciones;
         if (!contact.tags) contact.tags = [];
+        contact.tags = contact.tags.filter((t) => t !== 'emailerroneo');
         for (const t of ['alumno', 'cliente', 'cargainicial', 'yoga', '2_clases']) {
           if (!contact.tags.includes(t)) contact.tags.push(t);
         }
@@ -365,6 +382,7 @@ export class YogaInitialLoadService implements OnModuleInit {
           name: item.nombre,
           phone: formattedPhone,
           email: 'cargainicial',
+          emailerroneo: 'N',
           status: ContactStatus.ACTIVE,
           pipelineStage: PipelineStage.WON,
           isStudent: true,

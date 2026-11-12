@@ -218,9 +218,17 @@ export class AppointmentsService implements OnModuleInit {
         throw new BadRequestException(BLOCKED_USER_MESSAGE);
       }
       if (contact?.emailerroneo === 'S') {
-        throw new BadRequestException(
-          'El contacto tiene una incidencia registrada en su dirección de correo electrónico (emailerroneo=S). Debe verificar su correo mediante el código de 7 minutos antes de formalizar una reserva.',
-        );
+        if (contact.email === 'cargainicial' || !contact.email || !contact.email.includes('@')) {
+          contact.emailerroneo = 'N';
+          if (contact.tags && contact.tags.includes('emailerroneo')) {
+            contact.tags = contact.tags.filter((t) => t !== 'emailerroneo');
+          }
+          await this.contactsRepo.save(contact).catch(() => {});
+        } else {
+          throw new BadRequestException(
+            'El contacto tiene una incidencia registrada en su dirección de correo electrónico (emailerroneo=S). Debe verificar su correo mediante el código de 7 minutos antes de formalizar una reserva.',
+          );
+        }
       }
     }
 
@@ -1915,7 +1923,12 @@ export class AppointmentsService implements OnModuleInit {
 
       // 1. Dispatch Email notification if enabled for this service
       if (shouldEmail) {
-        if (contact.email) {
+        const isRealEmail =
+          Boolean(contact.email) &&
+          contact.email !== 'cargainicial' &&
+          /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email?.trim() || '');
+
+        if (isRealEmail) {
           const debounceKey = `email:${appt.id}:${decision}:${contact.email.toLowerCase().trim()}`;
           const lastSent = this.recentDispatches.get(debounceKey);
           if (lastSent && Date.now() - lastSent < 15000) {
@@ -1947,7 +1960,9 @@ export class AppointmentsService implements OnModuleInit {
             }
           }
         } else {
-          this.logger.warn(`[Email] Contact ${contact.id} (${contact.name}) has NO email. Cannot send ${decision} notification.`);
+          this.logger.log(
+            `[Email] Contact ${contact.id} (${contact.name}) has no valid email (email: "${contact.email || ''}"). Skipping email notification.`,
+          );
         }
       } else {
         this.logger.log(`[Email] Service "${appt.service}" has notifyByEmail=false. Skipping email notification.`);
