@@ -15,6 +15,7 @@ import { MiembroGrupo } from '../contact-groups/miembro-grupo.entity';
 import { YogaInitialLoadService } from './yoga-initial-load.service';
 import { ExalumnosLoadService } from './exalumnos-load.service';
 import { GongLoadService } from './gong-load.service';
+import { ConstelacionesLoadService } from './constelaciones-load.service';
 
 // Seeds demo data on first run (empty DB only). See SeedService.
 @Module({
@@ -39,7 +40,8 @@ import { GongLoadService } from './gong-load.service';
     YogaInitialLoadService,
     ExalumnosLoadService,
     GongLoadService,
+    ConstelacionesLoadService,
   ],
-  exports: [YogaInitialLoadService, ExalumnosLoadService, GongLoadService],
+  exports: [YogaInitialLoadService, ExalumnosLoadService, GongLoadService, ConstelacionesLoadService],
 })
 export class SeedModule {}
