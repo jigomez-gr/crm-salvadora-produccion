@@ -13,6 +13,7 @@ import { VapiAccount } from '../common/entities/vapi-account.entity';
 import { GrupoContacto } from '../contact-groups/grupo-contacto.entity';
 import { MiembroGrupo } from '../contact-groups/miembro-grupo.entity';
 import { YogaInitialLoadService } from './yoga-initial-load.service';
+import { ExalumnosLoadService } from './exalumnos-load.service';
 
 // Seeds demo data on first run (empty DB only). See SeedService.
 @Module({
@@ -32,7 +33,7 @@ import { YogaInitialLoadService } from './yoga-initial-load.service';
     // inserted directly, so we build their conversation rows afterwards.
     ConversationsModule,
   ],
-  providers: [SeedService, YogaInitialLoadService],
-  exports: [YogaInitialLoadService],
+  providers: [SeedService, YogaInitialLoadService, ExalumnosLoadService],
+  exports: [YogaInitialLoadService, ExalumnosLoadService],
 })
 export class SeedModule {}

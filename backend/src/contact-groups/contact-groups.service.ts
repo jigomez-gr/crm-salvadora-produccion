@@ -58,6 +58,10 @@ export const INITIAL_GROUPS: Array<{ name: string; description: string }> = [
     name: 'BIENESTAR_EXPERIENCE',
     description: 'Grupo Bienestar Experience y Programas Integrales',
   },
+  {
+    name: 'EXALUMNOS',
+    description: 'Grupo de exalumnos del centro',
+  },
 ];
 
 @Injectable()

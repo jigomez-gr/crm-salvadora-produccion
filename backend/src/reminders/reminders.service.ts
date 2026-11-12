@@ -335,9 +335,20 @@ export class RemindersService implements OnModuleInit {
         }
 
         case ReminderChannel.EMAIL: {
-          if (!email) {
-            result = { ok: false, error: 'El contacto no dispone de correo electrónico' };
-            break;
+          const isRealEmail =
+            Boolean(email) &&
+            email !== 'cargainicial' &&
+            /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email?.trim() || '');
+
+          if (!isRealEmail) {
+            this.logger.log(
+              `Reminder '${offsetLabel}' via [email] skipped for appointment ${appt.id}: contact email is placeholder or not valid ("${email || ''}").`,
+            );
+            await this.remindersRepo.update(claim.id, {
+              status: ReminderStatus.SENT,
+              providerMessageId: 'skipped-placeholder-email',
+            });
+            return;
           }
           const subject = `Recordatorio de tu cita: ${appt.service}`;
           const reminderNotesHtml = svc?.reminderNotes
