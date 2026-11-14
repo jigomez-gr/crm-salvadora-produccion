@@ -3383,8 +3383,31 @@ export class AppointmentsService implements OnModuleInit {
     const details: { contactId: string; studentName: string; apptIds: string[] }[] = [];
 
     for (const student of activeStudents) {
-      const modality = student.studentModality === '2_clases_semanales' ? '2_clases_semanales' : '1_clase_semanal';
+      // Check if student belongs to YOGA_TERAPEUTICO_2 in miembrosgrupo
+      let isYoga2Member = false;
+      try {
+        const rows = await this.contactsRepo.query(
+          `SELECT 1 FROM miembrosgrupo WHERE grupocontacto = 'YOGA_TERAPEUTICO_2' AND (contact_id = $1 OR movil = $2) LIMIT 1`,
+          [student.id, student.phone || ''],
+        );
+        isYoga2Member = Boolean(rows && rows.length > 0);
+      } catch {
+        isYoga2Member = false;
+      }
+
+      const modality =
+        student.studentModality === '2_clases_semanales' || isYoga2Member
+          ? '2_clases_semanales'
+          : '1_clase_semanal';
       const quota = modality === '2_clases_semanales' ? 2 : 1;
+      const targetServiceName =
+        modality === '2_clases_semanales'
+          ? 'Hatha Yoga Terapéutico (2 clases semanales)'
+          : 'Hatha Yoga Terapéutico (1 clase semanal)';
+      const targetServiceId =
+        modality === '2_clases_semanales'
+          ? '15f33ff9-210c-45ab-b6fd-e660854505b4'
+          : 'd3b4566d-e1da-430c-be1f-b2bd1d0a0bad';
 
       // Check if student already has appointments in the target next week
       const existingNextWeek = await this.appointmentsRepo.find({
@@ -3410,7 +3433,7 @@ export class AppointmentsService implements OnModuleInit {
             recurringPatterns.push({
               day: Number(slot.day),
               time: String(slot.time),
-              service: `Hatha Yoga Terapéutico (${modality === '2_clases_semanales' ? '2 clases semanales' : '1 clase semanal'})`,
+              service: targetServiceName,
             });
             if (recurringPatterns.length >= quota) break;
           }
@@ -3434,7 +3457,7 @@ export class AppointmentsService implements OnModuleInit {
           const day = zoned.getDay();
           const time = format(zoned, 'HH:mm');
           if (!recurringPatterns.some((p) => p.day === day && p.time === time)) {
-            recurringPatterns.push({ day, time, service: past.service });
+            recurringPatterns.push({ day, time, service: targetServiceName });
           }
           if (recurringPatterns.length >= quota) break;
         }
@@ -3448,7 +3471,7 @@ export class AppointmentsService implements OnModuleInit {
           recurringPatterns.push({
             day: fallback.day,
             time: fallback.time,
-            service: `Hatha Yoga Terapéutico (${modality === '2_clases_semanales' ? '2 clases semanales' : '1 clase semanal'})`,
+            service: targetServiceName,
           });
         }
         fallbackIndex++;
@@ -3477,12 +3500,13 @@ export class AppointmentsService implements OnModuleInit {
 
         try {
           const isYogaService =
-            /hatha yoga terapéutico/i.test(pattern.service || '') ||
-            /yoga/i.test(pattern.service || '');
+            /hatha yoga terapéutico/i.test(targetServiceName) ||
+            /yoga/i.test(targetServiceName);
           const appt = await this.create(
             {
               contactId: student.id,
-              service: pattern.service || 'Hatha Yoga Terapéutico',
+              service: targetServiceName,
+              serviceId: targetServiceId,
               startsAt: apptStart.toISOString(),
               endsAt: apptEnd.toISOString(),
               notes: 'Cita semanal generada automáticamente (modalidad alumno). Reprogramable.',

@@ -144,16 +144,20 @@ export class YogaInitialLoadService implements OnModuleInit {
       );
     }
 
-    // 2. Find or match yoga service
-    const yogaService = await this.servicesRepo
-      .createQueryBuilder('s')
-      .where('s.name ILIKE :q', { q: '%yoga%terap%' })
-      .orderBy('s.id', 'ASC')
-      .getOne();
+    // 2. Find or match 1-class yoga service
+    const yogaService =
+      (await this.servicesRepo
+        .createQueryBuilder('s')
+        .where('s.name ILIKE :q', { q: '%1 clase%' })
+        .getOne()) ||
+      (await this.servicesRepo
+        .createQueryBuilder('s')
+        .where('s.name ILIKE :q', { q: '%yoga%terap%' })
+        .getOne());
 
     const serviceName =
       yogaService?.name || 'Hatha Yoga Terapéutico (1 clase semanal)';
-    const serviceId = yogaService?.id || null;
+    const serviceId = yogaService?.id || 'd3b4566d-e1da-430c-be1f-b2bd1d0a0bad';
     const calendarId = yogaService?.calendarId || 'cal-hatha-yoga';
     const durationMinutes = yogaService?.durationMinutes || 90;
 
@@ -325,7 +329,7 @@ export class YogaInitialLoadService implements OnModuleInit {
 
     const serviceName =
       yoga2Service?.name || 'Hatha Yoga Terapéutico (2 clases semanales)';
-    const serviceId = yoga2Service?.id || null;
+    const serviceId = yoga2Service?.id || '15f33ff9-210c-45ab-b6fd-e660854505b4';
     const calendarId = yoga2Service?.calendarId || 'cal-hatha-yoga';
     const durationMinutes = yoga2Service?.durationMinutes || 90;
 

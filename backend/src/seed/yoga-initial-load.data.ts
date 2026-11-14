@@ -193,16 +193,6 @@ export const YOGA_2_CLASSES_DATA: Yoga2ClassesItem[] = [
     observaciones: 'REVISAR DOBLE CLASE: martes 09:45 y jueves 16:00. Confirmar modalidad 42 EUR/mes',
   },
   {
-    nombre: 'Telma',
-    movil: '670040698',
-    email: 'cargainicial',
-    clases: [
-      { dia: 'martes', hora: '17:00' },
-      { dia: 'martes', hora: '18:30' },
-    ],
-    observaciones: 'REVISAR HORARIOS: martes 17:00 y martes 18:30. Confirmar si son alternativos',
-  },
-  {
     nombre: 'Paz Alonso Briceño',
     movil: '619331478',
     email: 'cargainicial',
