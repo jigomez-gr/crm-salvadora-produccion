@@ -403,8 +403,8 @@ export class AppointmentsService implements OnModuleInit {
             maxAllowed = 1;
           }
           isFirstClass = false;
-          computedPrice = maxAllowed === 2 ? (serviceEntity?.price ?? '42.00') : (serviceEntity?.price ?? '25.00');
-          computedPaymentStatus = PaymentStatus.PENDING;
+          computedPrice = '0.00';
+          computedPaymentStatus = PaymentStatus.EXEMPT;
           additionalNotes = `Cuota mensual de alumno (${maxAllowed === 1 ? '1 clase semanal - 25€/mes' : '2 clases semanales - 42€/mes'})`;
         } else {
           // Check if contact has prior yoga appointments
@@ -734,7 +734,12 @@ export class AppointmentsService implements OnModuleInit {
           isFirstClass,
           isRecovery: dto.isRecovery ?? false,
           recoveredFromAppointmentId: dto.recoveredFromAppointmentId ?? null,
-          paymentStatus: (isYoga || isMeditacion) && (contact?.isStudent || isFirstClass) ? computedPaymentStatus : (dto.paymentStatus ?? PaymentStatus.UNPAID),
+          paymentStatus:
+            dto.paymentStatus !== undefined
+              ? dto.paymentStatus
+              : (isYoga || isMeditacion) && (contact?.isStudent || isFirstClass)
+              ? computedPaymentStatus
+              : (dto.paymentStatus ?? PaymentStatus.UNPAID),
           calBookingId,
           calBookingUid,
           calMeetingUrl,
