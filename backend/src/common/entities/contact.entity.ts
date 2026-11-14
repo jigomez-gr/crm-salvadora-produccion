@@ -110,6 +110,10 @@ export class Contact {
   @Column({ type: 'varchar', length: 1, default: 'N' })
   contactadowassap: string;
 
+  // Inhibir recordatorios de Yoga por WhatsApp: 'S' = no enviar recordatorios de Hatha Yoga por WhatsApp, 'N' = enviar normalmente (default)
+  @Column({ type: 'varchar', length: 1, default: 'N' })
+  inhibiryoga: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

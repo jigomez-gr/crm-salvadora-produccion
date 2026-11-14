@@ -33,6 +33,7 @@ export interface ContactFormData {
   bloqueado: string;
   emailerroneo: string;
   contactadowassap: string;
+  inhibiryoga: string;
 }
 
 export function toForm(c?: Partial<Contact>): ContactFormData {
@@ -53,6 +54,7 @@ export function toForm(c?: Partial<Contact>): ContactFormData {
     bloqueado: c?.bloqueado === "S" ? "S" : "N",
     emailerroneo: c?.emailerroneo === "S" ? "S" : "N",
     contactadowassap: c?.contactadowassap === "S" ? "S" : "N",
+    inhibiryoga: c?.inhibiryoga === "S" ? "S" : "N",
   };
 }
 
@@ -275,6 +277,28 @@ export function ContactModal({
               <span className="text-emerald-700 font-medium">✓ Registrado como contactado por WhatsApp.</span>
             ) : (
               <span>Indica si ya se ha contactado o conversado por WhatsApp con este número.</span>
+            )}
+          </p>
+        </div>
+        <div className={`rounded-lg border p-3 space-y-2 ${form.inhibiryoga === "S" ? "border-amber-300 bg-amber-50/70" : "border-neutral-200 bg-neutral-50/70"}`}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-neutral-800">
+              Inhibir recordatorios de Yoga por WhatsApp (inhibiryoga)
+            </span>
+            <select
+              className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs font-medium focus:border-amber-500 focus:outline-none"
+              value={form.inhibiryoga}
+              onChange={(e) => setField("inhibiryoga", e.target.value)}
+            >
+              <option value="N">No (Enviar recordatorios normalmente)</option>
+              <option value="S">Sí (Inhibir recordatorios de Yoga por WhatsApp)</option>
+            </select>
+          </div>
+          <p className="text-[11px] leading-relaxed text-neutral-600">
+            {form.inhibiryoga === "S" ? (
+              <span className="text-amber-800 font-medium">⚠️ No se enviarán recordatorios por WhatsApp para las clases de Hatha Yoga Terapéutico a este contacto.</span>
+            ) : (
+              <span>Si se marca &apos;Sí&apos;, se omiten los recordatorios automáticos por WhatsApp exclusivamente para los 3 servicios de Hatha Yoga Terapéutico.</span>
             )}
           </p>
         </div>

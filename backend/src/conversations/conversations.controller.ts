@@ -238,6 +238,14 @@ export class ConversationsController {
     this.eventEmitter.emit('conversation.updated', { threadId });
   }
 
+  /** Mark conversation as unread manually. */
+  @Post(':threadId/unread')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async markUnread(@Param('threadId') threadId: string) {
+    await this.messagesService.markUnread(threadId);
+    this.eventEmitter.emit('conversation.updated', { threadId });
+  }
+
   /** Toggle human handoff — when on, the agent stops auto-replying here. */
   @Patch(':threadId/handoff')
   async setHandoff(

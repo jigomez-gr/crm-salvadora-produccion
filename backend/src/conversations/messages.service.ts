@@ -770,6 +770,21 @@ export class MessagesService implements OnModuleInit {
     await this.conversationsRepo.update({ threadId }, { unreadCount: 0 });
   }
 
+  /** Operator marked thread as unread manually. */
+  async markUnread(threadId: string): Promise<void> {
+    if (threadId.startsWith('sms:')) {
+      const smsId = Number(threadId.slice('sms:'.length));
+      await this.smsRepo.update(smsId, { leido: false });
+      return;
+    }
+    if (threadId.startsWith('call:')) {
+      const callId = threadId.slice('call:'.length);
+      await this.callsRepo.update(callId, { needsReview: true });
+      return;
+    }
+    await this.conversationsRepo.update({ threadId }, { unreadCount: 1 });
+  }
+
   /** Link a conversation and its messages to a contact ID */
   async linkContact(threadId: string, contactId: string): Promise<void> {
     await this.ensureConversation(threadId);

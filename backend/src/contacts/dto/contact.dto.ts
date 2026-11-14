@@ -78,6 +78,11 @@ export class CreateContactDto {
   @IsString()
   @MaxLength(1)
   contactadowassap?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1)
+  inhibiryoga?: string;
 }
 
 export class UpdateContactDto {
@@ -158,6 +163,11 @@ export class UpdateContactDto {
   @IsString()
   @MaxLength(1)
   contactadowassap?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1)
+  inhibiryoga?: string;
 }
 
 export class ConvertToStudentDto {

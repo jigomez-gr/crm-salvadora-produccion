@@ -231,7 +231,10 @@ export class AppointmentsService implements OnModuleInit {
     return appt;
   }
 
-  async create(dto: CreateAppointmentDto): Promise<Appointment> {
+  async create(
+    dto: CreateAppointmentDto,
+    options?: { skipWhatsappNotification?: boolean },
+  ): Promise<Appointment> {
     // 0. Maintenance Mode Check
     const [settings] = await this.settingsRepo.find({ take: 1 }).catch(() => []);
     if (settings?.serviciosEnMantenimiento === 'S') {
@@ -740,12 +743,13 @@ export class AppointmentsService implements OnModuleInit {
     this.eventEmitter.emit('appointment.created', withContact);
 
     const managerName = serviceEntity?.manager?.name || 'Centro de Yoga Salvadora Conesa';
+    const channelOverrides = options?.skipWhatsappNotification ? { whatsapp: false } : undefined;
     if (saved.status === AppointmentStatus.SCHEDULED) {
-      await this.notifyStudentDecision(withContact, 'accepted', managerName).catch((err) => {
+      await this.notifyStudentDecision(withContact, 'accepted', managerName, undefined, undefined, false, channelOverrides).catch((err) => {
         this.logger.error(`Error notifying student on accepted appointment: ${err}`);
       });
     } else if (saved.status === AppointmentStatus.PENDING_APPROVAL) {
-      await this.notifyStudentDecision(withContact, 'pending_approval', managerName).catch((err) => {
+      await this.notifyStudentDecision(withContact, 'pending_approval', managerName, undefined, undefined, false, channelOverrides).catch((err) => {
         this.logger.error(`Error notifying student on pending_approval appointment: ${err}`);
       });
       await this.notifyTherapistPendingApproval(withContact, serviceEntity).catch((err) => {
@@ -3472,15 +3476,24 @@ export class AppointmentsService implements OnModuleInit {
         const apptEnd = new Date(apptStart.getTime() + 90 * 60 * 1000);
 
         try {
-          const appt = await this.create({
-            contactId: student.id,
-            service: pattern.service || 'Hatha Yoga Terapéutico',
-            startsAt: apptStart.toISOString(),
-            endsAt: apptEnd.toISOString(),
-            notes: 'Cita semanal generada automáticamente (modalidad alumno). Reprogramable.',
-            price: '0.00',
-            paymentStatus: PaymentStatus.EXEMPT,
-          });
+          const isYogaService =
+            /hatha yoga terapéutico/i.test(pattern.service || '') ||
+            /yoga/i.test(pattern.service || '');
+          const appt = await this.create(
+            {
+              contactId: student.id,
+              service: pattern.service || 'Hatha Yoga Terapéutico',
+              startsAt: apptStart.toISOString(),
+              endsAt: apptEnd.toISOString(),
+              notes: 'Cita semanal generada automáticamente (modalidad alumno). Reprogramable.',
+              price: '0.00',
+              paymentStatus: PaymentStatus.EXEMPT,
+            },
+            {
+              // Suprimir confirmación WhatsApp exclusivamente para los servicios de Yoga al generar citas semanales de membresía
+              skipWhatsappNotification: isYogaService,
+            },
+          );
 
           studentCreatedApptIds.push(appt.id);
           totalCreated++;
@@ -3779,17 +3792,29 @@ export class AppointmentsService implements OnModuleInit {
       if (!exists) {
         const apptEnd = new Date(apptStart.getTime() + 90 * 60_000);
         try {
-          const created = await this.create({
-            contactId: contact.id,
-            service: targetServiceName,
-            startsAt: apptStart.toISOString(),
-            endsAt: apptEnd.toISOString(),
-            price: '0.00',
-            paymentStatus: PaymentStatus.EXEMPT,
-            notes: 'Cita generada automáticamente por cambio de suscripción de yoga.',
-          });
+          const isYogaService =
+            /hatha yoga terapéutico/i.test(targetServiceName || '') ||
+            /yoga/i.test(targetServiceName || '');
+          const created = await this.create(
+            {
+              contactId: contact.id,
+              service: targetServiceName,
+              startsAt: apptStart.toISOString(),
+              endsAt: apptEnd.toISOString(),
+              price: '0.00',
+              paymentStatus: PaymentStatus.EXEMPT,
+              notes: 'Cita generada automáticamente por cambio de suscripción de yoga.',
+            },
+            {
+              skipWhatsappNotification: isYogaService,
+            },
+          );
           createdCount++;
-          await this.sendAppointmentConfirmationNotification(created.id, undefined, false).catch((err) => {
+          await this.sendAppointmentConfirmationNotification(
+            created.id,
+            isYogaService ? { whatsapp: false } : undefined,
+            false,
+          ).catch((err) => {
             this.logger.warn(`Could not send notification for created appointment ${created.id}: ${err?.message || err}`);
           });
         } catch (err: any) {

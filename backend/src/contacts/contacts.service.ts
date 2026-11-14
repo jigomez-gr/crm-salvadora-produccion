@@ -179,6 +179,7 @@ export class ContactsService {
         ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "bloqueado" character varying(1) DEFAULT 'N';
         ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "emailerroneo" character varying(1) NOT NULL DEFAULT 'N';
         ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "contactadowassap" character varying(1) NOT NULL DEFAULT 'N';
+        ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "inhibiryoga" character varying(1) NOT NULL DEFAULT 'N';
         CREATE TABLE IF NOT EXISTS "contact_identity_changes" (
           "id" uuid NOT NULL DEFAULT gen_random_uuid(),
           "contactId" uuid REFERENCES contacts(id) ON DELETE CASCADE,
@@ -619,6 +620,7 @@ export class ContactsService {
       bloqueado: dto.bloqueado?.toUpperCase() === 'S' ? 'S' : 'N',
       emailerroneo: dto.emailerroneo?.toUpperCase() === 'S' ? 'S' : 'N',
       contactadowassap: dto.contactadowassap?.toUpperCase() === 'S' ? 'S' : 'N',
+      inhibiryoga: dto.inhibiryoga?.toUpperCase() === 'S' ? 'S' : 'N',
       // New contacts land at the top of their column (newest first).
       boardPosition: Date.now(),
     });
@@ -648,11 +650,12 @@ export class ContactsService {
       'bloqueado',
       'emailerroneo',
       'contactadowassap',
+      'inhibiryoga',
     ] as const;
     const target = contact as unknown as Record<string, unknown>;
     for (const key of simpleFields) {
       if (dto[key] !== undefined) {
-        if (key === 'bloqueado' || key === 'emailerroneo' || key === 'contactadowassap') {
+        if (key === 'bloqueado' || key === 'emailerroneo' || key === 'contactadowassap' || key === 'inhibiryoga') {
           target[key] = dto[key]?.toUpperCase() === 'S' ? 'S' : 'N';
         } else {
           target[key] = dto[key];

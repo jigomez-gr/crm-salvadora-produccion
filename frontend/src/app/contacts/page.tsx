@@ -250,6 +250,7 @@ function ContactsPageInner() {
       bloqueado: data.bloqueado || "N",
       emailerroneo: data.emailerroneo || "N",
       contactadowassap: data.contactadowassap || "N",
+      inhibiryoga: data.inhibiryoga || "N",
     };
     if (editingContact) {
       await apiFetch(`/api/contacts/${editingContact.id}`, {
@@ -501,6 +502,11 @@ function ContactsPageInner() {
                       ) : (
                         <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium bg-neutral-100 text-neutral-600 border border-neutral-200" title="No contactado por WhatsApp">
                           WA: No
+                        </span>
+                      )}
+                      {c.inhibiryoga === "S" && (
+                        <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200" title="Recordatorios de Yoga por WhatsApp inhibidos">
+                          🔕 Yoga Sin WA
                         </span>
                       )}
                     </div>

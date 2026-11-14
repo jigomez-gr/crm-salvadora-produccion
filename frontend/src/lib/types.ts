@@ -159,6 +159,7 @@ export interface Contact {
   bloqueado?: string;
   emailerroneo?: string;
   contactadowassap?: string;
+  inhibiryoga?: string;
   optedOut: boolean;
   optedOutAt?: string | null;
   anonymizedAt?: string | null;

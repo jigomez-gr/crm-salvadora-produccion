@@ -218,6 +218,28 @@ export class RemindersService implements OnModuleInit {
       return;
     }
 
+    // Contact inhibiryoga flag: when 'S', suppress WhatsApp reminders ONLY for the 3 Hatha Yoga services.
+    const isYogaService =
+      (svc?.name && /hatha yoga terapéutico/i.test(svc.name)) ||
+      (appt.service && /hatha yoga terapéutico/i.test(appt.service)) ||
+      svc?.id === '7cf9b55a-3249-4eee-a043-ea8e6bf6be7e' ||
+      svc?.id === 'd3b4566d-e1da-430c-be1f-b2bd1d0a0bad' ||
+      svc?.id === '15f33ff9-210c-45ab-b6fd-e660854505b4' ||
+      appt.serviceId === '7cf9b55a-3249-4eee-a043-ea8e6bf6be7e' ||
+      appt.serviceId === 'd3b4566d-e1da-430c-be1f-b2bd1d0a0bad' ||
+      appt.serviceId === '15f33ff9-210c-45ab-b6fd-e660854505b4';
+
+    if (
+      channel === ReminderChannel.WHATSAPP &&
+      isYogaService &&
+      appt.contact?.inhibiryoga === 'S'
+    ) {
+      this.logger.log(
+        `Reminder skipped for appointment ${appt.id} (whatsapp) — contact ${appt.contact.id} has inhibiryoga='S' for yoga service (${appt.service || svc?.name}).`,
+      );
+      return;
+    }
+
     // Global WhatsApp automation pause: skip WhatsApp reminders before claiming
     // the idempotency row so that if automation is resumed within the grace window,
     // the reminder can still be delivered. Other channels (Email/SMS/Vapi) are unaffected.
