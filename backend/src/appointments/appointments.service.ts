@@ -403,8 +403,8 @@ export class AppointmentsService implements OnModuleInit {
             maxAllowed = 1;
           }
           isFirstClass = false;
-          computedPrice = '0.00';
-          computedPaymentStatus = PaymentStatus.EXEMPT;
+          computedPrice = maxAllowed === 2 ? (serviceEntity?.price ?? '42.00') : (serviceEntity?.price ?? '25.00');
+          computedPaymentStatus = PaymentStatus.PENDING;
           additionalNotes = `Cuota mensual de alumno (${maxAllowed === 1 ? '1 clase semanal - 25€/mes' : '2 clases semanales - 42€/mes'})`;
         } else {
           // Check if contact has prior yoga appointments
@@ -443,6 +443,12 @@ export class AppointmentsService implements OnModuleInit {
           const z = new TZDate(new Date(a.startsAt).getTime(), 'Europe/Madrid');
           return effectiveTimetable[z.getDay()]?.includes(format(z, 'HH:mm'));
         });
+
+        if (isStudent && maxAllowed === 2 && hathaExisting.length > 0 && dto.price === undefined) {
+          computedPrice = '0.00';
+          computedPaymentStatus = PaymentStatus.EXEMPT;
+          additionalNotes = 'Segunda clase semanal incluida en cuota 2 clases (42€/mes)';
+        }
 
         const isRecovery = Boolean(dto.isRecovery);
         if (isRecovery) {
@@ -3498,6 +3504,13 @@ export class AppointmentsService implements OnModuleInit {
         );
         const apptEnd = new Date(apptStart.getTime() + 90 * 60 * 1000);
 
+        const isSecondClassOfTwo = modality === '2_clases_semanales' && (existingYogaNextWeek.length + i) > 0;
+        const apptPrice = isSecondClassOfTwo ? '0.00' : (modality === '2_clases_semanales' ? '42.00' : '25.00');
+        const apptPaymentStatus = isSecondClassOfTwo ? PaymentStatus.EXEMPT : PaymentStatus.PENDING;
+        const apptNotes = isSecondClassOfTwo
+          ? 'Cita semanal generada automáticamente (Segunda clase semanal incluida en cuota 2 clases 42€/mes). Reprogramable.'
+          : `Cita semanal generada automáticamente (modalidad alumno ${modality === '2_clases_semanales' ? '2 clases - 42€/mes' : '1 clase - 25€/mes'}). Reprogramable.`;
+
         try {
           const isYogaService =
             /hatha yoga terapéutico/i.test(targetServiceName) ||
@@ -3509,9 +3522,9 @@ export class AppointmentsService implements OnModuleInit {
               serviceId: targetServiceId,
               startsAt: apptStart.toISOString(),
               endsAt: apptEnd.toISOString(),
-              notes: 'Cita semanal generada automáticamente (modalidad alumno). Reprogramable.',
-              price: '0.00',
-              paymentStatus: PaymentStatus.EXEMPT,
+              notes: apptNotes,
+              price: apptPrice,
+              paymentStatus: apptPaymentStatus,
             },
             {
               // Suprimir confirmación WhatsApp exclusivamente para los servicios de Yoga al generar citas semanales de membresía

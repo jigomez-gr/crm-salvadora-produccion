@@ -253,9 +253,10 @@ export class YogaInitialLoadService implements OnModuleInit {
           startsAt,
           endsAt,
           status: AppointmentStatus.SCHEDULED,
-          paymentStatus: PaymentStatus.EXEMPT,
+          paymentStatus: PaymentStatus.PENDING,
+          price: '25.00',
           modality: 'in_person',
-          notes: `Carga inicial suscripción Yoga Terapéutico (1 clase semanal). ${item.observaciones || ''}`.trim(),
+          notes: `Carga inicial suscripción Yoga Terapéutico (1 clase semanal - 25€/mes). ${item.observaciones || ''}`.trim(),
         });
         await this.appointmentsRepo.save(newAppt);
         appointmentsCreated++;
@@ -402,7 +403,8 @@ export class YogaInitialLoadService implements OnModuleInit {
       }
 
       // Create appointments for both weekly classes
-      for (const c of item.clases) {
+      for (let ci = 0; ci < item.clases.length; ci++) {
+        const c = item.clases[ci];
         const startsAt = this.getNextOccurrenceDate(c.dia, c.hora);
         const endsAt = new Date(startsAt.getTime() + durationMinutes * 60 * 1000);
 
@@ -413,6 +415,7 @@ export class YogaInitialLoadService implements OnModuleInit {
           .getOne();
 
         if (!existingAppt) {
+          const isSecond = ci > 0;
           const newAppt = this.appointmentsRepo.create({
             contactId: contact.id,
             service: serviceName,
@@ -421,9 +424,12 @@ export class YogaInitialLoadService implements OnModuleInit {
             startsAt,
             endsAt,
             status: AppointmentStatus.SCHEDULED,
-            paymentStatus: PaymentStatus.EXEMPT,
+            paymentStatus: isSecond ? PaymentStatus.EXEMPT : PaymentStatus.PENDING,
+            price: isSecond ? '0.00' : '42.00',
             modality: 'in_person',
-            notes: `Carga inicial suscripción Yoga Terapéutico (2 clases semanales). ${item.observaciones}`.trim(),
+            notes: isSecond
+              ? `Carga inicial suscripción Yoga Terapéutico (2ª clase semanal incluida en cuota 42€). ${item.observaciones}`.trim()
+              : `Carga inicial suscripción Yoga Terapéutico (2 clases semanales - 42€/mes). ${item.observaciones}`.trim(),
           });
           await this.appointmentsRepo.save(newAppt);
           appointmentsCreated++;
