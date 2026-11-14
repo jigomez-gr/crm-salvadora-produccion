@@ -25,7 +25,7 @@ import { CalcomService } from '../calcom/calcom.service';
 import { ZadarmaSmsService } from '../sms/zadarma-sms.service';
 import { parseWeeklyScheduleFromText } from '../services/schedule-parser';
 import { TZDate } from '@date-fns/tz';
-import { format, startOfWeek, endOfWeek, subMonths, addDays } from 'date-fns';
+import { format, startOfWeek, endOfWeek, subMonths, addDays, startOfMonth, endOfMonth } from 'date-fns';
 import { Cron } from '@nestjs/schedule';
 import { businessDayWindow } from './business-day';
 import { computeFreeSlots, TimeSlot } from './availability';
@@ -3504,12 +3504,38 @@ export class AppointmentsService implements OnModuleInit {
         );
         const apptEnd = new Date(apptStart.getTime() + 90 * 60 * 1000);
 
-        const isSecondClassOfTwo = modality === '2_clases_semanales' && (existingYogaNextWeek.length + i) > 0;
-        const apptPrice = isSecondClassOfTwo ? '0.00' : (modality === '2_clases_semanales' ? '42.00' : '25.00');
-        const apptPaymentStatus = isSecondClassOfTwo ? PaymentStatus.EXEMPT : PaymentStatus.PENDING;
-        const apptNotes = isSecondClassOfTwo
-          ? 'Cita semanal generada automáticamente (Segunda clase semanal incluida en cuota 2 clases 42€/mes). Reprogramable.'
-          : `Cita semanal generada automáticamente (modalidad alumno ${modality === '2_clases_semanales' ? '2 clases - 42€/mes' : '1 clase - 25€/mes'}). Reprogramable.`;
+        // Comprobar si el alumno ya tiene citas de yoga en este mes natural
+        const monthStart = startOfMonth(targetDay);
+        const monthEnd = endOfMonth(targetDay);
+        const existingInMonth = await this.appointmentsRepo.findOne({
+          where: {
+            contactId: student.id,
+            status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.COMPLETED]),
+            startsAt: Between(monthStart, monthEnd),
+          },
+        });
+
+        // Es la primera cita del mes si no existen citas previas en este mes natural y es la primera generada en este turno
+        const isFirstApptOfMonth = !existingInMonth && studentCreatedApptIds.length === 0;
+
+        let apptPrice = '0.00';
+        let apptPaymentStatus = PaymentStatus.EXEMPT;
+        let apptNotes = '';
+
+        if (isFirstApptOfMonth) {
+          // Primera semana / primera cita del mes: cuota mensual devengada pendiente de pago
+          apptPrice = modality === '2_clases_semanales' ? '42.00' : '25.00';
+          apptPaymentStatus = PaymentStatus.PENDING;
+          apptNotes = `Cita mensual alumno (Cuota mensual ${modality === '2_clases_semanales' ? '2 clases - 42€/mes' : '1 clase - 25€/mes'} pendiente de cobro). Reprogramable.`;
+        } else {
+          // Semanas posteriores a la primera (o segunda clase semanal): no se genera nuevo cargo, cubierta por la cuota mensual
+          const isSecondOfTwo = modality === '2_clases_semanales' && studentCreatedApptIds.length > 0;
+          apptPrice = '0.00';
+          apptPaymentStatus = PaymentStatus.EXEMPT;
+          apptNotes = isSecondOfTwo
+            ? 'Cita semanal generada automáticamente (Segunda clase semanal incluida en cuota 2 clases 42€/mes). Reprogramable.'
+            : 'Cita semanal generada automáticamente (Cubierta por la cuota mensual del alumno). Reprogramable.';
+        }
 
         try {
           const isYogaService =
