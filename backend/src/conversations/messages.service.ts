@@ -767,6 +767,7 @@ export class MessagesService implements OnModuleInit {
       await this.callsRepo.update(callId, { needsReview: false });
       return;
     }
+    await this.ensureConversation(threadId);
     await this.conversationsRepo.update({ threadId }, { unreadCount: 0 });
   }
 
@@ -782,6 +783,7 @@ export class MessagesService implements OnModuleInit {
       await this.callsRepo.update(callId, { needsReview: true });
       return;
     }
+    await this.ensureConversation(threadId);
     await this.conversationsRepo.update({ threadId }, { unreadCount: 1 });
   }
 

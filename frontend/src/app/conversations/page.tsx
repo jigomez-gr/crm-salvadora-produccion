@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Mail,
+  MailCheck,
   Sparkles,
   RotateCcw,
   TrendingUp,
@@ -383,6 +384,7 @@ function ConversationsPageInner() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sending, setSending] = useState(false);
   const [handoffBusy, setHandoffBusy] = useState(false);
+  const [readBusy, setReadBusy] = useState(false);
   const [whatsappAutomationPaused, setWhatsappAutomationPaused] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
@@ -484,6 +486,34 @@ function ConversationsPageInner() {
       // best-effort — a failed read-receipt isn't worth interrupting the user
     }
   }, []);
+
+  const toggleThreadReadStatus = useCallback(
+    async (threadId: string, currentUnread: boolean) => {
+      try {
+        setReadBusy(true);
+        const nextUnread = !currentUnread;
+        // Optimistic UI update
+        setThreads((prev) =>
+          prev.map((t) =>
+            t.threadId === threadId ? { ...t, unreadCount: nextUnread ? 1 : 0 } : t
+          )
+        );
+        if (nextUnread) {
+          await apiFetch(`/api/conversations/${threadId}/unread`, { method: "POST" });
+          toast.success("Conversación marcada como no leída para revisión");
+        } else {
+          await apiFetch(`/api/conversations/${threadId}/read`, { method: "POST" });
+          toast.success("Conversación marcada como leída");
+        }
+      } catch (err: any) {
+        toast.error("Error al cambiar estado de lectura: " + (err?.message || ""));
+        refreshThreads();
+      } finally {
+        setReadBusy(false);
+      }
+    },
+    [refreshThreads, toast]
+  );
 
   useEffect(() => {
     fetchThreads();
@@ -997,7 +1027,7 @@ function ConversationsPageInner() {
                   key={t.threadId}
                   onClick={() => setSelected(t.threadId)}
                   className={cn(
-                    "w-full border-b border-neutral-50 px-3.5 py-3 text-left hover:bg-neutral-50 transition-colors",
+                    "group w-full border-b border-neutral-50 px-3.5 py-3 text-left hover:bg-neutral-50 transition-colors",
                     selected === t.threadId && "bg-indigo-50/80"
                   )}
                 >
@@ -1058,15 +1088,43 @@ function ConversationsPageInner() {
                       )}
                       {t.lastMessage.body}
                     </p>
-                    {unread ? (
-                      <span className="flex h-4 min-w-4 flex-shrink-0 items-center justify-center rounded-full bg-indigo-600 px-1 text-[10px] font-semibold text-white">
-                        {t.unreadCount}
-                      </span>
-                    ) : t.lastMessage.createdAt ? (
-                      <span className="flex-shrink-0 text-[10px] text-neutral-400">
-                        {formatConversationDate(t.lastMessage.createdAt)}
-                      </span>
-                    ) : null}
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleThreadReadStatus(t.threadId, unread);
+                        }}
+                        disabled={readBusy}
+                        className={cn(
+                          "rounded p-1 transition-all",
+                          unread
+                            ? "text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800"
+                            : "text-neutral-300 hover:text-neutral-700 hover:bg-neutral-100 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        )}
+                        title={
+                          unread
+                            ? "Marcar como leído"
+                            : "Marcar como no leído (para que lo revise otro empleado)"
+                        }
+                        aria-label={unread ? "Marcar como leído" : "Marcar como no leído"}
+                      >
+                        {unread ? (
+                          <MailCheck className="h-3.5 w-3.5" />
+                        ) : (
+                          <Mail className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                      {unread ? (
+                        <span className="flex h-4 min-w-4 flex-shrink-0 items-center justify-center rounded-full bg-indigo-600 px-1 text-[10px] font-semibold text-white">
+                          {t.unreadCount}
+                        </span>
+                      ) : t.lastMessage.createdAt ? (
+                        <span className="flex-shrink-0 text-[10px] text-neutral-400">
+                          {formatConversationDate(t.lastMessage.createdAt)}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </button>
               );
@@ -1175,6 +1233,42 @@ function ConversationsPageInner() {
                 </div>
               </div>
               <div className="ml-auto flex items-center gap-2">
+                {selectedThread && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      toggleThreadReadStatus(
+                        selectedThread.threadId,
+                        selectedThread.unreadCount > 0
+                      )
+                    }
+                    disabled={readBusy}
+                    title={
+                      selectedThread.unreadCount > 0
+                        ? "Marcar esta conversación como leída"
+                        : "Marcar como no leída para que otro empleado la revise"
+                    }
+                    className={cn(
+                      "gap-1.5 text-xs font-medium",
+                      selectedThread.unreadCount > 0
+                        ? "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                        : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
+                    )}
+                  >
+                    {selectedThread.unreadCount > 0 ? (
+                      <>
+                        <MailCheck className="h-3.5 w-3.5 text-indigo-600" />
+                        <span>Marcar leído</span>
+                      </>
+                    ) : (
+                      <>
+                        <Mail className="h-3.5 w-3.5 text-neutral-500" />
+                        <span>Marcar no leído</span>
+                      </>
+                    )}
+                  </Button>
+                )}
                 {isCall && selectedThread && (
                   selectedThread.lastMessage.direction === "outbound" ? (
                     <Badge variant="info" className="gap-1 bg-blue-50 text-blue-700 border border-blue-200">
@@ -1217,8 +1311,37 @@ function ConversationsPageInner() {
                 {selectedThread && (
                   <ChannelBadge channel={selectedThread.channel} threadId={selectedThread.threadId} />
                 )}
+                <button
+                  type="button"
+                  onClick={() => setSelected(null)}
+                  className="rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 transition-colors"
+                  title="Cerrar vista de conversación"
+                  aria-label="Cerrar vista de conversación"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
             </div>
+
+            {/* Unread banner when manually marked unread */}
+            {selectedThread && selectedThread.unreadCount > 0 && (
+              <div className="flex items-center justify-between gap-2 border-b border-indigo-100 bg-indigo-50/80 px-5 py-2 text-xs text-indigo-950">
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-indigo-600 shrink-0" />
+                  <span>
+                    <strong>Marcada como no leída.</strong> Esta conversación aparece como pendiente para que tú u otro empleado la atienda.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => toggleThreadReadStatus(selectedThread.threadId, true)}
+                  disabled={readBusy}
+                  className="font-semibold text-indigo-700 hover:text-indigo-900 underline shrink-0"
+                >
+                  Marcar como leída
+                </button>
+              </div>
+            )}
 
             {/* Global WhatsApp automation pause banner */}
             {isWhatsapp && whatsappAutomationPaused && (
@@ -1484,6 +1607,35 @@ function ConversationsPageInner() {
                         </span>
                         {m.direction === "outbound" && isWhatsapp && (
                           <StatusTicks status={m.status} />
+                        )}
+                        {m.direction === "inbound" && selectedThread && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              toggleThreadReadStatus(
+                                selectedThread.threadId,
+                                selectedThread.unreadCount > 0
+                              )
+                            }
+                            disabled={readBusy}
+                            className="ml-1 text-neutral-400 hover:text-indigo-600 transition-colors inline-flex items-center"
+                            title={
+                              selectedThread.unreadCount > 0
+                                ? "Marcar conversación como leída"
+                                : "Dejar conversación sin leer (para otro empleado)"
+                            }
+                            aria-label={
+                              selectedThread.unreadCount > 0
+                                ? "Marcar conversación como leída"
+                                : "Dejar conversación sin leer"
+                            }
+                          >
+                            {selectedThread.unreadCount > 0 ? (
+                              <MailCheck className="h-3 w-3 text-indigo-600" />
+                            ) : (
+                              <Mail className="h-3 w-3" />
+                            )}
+                          </button>
                         )}
                       </div>
                     </div>
