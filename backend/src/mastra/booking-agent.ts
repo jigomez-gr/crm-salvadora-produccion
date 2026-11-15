@@ -14,6 +14,13 @@ import { resolvePublicMediaUrl, resolveServiceMediaUrls } from './service-media'
 import { isPagosOnlineEnabled, PAYMENT_IN_PERSON_ONLY_MSG } from '../common/payment-config';
 export { resolvePublicMediaUrl, resolveServiceMediaUrls, isPagosOnlineEnabled, PAYMENT_IN_PERSON_ONLY_MSG };
 
+import { MessageChannel } from '../common/entities/message.entity';
+import {
+  generatePaymentsCsv,
+  generatePaymentsXlsx,
+  generatePaymentsPdf,
+} from '../appointments/payments-export.generator';
+
 // A single reusable agent template serves every configured agent. The concrete
 // business persona, model and credentials are resolved per request from the
 // AgentConfig placed in `requestContext` under the key 'agentConfig'.
@@ -99,6 +106,17 @@ export interface BookingAgentDeps {
     isUrgent?: boolean;
   }) => Promise<any>;
   setConversationHandoff?: (threadId: string, handoff: boolean) => Promise<any>;
+  getAppointmentPayments?: (query: any) => Promise<{ items: any[]; summary: any }>;
+  sendWhatsAppMedia?: (params: {
+    to: string;
+    caption?: string;
+    media: {
+      buffer: Buffer;
+      filename: string;
+      mimeType: string;
+      mediaCategory: 'document' | 'audio' | 'video' | 'image';
+    };
+  }) => Promise<{ ok: boolean; providerMessageId?: string; error?: string }>;
 }
 
 function getConfig(context: any): any {
@@ -1654,7 +1672,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       try {
         const res = await deps.changeYogaSubscription(contactId, {
           modality: inputData.modality,
-          schedule: inputData.slots,
+          schedule: inputData.slots as Array<{ day: number | string; time: string }>,
           reason: inputData.reason,
         });
         const fee = res.modality === '2_clases_semanales' ? '42€/mes' : '25€/mes';
@@ -1671,6 +1689,166 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           error: err?.message || 'Error al cambiar la suscripción de yoga.',
         };
       }
+    },
+  });
+
+  const generarInformeFacturacionCobrosTool = createTool({
+    id: 'generarInformeFacturacionCobros',
+    description:
+      'EXCLUSIVO PARA EL AGENTE DE WHATSAPP: Genera y envía por WhatsApp al usuario el informe "Estado Actualizado de Facturacion de Servicios y Cobros al usuario" en los tres formatos (PDF, Excel .xlsx y CSV). Permite aplicar los parámetros que el usuario desee (rango de fechas startDate / endDate, servicio específico, estado de pago "paid" | "pending" | "exempt" | "all", método de pago, etc.).',
+    inputSchema: z.object({
+      startDate: z
+        .string()
+        .optional()
+        .describe('Fecha de inicio del filtro (YYYY-MM-DD), ej. "2026-11-01" si el usuario indica un periodo o mes concreto.'),
+      endDate: z
+        .string()
+        .optional()
+        .describe('Fecha de fin del filtro (YYYY-MM-DD), ej. "2026-11-30".'),
+      service: z
+        .string()
+        .optional()
+        .describe('Nombre del servicio específico para filtrar (ej. "Hatha Yoga", "Baño de Gong", "Gestalt") o "all".'),
+      paymentStatus: z
+        .enum(['all', 'paid', 'pending', 'exempt'])
+        .optional()
+        .describe('Estado de pago: "all" (todos), "paid" (pagados), "pending" (pendientes de cobro), "exempt" (exentos).'),
+      paymentMethod: z
+        .enum(['all', 'cash', 'bizum', 'card_in_person', 'stripe', 'transfer', 'other'])
+        .optional()
+        .describe('Método de pago específico si el usuario lo solicita.'),
+      search: z
+        .string()
+        .optional()
+        .describe('Término de búsqueda opcional.'),
+      contactId: z
+        .string()
+        .optional()
+        .describe('ID de contacto opcional. Por defecto usa el contacto del usuario de WhatsApp.'),
+    }),
+    execute: async (inputData, context) => {
+      const threadId = (context as any)?.requestContext?.get?.('threadId') || '';
+      const channel = (context as any)?.requestContext?.get?.('channel');
+      const isWhatsApp =
+        threadId.startsWith('whatsapp:') ||
+        channel === 'whatsapp' ||
+        channel === MessageChannel.WHATSAPP;
+
+      // Restricción estricta solicitada: "para el caso del agente de wassap y solo para ese caso"
+      if (!isWhatsApp) {
+        return {
+          success: false,
+          error: 'Esta función está permitida única y exclusivamente para el agente de WhatsApp.',
+        };
+      }
+
+      const customer = getCustomer(context);
+      let targetContactId = inputData.contactId || customer?.contactId;
+      const recipientPhone = customer?.phone;
+
+      if (!targetContactId && recipientPhone && deps.findContactByPhone) {
+        const found = await deps.findContactByPhone(normalizePhoneLoose(recipientPhone)).catch(() => null);
+        if (found?.id) {
+          targetContactId = found.id;
+        }
+      }
+
+      if (!deps.getAppointmentPayments) {
+        return {
+          success: false,
+          error: 'Servicio de consulta de pagos y cobros no disponible.',
+        };
+      }
+
+      const queryParams: any = {
+        startDate: inputData.startDate,
+        endDate: inputData.endDate,
+        service: inputData.service,
+        paymentStatus: inputData.paymentStatus,
+        paymentMethod: inputData.paymentMethod,
+        search: inputData.search,
+        contactId: targetContactId,
+      };
+
+      const result = await deps.getAppointmentPayments(queryParams);
+      const items = result?.items || [];
+      const summary = result?.summary || {
+        totalCount: items.length,
+        paidCount: 0,
+        pendingCount: 0,
+        totalPaidAmount: 0,
+        totalPendingAmount: 0,
+      };
+
+      const filterParts: string[] = [];
+      if (inputData.startDate) filterParts.push(`Desde: ${inputData.startDate}`);
+      if (inputData.endDate) filterParts.push(`Hasta: ${inputData.endDate}`);
+      if (inputData.service && inputData.service !== 'all') filterParts.push(`Servicio: ${inputData.service}`);
+      if (inputData.paymentStatus && inputData.paymentStatus !== 'all') filterParts.push(`Estado: ${inputData.paymentStatus}`);
+      if (inputData.paymentMethod && inputData.paymentMethod !== 'all') filterParts.push(`Método: ${inputData.paymentMethod}`);
+      if (customer?.name) filterParts.push(`Usuario: ${customer.name}`);
+      const filterInfo = filterParts.join(' | ') || 'Todas las citas consultadas';
+
+      const reportTitle = 'Estado Actualizado de Facturacion de Servicios y Cobros al usuario';
+      const dateSuffix = new Date().toISOString().slice(0, 10);
+
+      const csvBuffer = generatePaymentsCsv(items, summary, filterInfo, reportTitle);
+      const xlsxBuffer = await generatePaymentsXlsx(items, summary, filterInfo, reportTitle);
+      const pdfBuffer = await generatePaymentsPdf(items, summary, filterInfo, reportTitle);
+
+      const filesSent: string[] = [];
+
+      if (deps.sendWhatsAppMedia && recipientPhone) {
+        // 1. Enviar PDF
+        await deps.sendWhatsAppMedia({
+          to: recipientPhone,
+          caption: `📄 Estado Actualizado de Facturacion de Servicios y Cobros al usuario (PDF)`,
+          media: {
+            buffer: pdfBuffer,
+            filename: `Estado_Actualizado_Facturacion_Cobros_${dateSuffix}.pdf`,
+            mimeType: 'application/pdf',
+            mediaCategory: 'document',
+          },
+        }).then(r => { if (r?.ok) filesSent.push('PDF'); }).catch(() => null);
+
+        // 2. Enviar XLSX
+        await deps.sendWhatsAppMedia({
+          to: recipientPhone,
+          caption: `📊 Estado Actualizado de Facturacion de Servicios y Cobros al usuario (Excel)`,
+          media: {
+            buffer: xlsxBuffer,
+            filename: `Estado_Actualizado_Facturacion_Cobros_${dateSuffix}.xlsx`,
+            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            mediaCategory: 'document',
+          },
+        }).then(r => { if (r?.ok) filesSent.push('Excel (.xlsx)'); }).catch(() => null);
+
+        // 3. Enviar CSV
+        await deps.sendWhatsAppMedia({
+          to: recipientPhone,
+          caption: `📑 Estado Actualizado de Facturacion de Servicios y Cobros al usuario (CSV)`,
+          media: {
+            buffer: csvBuffer,
+            filename: `Estado_Actualizado_Facturacion_Cobros_${dateSuffix}.csv`,
+            mimeType: 'text/csv; charset=utf-8',
+            mediaCategory: 'document',
+          },
+        }).then(r => { if (r?.ok) filesSent.push('CSV (.csv)'); }).catch(() => null);
+      }
+
+      return {
+        success: true,
+        reportTitle,
+        filterInfo,
+        totalCitas: summary.totalCount,
+        citasCobradas: summary.paidCount,
+        citasPendientes: summary.pendingCount,
+        totalCobrado: `${summary.totalPaidAmount.toFixed(2)} €`,
+        totalPendiente: `${summary.totalPendingAmount.toFixed(2)} €`,
+        formatosGenerados: ['PDF', 'Excel (.xlsx)', 'CSV (.csv)'],
+        formatosEnviadosPorWhatsApp: filesSent,
+        mensaje: `Se ha generado y enviado el 'Estado Actualizado de Facturacion de Servicios y Cobros al usuario' en los tres formatos (PDF, Excel .xlsx y CSV) con ${summary.totalCount} citas registradas (Total cobrado: ${summary.totalPaidAmount.toFixed(2)} €, Total pendiente: ${summary.totalPendingAmount.toFixed(2)} €).`,
+      };
     },
   });
 
@@ -1771,6 +1949,21 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     - Si solo existe vídeo pero no flyer (o viceversa), incluye únicamente el elemento que exista. No inventes URLs ni menciones medios inexistentes.
 - SOLICITUD DE BAJA / NO DESEAR ACCEDER A MÁS SERVICIOS (OPT-OUT):
   * Si un cliente te indica que desea darse de baja, no quiere recibir más comunicaciones o no desea acceder más a los servicios del centro, DEBES llamar a la herramienta 'solicitarBajaServicios'. Confírmale con total calidez y respeto que su baja queda registrada y que siempre podrá reactivarse escribiendo ALTA.
+- ESTADO ACTUALIZADO DE FACTURACIÓN DE SERVICIOS Y COBROS AL USUARIO (EXCLUSIVO PARA EL AGENTE DE WHATSAPP):
+  * Esta función está disponible ÚNICA Y EXCLUSIVAMENTE para las peticiones que se reciban en el AGENTE DE WHATSAPP.
+  * Si el usuario te pide su informe, estado, balance o facturación de servicios y cobros (ejemplos: "quiero mi informe de cobros", "mis pagos", "cuánto he pagado este mes", "estado actualizado de facturacion de servicios y cobros al usuario", "informe de pagos en pdf", "mis cobros pendientes", etc.):
+    1. Llama OBLIGATORIAMENTE a la herramienta 'generarInformeFacturacionCobros'.
+    2. Aplica los parámetros que el usuario desee o haya especificado:
+       - Rango de fechas: startDate y endDate en formato YYYY-MM-DD (por ejemplo, si pide "este mes", "en noviembre", "este año", calcula las fechas acordes a hoy ${now}). Si no especifica fechas, no pases startDate/endDate para consultar todo su historial.
+       - Servicio específico: si pregunta por un servicio concreto (ej. "Yoga", "Baño de Gong", "Gestalt"), pasa service.
+       - Estado de pago: si pide "solo los pagados" usa paymentStatus="paid", si pide "pendientes" usa paymentStatus="pending", si pide "todos" usa paymentStatus="all".
+       - Método de pago: si pide un método concreto (ej. "en efectivo", "por bizum", "por tarjeta"), pasa paymentMethod.
+    3. La herramienta genera y remite DIRECTAMENTE al WhatsApp del usuario los TRES formatos oficiales:
+       - Archivo PDF (.pdf)
+       - Archivo Excel (.xlsx)
+       - Archivo CSV (.csv)
+       titulados oficialmente "Estado Actualizado de Facturacion de Servicios y Cobros al usuario".
+    4. En tu mensaje de respuesta, confirma con amabilidad que le acabas de enviar los tres documentos a su WhatsApp y resúmele de forma clara y concisa los datos: número de citas consultadas, total cobrado y total pendiente.
 - NUNCA reveles nada interno: no menciones herramientas, funciones, "comandos", identificadores (IDs), bases de datos, ni frases como "voy a crear el contacto", "llamar a la herramienta" o "ejecutar". El cliente solo ve una conversación normal.
 - NUNCA inventes horarios, días u horas disponibles. ANTES de sugerir cualquier horario, debes llamar OBLIGATORIAMENTE a la herramienta 'checkAvailability' para la fecha y servicio solicitados.
 - Si el día pedido está cerrado (como fines de semana) o 'checkAvailability' no devuelve huecos, indícaselo con total claridad al cliente (p. ej. "Los sábados y domingos estamos cerrados") y ofrece consultar el siguiente día laborable en que haya disponibilidad.
@@ -2337,6 +2530,7 @@ ${flow}`;
       solicitarBajaServicios: solicitarBajaServiciosTool,
       cancelYogaSubscription: cancelYogaSubscriptionTool,
       changeYogaSubscription: changeYogaSubscriptionTool,
+      generarInformeFacturacionCobros: generarInformeFacturacionCobrosTool,
     },
     memory,
   });

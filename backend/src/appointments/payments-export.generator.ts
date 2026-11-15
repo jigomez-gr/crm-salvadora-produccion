@@ -78,6 +78,7 @@ export function generatePaymentsCsv(
   items: Appointment[],
   summary: PaymentsSummaryData,
   filterInfo = '',
+  reportTitle?: string,
 ): Buffer {
   const lines: string[] = [];
 
@@ -85,7 +86,10 @@ export function generatePaymentsCsv(
   const BOM = '\uFEFF';
 
   // Metadatos iniciales
-  lines.push(`CENTRO DE YOGA SALVADORA CONESA - INFORME DE COBROS Y CITAS`);
+  const headerTitle = reportTitle
+    ? `CENTRO DE YOGA SALVADORA CONESA - ${reportTitle.toUpperCase()}`
+    : `CENTRO DE YOGA SALVADORA CONESA - INFORME DE COBROS Y CITAS`;
+  lines.push(headerTitle);
   if (filterInfo) lines.push(`Filtros: ${sanitizeCsv(filterInfo)}`);
   lines.push(
     `Resumen: Total Cobrado=${formatCurrency(summary.totalPaidAmount)} (${summary.paidCount} citas) | Pendiente=${formatCurrency(summary.totalPendingAmount)} (${summary.pendingCount} citas) | Total=${summary.totalCount} citas`,
@@ -171,6 +175,7 @@ export async function generatePaymentsXlsx(
   items: Appointment[],
   summary: PaymentsSummaryData,
   filterInfo = '',
+  reportTitle?: string,
 ): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Centro de Yoga Salvadora Conesa';
@@ -185,7 +190,9 @@ export async function generatePaymentsXlsx(
   // 1. Título principal corporativo
   worksheet.mergeCells('A1:K1');
   const titleCell = worksheet.getCell('A1');
-  titleCell.value = 'CENTRO DE YOGA SALVADORA CONESA - PAGOS Y COBROS DE CITAS';
+  titleCell.value = reportTitle
+    ? `CENTRO DE YOGA SALVADORA CONESA - ${reportTitle.toUpperCase()}`
+    : 'CENTRO DE YOGA SALVADORA CONESA - PAGOS Y COBROS DE CITAS';
   titleCell.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
   titleCell.fill = {
     type: 'pattern',
@@ -350,16 +357,21 @@ export function generatePaymentsPdf(
   items: Appointment[],
   summary: PaymentsSummaryData,
   filterInfo = '',
+  reportTitle?: string,
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
+      const displayTitle = reportTitle
+        ? reportTitle.toUpperCase()
+        : 'INFORME OFICIAL DE COBROS Y CITAS REGISTRADAS';
+
       const doc = new PDFDocument({
         size: 'A4',
         layout: 'landscape', // 842 × 595 puntos
         margin: 36,
         bufferPages: true,
         info: {
-          Title: 'Informe de Pagos y Cobros de Citas - Centro de Yoga Salvadora Conesa',
+          Title: `${displayTitle} - Centro de Yoga Salvadora Conesa`,
           Author: 'Salvadora Conesa',
           Subject: 'Informe oficial de pagos de alumnos y citas',
           CreationDate: new Date(),
@@ -396,8 +408,8 @@ export function generatePaymentsPdf(
           .font('Helvetica')
           .text(
             isFirstPage
-              ? 'INFORME OFICIAL DE COBROS Y CITAS REGISTRADAS'
-              : 'Informe Oficial de Cobros y Citas (Continuación)',
+              ? displayTitle
+              : `${displayTitle} (Continuación)`,
             margin + 16,
             margin + (isFirstPage ? 28 : 22),
           );

@@ -15,6 +15,18 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { HumanHandoffNotificationService } from '../notifications/human-handoff-notification.service';
 import { createBookingAgent, TEMPLATE_AGENT_ID } from './booking-agent';
 import { isPagosOnlineEnabled } from '../common/payment-config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { YCloudModule } from '../whatsapp/ycloud.module';
+import { AgentsConfigModule } from '../agents/agents-config.module';
+import { WhatsappGatewayService } from '../whatsapp/whatsapp-gateway.service';
+import { AgentsConfigService } from '../agents/agents-config.service';
+import {
+  MessageDirection,
+  MessageChannel,
+  MessageStatus,
+  MediaType,
+} from '../common/entities/message.entity';
+import { toMessageView } from '../conversations/messages.service';
 
 export { NestMastraModule };
 
@@ -25,6 +37,8 @@ export { NestMastraModule };
     PaymentsModule,
     ConversationsModule,
     NotificationsModule,
+    YCloudModule,
+    AgentsConfigModule,
     NestMastraModule.registerAsync({
       imports: [
         ContactsModule,
@@ -32,6 +46,8 @@ export { NestMastraModule };
         PaymentsModule,
         ConversationsModule,
         NotificationsModule,
+        YCloudModule,
+        AgentsConfigModule,
       ],
       useFactory: (
         contactsService: ContactsService,
@@ -39,6 +55,9 @@ export { NestMastraModule };
         paymentsService: PaymentsService,
         messagesService: MessagesService,
         humanNoticeService: HumanHandoffNotificationService,
+        whatsappGateway: WhatsappGatewayService,
+        agentsConfigService: AgentsConfigService,
+        eventEmitter: EventEmitter2,
       ) => {
         const databaseUrl =
           process.env.DATABASE_URL ||
@@ -201,6 +220,51 @@ export { NestMastraModule };
           setConversationHandoff: async (threadId: string, handoff: boolean) => {
             return messagesService.setHandoff(threadId, handoff);
           },
+          getAppointmentPayments: async (query: any) => {
+            return appointmentsService.getAppointmentPayments(query);
+          },
+          sendWhatsAppMedia: async (params: {
+            to: string;
+            caption?: string;
+            media: {
+              buffer: Buffer;
+              filename: string;
+              mimeType: string;
+              mediaCategory: 'document' | 'audio' | 'video' | 'image';
+            };
+          }) => {
+            const config = await agentsConfigService.findByKeyOrNull('booking');
+            const senderFrom =
+              config?.whatsappNumber || config?.evolutionInstanceName || undefined;
+            const res = await whatsappGateway.sendAutomatedMediaMessage({
+              config,
+              from: senderFrom,
+              to: params.to,
+              caption: params.caption,
+              media: params.media,
+            });
+            if (res.ok) {
+              const contact = await contactsService.findByPhone(params.to).catch(() => null);
+              const threadId = `booking:${params.to}`;
+              const msg = await messagesService.saveMessage({
+                contactId: contact?.id,
+                threadId,
+                direction: MessageDirection.OUTBOUND,
+                channel: MessageChannel.WHATSAPP,
+                body: params.caption || `[Documento adjunto: ${params.media.filename}]`,
+                status: MessageStatus.SENT,
+                providerMessageId: res.providerMessageId,
+                mediaType: MediaType.DOCUMENT,
+                mediaMimeType: params.media.mimeType,
+                mediaFilename: params.media.filename,
+              });
+              eventEmitter.emit('message.sent', {
+                ...toMessageView(msg),
+                threadId: msg.threadId,
+              });
+            }
+            return res;
+          },
         };
 
         const agent = createBookingAgent(deps, memory);
@@ -224,6 +288,9 @@ export { NestMastraModule };
         PaymentsService,
         MessagesService,
         HumanHandoffNotificationService,
+        WhatsappGatewayService,
+        AgentsConfigService,
+        EventEmitter2,
       ],
     }),
   ],

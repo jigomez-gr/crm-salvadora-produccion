@@ -21,6 +21,7 @@ export interface ValidatedWhatsappAttachment extends WhatsappMediaInput {
     | '.docx'
     | '.xlsx'
     | '.txt'
+    | '.csv'
     | '.mp3'
     | '.mp4'
     | '.jpg'
@@ -321,6 +322,28 @@ export function validateWhatsappAttachment(
         mediaCategory: 'document',
         messageMediaType: MediaType.DOCUMENT,
         extension: '.txt',
+        sizeBytes,
+      };
+    }
+
+    case '.csv': {
+      if (
+        rawMime !== 'text/csv' &&
+        rawMime !== 'text/plain' &&
+        rawMime !== 'application/csv' &&
+        rawMime !== 'application/vnd.ms-excel'
+      ) {
+        throw new BadRequestException(
+          `Tipo MIME inválido para archivo .csv ("${rawMime}"). Se esperaba "text/csv".`,
+        );
+      }
+      return {
+        buffer: file.buffer,
+        filename: safeFilename,
+        mimeType: 'text/csv',
+        mediaCategory: 'document',
+        messageMediaType: MediaType.DOCUMENT,
+        extension: '.csv',
         sizeBytes,
       };
     }
