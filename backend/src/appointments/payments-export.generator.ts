@@ -615,7 +615,7 @@ export function generatePaymentsPdf(
         doc.switchToPage(p);
         doc.fontSize(7).fillColor('#9CA3AF').font('Helvetica')
           .text(
-            `Página ${p + 1} de ${pages.count} · Centro de Yoga Salvadora Conesa (Calle Pelayos, 1 · Fuenlabrada) · CRM Oficial`,
+            `Página ${p + 1} de ${pages.count} · Centro de Yoga Salvadora Conesa (Calle Holanda, 1 · Fuenlabrada) · CRM Oficial`,
             margin,
             560,
             { align: 'center', width: printableWidth },
