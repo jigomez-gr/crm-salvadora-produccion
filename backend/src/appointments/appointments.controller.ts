@@ -25,6 +25,13 @@ import {
   generatePaymentsPdf,
 } from './payments-export.generator';
 import {
+  generateAppointmentsCsv,
+  generateAppointmentsXlsx,
+  generateAppointmentsPdf,
+  generateAppointmentsZip,
+  cleanSafeFilename,
+} from './appointments-export.generator';
+import {
   CreateAppointmentDto,
   UpdateAppointmentDto,
   UploadPatientAttachmentDto,
@@ -32,6 +39,7 @@ import {
   RejectAppointmentDto,
   UpdateAppointmentPaymentDto,
   QueryAppointmentPaymentsDto,
+  QueryAppointmentsExportDto,
 } from './dto/appointment.dto';
 import { AppointmentStatus } from '../common/entities/appointment.entity';
 import { UserRole } from '../common/entities/user.entity';
@@ -127,6 +135,60 @@ export class AppointmentsController {
   @Get('yoga-subscription/:contactId')
   async getYogaSubscription(@Param('contactId') contactId: string) {
     return this.appointmentsService.getYogaSubscription(contactId);
+  }
+
+  /**
+   * Exporta el listado actual de citas según los filtros visualizados en pantalla a XLSX, CSV, PDF o ZIP (con adjuntos de pacientes).
+   * Por confidencialidad médica y protección de datos, bajo ninguna circunstancia incluye diagnósticos clínicos.
+   */
+  @Get('export')
+  async exportAppointments(
+    @Query() query: QueryAppointmentsExportDto,
+    @CurrentUser() user: AuthUser,
+    @Res() res: Response,
+  ) {
+    const managerId = user.role === UserRole.SERVICE_MANAGER ? user.id : undefined;
+    const { items, filterInfo, reportTitle } =
+      await this.appointmentsService.getAppointmentsForExport(query, managerId);
+
+    const format = (query.format || 'xlsx').toLowerCase();
+    const dateSuffix = new Date().toISOString().slice(0, 10);
+    const searchSlug = query.search ? cleanSafeFilename(query.search) : 'listado';
+    const baseFilename = `citas_${searchSlug}_${dateSuffix}`;
+
+    if (format === 'csv') {
+      const buffer = generateAppointmentsCsv(items, filterInfo, reportTitle);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${baseFilename}.csv"`);
+      res.setHeader('Content-Length', buffer.length);
+      return res.end(buffer);
+    }
+
+    if (format === 'pdf') {
+      const buffer = await generateAppointmentsPdf(items, filterInfo, reportTitle);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${baseFilename}.pdf"`);
+      res.setHeader('Content-Length', buffer.length);
+      return res.end(buffer);
+    }
+
+    if (format === 'zip') {
+      const buffer = await generateAppointmentsZip(items, filterInfo, reportTitle);
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${baseFilename}.zip"`);
+      res.setHeader('Content-Length', buffer.length);
+      return res.end(buffer);
+    }
+
+    // Default: xlsx
+    const buffer = await generateAppointmentsXlsx(items, filterInfo, reportTitle);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${baseFilename}.xlsx"`);
+    res.setHeader('Content-Length', buffer.length);
+    return res.end(buffer);
   }
 
   @Get('payments/export')

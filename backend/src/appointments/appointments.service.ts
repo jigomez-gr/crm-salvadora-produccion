@@ -25,11 +25,24 @@ import { CalcomService } from '../calcom/calcom.service';
 import { ZadarmaSmsService } from '../sms/zadarma-sms.service';
 import { parseWeeklyScheduleFromText } from '../services/schedule-parser';
 import { TZDate } from '@date-fns/tz';
-import { format, startOfWeek, endOfWeek, subMonths, addDays, startOfMonth, endOfMonth } from 'date-fns';
+import {
+  format,
+  startOfWeek,
+  endOfWeek,
+  subMonths,
+  addDays,
+  startOfMonth,
+  endOfMonth,
+  subWeeks,
+  addWeeks,
+  startOfDay,
+  endOfDay,
+} from 'date-fns';
 import { Cron } from '@nestjs/schedule';
 import { businessDayWindow } from './business-day';
 import { computeFreeSlots, TimeSlot } from './availability';
 import { parseFlexibleStartsAt } from '../common/time';
+import { normalizePhoneLoose } from '../common/phone';
 import { WorkingHourSlot } from '../common/entities/agent-config.entity';
 import {
   CreateAppointmentDto,
@@ -38,7 +51,19 @@ import {
   RejectAppointmentDto,
   UpdateAppointmentPaymentDto,
   QueryAppointmentPaymentsDto,
+  QueryAppointmentsExportDto,
 } from './dto/appointment.dto';
+import {
+  generateAppointmentsCsv,
+  generateAppointmentsXlsx,
+  generateAppointmentsPdf,
+  generateAppointmentsZip,
+  cleanSafeFilename,
+  formatDateMadrid,
+  formatAppointmentStatus,
+  formatModality,
+} from './appointments-export.generator';
+
 import { generateDoctorReportPdfBuffer } from './pdf-report.generator';
 import { AnalizaIaService, AiAnalysisResponse } from './analiza-ia.service';
 import { EmailService } from '../email/email.service';
@@ -4134,5 +4159,348 @@ export class AppointmentsService implements OnModuleInit {
       slots: resultSlots,
     };
   }
+
+  /**
+   * Obtiene y filtra citas para la exportación en pantalla (XLSX, CSV, PDF, ZIP),
+   * aplicando de forma exacta los filtros visualizados en la vista de lista y calendario.
+   * Por estricta protección de datos y confidencialidad médica, los datos de diagnóstico clínico
+   * se excluyen por completo.
+   */
+  async getAppointmentsForExport(
+    query: QueryAppointmentsExportDto,
+    managerId?: string,
+  ): Promise<{ items: Appointment[]; filterInfo: string; reportTitle: string }> {
+    const qb = this.appointmentsRepo
+      .createQueryBuilder('a')
+      .leftJoinAndSelect('a.contact', 'contact')
+      .addSelect('a.patientAttachmentData')
+      .orderBy('a.startsAt', 'ASC');
+
+    const now = new Date();
+    const filterParts: string[] = [];
+
+    // 1. Filtro por sub-tab
+    if (query.tab === 'today') {
+      const startOfToday = startOfDay(now);
+      const endOfToday = endOfDay(now);
+      qb.andWhere('a.startsAt BETWEEN :startOfToday AND :endOfToday', {
+        startOfToday: startOfToday.toISOString(),
+        endOfToday: endOfToday.toISOString(),
+      });
+      filterParts.push('Hoy');
+    } else if (query.tab === 'upcoming') {
+      qb.andWhere('a.startsAt > :now AND a.status NOT IN (:...nonUpcoming)', {
+        now: now.toISOString(),
+        nonUpcoming: [AppointmentStatus.COMPLETED, AppointmentStatus.CANCELLED],
+      });
+      filterParts.push('Próximas / Futuras');
+    } else if (query.tab === 'past') {
+      qb.andWhere('(a.startsAt <= :now OR a.status = :completedStatus)', {
+        now: now.toISOString(),
+        completedStatus: AppointmentStatus.COMPLETED,
+      });
+      filterParts.push('Pasadas / Historial');
+    } else if (query.tab === 'pending') {
+      qb.andWhere('a.status = :pendingStatus', {
+        pendingStatus: AppointmentStatus.PENDING_APPROVAL,
+      });
+      filterParts.push('Pendientes de Aprobación');
+    } else if (query.tab === 'prev_week') {
+      const prevWeekStart = startOfWeek(subWeeks(now, 1), { weekStartsOn: 1 });
+      const prevWeekEnd = endOfWeek(subWeeks(now, 1), { weekStartsOn: 1 });
+      qb.andWhere('a.startsAt BETWEEN :prevWeekStart AND :prevWeekEnd', {
+        prevWeekStart: prevWeekStart.toISOString(),
+        prevWeekEnd: prevWeekEnd.toISOString(),
+      });
+      filterParts.push(
+        `Semana Anterior (${prevWeekStart.toLocaleDateString('es-ES')} - ${prevWeekEnd.toLocaleDateString('es-ES')})`,
+      );
+    } else if (query.tab === 'next_week') {
+      const nextWeekStart = startOfWeek(addWeeks(now, 1), { weekStartsOn: 1 });
+      const nextWeekEnd = endOfWeek(addWeeks(now, 1), { weekStartsOn: 1 });
+      qb.andWhere('a.startsAt BETWEEN :nextWeekStart AND :nextWeekEnd', {
+        nextWeekStart: nextWeekStart.toISOString(),
+        nextWeekEnd: nextWeekEnd.toISOString(),
+      });
+      filterParts.push(
+        `Semana Posterior (${nextWeekStart.toLocaleDateString('es-ES')} - ${nextWeekEnd.toLocaleDateString('es-ES')})`,
+      );
+    }
+
+    // 2. Filtro de rango de fechas ("De tal fecha a tal fecha")
+    const effectiveStartDate = query.startDate || query.from;
+    const effectiveEndDate = query.endDate || query.to;
+
+    if (effectiveStartDate && query.tab !== 'prev_week' && query.tab !== 'next_week' && query.tab !== 'today') {
+      const s = new Date(effectiveStartDate);
+      if (!isNaN(s.getTime())) {
+        const start = startOfDay(s);
+        qb.andWhere('a.startsAt >= :customStartDate', { customStartDate: start.toISOString() });
+        filterParts.push(`Desde: ${start.toLocaleDateString('es-ES')}`);
+      }
+    }
+
+    if (effectiveEndDate && query.tab !== 'prev_week' && query.tab !== 'next_week' && query.tab !== 'today') {
+      const e = new Date(effectiveEndDate);
+      if (!isNaN(e.getTime())) {
+        const end = endOfDay(e);
+        qb.andWhere('a.startsAt <= :customEndDate', { customEndDate: end.toISOString() });
+        filterParts.push(`Hasta: ${end.toLocaleDateString('es-ES')}`);
+      }
+    }
+
+    // 3. Filtro de servicio / calendario
+    if (query.serviceId && query.serviceId !== 'all') {
+      qb.andWhere('(a.serviceId = :svcId OR a.calendarId = :svcId)', { svcId: query.serviceId });
+      filterParts.push(`Servicio: ${query.serviceId}`);
+    }
+
+    // 4. Filtro de estado
+    if (query.status) {
+      qb.andWhere('a.status = :status', { status: query.status });
+      filterParts.push(`Estado: ${query.status}`);
+    }
+
+    // 5. Filtro de contacto
+    if (query.contactId) {
+      qb.andWhere('a.contactId = :contactId', { contactId: query.contactId });
+    }
+
+    // 6. Búsqueda por texto (paciente, teléfono, email, servicio, motivo)
+    if (query.search && query.search.trim()) {
+      const term = `%${query.search.trim()}%`;
+      qb.andWhere(
+        '(contact.name ILIKE :search OR contact.phone ILIKE :search OR contact.email ILIKE :search OR a.service ILIKE :search OR a.reason ILIKE :search)',
+        { search: term },
+      );
+      filterParts.push(`Búsqueda: "${query.search.trim()}"`);
+    }
+
+    // 7. Restricción por Service Manager
+    if (managerId) {
+      const managedServices = await this.servicesRepo.find({
+        where: { managerId },
+      });
+      const managedServiceIds = managedServices.map((s) => s.id);
+      const managedCalendarIds = managedServices.map((s) => s.calendarId);
+      const managedNames = managedServices.map((s) => s.name);
+
+      if (managedServiceIds.length > 0) {
+        qb.andWhere(
+          '(a.serviceId IN (:...managedServiceIds) OR a.calendarId IN (:...managedCalendarIds) OR a.service IN (:...managedNames))',
+          { managedServiceIds, managedCalendarIds, managedNames },
+        );
+      } else {
+        qb.andWhere('1 = 0');
+      }
+    }
+
+    const items = await qb.getMany();
+    const filterInfo = filterParts.length > 0 ? filterParts.join(' | ') : 'Todas las citas';
+    const reportTitle = 'Listado Oficial de Citas y Reservas';
+
+    return { items, filterInfo, reportTitle };
+  }
+
+  /**
+   * EXCLUSIVO PARA EL AGENTE DE WHATSAPP:
+   * Genera el informe oficial de citas del contacto que está implícito en el móvil de WhatsApp.
+   * Filtra estrictamente por dicho contacto, permite configurar parámetros (semana anterior,
+   * semana posterior, fecha puntual, desde/hasta, estado), genera PDF, XLSX, CSV y ZIP (con adjuntos
+   * de paciente si los hubiera), y bajo ninguna circunstancia saca el diagnóstico clínico.
+   */
+  async getContactAppointmentsReport(params: {
+    contactId?: string;
+    phone?: string;
+    startDate?: string;
+    endDate?: string;
+    specificDate?: string;
+    semanaAnterior?: boolean;
+    semanaPosterior?: boolean;
+    status?: string;
+    service?: string;
+    forceZip?: boolean;
+  }): Promise<{
+    contact: { id?: string; name: string; phone: string; email: string };
+    items: Appointment[];
+    totalCitas: number;
+    attachmentsCount: number;
+    pdfBuffer: Buffer;
+    xlsxBuffer: Buffer;
+    csvBuffer: Buffer;
+    zipBuffer: Buffer | null;
+    textSummary: string;
+    filenameBase: string;
+  }> {
+    let contact: Contact | null = null;
+    const phone = params.phone?.trim() || '';
+    const phoneDigits = phone.replace(/\D/g, '');
+
+    if (this.contactsRepo) {
+      if (params.contactId) {
+        contact = await this.contactsRepo.findOne({
+          where: { id: params.contactId },
+        });
+      }
+      if (!contact && phone) {
+        const norm = normalizePhoneLoose(phone);
+        contact = await this.contactsRepo.findOne({
+          where: [{ phone }, { phone: norm }],
+        });
+        if (!contact && phoneDigits.length >= 7) {
+          contact = await this.contactsRepo
+            .createQueryBuilder('c')
+            .where("regexp_replace(c.phone, '[^0-9]', '', 'g') LIKE :dig", {
+              dig: `%${phoneDigits.slice(-9)}%`,
+            })
+            .orderBy('c.createdAt', 'DESC')
+            .getOne();
+        }
+      }
+    }
+
+    if (!contact) {
+      throw new BadRequestException(
+        'No se encontró ningún contacto registrado para el número de teléfono móvil de WhatsApp.',
+      );
+    }
+
+    const contactInfo = {
+      id: contact.id,
+      name: contact.name || phone || 'Cliente',
+      phone: contact.phone || phone,
+      email: contact.email || '',
+    };
+
+    const qb = this.appointmentsRepo
+      .createQueryBuilder('a')
+      .leftJoinAndSelect('a.contact', 'contact')
+      .addSelect('a.patientAttachmentData')
+      .where('a.contactId = :contactId', { contactId: contact.id })
+      .orderBy('a.startsAt', 'ASC');
+
+    const now = new Date();
+    let filterDescription = 'Historial completo de citas';
+
+    if (params.semanaAnterior) {
+      const prevWeekStart = startOfWeek(subWeeks(now, 1), { weekStartsOn: 1 });
+      const prevWeekEnd = endOfWeek(subWeeks(now, 1), { weekStartsOn: 1 });
+      qb.andWhere('a.startsAt BETWEEN :prevWeekStart AND :prevWeekEnd', {
+        prevWeekStart: prevWeekStart.toISOString(),
+        prevWeekEnd: prevWeekEnd.toISOString(),
+      });
+      filterDescription = `Semana anterior (${prevWeekStart.toLocaleDateString('es-ES')} a ${prevWeekEnd.toLocaleDateString('es-ES')})`;
+    } else if (params.semanaPosterior) {
+      const nextWeekStart = startOfWeek(addWeeks(now, 1), { weekStartsOn: 1 });
+      const nextWeekEnd = endOfWeek(addWeeks(now, 1), { weekStartsOn: 1 });
+      qb.andWhere('a.startsAt BETWEEN :nextWeekStart AND :nextWeekEnd', {
+        nextWeekStart: nextWeekStart.toISOString(),
+        nextWeekEnd: nextWeekEnd.toISOString(),
+      });
+      filterDescription = `Semana posterior (${nextWeekStart.toLocaleDateString('es-ES')} a ${nextWeekEnd.toLocaleDateString('es-ES')})`;
+    } else if (params.specificDate) {
+      const d = new Date(params.specificDate);
+      if (!isNaN(d.getTime())) {
+        const s = startOfDay(d);
+        const e = endOfDay(d);
+        qb.andWhere('a.startsAt BETWEEN :sDate AND :eDate', {
+          sDate: s.toISOString(),
+          eDate: e.toISOString(),
+        });
+        filterDescription = `Fecha: ${params.specificDate}`;
+      }
+    } else {
+      if (params.startDate) {
+        const s = new Date(params.startDate);
+        if (!isNaN(s.getTime())) {
+          qb.andWhere('a.startsAt >= :startDate', { startDate: startOfDay(s).toISOString() });
+          filterDescription = `Desde: ${params.startDate}`;
+        }
+      }
+      if (params.endDate) {
+        const e = new Date(params.endDate);
+        if (!isNaN(e.getTime())) {
+          qb.andWhere('a.startsAt <= :endDate', { endDate: endOfDay(e).toISOString() });
+          filterDescription += ` Hasta: ${params.endDate}`;
+        }
+      }
+    }
+
+    if (params.status && params.status !== 'all') {
+      const st = params.status.toLowerCase();
+      if (st.includes('programada')) {
+        qb.andWhere('a.status = :st', { st: AppointmentStatus.SCHEDULED });
+      } else if (st.includes('completada')) {
+        qb.andWhere('a.status = :st', { st: AppointmentStatus.COMPLETED });
+      } else if (st.includes('cancelada')) {
+        qb.andWhere('a.status = :st', { st: AppointmentStatus.CANCELLED });
+      } else if (st.includes('pendiente')) {
+        qb.andWhere('a.status = :st', { st: AppointmentStatus.PENDING_APPROVAL });
+      }
+    }
+
+    if (params.service && params.service !== 'all') {
+      qb.andWhere('a.service ILIKE :svc', { svc: `%${params.service}%` });
+    }
+
+    const items = await qb.getMany();
+    const attachmentsCount = items.filter((a) => a.patientAttachmentName).length;
+
+    const reportTitle = `Historial Oficial de Citas - ${contactInfo.name}`;
+    const [pdfBuffer, xlsxBuffer] = await Promise.all([
+      generateAppointmentsPdf(items, filterDescription, reportTitle),
+      generateAppointmentsXlsx(items, filterDescription, reportTitle),
+    ]);
+    const csvBuffer = generateAppointmentsCsv(items, filterDescription, reportTitle);
+
+    let zipBuffer: Buffer | null = null;
+    if (attachmentsCount > 0 || params.forceZip) {
+      zipBuffer = await generateAppointmentsZip(items, filterDescription, reportTitle);
+    }
+
+    const safeContact = cleanSafeFilename(contactInfo.name || 'contacto');
+    const dateSuffix = new Date().toISOString().slice(0, 10);
+    const filenameBase = `Historial_Citas_${safeContact}_${dateSuffix}`;
+
+    // Resumen en texto amigable para la respuesta del agente (SIN DIAGNÓSTICO CLÍNICO)
+    let textSummary = '';
+    if (items.length === 0) {
+      textSummary = `No tienes citas registradas en el sistema para el periodo consultado (${filterDescription}).`;
+    } else {
+      const lines = [
+        `📅 Tienes un total de ${items.length} cita(s) (${filterDescription}):`,
+      ];
+      items.forEach((item, idx) => {
+        const dtStr = `${formatDateMadrid(item.startsAt)}`;
+        const statusStr = formatAppointmentStatus(item.status);
+        const modStr = formatModality(item.modality);
+        const priceStr = item.price ? `${parseFloat(item.price).toFixed(2)} €` : '0,00 €';
+        const attachStr = item.patientAttachmentName
+          ? ` (📎 Documento adjunto: ${item.patientAttachmentName})`
+          : '';
+        lines.push(
+          `${idx + 1}. ${dtStr} - ${item.service} (${modStr}) · Estado: ${statusStr} · ${priceStr}${attachStr}`,
+        );
+      });
+      if (attachmentsCount > 0) {
+        lines.push(`\n📎 Se han localizado ${attachmentsCount} documento(s) adjunto(s) en tus citas y se han empaquetado en un archivo ZIP.`);
+      }
+      textSummary = lines.join('\n');
+    }
+
+    return {
+      contact: contactInfo,
+      items,
+      totalCitas: items.length,
+      attachmentsCount,
+      pdfBuffer,
+      xlsxBuffer,
+      csvBuffer,
+      zipBuffer,
+      textSummary,
+      filenameBase,
+    };
+  }
+
 }
 

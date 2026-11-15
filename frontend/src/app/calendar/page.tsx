@@ -26,6 +26,13 @@ import {
   Bot,
   CreditCard,
   AlertCircle,
+  FileSpreadsheet,
+  FileDown,
+  FolderArchive,
+  RefreshCw,
+  ChevronDown,
+  Calendar,
+  X,
 } from "lucide-react";
 import { ImageCropModal, SPECIALTIES, SpecialtyType } from "@/components/ImageCropModal";
 import {
@@ -47,6 +54,7 @@ import {
   getMinutes,
   differenceInMinutes,
   startOfDay,
+  endOfDay,
 } from "date-fns";
 import { es } from "date-fns/locale";
 import { apiFetch, ApiError, apiUrl } from "@/lib/api";
@@ -1852,21 +1860,49 @@ function WeekView({
 
 function AppointmentListView({
   appointments,
+  selectedServiceId,
   onAppointmentClick,
   onOpenResponseDoc,
   onAccept,
   onOpenRejectDialog,
 }: {
   appointments: Appointment[];
+  selectedServiceId?: string;
   onAppointmentClick: (a: Appointment) => void;
   onOpenResponseDoc: (a: Appointment) => void;
   onAccept?: (id: string) => Promise<void>;
   onOpenRejectDialog?: (a: Appointment, isReschedule: boolean) => void;
 }) {
-  const [tab, setTab] = useState<"all" | "today" | "upcoming" | "past" | "pending">("all");
+  const toast = useToast();
+  const [tab, setTab] = useState<
+    "all" | "today" | "upcoming" | "past" | "pending" | "prev_week" | "next_week"
+  >("all");
   const [search, setSearch] = useState("");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
+
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exportingFormat, setExportingFormat] = useState<string | null>(null);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setShowExportMenu(false);
+      }
+    }
+    if (showExportMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showExportMenu]);
 
   const now = new Date();
+  const prevWeekStart = startOfWeek(subWeeks(now, 1), { weekStartsOn: 1 });
+  const prevWeekEnd = endOfWeek(subWeeks(now, 1), { weekStartsOn: 1 });
+
+  const nextWeekStart = startOfWeek(addWeeks(now, 1), { weekStartsOn: 1 });
+  const nextWeekEnd = endOfWeek(addWeeks(now, 1), { weekStartsOn: 1 });
 
   const filtered = appointments.filter((a) => {
     const start = new Date(a.startsAt);
@@ -1874,6 +1910,17 @@ function AppointmentListView({
     if (tab === "upcoming" && (start <= now || a.status === "completed" || a.status === "cancelled")) return false;
     if (tab === "past" && start > now && a.status !== "completed") return false;
     if (tab === "pending" && a.status !== "pending_approval") return false;
+    if (tab === "prev_week" && (start < prevWeekStart || start > prevWeekEnd)) return false;
+    if (tab === "next_week" && (start < nextWeekStart || start > nextWeekEnd)) return false;
+
+    if (customStartDate) {
+      const parsedStart = startOfDay(parseISO(customStartDate));
+      if (start < parsedStart) return false;
+    }
+    if (customEndDate) {
+      const parsedEnd = endOfDay(parseISO(customEndDate));
+      if (start > parsedEnd) return false;
+    }
 
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -1895,14 +1942,70 @@ function AppointmentListView({
   const countUpcoming = appointments.filter((a) => new Date(a.startsAt) > now && a.status !== "completed" && a.status !== "cancelled").length;
   const countPast = appointments.filter((a) => new Date(a.startsAt) <= now || a.status === "completed").length;
   const countPending = appointments.filter((a) => a.status === "pending_approval").length;
+  const countPrevWeek = appointments.filter((a) => {
+    const d = new Date(a.startsAt);
+    return d >= prevWeekStart && d <= prevWeekEnd;
+  }).length;
+  const countNextWeek = appointments.filter((a) => {
+    const d = new Date(a.startsAt);
+    return d >= nextWeekStart && d <= nextWeekEnd;
+  }).length;
+
+  const totalAttachmentsInView = filtered.filter((a) => a.patientAttachmentName).length;
+
+  const downloadExport = async (format: "xlsx" | "csv" | "pdf" | "zip") => {
+    if (exportingFormat) return;
+    setExportingFormat(format);
+    setShowExportMenu(false);
+    try {
+      const q = new URLSearchParams();
+      q.set("format", format);
+      if (tab !== "all") q.set("tab", tab);
+      if (customStartDate) q.set("startDate", customStartDate);
+      if (customEndDate) q.set("endDate", customEndDate);
+      if (search) q.set("search", search);
+      if (selectedServiceId) q.set("serviceId", selectedServiceId);
+
+      const url = apiUrl(`/api/appointments/export?${q.toString()}`);
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.message || `Error al generar exportación ${format.toUpperCase()}`);
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition");
+      let filename = `listado_citas.${format}`;
+      if (disposition) {
+        const match = disposition.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+        if (match && match[1]) {
+          filename = decodeURIComponent(match[1]);
+        }
+      }
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(blobUrl);
+      a.remove();
+      toast.success(`Listado de citas en ${format.toUpperCase()} descargado con éxito`);
+    } catch (err: any) {
+      toast.error("Error al exportar: " + (err?.message || "Error desconocido"));
+    } finally {
+      setExportingFormat(null);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full bg-white rounded-xl border border-neutral-200 overflow-hidden">
-      {/* Sub tabs & Search */}
+      {/* Sub tabs & Search & Date filters & Export */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 p-3 bg-neutral-50/50">
         <div className="flex flex-wrap items-center gap-1.5">
           <button
-            onClick={() => setTab("all")}
+            onClick={() => {
+              setTab("all");
+            }}
             className={cn(
               "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors",
               tab === "all" ? "bg-indigo-600 text-white shadow-sm" : "bg-white text-neutral-600 hover:bg-neutral-100 border border-neutral-200"
@@ -1937,6 +2040,33 @@ function AppointmentListView({
           >
             Pasadas / Historial ({countPast})
           </button>
+
+          {/* Botones extras: Semana anterior y Semana posterior */}
+          <button
+            onClick={() => setTab(tab === "prev_week" ? "all" : "prev_week")}
+            className={cn(
+              "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors",
+              tab === "prev_week"
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "bg-white text-neutral-600 hover:bg-neutral-100 border border-neutral-200"
+            )}
+            title={`Filtrar citas de la semana anterior (${format(prevWeekStart, "dd/MM")} - ${format(prevWeekEnd, "dd/MM")})`}
+          >
+            Semana anterior ({countPrevWeek})
+          </button>
+          <button
+            onClick={() => setTab(tab === "next_week" ? "all" : "next_week")}
+            className={cn(
+              "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors",
+              tab === "next_week"
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "bg-white text-neutral-600 hover:bg-neutral-100 border border-neutral-200"
+            )}
+            title={`Filtrar citas de la semana posterior (${format(nextWeekStart, "dd/MM")} - ${format(nextWeekEnd, "dd/MM")})`}
+          >
+            Semana posterior ({countNextWeek})
+          </button>
+
           {countPending > 0 && (
             <button
               onClick={() => setTab("pending")}
@@ -1948,19 +2078,147 @@ function AppointmentListView({
               Pendientes ({countPending})
             </button>
           )}
+
+          {/* Filtro: De tal fecha a tal fecha */}
+          <div className="flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs shadow-sm ml-1">
+            <Calendar className="h-3.5 w-3.5 text-neutral-400 shrink-0" />
+            <span className="text-[11px] font-medium text-neutral-500">Desde:</span>
+            <input
+              type="date"
+              value={customStartDate}
+              onChange={(e) => setCustomStartDate(e.target.value)}
+              className="text-[11px] bg-transparent focus:outline-none text-neutral-700 cursor-pointer"
+            />
+            <span className="text-[11px] font-medium text-neutral-500 ml-1">Hasta:</span>
+            <input
+              type="date"
+              value={customEndDate}
+              onChange={(e) => setCustomEndDate(e.target.value)}
+              className="text-[11px] bg-transparent focus:outline-none text-neutral-700 cursor-pointer"
+            />
+            {(customStartDate || customEndDate) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomStartDate("");
+                  setCustomEndDate("");
+                }}
+                className="ml-1 text-neutral-400 hover:text-neutral-700 rounded p-0.5"
+                title="Limpiar fechas"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="relative min-w-[220px]">
-          <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-neutral-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por paciente, servicio..."
-            className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-neutral-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          />
+        <div className="flex items-center gap-2">
+          {/* Botón Exportar con desplegable */}
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              type="button"
+              onClick={() => setShowExportMenu((prev) => !prev)}
+              disabled={Boolean(exportingFormat) || sorted.length === 0}
+              className="flex items-center gap-1 rounded-lg border border-neutral-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 transition-colors shadow-sm"
+              title="Exportar listado actual a Excel, CSV, PDF o ZIP con adjuntos"
+            >
+              {exportingFormat ? (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-neutral-500" />
+                  <span>{exportingFormat.toUpperCase()}...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="h-3.5 w-3.5 text-neutral-500" />
+                  <span>Exportar ({sorted.length})</span>
+                  <ChevronDown className="h-3 w-3 text-neutral-400" />
+                </>
+              )}
+            </button>
+
+            {showExportMenu && (
+              <div className="absolute right-0 top-full z-40 mt-1 w-64 rounded-xl border border-neutral-200 bg-white p-1.5 shadow-xl">
+                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+                  Exportar listado actual ({sorted.length} citas)
+                </div>
+                <button
+                  type="button"
+                  onClick={() => downloadExport("xlsx")}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
+                >
+                  <FileSpreadsheet className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-neutral-800">Excel (.xlsx)</div>
+                    <div className="text-[10px] text-neutral-400">Listado estilizado con datos de adjuntos</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => downloadExport("csv")}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
+                >
+                  <FileDown className="h-4 w-4 text-blue-600 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-neutral-800">CSV (.csv)</div>
+                    <div className="text-[10px] text-neutral-400">Exportación tabular UTF-8</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => downloadExport("pdf")}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
+                >
+                  <FileText className="h-4 w-4 text-rose-600 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-neutral-800">PDF (.pdf)</div>
+                    <div className="text-[10px] text-neutral-400">Informe oficial en A4 apaisado</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => downloadExport("zip")}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
+                >
+                  <FolderArchive className="h-4 w-4 text-purple-600 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-neutral-800">ZIP (.zip)</div>
+                    <div className="text-[10px] text-neutral-400">
+                      Listado + Archivos adjuntos del paciente ({totalAttachmentsInView})
+                    </div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="relative min-w-[200px]">
+            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-neutral-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por paciente, servicio..."
+              className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-neutral-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+
+          {(search || customStartDate || customEndDate || tab !== "all") && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch("");
+                setCustomStartDate("");
+                setCustomEndDate("");
+                setTab("all");
+              }}
+              className="text-xs text-indigo-600 hover:text-indigo-800 font-medium whitespace-nowrap"
+            >
+              Limpiar
+            </button>
+          )}
         </div>
       </div>
+
 
       {/* Appointment list */}
       <div className="flex-1 overflow-y-auto divide-y divide-neutral-100">
@@ -2532,6 +2790,7 @@ function CalendarPageInner() {
         {view === "list" ? (
           <AppointmentListView
             appointments={appointments}
+            selectedServiceId={selectedServiceId}
             onAppointmentClick={openEdit}
             onOpenResponseDoc={(a) => setResponseDocAppt(a)}
             onAccept={handleAccept}

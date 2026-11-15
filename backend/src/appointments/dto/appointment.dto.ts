@@ -282,3 +282,50 @@ export class QueryAppointmentPaymentsDto {
   format?: string; // csv | xlsx | pdf
 }
 
+export class QueryAppointmentsExportDto {
+  @IsOptional()
+  @IsString()
+  format?: string; // xlsx | csv | pdf | zip
+
+  @IsOptional()
+  @IsString()
+  tab?: string; // all | today | upcoming | past | pending | prev_week | next_week | custom
+
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+
+  @IsOptional()
+  @IsString()
+  from?: string;
+
+  @IsOptional()
+  @IsString()
+  to?: string;
+
+  @IsOptional()
+  @IsString()
+  serviceId?: string;
+
+  @IsOptional()
+  @IsString()
+  calendarId?: string;
+
+  @IsOptional()
+  @IsString()
+  status?: AppointmentStatus;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsString()
+  contactId?: string;
+}
+
+

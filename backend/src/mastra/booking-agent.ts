@@ -145,6 +145,29 @@ export interface BookingAgentDeps {
     textSummary: string;
     filenameBase: string;
   }>;
+  getContactAppointmentsReport?: (params: {
+    contactId?: string;
+    phone?: string;
+    startDate?: string;
+    endDate?: string;
+    specificDate?: string;
+    semanaAnterior?: boolean;
+    semanaPosterior?: boolean;
+    status?: string;
+    service?: string;
+    forceZip?: boolean;
+  }) => Promise<{
+    contact: any;
+    items: any[];
+    totalCitas: number;
+    attachmentsCount: number;
+    pdfBuffer: Buffer;
+    xlsxBuffer: Buffer;
+    csvBuffer: Buffer;
+    zipBuffer: Buffer | null;
+    textSummary: string;
+    filenameBase: string;
+  }>;
 }
 
 function getConfig(context: any): any {
@@ -2050,6 +2073,198 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     },
   });
 
+  const exportarCitasUsuarioTool = createTool({
+    id: 'exportarCitasUsuario',
+    description:
+      'EXCLUSIVO PARA EL AGENTE DE WHATSAPP: Exporta y remite por WhatsApp el listado oficial de citas y reservas del contacto asociado estrictamente al número de teléfono móvil que interactúa por WhatsApp. Permite especificar parámetros de fecha (semana anterior, semana posterior, fecha puntual o rango de fechas desde/hasta) y estado ("programadas", "completadas", "canceladas", "todas"). Envía por WhatsApp los documentos en PDF, Excel (.xlsx) y CSV, y si alguna de sus citas tuviese documentos o imágenes adjuntas del paciente (radiografías, análisis, informes previos), envía además un archivo ZIP con todos los documentos. Por estricta confidencialidad médica y protección de datos, NO incluye el diagnóstico clínico.',
+    inputSchema: z.object({
+      semanaAnterior: z
+        .boolean()
+        .optional()
+        .describe(
+          'Si el usuario solicita las citas de la semana anterior o semana pasada.',
+        ),
+      semanaPosterior: z
+        .boolean()
+        .optional()
+        .describe(
+          'Si el usuario solicita las citas de la semana posterior, próxima semana o semana que viene.',
+        ),
+      fecha: z
+        .string()
+        .optional()
+        .describe(
+          'Fecha puntual concreta a consultar (formato YYYY-MM-DD), ej. "2026-11-15".',
+        ),
+      desde: z
+        .string()
+        .optional()
+        .describe(
+          'Fecha inicial del rango (formato YYYY-MM-DD), ej. "2026-11-01".',
+        ),
+      hasta: z
+        .string()
+        .optional()
+        .describe(
+          'Fecha final del rango (formato YYYY-MM-DD), ej. "2026-11-30".',
+        ),
+      estado: z
+        .enum(['all', 'programadas', 'completadas', 'canceladas', 'pendientes'])
+        .optional()
+        .describe('Filtrar por estado de las citas (por defecto todas).'),
+      servicio: z
+        .string()
+        .optional()
+        .describe('Filtrar por nombre o tipo de servicio si el usuario lo especifica.'),
+    }),
+    execute: async (inputData, context) => {
+      const threadId = (context as any)?.requestContext?.get?.('threadId') || '';
+      const channel = (context as any)?.requestContext?.get?.('channel');
+      const isWhatsApp =
+        threadId.startsWith('whatsapp:') ||
+        channel === 'whatsapp' ||
+        channel === MessageChannel.WHATSAPP;
+
+      // Restricción estricta solicitada: "en el agente de wassap añadir que se puedan pedir y poner los parametros pero solo para las citas del contacto que esta implicito en el movil del que hace la petición"
+      if (!isWhatsApp) {
+        return {
+          success: false,
+          error:
+            'Esta función está permitida única y exclusivamente para el agente de WhatsApp.',
+        };
+      }
+
+      const customer = getCustomer(context);
+      const recipientPhone = customer?.phone;
+      if (!recipientPhone) {
+        return {
+          success: false,
+          error:
+            'No se pudo identificar el teléfono móvil de WhatsApp del contacto actual.',
+        };
+      }
+
+      if (!deps.getContactAppointmentsReport) {
+        return {
+          success: false,
+          error:
+            'Servicio de exportación de citas no disponible en el sistema.',
+        };
+      }
+
+      let targetContactId = customer?.contactId;
+      if (!targetContactId && deps.findContactByPhone) {
+        const found = await deps
+          .findContactByPhone(normalizePhoneLoose(recipientPhone))
+          .catch(() => null);
+        if (found?.id) {
+          targetContactId = found.id;
+        }
+      }
+
+      const report = await deps.getContactAppointmentsReport({
+        contactId: targetContactId,
+        phone: recipientPhone,
+        startDate: inputData.desde,
+        endDate: inputData.hasta,
+        specificDate: inputData.fecha,
+        semanaAnterior: inputData.semanaAnterior,
+        semanaPosterior: inputData.semanaPosterior,
+        status: inputData.estado,
+        service: inputData.servicio,
+      });
+
+      const filesSent: string[] = [];
+
+      if (deps.sendWhatsAppMedia && recipientPhone) {
+        // 1. Enviar PDF
+        await deps
+          .sendWhatsAppMedia({
+            to: recipientPhone,
+            caption: `📄 Listado Oficial de Citas (${report.contact.name}) - PDF`,
+            media: {
+              buffer: report.pdfBuffer,
+              filename: `${report.filenameBase}.pdf`,
+              mimeType: 'application/pdf',
+              mediaCategory: 'document',
+            },
+          })
+          .then((r) => {
+            if (r?.ok) filesSent.push('PDF');
+          })
+          .catch(() => null);
+
+        // 2. Enviar XLSX
+        await deps
+          .sendWhatsAppMedia({
+            to: recipientPhone,
+            caption: `📊 Listado Oficial de Citas (${report.contact.name}) - Excel`,
+            media: {
+              buffer: report.xlsxBuffer,
+              filename: `${report.filenameBase}.xlsx`,
+              mimeType:
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              mediaCategory: 'document',
+            },
+          })
+          .then((r) => {
+            if (r?.ok) filesSent.push('Excel (.xlsx)');
+          })
+          .catch(() => null);
+
+        // 3. Enviar CSV
+        await deps
+          .sendWhatsAppMedia({
+            to: recipientPhone,
+            caption: `📋 Listado Oficial de Citas (${report.contact.name}) - CSV`,
+            media: {
+              buffer: report.csvBuffer,
+              filename: `${report.filenameBase}.csv`,
+              mimeType: 'text/csv',
+              mediaCategory: 'document',
+            },
+          })
+          .then((r) => {
+            if (r?.ok) filesSent.push('CSV');
+          })
+          .catch(() => null);
+
+        // 4. Enviar ZIP (si hubiese documentos adjuntos del paciente en las citas)
+        if (report.zipBuffer && report.attachmentsCount > 0) {
+          await deps
+            .sendWhatsAppMedia({
+              to: recipientPhone,
+              caption: `📦 Archivos y documentos adjuntos de tus citas (${report.attachmentsCount} adjuntos) - ZIP`,
+              media: {
+                buffer: report.zipBuffer,
+                filename: `${report.filenameBase}.zip`,
+                mimeType: 'application/zip',
+                mediaCategory: 'document',
+              },
+            })
+            .then((r) => {
+              if (r?.ok)
+                filesSent.push(`ZIP (${report.attachmentsCount} adjuntos)`);
+            })
+            .catch(() => null);
+        }
+      }
+
+      return {
+        success: true,
+        contact: report.contact,
+        totalCitas: report.totalCitas,
+        adjuntosEncontrados: report.attachmentsCount,
+        formatosEnviadosPorWhatsApp: filesSent,
+        resumenTextoCitas: report.textSummary,
+        mensaje: `Se ha procesado el listado de tus citas.\n${report.textSummary}\n\nSe han enviado a tu WhatsApp los archivos: ${filesSent.join(
+          ', ',
+        )}. Recuerda que por estricta confidencialidad médica y privacidad nunca se incluye el diagnóstico clínico en estos documentos.`,
+      };
+    },
+  });
+
+
   return new Agent({
     id: TEMPLATE_AGENT_ID,
     name: 'Assistant',
@@ -2178,6 +2393,27 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     4. En tu mensaje de respuesta, infórmale con amabilidad:
        - Las fechas exactas en las que tiene registradas conversaciones y el tipo/canal (WhatsApp, Web Landing, Llamada telefónica, SMS, etc.) de cada una.
        - Confírmale que le acabas de remitir por WhatsApp los documentos en PDF, Excel y CSV (y el ZIP con documentos si los hubiese).
+- EXPORTACIÓN DE LISTADO DE CITAS DEL USUARIO (EXCLUSIVO PARA EL AGENTE DE WHATSAPP):
+  * Esta función está disponible ÚNICA Y EXCLUSIVAMENTE para las peticiones que se reciban en el AGENTE DE WHATSAPP y SOLO para el número de móvil del contacto de WhatsApp que interactúa.
+  * Si el usuario te pide consultar o exportar sus citas, su listado de citas, lo que tiene agendado o tuvo en el pasado, pedir sus citas de la semana anterior, semana posterior, de una fecha o rango de fechas (ejemplos: "quiero exportar mis citas", "mándame el listado de mis citas en pdf o excel", "qué citas tengo la semana que viene", "citas de la semana pasada", "mis citas desde el 1 de octubre al 30 de noviembre", "mándame mis citas y documentos adjuntos", "exportar citas de este mes", etc.):
+    1. Llama OBLIGATORIAMENTE a la herramienta 'exportarCitasUsuario'.
+    2. Pasa los parámetros correspondientes según lo que pida el usuario:
+       - Si pide la semana pasada o semana anterior: pasa semanaAnterior=true.
+       - Si pide la próxima semana, semana posterior o semana que viene: pasa semanaPosterior=true.
+       - Si pide una fecha puntual (ej. "del día 15 de noviembre"): pasa fecha="2026-11-15".
+       - Si pide un rango (ej. "de octubre a hoy" o "de este mes"): calcula y pasa desde y hasta en formato YYYY-MM-DD con respecto a hoy (${now}).
+       - Si especifica estado (ej. "solo las programadas" o "las completadas"): pasa estado="programadas" | "completadas" | "canceladas".
+       - Si no especifica fechas, omite para obtener todo su historial de citas.
+    3. La herramienta genera y remite DIRECTAMENTE por WhatsApp:
+       - El archivo en PDF (.pdf)
+       - El archivo en Excel (.xlsx)
+       - El archivo en CSV (.csv)
+       - Y si alguna de sus citas tuviese documentos o imágenes adjuntas del paciente (radiografías, análisis, etc.), además un archivo ZIP (.zip) con todos los documentos adjuntos.
+    4. REGLA ESTRICTA DE PRIVACIDAD Y CONFIDENCIALIDAD: NUNCA se incluye ni se revela el diagnóstico clínico en ningún caso.
+    5. En tu mensaje de respuesta, infórmale con amabilidad:
+       - El resumen claro de las citas encontradas (fechas, servicio y estado).
+       - Confírmale que le acabas de remitir por WhatsApp los documentos en PDF, Excel y CSV (y el ZIP con documentos si los hubiese).
+
 - NUNCA reveles nada interno: no menciones herramientas, funciones, "comandos", identificadores (IDs), bases de datos, ni frases como "voy a crear el contacto", "llamar a la herramienta" o "ejecutar". El cliente solo ve una conversación normal.
 - NUNCA inventes horarios, días u horas disponibles. ANTES de sugerir cualquier horario, debes llamar OBLIGATORIAMENTE a la herramienta 'checkAvailability' para la fecha y servicio solicitados.
 - Si el día pedido está cerrado (como fines de semana) o 'checkAvailability' no devuelve huecos, indícaselo con total claridad al cliente (p. ej. "Los sábados y domingos estamos cerrados") y ofrece consultar el siguiente día laborable en que haya disponibilidad.
@@ -2746,6 +2982,7 @@ ${flow}`;
       changeYogaSubscription: changeYogaSubscriptionTool,
       generarInformeFacturacionCobros: generarInformeFacturacionCobrosTool,
       exportarConversacionesUsuario: exportarConversacionesUsuarioTool,
+      exportarCitasUsuario: exportarCitasUsuarioTool,
     },
     memory,
   });

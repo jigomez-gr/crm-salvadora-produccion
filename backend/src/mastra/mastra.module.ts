@@ -223,6 +223,9 @@ export { NestMastraModule };
           getContactConversationsReport: async (params: any) => {
             return messagesService.getContactConversationsReport(params);
           },
+          getContactAppointmentsReport: async (params: any) => {
+            return appointmentsService.getContactAppointmentsReport(params);
+          },
           getAppointmentPayments: async (query: any) => {
             return appointmentsService.getAppointmentPayments(query);
           },
