@@ -3,6 +3,7 @@ import * as ExcelJS from 'exceljs';
 import archiver from 'archiver';
 import { Conversation } from '../common/entities/conversation.entity';
 import { Message, MessageDirection } from '../common/entities/message.entity';
+import { ThreadSummary } from './messages.service';
 
 export function formatChannelName(channel?: string | null, threadId?: string | null): string {
   const ch = (channel || '').toLowerCase();
@@ -57,7 +58,7 @@ export function cleanSafeFilename(name: string): string {
   return name
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9_\-\.]/g, '_')
+    .replace(/[^a-zA-Z0-9_.-]/g, '_')
     .replace(/_+/g, '_')
     .slice(0, 80);
 }
@@ -514,3 +515,277 @@ export async function generateConversationZip(
     zip.finalize();
   });
 }
+
+// ─── 5. EXPORT CONVERSATION LIST (CSV / XLSX / PDF) ─────────────────────────
+export function generateConversationListCsv(
+  threads: ThreadSummary[],
+  filterInfo?: string,
+): string {
+  const header = [
+    'Fecha',
+    'Canal',
+    'Contacto',
+    'Teléfono',
+    'Email',
+    'Estado',
+    'Modo',
+    'Último Mensaje',
+  ];
+
+  const rows = threads.map((t) => {
+    const dateRef = t.lastMessage?.createdAt || t.createdAt;
+    const fecha = formatDateMadrid(dateRef);
+    const canal = formatChannelName(t.channel, t.threadId);
+    const contacto = t.contact?.name || '-';
+    const telefono = t.contact?.phone || '-';
+    const email = t.contact?.email || '-';
+    const estado = t.unreadCount > 0 ? `Sin leer (${t.unreadCount})` : 'Leído';
+    const modo = t.handoff ? 'Intervención manual (Humano)' : 'Agente IA';
+    const ultimoMsg = (t.lastMessage?.body || '').replace(/\r?\n/g, ' ').trim();
+
+    return [fecha, canal, contacto, telefono, email, estado, modo, ultimoMsg]
+      .map((cell) => {
+        const escaped = String(cell ?? '').replace(/"/g, '""');
+        return `"${escaped}"`;
+      })
+      .join(',');
+  });
+
+  const banner = filterInfo ? `# Filtros: ${filterInfo}\n` : '';
+  return '\uFEFF' + banner + header.map((h) => `"${h}"`).join(',') + '\n' + rows.join('\n');
+}
+
+export async function generateConversationListXlsx(
+  threads: ThreadSummary[],
+  filterInfo?: string,
+): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Escuela de Yoga Salvadora Conesa CRM';
+  workbook.created = new Date();
+
+  const sheet = workbook.addWorksheet('Conversaciones', {
+    pageSetup: { orientation: 'landscape', fitToPage: true },
+  });
+
+  // Título
+  sheet.mergeCells('A1:H1');
+  const titleCell = sheet.getCell('A1');
+  titleCell.value = 'Listado de Conversaciones';
+  titleCell.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FF1F2937' } };
+  titleCell.alignment = { vertical: 'middle' };
+  sheet.getRow(1).height = 24;
+
+  // Subtítulo con filtros y fecha
+  sheet.mergeCells('A2:H2');
+  const subCell = sheet.getCell('A2');
+  subCell.value = `Filtros: ${filterInfo || 'Todas las conversaciones'} | Total: ${threads.length} | Generado: ${formatDateMadrid(new Date())}`;
+  subCell.font = { name: 'Calibri', size: 10, italic: true, color: { argb: 'FF6B7280' } };
+  sheet.getRow(2).height = 18;
+
+  sheet.addRow([]); // Fila 3 vacía
+
+  // Cabecera tabla
+  const headerRow = sheet.addRow([
+    'Fecha',
+    'Canal',
+    'Contacto',
+    'Teléfono',
+    'Email',
+    'Estado',
+    'Modo',
+    'Último Mensaje',
+  ]);
+  headerRow.height = 24;
+  headerRow.eachCell((cell) => {
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF4F46E5' }, // Indigo brand
+    };
+    cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FF3730A3' } },
+      bottom: { style: 'medium', color: { argb: 'FF3730A3' } },
+    };
+  });
+
+  // Filas de datos
+  threads.forEach((t, idx) => {
+    const dateRef = t.lastMessage?.createdAt || t.createdAt;
+    const fecha = formatDateMadrid(dateRef);
+    const canal = formatChannelName(t.channel, t.threadId);
+    const contacto = t.contact?.name || '-';
+    const telefono = t.contact?.phone || '-';
+    const email = t.contact?.email || '-';
+    const estado = t.unreadCount > 0 ? `Sin leer (${t.unreadCount})` : 'Leído';
+    const modo = t.handoff ? 'Intervención manual' : 'Agente IA';
+    const ultimoMsg = (t.lastMessage?.body || '').replace(/\r?\n/g, ' ').trim();
+
+    const row = sheet.addRow([
+      fecha,
+      canal,
+      contacto,
+      telefono,
+      email,
+      estado,
+      modo,
+      ultimoMsg,
+    ]);
+    row.height = 20;
+
+    const isEven = idx % 2 === 0;
+    row.eachCell((cell, colNum) => {
+      cell.font = { name: 'Calibri', size: 10 };
+      cell.border = {
+        bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+      };
+      if (isEven) {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFF9FAFB' },
+        };
+      }
+      if (colNum === 1 || colNum === 2 || colNum === 6 || colNum === 7) {
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      } else {
+        cell.alignment = { vertical: 'middle', horizontal: 'left' };
+      }
+    });
+  });
+
+  sheet.columns = [
+    { width: 20 }, // Fecha
+    { width: 18 }, // Canal
+    { width: 25 }, // Contacto
+    { width: 18 }, // Teléfono
+    { width: 25 }, // Email
+    { width: 14 }, // Estado
+    { width: 20 }, // Modo
+    { width: 50 }, // Último Mensaje
+  ];
+
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
+export async function generateConversationListPdf(
+  threads: ThreadSummary[],
+  filterInfo?: string,
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      size: 'A4',
+      layout: 'landscape',
+      margin: 36,
+      bufferPages: true,
+    });
+    const chunks: Buffer[] = [];
+
+    doc.on('data', (chunk) => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const pageWidth = doc.page.width;
+    const contentWidth = pageWidth - 72; // 36 * 2
+
+    // Header
+    doc.rect(36, 36, contentWidth, 42).fill('#4F46E5');
+    doc
+      .fillColor('#FFFFFF')
+      .fontSize(14)
+      .font('Helvetica-Bold')
+      .text('LISTADO DE CONVERSACIONES', 48, 45);
+
+    doc
+      .fillColor('#E0E7FF')
+      .fontSize(8)
+      .font('Helvetica')
+      .text(
+        `Filtros: ${filterInfo || 'Todas las conversaciones'} | Total: ${threads.length} | Generado: ${formatDateMadrid(new Date())}`,
+        48,
+        62,
+      );
+
+    let y = 90;
+    const colWidths = {
+      fecha: 95,
+      canal: 80,
+      contacto: 120,
+      telefono: 85,
+      estado: 65,
+      ultimoMsg: contentWidth - 445,
+    };
+    const colX = {
+      fecha: 36,
+      canal: 36 + 95,
+      contacto: 36 + 95 + 80,
+      telefono: 36 + 95 + 80 + 120,
+      estado: 36 + 95 + 80 + 120 + 85,
+      ultimoMsg: 36 + 95 + 80 + 120 + 85 + 65,
+    };
+
+    const drawHeader = (currY: number) => {
+      doc.rect(36, currY, contentWidth, 20).fill('#F3F4F6');
+      doc.fillColor('#374151').font('Helvetica-Bold').fontSize(8);
+      doc.text('FECHA', colX.fecha + 4, currY + 6);
+      doc.text('CANAL', colX.canal + 4, currY + 6);
+      doc.text('CONTACTO', colX.contacto + 4, currY + 6);
+      doc.text('TELÉFONO', colX.telefono + 4, currY + 6);
+      doc.text('ESTADO', colX.estado + 4, currY + 6);
+      doc.text('ÚLTIMO MENSAJE', colX.ultimoMsg + 4, currY + 6);
+      return currY + 22;
+    };
+
+    y = drawHeader(y);
+
+    threads.forEach((t, idx) => {
+      if (y + 24 > doc.page.height - 40) {
+        doc.addPage({ size: 'A4', layout: 'landscape', margin: 36 });
+        y = drawHeader(36);
+      }
+
+      const isEven = idx % 2 === 0;
+      if (isEven) {
+        doc.rect(36, y, contentWidth, 18).fill('#F9FAFB');
+      }
+
+      const dateRef = t.lastMessage?.createdAt || t.createdAt;
+      const fecha = formatDateMadrid(dateRef);
+      const canal = formatChannelName(t.channel, t.threadId);
+      const contacto = t.contact?.name || '-';
+      const telefono = t.contact?.phone || '-';
+      const estado = t.unreadCount > 0 ? `Sin leer (${t.unreadCount})` : 'Leído';
+      const msg = (t.lastMessage?.body || '').replace(/\r?\n/g, ' ').slice(0, 75);
+
+      doc.fillColor('#111827').font('Helvetica').fontSize(7.5);
+      doc.text(fecha, colX.fecha + 4, y + 5, { width: colWidths.fecha - 8, lineBreak: false });
+      doc.text(canal, colX.canal + 4, y + 5, { width: colWidths.canal - 8, lineBreak: false });
+      doc.text(contacto, colX.contacto + 4, y + 5, { width: colWidths.contacto - 8, lineBreak: false });
+      doc.text(telefono, colX.telefono + 4, y + 5, { width: colWidths.telefono - 8, lineBreak: false });
+      doc.text(estado, colX.estado + 4, y + 5, { width: colWidths.estado - 8, lineBreak: false });
+      doc.text(msg, colX.ultimoMsg + 4, y + 5, { width: colWidths.ultimoMsg - 8, lineBreak: false });
+
+      y += 18;
+    });
+
+    // Numeración
+    const totalPages = doc.bufferedPageRange().count;
+    for (let i = 0; i < totalPages; i++) {
+      doc.switchToPage(i);
+      doc
+        .font('Helvetica')
+        .fontSize(8)
+        .fillColor('#9CA3AF')
+        .text(
+          `Página ${i + 1} de ${totalPages} · Escuela de Yoga Salvadora Conesa`,
+          36,
+          doc.page.height - 25,
+          { align: 'center', width: contentWidth },
+        );
+    }
+
+    doc.end();
+  });
+}
+

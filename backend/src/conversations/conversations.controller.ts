@@ -51,7 +51,11 @@ import {
   generateConversationXlsx,
   generateConversationCsv,
   generateConversationZip,
+  generateConversationListCsv,
+  generateConversationListXlsx,
+  generateConversationListPdf,
   getConversationBaseFilename,
+  cleanSafeFilename,
 } from './conversation-export.generator';
 
 // Cap the wait when streaming media from YCloud so a slow/hung upstream can't
@@ -355,6 +359,63 @@ export class ConversationsController {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /**
+   * Export filtered conversation list matching query parameters to XLSX, CSV, or PDF.
+   */
+  @Get('export')
+  async exportList(
+    @Query() query: QueryThreadsDto & { format?: 'xlsx' | 'csv' | 'pdf' },
+    @Res() res: Response,
+  ) {
+    const page = await this.messagesService.listThreads({
+      limit: 10000,
+      offset: 0,
+      days: query.days,
+      readStatus: query.readStatus,
+      channel: query.channel,
+      search: query.search,
+      searchField: query.searchField,
+    });
+    const format = (query.format || 'xlsx').toLowerCase();
+    const filterParts: string[] = [];
+    if (query.channel && query.channel !== 'all') filterParts.push(`Canal: ${query.channel}`);
+    if (query.days && query.days !== 'all') filterParts.push(`Periodo: últimos ${query.days} días`);
+    if (query.readStatus && query.readStatus !== 'all') filterParts.push(`Estado: ${query.readStatus}`);
+    if (query.search) filterParts.push(`Búsqueda: "${query.search}" (${query.searchField || 'todos'})`);
+    const filterDesc = filterParts.length > 0 ? filterParts.join(' | ') : 'Todas las conversaciones';
+
+    const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+    const searchSlug = query.search ? cleanSafeFilename(query.search) : 'Filtrado';
+    const baseFilename = `Conversaciones_${searchSlug}_${timestamp}`;
+
+    if (format === 'csv') {
+      const csvStr = generateConversationListCsv(page.items, filterDesc);
+      const csvBuf = Buffer.from(csvStr, 'utf-8');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${baseFilename}.csv"`);
+      res.setHeader('Content-Length', csvBuf.length);
+      return res.end(csvBuf);
+    }
+
+    if (format === 'pdf') {
+      const pdfBuf = await generateConversationListPdf(page.items, filterDesc);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${baseFilename}.pdf"`);
+      res.setHeader('Content-Length', pdfBuf.length);
+      return res.end(pdfBuf);
+    }
+
+    // Default: xlsx
+    const xlsxBuf = await generateConversationListXlsx(page.items, filterDesc);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${baseFilename}.xlsx"`);
+    res.setHeader('Content-Length', xlsxBuf.length);
+    return res.end(xlsxBuf);
   }
 
   @Get(':threadId/messages')

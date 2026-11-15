@@ -434,17 +434,69 @@ function ConversationsPageInner() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
+  // Export conversation list state (results based on current filters)
+  const [exportingListFormat, setExportingListFormat] = useState<string | null>(null);
+  const [showListExportMenu, setShowListExportMenu] = useState(false);
+  const listExportMenuRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
         setShowExportMenu(false);
       }
+      if (listExportMenuRef.current && !listExportMenuRef.current.contains(event.target as Node)) {
+        setShowListExportMenu(false);
+      }
     }
-    if (showExportMenu) {
+    if (showExportMenu || showListExportMenu) {
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
-  }, [showExportMenu]);
+  }, [showExportMenu, showListExportMenu]);
+
+  const downloadListExport = async (format: "xlsx" | "csv" | "pdf") => {
+    if (exportingListFormat) return;
+    setExportingListFormat(format);
+    setShowListExportMenu(false);
+    try {
+      const q = new URLSearchParams();
+      if (days !== "all") q.set("days", days);
+      if (readStatus !== "all") q.set("readStatus", readStatus);
+      if (channelFilter !== "all") q.set("channel", channelFilter);
+      if (search) q.set("search", search);
+      if (searchField !== "all") q.set("searchField", searchField);
+      q.set("format", format);
+
+      const url = apiUrl(`/api/conversations/export?${q.toString()}`);
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.message || `Error al generar listado ${format.toUpperCase()}`);
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition");
+      let filename = `listado_conversaciones.${format}`;
+      if (disposition) {
+        const match = disposition.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+        if (match && match[1]) {
+          filename = decodeURIComponent(match[1]);
+        }
+      }
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(blobUrl);
+      a.remove();
+      toast.success(`Listado de conversaciones en ${format.toUpperCase()} descargado con éxito`);
+    } catch (err: any) {
+      toast.error("Error al exportar listado: " + (err?.message || "Error desconocido"));
+    } finally {
+      setExportingListFormat(null);
+    }
+  };
 
   const downloadConversationExport = async (format: "pdf" | "xlsx" | "csv" | "zip") => {
     if (!selected || exportingFormat) return;
@@ -874,31 +926,99 @@ function ConversationsPageInner() {
                 {total}
               </span>
             </div>
-            {(searchInput || search || days !== "all" || readStatus !== "all" || channelFilter !== "all" || searchField !== "all") && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchInput("");
-                  setSearch("");
-                  setSearchField("all");
-                  setDays("all");
-                  setReadStatus("all");
-                  setChannelFilter("all");
-                  setOffset(0);
-                  fetchThreads({
-                    search: "",
-                    searchField: "all",
-                    days: "all",
-                    readStatus: "all",
-                    channel: "all",
-                    offset: 0,
-                  });
-                }}
-                className="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium"
-              >
-                Limpiar filtros
-              </button>
-            )}
+
+            <div className="flex items-center gap-1.5">
+              {/* Export conversation list matching active parameters */}
+              <div className="relative" ref={listExportMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowListExportMenu((prev) => !prev)}
+                  disabled={Boolean(exportingListFormat) || total === 0}
+                  className="flex items-center gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 text-[11px] font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 transition-colors shadow-sm"
+                  title="Exportar listado según los filtros en pantalla a Excel, CSV o PDF"
+                >
+                  {exportingListFormat ? (
+                    <>
+                      <RefreshCw className="h-3 w-3 animate-spin text-neutral-500" />
+                      <span>{exportingListFormat.toUpperCase()}...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-3 w-3 text-neutral-500" />
+                      <span>Exportar</span>
+                      <ChevronDown className="h-2.5 w-2.5 text-neutral-400" />
+                    </>
+                  )}
+                </button>
+
+                {showListExportMenu && (
+                  <div className="absolute right-0 top-full z-40 mt-1 w-60 rounded-xl border border-neutral-200 bg-white p-1.5 shadow-lg">
+                    <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+                      Exportar resultado ({total})
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => downloadListExport("xlsx")}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
+                    >
+                      <FileSpreadsheet className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <div>
+                        <div className="font-semibold text-neutral-800">Excel (.xlsx)</div>
+                        <div className="text-[10px] text-neutral-400">Listado con filtros y formato</div>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => downloadListExport("csv")}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
+                    >
+                      <FileDown className="h-4 w-4 text-blue-600 shrink-0" />
+                      <div>
+                        <div className="font-semibold text-neutral-800">CSV (.csv)</div>
+                        <div className="text-[10px] text-neutral-400">Exportación de datos tabulares</div>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => downloadListExport("pdf")}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
+                    >
+                      <FileText className="h-4 w-4 text-rose-600 shrink-0" />
+                      <div>
+                        <div className="font-semibold text-neutral-800">PDF (.pdf)</div>
+                        <div className="text-[10px] text-neutral-400">Informe horizontal para imprimir</div>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {(searchInput || search || days !== "all" || readStatus !== "all" || channelFilter !== "all" || searchField !== "all") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchInput("");
+                    setSearch("");
+                    setSearchField("all");
+                    setDays("all");
+                    setReadStatus("all");
+                    setChannelFilter("all");
+                    setOffset(0);
+                    fetchThreads({
+                      search: "",
+                      searchField: "all",
+                      days: "all",
+                      readStatus: "all",
+                      channel: "all",
+                      offset: 0,
+                    });
+                  }}
+                  className="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium"
+                >
+                  Limpiar
+                </button>
+              )}
+            </div>
           </div>
 
           {whatsappAutomationPaused && (
