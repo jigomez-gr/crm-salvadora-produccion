@@ -211,4 +211,110 @@ describe('Conversations Read / Unread Status', () => {
       expect(res.send).toHaveBeenCalled();
     });
   });
+
+  describe('Conversation Exports (PDF, XLSX, CSV, ZIP)', () => {
+    it('getConversationExportData returns conversation and its messages', async () => {
+      const mockConv = {
+        threadId: 'booking:+34650039234',
+        channel: 'whatsapp',
+        contact: { name: 'Jose Ignacio', phone: '+34650039234' },
+      };
+      const mockMsgs = [
+        {
+          id: 'm1',
+          threadId: 'booking:+34650039234',
+          body: 'Hola',
+          direction: 'inbound',
+          createdAt: new Date(),
+        },
+      ];
+
+      jest.spyOn(messagesService, 'getConversation').mockResolvedValue(mockConv as any);
+      jest.spyOn(messagesService, 'getThreadMessages').mockResolvedValue(mockMsgs as any);
+
+      const data = await messagesService.getConversationExportData('booking:+34650039234');
+      expect(data.conversation).toEqual(mockConv);
+      expect(data.messages).toEqual(mockMsgs);
+    });
+
+    it('exportCsv streams CSV with attachment header and channel name', async () => {
+      const mockConv = {
+        threadId: 'booking:+34650039234',
+        channel: 'whatsapp',
+        contact: { name: 'Jose Ignacio', phone: '+34650039234' },
+      };
+      const mockMsgs = [
+        {
+          id: 'm1',
+          threadId: 'booking:+34650039234',
+          body: 'Hola, información sobre Baño de Gong',
+          direction: 'inbound',
+          createdAt: new Date('2026-11-15T10:00:00Z'),
+        },
+      ];
+
+      jest.spyOn(messagesService, 'getConversationExportData').mockResolvedValue({
+        conversation: mockConv as any,
+        messages: mockMsgs as any,
+      });
+
+      const res = {
+        setHeader: jest.fn(),
+        end: jest.fn(),
+      } as any;
+
+      await controller.exportCsv('booking:+34650039234', res);
+
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Type',
+        'text/csv; charset=utf-8',
+      );
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Disposition',
+        expect.stringContaining('Conversacion_WhatsApp_'),
+      );
+      expect(res.end).toHaveBeenCalled();
+    });
+
+    it('exportZip streams ZIP archive with correct content type', async () => {
+      const mockConv = {
+        threadId: 'booking:+34650039234',
+        channel: 'whatsapp',
+        contact: { name: 'Jose Ignacio', phone: '+34650039234' },
+      };
+      const mockMsgs = [
+        {
+          id: 'm1',
+          threadId: 'booking:+34650039234',
+          body: 'Consulta con adjunto',
+          mediaUrl: 'data:text/plain;base64,SG9sYQ==',
+          mediaFilename: 'prueba.txt',
+          direction: 'inbound',
+          createdAt: new Date('2026-11-15T10:00:00Z'),
+        },
+      ];
+
+      jest.spyOn(messagesService, 'getConversationExportData').mockResolvedValue({
+        conversation: mockConv as any,
+        messages: mockMsgs as any,
+      });
+
+      const res = {
+        setHeader: jest.fn(),
+        end: jest.fn(),
+      } as any;
+
+      await controller.exportZip('booking:+34650039234', res);
+
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Type',
+        'application/zip',
+      );
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Disposition',
+        expect.stringContaining('.zip'),
+      );
+      expect(res.end).toHaveBeenCalled();
+    });
+  });
 });

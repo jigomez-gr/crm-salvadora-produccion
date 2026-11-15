@@ -31,6 +31,10 @@ import {
   User,
   RefreshCw,
   Smartphone,
+  Archive,
+  ChevronDown,
+  FileSpreadsheet,
+  FileDown,
 } from "lucide-react";
 import { apiFetch, apiUrl, ApiError } from "@/lib/api";
 import {
@@ -424,6 +428,59 @@ function ConversationsPageInner() {
   const [emailBody, setEmailBody] = useState("");
   const [initialAiDraft, setInitialAiDraft] = useState<{ subject: string; body: string } | null>(null);
   const [sendingEmail, setSendingEmail] = useState(false);
+
+  // Export conversation state
+  const [exportingFormat, setExportingFormat] = useState<string | null>(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setShowExportMenu(false);
+      }
+    }
+    if (showExportMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showExportMenu]);
+
+  const downloadConversationExport = async (format: "pdf" | "xlsx" | "csv" | "zip") => {
+    if (!selected || exportingFormat) return;
+    setExportingFormat(format);
+    setShowExportMenu(false);
+    try {
+      const url = apiUrl(`/api/conversations/${encodeURIComponent(selected)}/export/${format}`);
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.message || `Error al generar exportación ${format.toUpperCase()}`);
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition");
+      let filename = `conversacion_${format}.${format}`;
+      if (disposition) {
+        const match = disposition.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+        if (match && match[1]) {
+          filename = decodeURIComponent(match[1]);
+        }
+      }
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(blobUrl);
+      a.remove();
+      toast.success(`Exportación ${format.toUpperCase()} descargada con éxito`);
+    } catch (err: any) {
+      toast.error("Error al exportar: " + (err?.message || "Error desconocido"));
+    } finally {
+      setExportingFormat(null);
+    }
+  };
 
   // Spinner shown while the selected thread's messages haven't loaded yet.
   const loadingMessages = selected !== null && selected !== loadedThread;
@@ -1323,6 +1380,99 @@ function ConversationsPageInner() {
                 )}
                 {selectedThread && (
                   <ChannelBadge channel={selectedThread.channel} threadId={selectedThread.threadId} />
+                )}
+                {selectedThread && (
+                  <div className="relative" ref={exportMenuRef}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setShowExportMenu((prev) => !prev)}
+                      disabled={Boolean(exportingFormat)}
+                      title="Exportar conversación a PDF, Excel, CSV o ZIP con archivos adjuntos"
+                      className="gap-1 text-xs font-medium border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
+                    >
+                      {exportingFormat ? (
+                        <>
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin text-neutral-500" />
+                          <span>{exportingFormat.toUpperCase()}...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="h-3.5 w-3.5 text-neutral-500" />
+                          <span>Exportar</span>
+                          <ChevronDown className="h-3 w-3 text-neutral-400" />
+                        </>
+                      )}
+                    </Button>
+
+                    {showExportMenu && (
+                      <div className="absolute right-0 top-full z-30 mt-1 w-64 rounded-xl border border-neutral-200 bg-white p-1.5 shadow-lg">
+                        <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
+                          Exportar conversación
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => downloadConversationExport("pdf")}
+                          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
+                        >
+                          <FileText className="h-4 w-4 text-rose-600 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-neutral-900">Documento PDF</p>
+                            <p className="text-[10px] text-neutral-500">Historial maquetado ({selectedThread.channel})</p>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => downloadConversationExport("xlsx")}
+                          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
+                        >
+                          <FileSpreadsheet className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-neutral-900">Hoja de cálculo Excel (.xlsx)</p>
+                            <p className="text-[10px] text-neutral-500">Con métricas y columnas detalladas</p>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => downloadConversationExport("csv")}
+                          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
+                        >
+                          <FileDown className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-neutral-900">Archivo CSV (.csv)</p>
+                            <p className="text-[10px] text-neutral-500">Separado por puntos y coma</p>
+                          </div>
+                        </button>
+
+                        <div className="my-1 border-t border-neutral-100" />
+
+                        <button
+                          type="button"
+                          onClick={() => downloadConversationExport("zip")}
+                          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
+                        >
+                          <Archive className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-semibold text-neutral-900">Paquete ZIP (.zip)</p>
+                              {messages.some((m) => Boolean(m.mediaType || m.mediaFilename)) && (
+                                <span className="rounded bg-amber-100 px-1 py-0.2 text-[9px] font-bold text-amber-800">
+                                  Con archivos
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-neutral-500">
+                              {messages.some((m) => Boolean(m.mediaType || m.mediaFilename))
+                                ? "Incluye transcripciones y todos los archivos adjuntos"
+                                : "Incluye transcripciones PDF, Excel y CSV"}
+                            </p>
+                          </div>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 )}
                 <button
                   type="button"

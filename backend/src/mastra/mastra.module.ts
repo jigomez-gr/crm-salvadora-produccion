@@ -220,6 +220,9 @@ export { NestMastraModule };
           setConversationHandoff: async (threadId: string, handoff: boolean) => {
             return messagesService.setHandoff(threadId, handoff);
           },
+          getContactConversationsReport: async (params: any) => {
+            return messagesService.getContactConversationsReport(params);
+          },
           getAppointmentPayments: async (query: any) => {
             return appointmentsService.getAppointmentPayments(query);
           },

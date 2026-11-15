@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, NotFoundException, OnModuleInit, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -11,6 +11,17 @@ import {
 import { Conversation } from '../common/entities/conversation.entity';
 import { Call, CallDirection } from '../common/entities/call.entity';
 import { ZadarmaSmsLog } from '../sms/zadarma-sms-log.entity';
+import { Contact } from '../common/entities/contact.entity';
+import { normalizePhoneLoose } from '../common/phone';
+import {
+  generateConversationPdf,
+  generateConversationXlsx,
+  generateConversationCsv,
+  generateConversationZip,
+  formatChannelName,
+  formatDateMadrid,
+  cleanSafeFilename,
+} from './conversation-export.generator';
 
 export interface SaveMessageDto {
   contactId?: string;
@@ -94,6 +105,37 @@ export interface ThreadPage {
   offset: number;
 }
 
+export interface ContactConversationsReportParams {
+  contactId?: string;
+  phone?: string;
+  startDate?: string;
+  endDate?: string;
+  specificDate?: string;
+  forceZip?: boolean;
+}
+
+export interface ContactConversationsReportResult {
+  contact: { id?: string; name: string; phone: string; email?: string };
+  conversationsSummary: Array<{
+    threadId: string;
+    channel: string;
+    date: Date | string;
+    dateFormatted: string;
+    messageCount: number;
+    hasAttachments: boolean;
+    attachmentsCount: number;
+    summarySnippet: string;
+  }>;
+  messages: Message[];
+  attachmentsCount: number;
+  pdfBuffer: Buffer;
+  xlsxBuffer: Buffer;
+  csvBuffer: Buffer;
+  zipBuffer: Buffer | null;
+  textSummary: string;
+  filenameBase: string;
+}
+
 @Injectable()
 export class MessagesService implements OnModuleInit {
   constructor(
@@ -105,6 +147,9 @@ export class MessagesService implements OnModuleInit {
     private readonly callsRepo: Repository<Call>,
     @InjectRepository(ZadarmaSmsLog)
     private readonly smsRepo: Repository<ZadarmaSmsLog>,
+    @Optional()
+    @InjectRepository(Contact)
+    private readonly contactsRepo?: Repository<Contact>,
   ) {}
 
   async onModuleInit() {
@@ -712,7 +757,10 @@ export class MessagesService implements OnModuleInit {
         updatedAt: call.updatedAt || call.createdAt,
       } as Conversation;
     }
-    return this.conversationsRepo.findOne({ where: { threadId } });
+    return this.conversationsRepo.findOne({
+      where: { threadId },
+      relations: ['contact'],
+    });
   }
 
   /**
@@ -943,5 +991,373 @@ export class MessagesService implements OnModuleInit {
        ON CONFLICT ("threadId") DO UPDATE SET channel = $3 WHERE conversations.channel != $3 AND $3 != 'whatsapp'`,
       [threadId, agentKey, channel],
     );
+  }
+
+  /**
+   * Retrieves full conversation details and all associated messages for export (PDF, Excel, CSV, ZIP).
+   */
+  async getConversationExportData(threadId: string): Promise<{
+    conversation: Conversation;
+    messages: Message[];
+  }> {
+    const conversation = await this.getConversation(threadId);
+    if (!conversation) {
+      throw new NotFoundException(
+        `Conversación con identificador ${threadId} no encontrada`,
+      );
+    }
+    const messages = await this.getThreadMessages(threadId);
+    return { conversation, messages };
+  }
+
+  /**
+   * Builds a multi-channel conversation report for a specific contact and optional date range.
+   * Restrictable to the requesting customer's mobile number for privacy and security.
+   */
+  async getContactConversationsReport(
+    params: ContactConversationsReportParams,
+  ): Promise<ContactConversationsReportResult> {
+    let contact: Contact | null = null;
+    const phone = params.phone?.trim() || '';
+    const phoneDigits = phone.replace(/\D/g, '');
+
+    if (this.contactsRepo) {
+      if (params.contactId) {
+        contact = await this.contactsRepo.findOne({
+          where: { id: params.contactId },
+        });
+      }
+      if (!contact && phone) {
+        const norm = normalizePhoneLoose(phone);
+        contact = await this.contactsRepo.findOne({
+          where: [{ phone }, { phone: norm }],
+        });
+        if (!contact && phoneDigits.length >= 7) {
+          contact = await this.contactsRepo
+            .createQueryBuilder('c')
+            .where("regexp_replace(c.phone, '[^0-9]', '', 'g') LIKE :dig", {
+              dig: `%${phoneDigits.slice(-9)}%`,
+            })
+            .orderBy('c.createdAt', 'DESC')
+            .getOne();
+        }
+      }
+    }
+
+    const contactInfo = {
+      id: contact?.id,
+      name: contact?.name || phone || 'Cliente',
+      phone: contact?.phone || phone,
+      email: contact?.email || '',
+    };
+
+    // Parse date filters
+    let startDate: Date | null = null;
+    let endDate: Date | null = null;
+    let filterDescription = 'Historial completo de conversaciones';
+
+    if (params.specificDate) {
+      const d = new Date(params.specificDate);
+      if (!isNaN(d.getTime())) {
+        startDate = new Date(d);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(d);
+        endDate.setHours(23, 59, 59, 999);
+        filterDescription = `Fecha: ${params.specificDate}`;
+      }
+    } else {
+      if (params.startDate) {
+        const d = new Date(params.startDate);
+        if (!isNaN(d.getTime())) {
+          startDate = new Date(d);
+          startDate.setHours(0, 0, 0, 0);
+        }
+      }
+      if (params.endDate) {
+        const d = new Date(params.endDate);
+        if (!isNaN(d.getTime())) {
+          endDate = new Date(d);
+          endDate.setHours(23, 59, 59, 999);
+        }
+      }
+      if (startDate && endDate) {
+        filterDescription = `Desde: ${params.startDate} | Hasta: ${params.endDate}`;
+      } else if (startDate) {
+        filterDescription = `Desde: ${params.startDate}`;
+      } else if (endDate) {
+        filterDescription = `Hasta: ${params.endDate}`;
+      }
+    }
+
+    // 1. Gather relevant conversation threads
+    const convConditions: string[] = [];
+    const convParams: any = {};
+
+    if (contact?.id) {
+      convConditions.push('c."contactId" = :cid');
+      convParams.cid = contact.id;
+    }
+    if (phoneDigits.length >= 7) {
+      convConditions.push('c."threadId" LIKE :pDig');
+      convParams.pDig = `%${phoneDigits.slice(-9)}%`;
+    }
+
+    let matchingConversations: Conversation[] = [];
+    if (convConditions.length > 0) {
+      matchingConversations = await this.conversationsRepo
+        .createQueryBuilder('c')
+        .leftJoinAndSelect('c.contact', 'contact')
+        .where(`(${convConditions.join(' OR ')})`, convParams)
+        .orderBy('c."lastMessageAt"', 'DESC')
+        .getMany();
+    }
+
+    // 2. Also search calls
+    let matchingCalls: Call[] = [];
+    try {
+      const callConditions: string[] = [];
+      const callParams: any = {};
+      if (contact?.id) {
+        callConditions.push('call."contactId" = :cid');
+        callParams.cid = contact.id;
+      }
+      if (phoneDigits.length >= 7) {
+        callConditions.push("regexp_replace(call.\"phoneNumber\", '[^0-9]', '', 'g') LIKE :pDig");
+        callConditions.push("regexp_replace(call.\"customerNumber\", '[^0-9]', '', 'g') LIKE :pDig");
+        callParams.pDig = `%${phoneDigits.slice(-9)}%`;
+      }
+      if (callConditions.length > 0) {
+        matchingCalls = await this.callsRepo
+          .createQueryBuilder('call')
+          .leftJoinAndSelect('call.contact', 'contact')
+          .where(`(${callConditions.join(' OR ')})`, callParams)
+          .orderBy('call."createdAt"', 'DESC')
+          .getMany();
+      }
+    } catch {
+      // Non-fatal
+    }
+
+    // 3. Also search SMS
+    let matchingSms: ZadarmaSmsLog[] = [];
+    try {
+      const smsConditions: string[] = [];
+      const smsParams: any = {};
+      if (contact?.id) {
+        smsConditions.push('sms."contactId" = :cid');
+        smsParams.cid = contact.id;
+      }
+      if (phoneDigits.length >= 7) {
+        smsConditions.push("regexp_replace(sms.\"phone\", '[^0-9]', '', 'g') LIKE :pDig");
+        smsConditions.push("regexp_replace(sms.\"numerodestino\", '[^0-9]', '', 'g') LIKE :pDig");
+        smsParams.pDig = `%${phoneDigits.slice(-9)}%`;
+      }
+      if (smsConditions.length > 0) {
+        matchingSms = await this.smsRepo
+          .createQueryBuilder('sms')
+          .leftJoinAndSelect('sms.contact', 'contact')
+          .where(`(${smsConditions.join(' OR ')})`, smsParams)
+          .orderBy('sms."fecharegistro"', 'DESC')
+          .getMany();
+      }
+    } catch {
+      // Non-fatal
+    }
+
+    // Process all threads and collect messages
+    const conversationsSummary: ContactConversationsReportResult['conversationsSummary'] = [];
+    const allMessages: Message[] = [];
+    const seenMessageIds = new Set<string>();
+
+    for (const conv of matchingConversations) {
+      const msgs = await this.getThreadMessages(conv.threadId);
+      const filtered = msgs.filter((m) => {
+        const t = new Date(m.createdAt).getTime();
+        if (startDate && t < startDate.getTime()) return false;
+        if (endDate && t > endDate.getTime()) return false;
+        return true;
+      });
+
+      if (filtered.length > 0) {
+        const attCount = filtered.filter((m) => Boolean(m.mediaUrl || m.mediaFilename)).length;
+        const convDate = filtered[0].createdAt || conv.createdAt || conv.lastMessageAt;
+        const channelFormatted = formatChannelName(conv.channel, conv.threadId);
+        conversationsSummary.push({
+          threadId: conv.threadId,
+          channel: channelFormatted,
+          date: convDate,
+          dateFormatted: formatDateMadrid(convDate),
+          messageCount: filtered.length,
+          hasAttachments: attCount > 0,
+          attachmentsCount: attCount,
+          summarySnippet: filtered[filtered.length - 1]?.body?.slice(0, 100) || '',
+        });
+
+        filtered.forEach((m) => {
+          if (!seenMessageIds.has(m.id)) {
+            seenMessageIds.add(m.id);
+            allMessages.push(m);
+          }
+        });
+      }
+    }
+
+    // Process Calls
+    for (const call of matchingCalls) {
+      const callDate = call.startedAt || call.createdAt || new Date();
+      const t = new Date(callDate).getTime();
+      if (startDate && t < startDate.getTime()) continue;
+      if (endDate && t > endDate.getTime()) continue;
+
+      const msgs = await this.getThreadMessages(`call:${call.id}`);
+      if (msgs.length > 0) {
+        conversationsSummary.push({
+          threadId: `call:${call.id}`,
+          channel: 'Llamada telefónica (VAPI)',
+          date: callDate,
+          dateFormatted: formatDateMadrid(callDate),
+          messageCount: msgs.length,
+          hasAttachments: false,
+          attachmentsCount: 0,
+          summarySnippet: call.summary || call.transcript || 'Llamada telefónica',
+        });
+        msgs.forEach((m) => {
+          if (!seenMessageIds.has(m.id)) {
+            seenMessageIds.add(m.id);
+            allMessages.push(m);
+          }
+        });
+      }
+    }
+
+    // Process SMS
+    for (const sms of matchingSms) {
+      const smsDate = sms.fecha || sms.fecharegistro || new Date();
+      const t = new Date(smsDate).getTime();
+      if (startDate && t < startDate.getTime()) continue;
+      if (endDate && t > endDate.getTime()) continue;
+
+      const msgs = await this.getThreadMessages(`sms:${sms.id}`);
+      if (msgs.length > 0) {
+        conversationsSummary.push({
+          threadId: `sms:${sms.id}`,
+          channel: 'Mensaje SMS (Zadarma)',
+          date: smsDate,
+          dateFormatted: formatDateMadrid(smsDate),
+          messageCount: msgs.length,
+          hasAttachments: false,
+          attachmentsCount: 0,
+          summarySnippet: sms.message || sms.mensaje || 'Mensaje SMS',
+        });
+        msgs.forEach((m) => {
+          if (!seenMessageIds.has(m.id)) {
+            seenMessageIds.add(m.id);
+            allMessages.push(m);
+          }
+        });
+      }
+    }
+
+    // Sort summary and messages chronologically
+    conversationsSummary.sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+    allMessages.sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+
+    const totalAttachments = allMessages.filter((m) =>
+      Boolean(m.mediaUrl || m.mediaFilename),
+    ).length;
+    const dateSuffix = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const filenameBase = `Historial_Conversaciones_${cleanSafeFilename(
+      contactInfo.name || contactInfo.phone || 'cliente',
+    )}_${dateSuffix}`;
+
+    // Synthetic conversation for export generator
+    const reportConversation: Conversation = {
+      threadId: `report:${contactInfo.phone || 'cliente'}`,
+      agentKey: 'salvadora',
+      contactId: contactInfo.id,
+      contact: {
+        id: contactInfo.id || 'cliente',
+        name: contactInfo.name,
+        phone: contactInfo.phone,
+        email: contactInfo.email,
+      } as any,
+      channel:
+        conversationsSummary.length === 1
+          ? conversationsSummary[0].channel
+          : 'Multicanal (CRM)',
+      handoff: false,
+      unreadCount: 0,
+      lastMessageAt:
+        allMessages[allMessages.length - 1]?.createdAt || new Date(),
+      lastInboundAt: null,
+      lastMessageBody: '',
+      lastMessageDirection: MessageDirection.OUTBOUND,
+      messageCount: allMessages.length,
+      createdAt: allMessages[0]?.createdAt || new Date(),
+      updatedAt: new Date(),
+    } as Conversation;
+
+    const exportOptions = {
+      reportTitle: 'HISTORIAL Y TRANSCRIPCIÓN DE CONVERSACIONES',
+      filterInfo: filterDescription,
+      zipFilename: filenameBase,
+    };
+
+    const pdfBuffer = await generateConversationPdf(
+      reportConversation,
+      allMessages,
+      exportOptions,
+    );
+    const xlsxBuffer = await generateConversationXlsx(
+      reportConversation,
+      allMessages,
+      exportOptions,
+    );
+    const csvStr = generateConversationCsv(
+      reportConversation,
+      allMessages,
+      exportOptions,
+    );
+    const csvBuffer = Buffer.from(csvStr, 'utf-8');
+
+    let zipBuffer: Buffer | null = null;
+    if (totalAttachments > 0 || params.forceZip) {
+      zipBuffer = await generateConversationZip(
+        reportConversation,
+        allMessages,
+        exportOptions,
+      );
+    }
+
+    // Generate formatted text summary for WhatsApp / chat response
+    let textSummary = `📋 *Resumen de tus conversaciones registradas (${filterDescription}):*\n`;
+    if (conversationsSummary.length === 0) {
+      textSummary += `No se encontraron conversaciones registradas para el período solicitado.`;
+    } else {
+      textSummary += conversationsSummary
+        .map((cs) => {
+          const att =
+            cs.attachmentsCount > 0 ? ` 📎 (${cs.attachmentsCount} adjuntos)` : '';
+          return `• *${cs.dateFormatted}* — *${cs.channel}* (${cs.messageCount} msgs${att})`;
+        })
+        .join('\n');
+    }
+
+    return {
+      contact: contactInfo,
+      conversationsSummary,
+      messages: allMessages,
+      attachmentsCount: totalAttachments,
+      pdfBuffer,
+      xlsxBuffer,
+      csvBuffer,
+      zipBuffer,
+      textSummary,
+      filenameBase,
+    };
   }
 }

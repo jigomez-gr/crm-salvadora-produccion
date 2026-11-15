@@ -46,6 +46,13 @@ import {
 import { EmailService } from '../email/email.service';
 import { ContactsService } from '../contacts/contacts.service';
 import { AppointmentsService } from '../appointments/appointments.service';
+import {
+  generateConversationPdf,
+  generateConversationXlsx,
+  generateConversationCsv,
+  generateConversationZip,
+  getConversationBaseFilename,
+} from './conversation-export.generator';
 
 // Cap the wait when streaming media from YCloud so a slow/hung upstream can't
 // pin a request open. WhatsApp media limit is 101 MB for documents and media.
@@ -301,6 +308,89 @@ export class ConversationsController {
     const messages = await this.messagesService.getThreadMessages(threadId);
     // Strip internal/secret fields (mediaUrl, externalId, providerMessageId).
     return messages.map(toMessageView);
+  }
+
+  /**
+   * Export conversation transcript to PDF.
+   */
+  @Get(':threadId/export/pdf')
+  async exportPdf(@Param('threadId') threadId: string, @Res() res: Response) {
+    const { conversation, messages } =
+      await this.messagesService.getConversationExportData(threadId);
+    const pdfBuf = await generateConversationPdf(conversation, messages);
+    const filename = `${getConversationBaseFilename(conversation)}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${encodeURIComponent(filename)}"`,
+    );
+    res.setHeader('Content-Length', pdfBuf.length);
+    res.end(pdfBuf);
+  }
+
+  /**
+   * Export conversation transcript to XLSX (Excel).
+   */
+  @Get(':threadId/export/xlsx')
+  async exportXlsx(@Param('threadId') threadId: string, @Res() res: Response) {
+    const { conversation, messages } =
+      await this.messagesService.getConversationExportData(threadId);
+    const xlsxBuf = await generateConversationXlsx(conversation, messages);
+    const filename = `${getConversationBaseFilename(conversation)}.xlsx`;
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${encodeURIComponent(filename)}"`,
+    );
+    res.setHeader('Content-Length', xlsxBuf.length);
+    res.end(xlsxBuf);
+  }
+
+  /**
+   * Export conversation transcript to CSV.
+   */
+  @Get(':threadId/export/csv')
+  async exportCsv(@Param('threadId') threadId: string, @Res() res: Response) {
+    const { conversation, messages } =
+      await this.messagesService.getConversationExportData(threadId);
+    const csvStr = generateConversationCsv(conversation, messages);
+    const csvBuf = Buffer.from(csvStr, 'utf-8');
+    const filename = `${getConversationBaseFilename(conversation)}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${encodeURIComponent(filename)}"`,
+    );
+    res.setHeader('Content-Length', csvBuf.length);
+    res.end(csvBuf);
+  }
+
+  /**
+   * Export conversation transcript and all attached documents to ZIP.
+   */
+  @Get(':threadId/export/zip')
+  async exportZip(@Param('threadId') threadId: string, @Res() res: Response) {
+    const { conversation, messages } =
+      await this.messagesService.getConversationExportData(threadId);
+    const agentConfig = await (this.agentsConfigService?.findByKeyOrNull
+      ? this.agentsConfigService
+          .findByKeyOrNull(this.agentKeyOf(threadId))
+          .catch(() => null)
+      : Promise.resolve(null));
+    const zipBuf = await generateConversationZip(conversation, messages, {
+      agentConfig,
+    });
+    const filename = `${getConversationBaseFilename(conversation)}.zip`;
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${encodeURIComponent(filename)}"`,
+    );
+    res.setHeader('Content-Length', zipBuf.length);
+    res.end(zipBuf);
   }
 
   /** Clear the unread badge — the operator has opened this thread. */

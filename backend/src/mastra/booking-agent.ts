@@ -117,6 +117,34 @@ export interface BookingAgentDeps {
       mediaCategory: 'document' | 'audio' | 'video' | 'image';
     };
   }) => Promise<{ ok: boolean; providerMessageId?: string; error?: string }>;
+  getContactConversationsReport?: (params: {
+    contactId?: string;
+    phone?: string;
+    startDate?: string;
+    endDate?: string;
+    specificDate?: string;
+    forceZip?: boolean;
+  }) => Promise<{
+    contact: any;
+    conversationsSummary: Array<{
+      threadId: string;
+      channel: string;
+      date: Date | string;
+      dateFormatted: string;
+      messageCount: number;
+      hasAttachments: boolean;
+      attachmentsCount: number;
+      summarySnippet: string;
+    }>;
+    messages: any[];
+    attachmentsCount: number;
+    pdfBuffer: Buffer;
+    xlsxBuffer: Buffer;
+    csvBuffer: Buffer;
+    zipBuffer: Buffer | null;
+    textSummary: string;
+    filenameBase: string;
+  }>;
 }
 
 function getConfig(context: any): any {
@@ -1852,6 +1880,176 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     },
   });
 
+  const exportarConversacionesUsuarioTool = createTool({
+    id: 'exportarConversacionesUsuario',
+    description:
+      'EXCLUSIVO PARA EL AGENTE DE WHATSAPP: Exporta el historial de conversaciones del contacto asociado al móvil de WhatsApp (para una fecha o rango de fechas desde/hasta opcional). Envía por WhatsApp los documentos en PDF, Excel (.xlsx) y CSV, y si hubiese archivos o documentos adjuntos en las conversaciones, envía además un archivo ZIP con todos ellos. También informa de las fechas en las que el cliente tiene conversaciones registradas y el tipo (WhatsApp, Web Landing, Llamada telefónica, SMS, etc.) y fecha de cada una.',
+    inputSchema: z.object({
+      fecha: z
+        .string()
+        .optional()
+        .describe(
+          'Fecha puntual concreta a consultar (formato YYYY-MM-DD), ej. "2026-11-15".',
+        ),
+      desde: z
+        .string()
+        .optional()
+        .describe(
+          'Fecha inicial del rango (formato YYYY-MM-DD), ej. "2026-11-01".',
+        ),
+      hasta: z
+        .string()
+        .optional()
+        .describe(
+          'Fecha final del rango (formato YYYY-MM-DD), ej. "2026-11-15".',
+        ),
+    }),
+    execute: async (inputData, context) => {
+      const threadId = (context as any)?.requestContext?.get?.('threadId') || '';
+      const channel = (context as any)?.requestContext?.get?.('channel');
+      const isWhatsApp =
+        threadId.startsWith('whatsapp:') ||
+        channel === 'whatsapp' ||
+        channel === MessageChannel.WHATSAPP;
+
+      // Restricción estricta solicitada: "que solo desde el agente de wassap"
+      if (!isWhatsApp) {
+        return {
+          success: false,
+          error:
+            'Esta función está permitida única y exclusivamente para el agente de WhatsApp.',
+        };
+      }
+
+      // Restricción estricta solicitada: "y solo para el contacto que defina el movil del wassap"
+      const customer = getCustomer(context);
+      const recipientPhone = customer?.phone;
+      if (!recipientPhone) {
+        return {
+          success: false,
+          error:
+            'No se pudo identificar el teléfono móvil de WhatsApp del contacto actual.',
+        };
+      }
+
+      if (!deps.getContactConversationsReport) {
+        return {
+          success: false,
+          error:
+            'Servicio de exportación de conversaciones no disponible en el sistema.',
+        };
+      }
+
+      let targetContactId = customer?.contactId;
+      if (!targetContactId && deps.findContactByPhone) {
+        const found = await deps
+          .findContactByPhone(normalizePhoneLoose(recipientPhone))
+          .catch(() => null);
+        if (found?.id) {
+          targetContactId = found.id;
+        }
+      }
+
+      const report = await deps.getContactConversationsReport({
+        contactId: targetContactId,
+        phone: recipientPhone,
+        startDate: inputData.desde,
+        endDate: inputData.hasta,
+        specificDate: inputData.fecha,
+      });
+
+      const filesSent: string[] = [];
+
+      if (deps.sendWhatsAppMedia && recipientPhone) {
+        // 1. Enviar PDF
+        await deps
+          .sendWhatsAppMedia({
+            to: recipientPhone,
+            caption: `📄 Historial de Conversaciones (${report.contact.name}) - PDF`,
+            media: {
+              buffer: report.pdfBuffer,
+              filename: `${report.filenameBase}.pdf`,
+              mimeType: 'application/pdf',
+              mediaCategory: 'document',
+            },
+          })
+          .then((r) => {
+            if (r?.ok) filesSent.push('PDF');
+          })
+          .catch(() => null);
+
+        // 2. Enviar XLSX
+        await deps
+          .sendWhatsAppMedia({
+            to: recipientPhone,
+            caption: `📊 Historial de Conversaciones (${report.contact.name}) - Excel`,
+            media: {
+              buffer: report.xlsxBuffer,
+              filename: `${report.filenameBase}.xlsx`,
+              mimeType:
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              mediaCategory: 'document',
+            },
+          })
+          .then((r) => {
+            if (r?.ok) filesSent.push('Excel (.xlsx)');
+          })
+          .catch(() => null);
+
+        // 3. Enviar CSV
+        await deps
+          .sendWhatsAppMedia({
+            to: recipientPhone,
+            caption: `📑 Historial de Conversaciones (${report.contact.name}) - CSV`,
+            media: {
+              buffer: report.csvBuffer,
+              filename: `${report.filenameBase}.csv`,
+              mimeType: 'text/csv; charset=utf-8',
+              mediaCategory: 'document',
+            },
+          })
+          .then((r) => {
+            if (r?.ok) filesSent.push('CSV (.csv)');
+          })
+          .catch(() => null);
+
+        // 4. Enviar ZIP (si hubiese documentos/adjuntos en las conversaciones)
+        if (report.zipBuffer && report.attachmentsCount > 0) {
+          await deps
+            .sendWhatsAppMedia({
+              to: recipientPhone,
+              caption: `📦 Archivos y documentos adjuntos de tus conversaciones (${report.attachmentsCount} adjuntos) - ZIP`,
+              media: {
+                buffer: report.zipBuffer,
+                filename: `${report.filenameBase}.zip`,
+                mimeType: 'application/zip',
+                mediaCategory: 'document',
+              },
+            })
+            .then((r) => {
+              if (r?.ok)
+                filesSent.push(`ZIP (${report.attachmentsCount} adjuntos)`);
+            })
+            .catch(() => null);
+        }
+      }
+
+      return {
+        success: true,
+        contact: report.contact,
+        totalConversaciones: report.conversationsSummary.length,
+        totalMensajes: report.messages.length,
+        adjuntosEncontrados: report.attachmentsCount,
+        formatosEnviadosPorWhatsApp: filesSent,
+        resumenTextoConversaciones: report.textSummary,
+        conversacionesDetalle: report.conversationsSummary,
+        mensaje: `Se ha procesado el historial de conversaciones. Fechas y tipos de conversaciones encontradas:\n${report.textSummary}\n\nSe han enviado por WhatsApp los archivos: ${filesSent.join(
+          ', ',
+        )}.`,
+      };
+    },
+  });
+
   return new Agent({
     id: TEMPLATE_AGENT_ID,
     name: 'Assistant',
@@ -1964,6 +2162,22 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
        - Archivo CSV (.csv)
        titulados oficialmente "Estado Actualizado de Facturacion de Servicios y Cobros al usuario".
     4. En tu mensaje de respuesta, confirma con amabilidad que le acabas de enviar los tres documentos a su WhatsApp y resúmele de forma clara y concisa los datos: número de citas consultadas, total cobrado y total pendiente.
+- EXPORTACIÓN DE HISTORIAL DE CONVERSACIONES DEL USUARIO (EXCLUSIVO PARA EL AGENTE DE WHATSAPP):
+  * Esta función está disponible ÚNICA Y EXCLUSIVAMENTE para las peticiones que se reciban en el AGENTE DE WHATSAPP y SOLO para el número de móvil del contacto de WhatsApp que interactúa.
+  * Si el usuario te pide exportar sus conversaciones, consultar su historial de mensajes, lo que ha hablado en fechas concretas o rangos de fecha, o que le envíes sus conversaciones o archivos adjuntos (ejemplos: "quiero exportar mis conversaciones", "mándame lo que hemos hablado en pdf/excel", "en qué fechas he tenido conversaciones", "qué conversaciones he tenido y de qué tipo", "mándame mis documentos y conversaciones", "exportar conversaciones de este mes", etc.):
+    1. Llama OBLIGATORIAMENTE a la herramienta 'exportarConversacionesUsuario'.
+    2. Pasa los parámetros correspondientes según lo que pida el usuario:
+       - Si pide una fecha concreta (ej. "del día 13 de noviembre"): pasa fecha="2026-11-13".
+       - Si pide un rango (ej. "desde octubre hasta hoy" o "de este mes"): calcula y pasa desde y hasta en formato YYYY-MM-DD con respecto a hoy (${now}).
+       - Si no especifica fechas, omite fecha/desde/hasta para obtener todo su historial.
+    3. La herramienta genera y remite DIRECTAMENTE por WhatsApp:
+       - El archivo en PDF (.pdf)
+       - El archivo en Excel (.xlsx)
+       - El archivo en CSV (.csv)
+       - Y si hubiese archivos o documentos adjuntos en las conversaciones, además un archivo ZIP (.zip) con todos los documentos.
+    4. En tu mensaje de respuesta, infórmale con amabilidad:
+       - Las fechas exactas en las que tiene registradas conversaciones y el tipo/canal (WhatsApp, Web Landing, Llamada telefónica, SMS, etc.) de cada una.
+       - Confírmale que le acabas de remitir por WhatsApp los documentos en PDF, Excel y CSV (y el ZIP con documentos si los hubiese).
 - NUNCA reveles nada interno: no menciones herramientas, funciones, "comandos", identificadores (IDs), bases de datos, ni frases como "voy a crear el contacto", "llamar a la herramienta" o "ejecutar". El cliente solo ve una conversación normal.
 - NUNCA inventes horarios, días u horas disponibles. ANTES de sugerir cualquier horario, debes llamar OBLIGATORIAMENTE a la herramienta 'checkAvailability' para la fecha y servicio solicitados.
 - Si el día pedido está cerrado (como fines de semana) o 'checkAvailability' no devuelve huecos, indícaselo con total claridad al cliente (p. ej. "Los sábados y domingos estamos cerrados") y ofrece consultar el siguiente día laborable en que haya disponibilidad.
@@ -2531,6 +2745,7 @@ ${flow}`;
       cancelYogaSubscription: cancelYogaSubscriptionTool,
       changeYogaSubscription: changeYogaSubscriptionTool,
       generarInformeFacturacionCobros: generarInformeFacturacionCobrosTool,
+      exportarConversacionesUsuario: exportarConversacionesUsuarioTool,
     },
     memory,
   });

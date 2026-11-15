@@ -22,6 +22,7 @@ export interface ValidatedWhatsappAttachment extends WhatsappMediaInput {
     | '.xlsx'
     | '.txt'
     | '.csv'
+    | '.zip'
     | '.mp3'
     | '.mp4'
     | '.jpg'
@@ -344,6 +345,40 @@ export function validateWhatsappAttachment(
         mediaCategory: 'document',
         messageMediaType: MediaType.DOCUMENT,
         extension: '.csv',
+        sizeBytes,
+      };
+    }
+
+    case '.zip': {
+      if (
+        rawMime &&
+        rawMime !== 'application/zip' &&
+        rawMime !== 'application/x-zip-compressed' &&
+        rawMime !== 'multipart/x-zip' &&
+        rawMime !== 'application/octet-stream'
+      ) {
+        throw new BadRequestException(
+          `Tipo MIME inválido para archivo .zip ("${rawMime}"). Se esperaba "application/zip".`,
+        );
+      }
+      if (
+        sizeBytes < 4 ||
+        file.buffer[0] !== 0x50 ||
+        file.buffer[1] !== 0x4b ||
+        file.buffer[2] !== 0x03 ||
+        file.buffer[3] !== 0x04
+      ) {
+        throw new BadRequestException(
+          'El archivo .zip no contiene una cabecera ZIP válida (PK\\x03\\x04).',
+        );
+      }
+      return {
+        buffer: file.buffer,
+        filename: safeFilename,
+        mimeType: 'application/zip',
+        mediaCategory: 'document',
+        messageMediaType: MediaType.DOCUMENT,
+        extension: '.zip',
         sizeBytes,
       };
     }
