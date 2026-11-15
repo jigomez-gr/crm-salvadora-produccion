@@ -149,14 +149,17 @@ export class ConversationsController {
       throw new NotFoundException('Archivo no encontrado');
     }
 
-    // Auto-heal payment reports sent with null mediaUrl
-    if (
-      !message.mediaUrl &&
+    // Auto-heal payment reports if mediaUrl is missing or not a base64 data: URL (e.g. stale upstream URL)
+    const isPaymentReport =
       message.mediaFilename?.startsWith('Estado_Actualizado_Facturacion_Cobros_') &&
-      this.appointmentsService
+      this.appointmentsService;
+
+    if (
+      isPaymentReport &&
+      (!message.mediaUrl || !message.mediaUrl.startsWith('data:'))
     ) {
       try {
-        const paymentsData = await this.appointmentsService.getAppointmentPayments({
+        const paymentsData = await this.appointmentsService!.getAppointmentPayments({
           contactId: message.contactId,
         });
         const { generatePaymentsPdf, generatePaymentsXlsx, generatePaymentsCsv } =
@@ -167,7 +170,7 @@ export class ConversationsController {
         let generatedBuffer: Buffer | null = null;
         let mime = message.mediaMimeType || 'application/pdf';
 
-        if (message.mediaFilename.endsWith('.pdf')) {
+        if (message.mediaFilename!.endsWith('.pdf')) {
           generatedBuffer = await generatePaymentsPdf(
             paymentsData.items,
             paymentsData.summary,
@@ -175,7 +178,7 @@ export class ConversationsController {
             reportTitle,
           );
           mime = 'application/pdf';
-        } else if (message.mediaFilename.endsWith('.xlsx')) {
+        } else if (message.mediaFilename!.endsWith('.xlsx')) {
           generatedBuffer = await generatePaymentsXlsx(
             paymentsData.items,
             paymentsData.summary,
@@ -184,7 +187,7 @@ export class ConversationsController {
           );
           mime =
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-        } else if (message.mediaFilename.endsWith('.csv')) {
+        } else if (message.mediaFilename!.endsWith('.csv')) {
           generatedBuffer = await generatePaymentsCsv(
             paymentsData.items,
             paymentsData.summary,
@@ -203,6 +206,49 @@ export class ConversationsController {
       } catch (err) {
         this.logger.warn(
           `Failed to auto-regenerate media for message ${messageId}: ${err}`,
+        );
+      }
+    }
+
+    // Auto-heal conversation history reports if mediaUrl is missing or not a base64 data: URL
+    const isHistoryReport =
+      message.mediaFilename?.startsWith('Historial_Conversaciones_');
+
+    if (
+      isHistoryReport &&
+      (!message.mediaUrl || !message.mediaUrl.startsWith('data:'))
+    ) {
+      try {
+        const report = await this.messagesService.getContactConversationsReport({
+          contactId: message.contactId,
+        });
+        let generatedBuffer: Buffer | null = null;
+        let mime = message.mediaMimeType || 'application/pdf';
+
+        if (message.mediaFilename!.endsWith('.pdf')) {
+          generatedBuffer = report.pdfBuffer;
+          mime = 'application/pdf';
+        } else if (message.mediaFilename!.endsWith('.xlsx')) {
+          generatedBuffer = report.xlsxBuffer;
+          mime =
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        } else if (message.mediaFilename!.endsWith('.csv')) {
+          generatedBuffer = report.csvBuffer;
+          mime = 'text/csv; charset=utf-8';
+        } else if (message.mediaFilename!.endsWith('.zip')) {
+          generatedBuffer = report.zipBuffer;
+          mime = 'application/zip';
+        }
+
+        if (generatedBuffer) {
+          const dataUrl = `data:${mime};base64,${generatedBuffer.toString('base64')}`;
+          await this.messagesService.updateMediaUrl(message.id, dataUrl);
+          message.mediaUrl = dataUrl;
+          message.mediaMimeType = mime;
+        }
+      } catch (err) {
+        this.logger.warn(
+          `Failed to auto-regenerate history report for message ${messageId}: ${err}`,
         );
       }
     }
@@ -288,15 +334,23 @@ export class ConversationsController {
       }
       res.send(bytes);
     } catch (err) {
-      if (err instanceof HttpException) throw err;
+      if (err instanceof HttpException) {
+        if (err.getStatus() === HttpStatus.BAD_GATEWAY) {
+          throw new HttpException(
+            'El archivo adjunto ya no está disponible en el servidor del proveedor',
+            HttpStatus.NOT_FOUND,
+          );
+        }
+        throw err;
+      }
       const reason =
         (err as Error)?.name === 'AbortError'
           ? 'timeout'
           : String((err as Error)?.message ?? err);
       this.logger.warn(`Media fetch for message ${messageId} error: ${reason}`);
       throw new HttpException(
-        'No se pudo obtener el archivo del proveedor',
-        HttpStatus.BAD_GATEWAY,
+        'El archivo adjunto no se encuentra disponible',
+        HttpStatus.NOT_FOUND,
       );
     } finally {
       clearTimeout(timer);
