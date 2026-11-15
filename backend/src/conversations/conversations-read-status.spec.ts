@@ -131,4 +131,84 @@ describe('Conversations Read / Unread Status', () => {
       });
     });
   });
+
+  describe('ConversationsController.getMedia', () => {
+    it('streams data: URLs directly by decoding base64', async () => {
+      const fakeBuffer = Buffer.from('PDF_TEST_CONTENT');
+      const dataUrl = `data:application/pdf;base64,${fakeBuffer.toString('base64')}`;
+
+      jest.spyOn(messagesService, 'getMessageById').mockResolvedValue({
+        id: 'msg-1',
+        mediaType: 'document' as any,
+        mediaUrl: dataUrl,
+        mediaMimeType: 'application/pdf',
+        mediaFilename: 'test.pdf',
+        threadId: 'booking:+34600112233',
+      } as any);
+
+      const res = {
+        setHeader: jest.fn(),
+        send: jest.fn(),
+      } as any;
+
+      await controller.getMedia('msg-1', res);
+
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
+      expect(res.send).toHaveBeenCalledWith(fakeBuffer);
+    });
+
+    it('auto-heals Estado_Actualizado reports if mediaUrl is missing', async () => {
+      const fakeMsg = {
+        id: 'msg-report',
+        mediaType: 'document' as any,
+        mediaUrl: null,
+        mediaMimeType: 'text/csv',
+        mediaFilename: 'Estado_Actualizado_Facturacion_Cobros_202611.csv',
+        threadId: 'booking:+34600112233',
+        contactId: 'contact-1',
+      };
+
+      jest.spyOn(messagesService, 'getMessageById').mockResolvedValue(fakeMsg as any);
+      const updateMediaSpy = jest.spyOn(messagesService, 'updateMediaUrl').mockResolvedValue();
+
+      const appointmentsServiceMock = {
+        getAppointmentPayments: jest.fn().mockResolvedValue({
+          items: [],
+          summary: {
+            totalCount: 0,
+            paidCount: 0,
+            pendingCount: 0,
+            totalPaidAmount: 0,
+            totalPendingAmount: 0,
+          },
+        }),
+      };
+
+      const controllerWithAppts = new ConversationsController(
+        messagesService,
+        {} as any,
+        {} as any,
+        eventEmitter,
+        {} as any,
+        {} as any,
+        undefined,
+        undefined,
+        appointmentsServiceMock as any,
+      );
+
+      const res = {
+        setHeader: jest.fn(),
+        send: jest.fn(),
+      } as any;
+
+      await controllerWithAppts.getMedia('msg-report', res);
+
+      expect(updateMediaSpy).toHaveBeenCalled();
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Type',
+        expect.stringContaining('text/csv'),
+      );
+      expect(res.send).toHaveBeenCalled();
+    });
+  });
 });

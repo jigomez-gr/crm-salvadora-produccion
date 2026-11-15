@@ -45,6 +45,7 @@ import {
 } from '../common/entities/message.entity';
 import { EmailService } from '../email/email.service';
 import { ContactsService } from '../contacts/contacts.service';
+import { AppointmentsService } from '../appointments/appointments.service';
 
 // Cap the wait when streaming media from YCloud so a slow/hung upstream can't
 // pin a request open. WhatsApp media limit is 101 MB for documents and media.
@@ -69,6 +70,9 @@ export class ConversationsController {
     @Optional() private readonly whatsappGateway?: WhatsappGatewayService,
     @Optional()
     private readonly whatsappAdminSendService?: WhatsappAdminSendService,
+    @Optional()
+    @Inject(forwardRef(() => AppointmentsService))
+    private readonly appointmentsService?: AppointmentsService,
   ) {}
 
   @Get()
@@ -134,13 +138,73 @@ export class ConversationsController {
     @Res() res: Response,
   ): Promise<void> {
     const message = await this.messagesService.getMessageById(messageId);
-    if (!message?.mediaType || !message.mediaUrl) {
+    if (!message?.mediaType) {
       throw new NotFoundException('Archivo no encontrado');
     }
 
-    // Defensive SSRF guard: only https (YCloud) or data: (demo seed). The URL
-    // originates from a signature-verified webhook or the seed, never user
-    // input, but validate the scheme anyway — never fetch file:/internal http.
+    // Auto-heal payment reports sent with null mediaUrl
+    if (
+      !message.mediaUrl &&
+      message.mediaFilename?.startsWith('Estado_Actualizado_Facturacion_Cobros_') &&
+      this.appointmentsService
+    ) {
+      try {
+        const paymentsData = await this.appointmentsService.getAppointmentPayments({
+          contactId: message.contactId,
+        });
+        const { generatePaymentsPdf, generatePaymentsXlsx, generatePaymentsCsv } =
+          await import('../appointments/payments-export.generator');
+        const reportTitle =
+          'Estado Actualizado de Facturacion de Servicios y Cobros al usuario';
+        const filterInfo = 'Consulta de Estado de Facturacion y Cobros';
+        let generatedBuffer: Buffer | null = null;
+        let mime = message.mediaMimeType || 'application/pdf';
+
+        if (message.mediaFilename.endsWith('.pdf')) {
+          generatedBuffer = await generatePaymentsPdf(
+            paymentsData.items,
+            paymentsData.summary,
+            filterInfo,
+            reportTitle,
+          );
+          mime = 'application/pdf';
+        } else if (message.mediaFilename.endsWith('.xlsx')) {
+          generatedBuffer = await generatePaymentsXlsx(
+            paymentsData.items,
+            paymentsData.summary,
+            filterInfo,
+            reportTitle,
+          );
+          mime =
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        } else if (message.mediaFilename.endsWith('.csv')) {
+          generatedBuffer = await generatePaymentsCsv(
+            paymentsData.items,
+            paymentsData.summary,
+            filterInfo,
+            reportTitle,
+          );
+          mime = 'text/csv; charset=utf-8';
+        }
+
+        if (generatedBuffer) {
+          const dataUrl = `data:${mime};base64,${generatedBuffer.toString('base64')}`;
+          await this.messagesService.updateMediaUrl(message.id, dataUrl);
+          message.mediaUrl = dataUrl;
+          message.mediaMimeType = mime;
+        }
+      } catch (err) {
+        this.logger.warn(
+          `Failed to auto-regenerate media for message ${messageId}: ${err}`,
+        );
+      }
+    }
+
+    if (!message.mediaUrl) {
+      throw new NotFoundException('Archivo no encontrado');
+    }
+
+    // Defensive SSRF guard: only https (YCloud/Evolution) or data: (demo seed/inline base64).
     let scheme: string;
     try {
       scheme = new URL(message.mediaUrl).protocol;
@@ -151,46 +215,55 @@ export class ConversationsController {
       throw new BadRequestException('Origen de archivo no permitido');
     }
 
-    // Attach the agent's YCloud key for https links in case the media endpoint
-    // requires it (harmless on a public CDN link; irrelevant for data: URLs).
-    const config =
-      scheme === 'https:'
-        ? await this.agentsConfigService
-            .findByKeyOrNull(this.agentKeyOf(message.threadId))
-            .catch(() => null)
-        : null;
-
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), MEDIA_FETCH_TIMEOUT_MS);
     try {
       let bytes: Buffer;
       let upstreamContentType: string | null = null;
-      if (this.whatsappGateway) {
-        const mediaRes = await this.whatsappGateway.fetchInboundMedia({
-          config,
-          mediaUrl: message.mediaUrl,
-          signal: controller.signal,
-        });
-        bytes = mediaRes.buffer;
-        upstreamContentType = mediaRes.contentType;
-      } else {
-        const upstream = await fetch(message.mediaUrl, {
-          signal: controller.signal,
-          headers:
-            config?.ycloudApiKey ? { 'X-API-Key': config.ycloudApiKey } : undefined,
-        });
-        if (!upstream.ok) {
-          this.logger.warn(
-            `Media fetch for message ${messageId} failed: ${upstream.status}`,
-          );
-          throw new HttpException(
-            'No se pudo obtener el archivo del proveedor',
-            HttpStatus.BAD_GATEWAY,
-          );
+
+      if (scheme === 'data:') {
+        const commaIdx = message.mediaUrl.indexOf(',');
+        if (commaIdx === -1) {
+          throw new BadRequestException('Formato de datos no válido');
         }
-        bytes = Buffer.from(await upstream.arrayBuffer());
-        upstreamContentType = upstream.headers.get('content-type');
+        const meta = message.mediaUrl.slice(5, commaIdx);
+        const isBase64 = meta.includes(';base64');
+        const dataStr = message.mediaUrl.slice(commaIdx + 1);
+        bytes = Buffer.from(dataStr, isBase64 ? 'base64' : 'utf-8');
+        upstreamContentType = meta.split(';')[0] || message.mediaMimeType;
+      } else {
+        const config = await this.agentsConfigService
+          .findByKeyOrNull(this.agentKeyOf(message.threadId))
+          .catch(() => null);
+
+        if (this.whatsappGateway) {
+          const mediaRes = await this.whatsappGateway.fetchInboundMedia({
+            config,
+            mediaUrl: message.mediaUrl,
+            signal: controller.signal,
+          });
+          bytes = mediaRes.buffer;
+          upstreamContentType = mediaRes.contentType;
+        } else {
+          const upstream = await fetch(message.mediaUrl, {
+            signal: controller.signal,
+            headers:
+              config?.ycloudApiKey ? { 'X-API-Key': config.ycloudApiKey } : undefined,
+          });
+          if (!upstream.ok) {
+            this.logger.warn(
+              `Media fetch for message ${messageId} failed: ${upstream.status}`,
+            );
+            throw new HttpException(
+              'No se pudo obtener el archivo del proveedor',
+              HttpStatus.BAD_GATEWAY,
+            );
+          }
+          bytes = Buffer.from(await upstream.arrayBuffer());
+          upstreamContentType = upstream.headers.get('content-type');
+        }
       }
+
       res.setHeader(
         'Content-Type',
         message.mediaMimeType ||

@@ -246,6 +246,7 @@ export { NestMastraModule };
             if (res.ok) {
               const contact = await contactsService.findByPhone(params.to).catch(() => null);
               const threadId = `booking:${params.to}`;
+              const dataUrl = `data:${params.media.mimeType};base64,${params.media.buffer.toString('base64')}`;
               const msg = await messagesService.saveMessage({
                 contactId: contact?.id,
                 threadId,
@@ -257,6 +258,7 @@ export { NestMastraModule };
                 mediaType: MediaType.DOCUMENT,
                 mediaMimeType: params.media.mimeType,
                 mediaFilename: params.media.filename,
+                mediaUrl: dataUrl,
               });
               eventEmitter.emit('message.sent', {
                 ...toMessageView(msg),

@@ -279,11 +279,14 @@ function StatusTicks({ status }: { status?: MessageStatus }) {
 function MediaAttachment({ message }: { message: Message }) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     if (!message.mediaType) return;
     let active = true;
     let objectUrl: string | null = null;
+    setFailed(false);
+    setUrl(null);
     (async () => {
       try {
         const res = await fetch(
@@ -302,14 +305,24 @@ function MediaAttachment({ message }: { message: Message }) {
       active = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [message.id, message.mediaType]);
+  }, [message.id, message.mediaType, retryKey]);
 
   if (!message.mediaType) return null;
 
   if (failed) {
     return (
-      <div className="mb-1 flex items-center gap-1.5 rounded-lg bg-neutral-100 px-2.5 py-2 text-xs text-neutral-500">
-        <AlertCircle className="h-3.5 w-3.5" /> No se pudo cargar el archivo
+      <div className="mb-1 flex items-center justify-between gap-1.5 rounded-lg bg-neutral-100 px-2.5 py-2 text-xs text-neutral-600">
+        <div className="flex items-center gap-1.5 truncate">
+          <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 text-amber-600" />
+          <span className="truncate">{message.mediaFilename || "Archivo no disponible"}</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setRetryKey((k) => k + 1)}
+          className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 underline flex-shrink-0"
+        >
+          Reintentar
+        </button>
       </div>
     );
   }

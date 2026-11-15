@@ -190,6 +190,11 @@ export class MessagesService implements OnModuleInit {
     });
   }
 
+  /** Update a message's mediaUrl (e.g. self-healed base64 data URL). */
+  async updateMediaUrl(id: string, mediaUrl: string): Promise<void> {
+    await this.messagesRepo.update(id, { mediaUrl });
+  }
+
   /**
    * Update delivery status from a YCloud status webhook, correlated by the
    * provider message id we stored when sending. Never downgrades a status

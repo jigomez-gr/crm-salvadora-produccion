@@ -11,6 +11,7 @@ import { YCloudModule } from '../whatsapp/ycloud.module';
 import { AgentsConfigModule } from '../agents/agents-config.module';
 import { EmailModule } from '../email/email.module';
 import { ContactsModule } from '../contacts/contacts.module';
+import { AppointmentsModule } from '../appointments/appointments.module';
 import { WhatsappAdminSendService } from '../whatsapp/whatsapp-admin-send.service';
 
 @Module({
@@ -24,6 +25,7 @@ import { WhatsappAdminSendService } from '../whatsapp/whatsapp-admin-send.servic
     AgentsConfigModule,
     forwardRef(() => EmailModule),
     forwardRef(() => ContactsModule),
+    forwardRef(() => AppointmentsModule),
   ],
   providers: [MessagesService, WhatsappAdminSendService],
   controllers: [ConversationsController],
