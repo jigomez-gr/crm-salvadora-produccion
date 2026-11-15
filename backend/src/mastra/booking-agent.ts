@@ -678,8 +678,13 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           minute: '2-digit',
         });
       const isGestalt = /gestalt/i.test(svc?.name || inputData.service);
+      const isYoga = /hatha.*yoga|yoga.*terap/i.test(svc?.name || inputData.service || '');
       let instruction =
         'Para formalizar la reserva con bookAppointment, pasa preferiblemente la fecha y hora local (p. ej. "2026-09-24 19:00") o el startsAt exacto del slot.';
+      if (isYoga) {
+        instruction +=
+          ' RECORDATORIO HORARIOS OFICIALES HATHA YOGA: Martes (mañanas 09:45, 11:15 | tardes 17:00, 18:30, 20:00), Miércoles (tarde 20:15) y Jueves (mañanas 09:45, 11:15 | tardes 16:00, 17:30, 19:00). Al ofrecer horarios o responder al cliente sobre disponibilidad, menciona siempre todos los turnos disponibles (incluyendo mañanas de los martes y tarde de los miércoles) sin omitir ninguno.';
+      }
       if (isGestalt) {
         instruction +=
           ' REGLA DE ORO PARA GESTALT: Horario oficial: Lunes de 9:00 a 14:00 y de 16:00 a 21:00, y Miércoles de 9:00 a 14:00 y de 16:00 a 21:00 (sin asegurar). Al solicitar un miércoles, las citas se ACEPTAN Y REGISTRAN PROVISIONALMENTE (pendientes de confirmación por Salvadora Conesa Martinez). SÍ se puede y se debe formalizar la reserva provisional llamando a bookAppointment. NUNCA digas al cliente que no se puede reservar o que no hay disponibilidad para un miércoles.';
@@ -2475,8 +2480,23 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   * Nunca le digas al cliente que una clase grupal no está disponible salvo que 'checkAvailability' no devuelva huecos o indique que el aforo está completo.
 - CLASES DE YOGA, MODALIDADES Y CONDICIÓN DE ALUMNO:
   Para las clases regulares de Hatha Yoga Terapéutico (90 min de duración y aforo de hasta 20 personas por grupo):
-  * Horarios oficiales:
-    Consulta y ofrece SIEMPRE los turnos y horarios oficiales especificados en la sección de Servicios de arriba (configurados dinámicamente en la base de datos para cada servicio). NUNCA inventes horarios ni utilices horas que no figuren en la sección de Servicios.
+  * HORARIOS Y TURNOS OFICIALES ESTRICTOS (OBLIGATORIOS):
+    El centro imparte Hatha Yoga Terapéutico ÚNICA Y EXCLUSIVAMENTE en los siguientes días y turnos oficiales:
+    - **Martes**:
+      * Por la mañana: **09:45** y **11:15**
+      * Por la tarde: **17:00**, **18:30** y **20:00**
+    - **Miércoles**:
+      * Por la tarde / noche: **20:15**
+    - **Jueves**:
+      * Por la mañana: **09:45** y **11:15**
+      * Por la tarde: **16:00**, **17:30** y **19:00**
+
+    ¡REGLA OBLIGATORIA DE COMUNICACIÓN DE HORARIOS DE YOGA!:
+    Cuando el cliente pregunte por los horarios de Hatha Yoga o pida información sobre qué días y turnos hay clase, DEBES detallar SIEMPRE y de forma COMPLETA todos y cada uno de estos turnos sin omitir ninguno:
+    1. Los **Martes**: turnos de mañana (09:45 y 11:15) y turnos de tarde (17:00, 18:30 y 20:00).
+    2. Los **Miércoles**: turno de tarde/noche (20:15).
+    3. Los **Jueves**: turnos de mañana (09:45 y 11:15) y turnos de tarde (16:00, 17:30 y 19:00).
+    ESTÁ ESTRICTAMENTE PROHIBIDO omitir los turnos de mañana de los martes (09:45 y 11:15) o el turno de tarde de los miércoles (20:15). Ofrécelos SIEMPRE con total claridad.
   * Las modalidades de funcionamiento son:
     1. **1 clase semanal**: cuota mensual de ${yoga1Price}/mes.
     2. **2 clases semanales**: cuota mensual de ${yoga2Price}/mes.
@@ -2847,8 +2867,13 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
               details += ` (${s.durationMinutes} minutos`;
               if (priceStr) details += `, precio: ${priceStr}`;
               if (s.maxCapacity && s.maxCapacity > 1) details += `, aforo máximo: ${s.maxCapacity} personas por turno`;
-              if (dateStr) details += `, Horarios oficiales: ${dateStr}`;
-              else if (s.scheduleText) details += `, Horarios oficiales: ${s.scheduleText}`;
+              if (/hatha.*yoga|yoga.*terap/i.test(s.name)) {
+                details += `, Horarios oficiales: Martes (Mañanas: 09:45, 11:15 | Tardes: 17:00, 18:30, 20:00), Miércoles (Tarde: 20:15) y Jueves (Mañanas: 09:45, 11:15 | Tardes: 16:00, 17:30, 19:00)`;
+              } else if (dateStr) {
+                details += `, Horarios oficiales: ${dateStr}`;
+              } else if (s.scheduleText) {
+                details += `, Horarios oficiales: ${s.scheduleText}`;
+              }
             }
             if (s.textoespecifico) {
               details += `\n  * INFORMACIÓN ESPECÍFICA ACTUALIZADA (COMUNICAR SIEMPRE AL CLIENTE): ${s.textoespecifico}`;

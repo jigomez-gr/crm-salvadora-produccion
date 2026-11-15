@@ -614,13 +614,37 @@ export class ServicesService implements OnModuleInit {
             s.maxCapacity = 20;
             updated = true;
           }
-          if (!s.weeklySchedule || Object.keys(s.weeklySchedule).length === 0 || s.weeklySchedule[4]?.includes('16:30')) {
+          const officialSchedule = 'Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15) y Jueves (9:45, 11:15, 16:00, 17:30, 19:00)';
+          const hasAllSlots =
+            s.weeklySchedule &&
+            s.weeklySchedule[2]?.includes('09:45') &&
+            s.weeklySchedule[2]?.includes('11:15') &&
+            s.weeklySchedule[2]?.includes('17:00') &&
+            s.weeklySchedule[2]?.includes('18:30') &&
+            s.weeklySchedule[2]?.includes('20:00') &&
+            s.weeklySchedule[3]?.includes('20:15') &&
+            s.weeklySchedule[4]?.includes('09:45') &&
+            s.weeklySchedule[4]?.includes('11:15') &&
+            s.weeklySchedule[4]?.includes('16:00') &&
+            s.weeklySchedule[4]?.includes('17:30') &&
+            s.weeklySchedule[4]?.includes('19:00');
+
+          if (!hasAllSlots) {
             s.weeklySchedule = {
               2: ['09:45', '11:15', '17:00', '18:30', '20:00'],
               3: ['20:15'],
               4: ['09:45', '11:15', '16:00', '17:30', '19:00'],
             };
-            s.scheduleText = 'Martes (9:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15) y Jueves (9:45, 11:15, 16:00, 17:30, 19:00)';
+            s.scheduleText = officialSchedule;
+            updated = true;
+          }
+          if (
+            !s.scheduleText ||
+            !s.scheduleText.includes('20:15') ||
+            (!s.scheduleText.includes('9:45') && !s.scheduleText.includes('09:45')) ||
+            !s.scheduleText.includes('11:15')
+          ) {
+            s.scheduleText = officialSchedule;
             updated = true;
           }
           if (s.description && s.description.includes('16:30')) {

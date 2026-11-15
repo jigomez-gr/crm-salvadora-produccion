@@ -175,9 +175,24 @@ export class AgentsConfigService implements OnModuleInit {
         existing.whatsappNumber = process.env.YCLOUD_WHATSAPP_NUMBER;
         updated = true;
       }
-      if (existing.customInstructions && existing.customInstructions.includes('16:30')) {
-        existing.customInstructions = existing.customInstructions.replace(/16:30/g, '16:00');
-        updated = true;
+      if (existing.customInstructions) {
+        if (existing.customInstructions.includes('16:30')) {
+          existing.customInstructions = existing.customInstructions.replace(/16:30/g, '16:00');
+          updated = true;
+        }
+        if (/hatha.*yoga/i.test(existing.customInstructions)) {
+          if (
+            !existing.customInstructions.includes('20:15') ||
+            (!existing.customInstructions.includes('9:45') && !existing.customInstructions.includes('09:45')) ||
+            !existing.customInstructions.includes('11:15')
+          ) {
+            existing.customInstructions = existing.customInstructions.replace(
+              /Hatha Yoga Terapéutico:[^\n]+/i,
+              'Hatha Yoga Terapéutico: Mañanas: Martes y Jueves (9:45 y 11:15). Tardes: Martes (17:00, 18:30, 20:00), Miércoles (20:15), Jueves (16:00, 17:30, 19:00). Clases de 90 min.'
+            );
+            updated = true;
+          }
+        }
       }
       if (existing.services && Array.isArray(existing.services)) {
         const str = JSON.stringify(existing.services);

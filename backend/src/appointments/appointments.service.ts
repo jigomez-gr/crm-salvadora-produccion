@@ -377,10 +377,7 @@ export class AppointmentsService implements OnModuleInit {
         3: ['20:15'],
         4: ['09:45', '11:15', '16:00', '17:30', '19:00'],
       };
-      const effectiveTimetable =
-        serviceEntity?.weeklySchedule && Object.keys(serviceEntity.weeklySchedule).length > 0
-          ? serviceEntity.weeklySchedule
-          : HATHA_YOGA_TIMETABLE;
+      const effectiveTimetable = HATHA_YOGA_TIMETABLE;
       let zoned = new TZDate(startsAt.getTime(), 'Europe/Madrid');
       let dayOfWeek = zoned.getDay();
       let timeStr = format(zoned, 'HH:mm');
@@ -2916,12 +2913,12 @@ export class AppointmentsService implements OnModuleInit {
     }
 
     const effectiveTimetable =
-      !isGestalt && targetService?.weeklySchedule && Object.keys(targetService.weeklySchedule).length > 0
-        ? targetService.weeklySchedule
-        : isHathaYoga
+      isHathaYoga
         ? HATHA_YOGA_TIMETABLE
         : isMeditacion
         ? MEDITACION_TIMETABLE
+        : !isGestalt && targetService?.weeklySchedule && Object.keys(targetService.weeklySchedule).length > 0
+        ? targetService.weeklySchedule
         : null;
 
     if (effectiveTimetable) {
