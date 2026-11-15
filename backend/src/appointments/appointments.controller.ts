@@ -20,6 +20,11 @@ import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AppointmentsService } from './appointments.service';
 import {
+  generatePaymentsCsv,
+  generatePaymentsXlsx,
+  generatePaymentsPdf,
+} from './payments-export.generator';
+import {
   CreateAppointmentDto,
   UpdateAppointmentDto,
   UploadPatientAttachmentDto,
@@ -122,6 +127,58 @@ export class AppointmentsController {
   @Get('yoga-subscription/:contactId')
   async getYogaSubscription(@Param('contactId') contactId: string) {
     return this.appointmentsService.getYogaSubscription(contactId);
+  }
+
+  @Get('payments/export')
+  async exportPayments(
+    @Query() query: QueryAppointmentPaymentsDto,
+    @Res() res: Response,
+  ) {
+    const { items, summary } = await this.appointmentsService.getAppointmentPayments(query);
+
+    const format = (query.format || 'csv').toLowerCase();
+    const filterParts: string[] = [];
+    if (query.startDate) filterParts.push(`Desde: ${query.startDate}`);
+    if (query.endDate) filterParts.push(`Hasta: ${query.endDate}`);
+    if (query.service && query.service !== 'all') filterParts.push(`Servicio: ${query.service}`);
+    if (query.paymentStatus && query.paymentStatus !== 'all') filterParts.push(`Estado: ${query.paymentStatus}`);
+    if (query.paymentMethod && query.paymentMethod !== 'all') filterParts.push(`Método: ${query.paymentMethod}`);
+    if (query.search) filterParts.push(`Búsqueda: ${query.search}`);
+    const filterInfo = filterParts.join(' | ') || 'Todas las citas consultadas';
+
+    const dateSuffix = new Date().toISOString().slice(0, 10);
+
+    if (format === 'xlsx') {
+      const buffer = await generatePaymentsXlsx(items, summary, filterInfo);
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="cobros_citas_${dateSuffix}.xlsx"`,
+      );
+      return res.send(buffer);
+    }
+
+    if (format === 'pdf') {
+      const buffer = await generatePaymentsPdf(items, summary, filterInfo);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="cobros_citas_${dateSuffix}.pdf"`,
+      );
+      return res.send(buffer);
+    }
+
+    // Default to CSV
+    const buffer = generatePaymentsCsv(items, summary, filterInfo);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="cobros_citas_${dateSuffix}.csv"`,
+    );
+    return res.send(buffer);
   }
 
   @Get('payments')

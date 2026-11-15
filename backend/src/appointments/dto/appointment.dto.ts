@@ -276,5 +276,9 @@ export class QueryAppointmentPaymentsDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @IsOptional()
+  @IsString()
+  format?: string; // csv | xlsx | pdf
 }
 

@@ -15,6 +15,10 @@ import {
   RefreshCw,
   X,
   User,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  FileDown,
 } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useToast } from "@/contexts/ToastContext";
@@ -44,6 +48,7 @@ interface AppointmentPayment {
   paidAmount?: string | null;
   paidAt?: string | null;
   paymentNotes?: string | null;
+  notes?: string | null;
   paymentRecordedBy?: string | null;
   contact?: Contact | null;
 }
@@ -261,6 +266,120 @@ export default function PaymentsPage() {
     }
   };
 
+  const [exportingFormat, setExportingFormat] = useState<"csv" | "xlsx" | "pdf" | null>(null);
+
+  // Export helper: descarga directa en CSV de respaldo del lado cliente
+  const downloadClientSideCsv = () => {
+    const BOM = "\uFEFF";
+    const sanitize = (val: any) => {
+      let s = String(val ?? "").trim();
+      if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+      if (/[";,\n\r]/.test(s)) s = `"${s.replace(/"/g, '""')}"`;
+      return s;
+    };
+
+    const headers = [
+      "Alumno / Contacto",
+      "Teléfono",
+      "Email",
+      "Servicio / Actividad",
+      "Fecha Cita",
+      "Importe (€)",
+      "Estado de Pago",
+      "Método de Pago",
+      "Fecha Cobro",
+      "Registrado Por",
+      "Notas",
+    ];
+
+    const rows = payments.map((item) => {
+      const priceNum = item.price ? parseFloat(item.price) : 0;
+      const paidNum = item.paidAmount ? parseFloat(item.paidAmount) : priceNum;
+      const finalAmount = item.paymentStatus === "paid" ? paidNum : priceNum;
+      return [
+        item.contact?.name || "Sin contacto",
+        item.contact?.phone || "",
+        item.contact?.email || "",
+        item.service || "-",
+        formatDateTime(item.startsAt),
+        (isNaN(finalAmount) ? 0 : finalAmount).toFixed(2).replace(".", ","),
+        item.paymentStatus === "paid"
+          ? "Pagado"
+          : item.paymentStatus === "exempt"
+          ? "Exento / Prueba"
+          : "Pendiente",
+        item.paymentMethod || "-",
+        item.paidAt ? formatDateTime(item.paidAt) : "-",
+        item.paymentRecordedBy || "",
+        item.paymentNotes || item.notes || "",
+      ]
+        .map(sanitize)
+        .join(";");
+    });
+
+    const csvContent = BOM + [headers.map(sanitize).join(";"), ...rows].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cobros_citas_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
+  // Handler unificado para exportar a CSV, XLSX o PDF con los datos seleccionados
+  const handleExport = async (format: "csv" | "xlsx" | "pdf") => {
+    if (payments.length === 0) {
+      toast.error("No hay citas seleccionadas para exportar.");
+      return;
+    }
+
+    setExportingFormat(format);
+    try {
+      const params = new URLSearchParams();
+      params.append("format", format);
+      if (startDate) params.append("startDate", startDate);
+      if (endDate) params.append("endDate", endDate);
+      if (selectedService && selectedService !== "all") params.append("service", selectedService);
+      if (paymentStatusFilter && paymentStatusFilter !== "all") params.append("paymentStatus", paymentStatusFilter);
+      if (paymentMethodFilter && paymentMethodFilter !== "all") params.append("paymentMethod", paymentMethodFilter);
+      if (searchTerm.trim()) params.append("search", searchTerm.trim());
+
+      const res = await fetch(`/api/appointments/payments/export?${params.toString()}`);
+      if (!res.ok) {
+        throw new Error(`Error en la exportación: ${res.status} ${res.statusText}`);
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const dateRangeStr =
+        startDate && endDate ? `${startDate}_${endDate}` : new Date().toISOString().slice(0, 10);
+      a.download = `cobros_citas_${dateRangeStr}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      const formatNames = { csv: "CSV", xlsx: "Excel (.XLSX)", pdf: "PDF" };
+      toast.success(`Archivo ${formatNames[format]} descargado correctamente.`);
+    } catch (err: any) {
+      if (format === "csv") {
+        try {
+          downloadClientSideCsv();
+          toast.success("Archivo CSV generado y descargado correctamente.");
+          return;
+        } catch (_) {}
+      }
+      toast.error(err?.message || `No se pudo exportar a ${format.toUpperCase()}.`);
+    } finally {
+      setExportingFormat(null);
+    }
+  };
+
   // Format Helpers
   const formatDateTime = (iso: string) => {
     if (!iso) return "-";
@@ -360,7 +479,55 @@ export default function PaymentsPage() {
             Gestión de pagos de alumnos: cobros en mano en la oficina por Salvadora Conesa (efectivo, Bizum, TPV) y pagos online por Stripe.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Botón CSV */}
+          <button
+            type="button"
+            onClick={() => handleExport("csv")}
+            disabled={loading || payments.length === 0 || exportingFormat !== null}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-50 hover:border-neutral-400 transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            title="Exportar selección a archivo CSV (compatible con Excel)"
+          >
+            {exportingFormat === "csv" ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-neutral-600" />
+            ) : (
+              <FileText className="w-3.5 h-3.5 text-neutral-600" />
+            )}
+            <span>CSV</span>
+          </button>
+
+          {/* Botón XLSX */}
+          <button
+            type="button"
+            onClick={() => handleExport("xlsx")}
+            disabled={loading || payments.length === 0 || exportingFormat !== null}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-400 transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            title="Exportar selección a hoja de cálculo Excel .xlsx profesional"
+          >
+            {exportingFormat === "xlsx" ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-700" />
+            ) : (
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+            )}
+            <span>.XLSX</span>
+          </button>
+
+          {/* Botón PDF */}
+          <button
+            type="button"
+            onClick={() => handleExport("pdf")}
+            disabled={loading || payments.length === 0 || exportingFormat !== null}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-[#800020]/10 border border-[#800020]/30 text-[#800020] hover:bg-[#800020]/20 hover:border-[#800020]/50 transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            title="Exportar selección a documento PDF oficial para imprimir o archivar"
+          >
+            {exportingFormat === "pdf" ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#800020]" />
+            ) : (
+              <FileDown className="w-3.5 h-3.5 text-[#800020]" />
+            )}
+            <span>PDF</span>
+          </button>
+
           <Button variant="secondary" onClick={() => fetchPayments()} disabled={loading}>
             <RefreshCw className={`w-4 h-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
             Actualizar
@@ -577,16 +744,42 @@ export default function PaymentsPage() {
 
       {/* ─── Table of Appointments / Payments ─── */}
       <div className="bg-white rounded-xl border border-neutral-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-neutral-100 flex items-center justify-between">
+        <div className="p-4 border-b border-neutral-100 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold text-neutral-800">Listado de Citas y Cobros</span>
             <span className="text-xs bg-neutral-100 text-neutral-600 px-2 py-0.5 rounded-full font-medium">
               {payments.length}
             </span>
           </div>
-          <span className="text-xs text-neutral-400">
-            Se puede actualizar manualmente el cobro de cualquier cita en cualquier momento
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-neutral-400 hidden sm:inline mr-1">
+              Exportar resultado:
+            </span>
+            <button
+              type="button"
+              onClick={() => handleExport("csv")}
+              disabled={loading || payments.length === 0 || exportingFormat !== null}
+              className="px-2.5 py-1 text-xs font-semibold rounded-md border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50 flex items-center gap-1 shadow-2xs disabled:opacity-50 cursor-pointer"
+            >
+              <FileText className="w-3 h-3 text-neutral-500" /> CSV
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExport("xlsx")}
+              disabled={loading || payments.length === 0 || exportingFormat !== null}
+              className="px-2.5 py-1 text-xs font-semibold rounded-md border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 flex items-center gap-1 shadow-2xs disabled:opacity-50 cursor-pointer"
+            >
+              <FileSpreadsheet className="w-3 h-3 text-emerald-700" /> .xlsx
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExport("pdf")}
+              disabled={loading || payments.length === 0 || exportingFormat !== null}
+              className="px-2.5 py-1 text-xs font-semibold rounded-md border border-[#800020]/30 bg-[#800020]/10 text-[#800020] hover:bg-[#800020]/20 flex items-center gap-1 shadow-2xs disabled:opacity-50 cursor-pointer"
+            >
+              <FileDown className="w-3 h-3 text-[#800020]" /> PDF
+            </button>
+          </div>
         </div>
 
         {loading ? (
