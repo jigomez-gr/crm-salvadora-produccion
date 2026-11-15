@@ -99,6 +99,25 @@ export function formatPaymentStatus(status?: string | null): string {
   }
 }
 
+export function formatPaymentMethod(method?: string | null): string {
+  switch (method) {
+    case 'cash':
+      return 'Efectivo';
+    case 'bizum':
+      return 'Bizum';
+    case 'card_in_person':
+      return 'Tarjeta (TPV)';
+    case 'stripe':
+      return 'Stripe Online';
+    case 'transfer':
+      return 'Transferencia';
+    case 'other':
+      return 'Otro';
+    default:
+      return method || '-';
+  }
+}
+
 function sanitizeCsv(value: any): string {
   let s = String(value ?? '').trim();
   if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
@@ -164,7 +183,7 @@ export function generateAppointmentsCsv(
       formatAppointmentStatus(item.status),
       item.price ? `${parseFloat(item.price).toFixed(2).replace('.', ',')} €` : '0,00 €',
       formatPaymentStatus(item.paymentStatus),
-      item.paymentMethod || '-',
+      formatPaymentMethod(item.paymentMethod),
       item.reason || '-',
       hasAttach ? 'SÍ' : 'NO',
       item.patientAttachmentName || '-',
@@ -262,9 +281,10 @@ export async function generateAppointmentsXlsx(
     { header: 'Teléfono', key: 'phone', width: 16 },
     { header: 'Servicio / Actividad', key: 'service', width: 28 },
     { header: 'Modalidad', key: 'modality', width: 16 },
-    { header: 'Estado', key: 'status', width: 16 },
+    { header: 'Estado Cita', key: 'status', width: 16 },
     { header: 'Precio (€)', key: 'price', width: 14 },
     { header: 'Estado Pago', key: 'paymentStatus', width: 16 },
+    { header: 'Método Pago', key: 'paymentMethod', width: 18 },
     { header: 'Motivo', key: 'reason', width: 30 },
     { header: 'Documento Adjunto Paciente', key: 'attachmentName', width: 30 },
     { header: 'Tamaño Adjunto', key: 'attachmentSize', width: 16 },
@@ -309,15 +329,16 @@ export async function generateAppointmentsXlsx(
     priceCell.alignment = { horizontal: 'right' };
 
     row.getCell(8).value = formatPaymentStatus(item.paymentStatus);
-    row.getCell(9).value = item.reason || '-';
-    row.getCell(10).value = hasAttach ? item.patientAttachmentName : 'Sin adjuntos';
-    row.getCell(11).value = hasAttach ? formatBytes(item.patientAttachmentSize) : '-';
-    row.getCell(12).value = hasAttach ? formatDateMadrid(item.patientAttachmentUploadedAt) : '-';
+    row.getCell(9).value = formatPaymentMethod(item.paymentMethod);
+    row.getCell(10).value = item.reason || '-';
+    row.getCell(11).value = hasAttach ? item.patientAttachmentName : 'Sin adjuntos';
+    row.getCell(12).value = hasAttach ? formatBytes(item.patientAttachmentSize) : '-';
+    row.getCell(13).value = hasAttach ? formatDateMadrid(item.patientAttachmentUploadedAt) : '-';
 
     const isEven = currentRowIdx % 2 === 0;
     const bgColor = isEven ? 'FFF9FAFB' : 'FFFFFFFF';
 
-    for (let c = 1; c <= 12; c++) {
+    for (let c = 1; c <= 13; c++) {
       const cell = row.getCell(c);
       cell.font = { name: 'Arial', size: 9 };
       cell.border = { bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } } };
@@ -332,7 +353,14 @@ export async function generateAppointmentsXlsx(
         else if (item.status === 'cancelled') cell.font.color = { argb: 'FFDC2626' };
         else cell.font.color = { argb: 'FFD97706' };
       }
-      if (c === 10 && hasAttach) {
+      if (c === 8) {
+        // Payment status color
+        cell.font = { name: 'Arial', size: 9, bold: true };
+        if (item.paymentStatus === 'paid') cell.font.color = { argb: 'FF059669' };
+        else if (item.paymentStatus === 'exempt') cell.font.color = { argb: 'FF4B5563' };
+        else cell.font.color = { argb: 'FFD97706' };
+      }
+      if (c === 11 && hasAttach) {
         cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF7C3AED' } };
       }
     }
@@ -455,16 +483,16 @@ export function generateAppointmentsPdf(
       startY += 46;
 
       // 3. Estructura de Columnas (Total 770 pt):
-      // Fecha: 95, Paciente: 115, Teléfono: 70, Servicio: 110, Modalidad: 60, Estado: 65, Precio: 55, Adjunto: 200
       const columns = [
-        { title: 'FECHA Y HORA', width: 95, align: 'left' },
-        { title: 'PACIENTE / ALUMNO', width: 115, align: 'left' },
-        { title: 'TELÉFONO', width: 70, align: 'left' },
-        { title: 'SERVICIO', width: 110, align: 'left' },
-        { title: 'MODALIDAD', width: 60, align: 'left' },
-        { title: 'ESTADO', width: 65, align: 'left' },
-        { title: 'PRECIO', width: 55, align: 'right' },
-        { title: 'DOC. ADJUNTO DEL PACIENTE', width: 200, align: 'left' },
+        { title: 'FECHA Y HORA', width: 90, align: 'left' },
+        { title: 'PACIENTE / ALUMNO', width: 110, align: 'left' },
+        { title: 'TELÉFONO', width: 65, align: 'left' },
+        { title: 'SERVICIO', width: 105, align: 'left' },
+        { title: 'MODALIDAD', width: 55, align: 'left' },
+        { title: 'ESTADO', width: 60, align: 'left' },
+        { title: 'PRECIO', width: 50, align: 'right' },
+        { title: 'PAGO / MÉTODO', width: 85, align: 'left' },
+        { title: 'DOC. ADJUNTO DEL PACIENTE', width: 150, align: 'left' },
       ];
 
       const drawTableHeader = (y: number) => {
@@ -508,32 +536,38 @@ export function generateAppointmentsPdf(
           ? `📎 ${item.patientAttachmentName} (${formatBytes(item.patientAttachmentSize)})`
           : 'Sin adjuntos';
 
+        const isPaid = item.paymentStatus === 'paid';
+        const methodStr = formatPaymentMethod(item.paymentMethod);
+        const payText = isPaid
+          ? (methodStr && methodStr !== '-' ? `Pagado (${methodStr})` : 'Pagado')
+          : formatPaymentStatus(item.paymentStatus);
+
         let curX = margin;
 
         // Fecha
         doc.fillColor(darkColor).fontSize(7).font('Helvetica')
-          .text(dtStr, curX + 4, currentY + 5, { width: 87, ellipsis: true });
-        curX += 95;
+          .text(dtStr, curX + 4, currentY + 5, { width: 82, ellipsis: true });
+        curX += 90;
 
         // Paciente
         doc.fillColor(darkColor).fontSize(7).font('Helvetica-Bold')
-          .text(item.contact?.name || 'Sin asignar', curX + 4, currentY + 5, { width: 107, ellipsis: true });
-        curX += 115;
+          .text(item.contact?.name || 'Sin asignar', curX + 4, currentY + 5, { width: 102, ellipsis: true });
+        curX += 110;
 
         // Teléfono
         doc.fillColor(grayColor).fontSize(7).font('Helvetica')
-          .text(item.contact?.phone || '-', curX + 4, currentY + 5, { width: 62, ellipsis: true });
-        curX += 70;
+          .text(item.contact?.phone || '-', curX + 4, currentY + 5, { width: 57, ellipsis: true });
+        curX += 65;
 
         // Servicio
         doc.fillColor(darkColor).fontSize(7).font('Helvetica')
-          .text(item.service || '-', curX + 4, currentY + 5, { width: 102, ellipsis: true });
-        curX += 110;
+          .text(item.service || '-', curX + 4, currentY + 5, { width: 97, ellipsis: true });
+        curX += 105;
 
         // Modalidad
         doc.fillColor(grayColor).fontSize(6.5).font('Helvetica')
-          .text(formatModality(item.modality), curX + 4, currentY + 5, { width: 52, ellipsis: true });
-        curX += 60;
+          .text(formatModality(item.modality), curX + 4, currentY + 5, { width: 47, ellipsis: true });
+        curX += 55;
 
         // Estado
         let statusColor = '#374151';
@@ -543,17 +577,27 @@ export function generateAppointmentsPdf(
         else if (item.status === 'pending_approval') statusColor = '#D97706';
 
         doc.fillColor(statusColor).fontSize(7).font('Helvetica-Bold')
-          .text(formatAppointmentStatus(item.status), curX + 4, currentY + 5, { width: 57, ellipsis: true });
-        curX += 65;
+          .text(formatAppointmentStatus(item.status), curX + 4, currentY + 5, { width: 52, ellipsis: true });
+        curX += 60;
 
         // Precio
         doc.fillColor(darkColor).fontSize(7).font('Helvetica')
-          .text(priceStr, curX + 4, currentY + 5, { width: 47, align: 'right' });
-        curX += 55;
+          .text(priceStr, curX + 4, currentY + 5, { width: 42, align: 'right' });
+        curX += 50;
+
+        // Estado y Método de Pago
+        const payColor = isPaid
+          ? '#059669'
+          : item.paymentStatus === 'exempt'
+          ? '#4B5563'
+          : '#D97706';
+        doc.fillColor(payColor).fontSize(6.8).font('Helvetica-Bold')
+          .text(payText, curX + 4, currentY + 5, { width: 77, ellipsis: true });
+        curX += 85;
 
         // Adjunto paciente (NO clinical diagnosis!)
         doc.fillColor(hasAttach ? '#7C3AED' : '#9CA3AF').fontSize(6.8).font(hasAttach ? 'Helvetica-Bold' : 'Helvetica')
-          .text(attachStr, curX + 4, currentY + 5, { width: 192, ellipsis: true });
+          .text(attachStr, curX + 4, currentY + 5, { width: 142, ellipsis: true });
 
         currentY += rowHeight;
       }

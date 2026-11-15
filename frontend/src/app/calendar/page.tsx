@@ -91,6 +91,26 @@ function statusLabel(s: Appointment["status"]) {
   return "Cancelada";
 }
 
+function formatPaymentMethodLabel(method?: string | null): string {
+  switch (method) {
+    case "cash":
+      return "Efectivo";
+    case "bizum":
+      return "Bizum";
+    case "card_in_person":
+      return "Tarjeta TPV";
+    case "stripe":
+      return "Stripe Online";
+    case "transfer":
+      return "Transferencia";
+    case "other":
+      return "Otro";
+    default:
+      return method || "";
+  }
+}
+
+
 // ─── Create/Edit Modal ───────────────────────────────────────────────────────
 
 interface ApptFormData {
@@ -2274,6 +2294,23 @@ function AppointmentListView({
                       <span className="text-xs font-semibold text-neutral-700 bg-neutral-100 px-2 py-0.5 rounded">
                         {a.price} €
                       </span>
+                    )}
+                    {a.paymentStatus === "paid" ? (
+                      <Badge variant="success" className="text-[10px] bg-emerald-50 text-emerald-800 border-emerald-300 font-medium">
+                        💳 Pagado{a.paymentMethod ? ` (${formatPaymentMethodLabel(a.paymentMethod)})` : ""}
+                      </Badge>
+                    ) : a.paymentStatus === "exempt" ? (
+                      <Badge variant="default" className="text-[10px] bg-neutral-100 text-neutral-700 border-neutral-300">
+                        Exento / Prueba
+                      </Badge>
+                    ) : a.paymentStatus === "refunded" ? (
+                      <Badge variant="danger" className="text-[10px] bg-rose-50 text-rose-800 border-rose-300">
+                        Reembolsado
+                      </Badge>
+                    ) : (
+                      <Badge variant="warning" className="text-[10px] bg-amber-50 text-amber-800 border-amber-300 font-medium">
+                        ⏳ Pendiente de cobro
+                      </Badge>
                     )}
                     {a.responseDocument && (
                       <Badge variant="success" className="bg-emerald-50 text-emerald-800 border-emerald-200">

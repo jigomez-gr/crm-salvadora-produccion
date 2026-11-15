@@ -18,6 +18,8 @@ jest.mock(
 );
 jest.mock('@mastra/memory', () => ({ Memory: class {} }), { virtual: true });
 
+import * as zlib from 'zlib';
+import * as ExcelJS from 'exceljs';
 import {
   generateAppointmentsCsv,
   generateAppointmentsXlsx,
@@ -96,7 +98,7 @@ describe('Appointments Export Generator & WhatsApp Tool', () => {
   ];
 
   describe('1. CSV Export Generator', () => {
-    it('generates CSV with UTF-8 BOM, appointment details, and patient attachment metadata', () => {
+    it('generates CSV with UTF-8 BOM, appointment details, payment status/method, and patient attachment metadata', () => {
       const csvBuffer = generateAppointmentsCsv(
         mockAppointments,
         'Filtro: Todas las citas',
@@ -112,6 +114,9 @@ describe('Appointments Export Generator & WhatsApp Tool', () => {
       expect(csvText).toContain('radiografia_lumbar.pdf');
       expect(csvText).toContain('32.0 KB');
       expect(csvText).toContain('42,00 €');
+      expect(csvText).toContain('Pagado');
+      expect(csvText).toContain('Efectivo');
+      expect(csvText).toContain('Pendiente');
     });
 
     it('STRICT PRIVACY: never includes clinical diagnosis in CSV output', () => {
@@ -126,7 +131,7 @@ describe('Appointments Export Generator & WhatsApp Tool', () => {
   });
 
   describe('2. Excel XLSX Export Generator', () => {
-    it('generates a valid XLSX buffer with appointment and patient attachment data', async () => {
+    it('generates a valid XLSX buffer with appointment, payment status, method, and patient attachment data', async () => {
       const xlsxBuffer = await generateAppointmentsXlsx(
         mockAppointments,
         'Filtro: Noviembre 2026',
@@ -137,11 +142,17 @@ describe('Appointments Export Generator & WhatsApp Tool', () => {
       // PK signature for ZIP/XLSX
       expect(xlsxBuffer[0]).toBe(0x50);
       expect(xlsxBuffer[1]).toBe(0x4b);
+
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(xlsxBuffer as any);
+      const ws = wb.getWorksheet('Citas y Agenda');
+      expect(ws?.getCell('H7').value).toBe('Pagado');
+      expect(ws?.getCell('I7').value).toBe('Efectivo');
     });
   });
 
   describe('3. PDF Export Generator', () => {
-    it('generates a valid landscape PDF buffer without clinical diagnosis', async () => {
+    it('generates a valid landscape PDF buffer with payment data and without clinical diagnosis', async () => {
       const pdfBuffer = await generateAppointmentsPdf(
         mockAppointments,
         'Filtro: Noviembre 2026',
@@ -155,6 +166,16 @@ describe('Appointments Export Generator & WhatsApp Tool', () => {
       const pdfString = pdfBuffer.toString('latin1');
       expect(pdfString).not.toContain('DIAGNOSTICO_SECRETO_LUMBALGIA_AGUDA');
       expect(pdfString).not.toContain('DIAGNOSTICO_SECRETO_ANSIEDAD_LABORAL');
+
+      // Decompress the stream to verify content text (PDFKit encodes kerning in hex arrays)
+      const streamStart = pdfBuffer.indexOf('stream\r\n') !== -1 ? pdfBuffer.indexOf('stream\r\n') + 8 : pdfBuffer.indexOf('stream\n') + 7;
+      const streamEnd = pdfBuffer.indexOf('endstream');
+      const deflated = pdfBuffer.subarray(streamStart, streamEnd);
+      const inflated = zlib.inflateSync(deflated).toString('latin1');
+      // Hex representation for 'gado (Ef' and 'ectiv' (Pagado Efectivo) and 'endiente' (Pendiente)
+      expect(inflated).toContain('6761646f'); // 'gado'
+      expect(inflated).toContain('6563746976'); // 'ectiv'
+      expect(inflated).toContain('656e6469656e7465'); // 'endiente'
     });
   });
 

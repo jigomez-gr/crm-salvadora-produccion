@@ -62,6 +62,8 @@ import {
   formatDateMadrid,
   formatAppointmentStatus,
   formatModality,
+  formatPaymentStatus,
+  formatPaymentMethod,
 } from './appointments-export.generator';
 
 import { generateDoctorReportPdfBuffer } from './pdf-report.generator';
@@ -4475,11 +4477,16 @@ export class AppointmentsService implements OnModuleInit {
         const statusStr = formatAppointmentStatus(item.status);
         const modStr = formatModality(item.modality);
         const priceStr = item.price ? `${parseFloat(item.price).toFixed(2)} €` : '0,00 €';
+        const isPaid = item.paymentStatus === 'paid';
+        const methodStr = formatPaymentMethod(item.paymentMethod);
+        const payStr = isPaid
+          ? `Pagado${methodStr && methodStr !== '-' ? ` por ${methodStr}` : ''}`
+          : formatPaymentStatus(item.paymentStatus);
         const attachStr = item.patientAttachmentName
           ? ` (📎 Documento adjunto: ${item.patientAttachmentName})`
           : '';
         lines.push(
-          `${idx + 1}. ${dtStr} - ${item.service} (${modStr}) · Estado: ${statusStr} · ${priceStr}${attachStr}`,
+          `${idx + 1}. ${dtStr} - ${item.service} (${modStr}) · ${priceStr} [${payStr}] · Estado cita: ${statusStr}${attachStr}`,
         );
       });
       if (attachmentsCount > 0) {
