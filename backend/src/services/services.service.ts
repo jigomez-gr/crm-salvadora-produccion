@@ -150,7 +150,7 @@ export class ServicesService implements OnModuleInit {
             "textosinpreciodefinitivo" = 'fecha por confirmar',
             "eventDatesText" = 'fecha por confirmar',
             "description" = 'Jornada sagrada femenina de empoderamiento, arquetipos, sanación de memorias, meditación, danza y autocuidado. Fecha por confirmar. Precio por confirmar.'
-          WHERE "name" ILIKE '%mujeres%' OR "name" ILIKE '%femenino%';
+          WHERE ("name" ILIKE '%mujeres%' OR "name" ILIKE '%femenino%') AND "eventDatesText" IS NULL;
 
           UPDATE services SET 
             "sinfechadefinitiva" = 'S', 
@@ -159,7 +159,7 @@ export class ServicesService implements OnModuleInit {
             "textosinpreciodefinitivo" = 'El precio se determinará en función de las características del viaje y alojamiento.',
             "eventDatesText" = 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
             "description" = 'Evento vivencial de inmersión y transformación sonora durante toda la noche (11 horas continuas de sonido). Fechas: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027. El precio se determinará en función de las características del viaje y alojamiento. Se aceptan reservas provisionales.'
-          WHERE "name" ILIKE '%puja%';
+          WHERE "name" ILIKE '%puja%' AND "eventDatesText" IS NULL;
 
           UPDATE services SET
             "description" = 'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 21 de Noviembre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€ (14€ si vienes acompañado/acompañada). Pago en el centro.',
@@ -172,7 +172,7 @@ export class ServicesService implements OnModuleInit {
             "flyerParticularUrl" = '/flyers/banogongparticular.jpg',
             "flyerParticularPath" = 'public/flyers/banogongparticular.jpg',
             "textoespecifico" = 'Próxima sesión confirmada: Sábado 21 de Noviembre de 2026 de 18:00 a 20:00 h. Mejoraremos el Hígado. Precio: 16 € (14 € si vienes acompañado/acompañada).'
-          WHERE ("name" ILIKE '%baño de gong%' OR "name" ILIKE '%meditación sonora%');
+          WHERE ("name" ILIKE '%baño de gong%' OR "name" ILIKE '%meditación sonora%') AND "eventDatesText" IS NULL;
         `);
       } catch (colErr) {
         console.warn('Auto-migration warning in services table:', colErr);
@@ -323,16 +323,11 @@ export class ServicesService implements OnModuleInit {
           }),
         );
       } else {
-        mujeresSvc.sinfechadefinitiva = 'S';
-        mujeresSvc.textosinfechadefinitiva = 'fecha por confirmar';
-        mujeresSvc.sinpreciodefinitivo = 'S';
-        mujeresSvc.textosinpreciodefinitivo = 'fecha por confirmar';
-        mujeresSvc.eventDatesText = 'fecha por confirmar';
-        mujeresSvc.description =
-          'Jornada sagrada femenina de empoderamiento, arquetipos, sanación de memorias, meditación, danza y autocuidado. Fecha por confirmar. Precio por confirmar.';
-        mujeresSvc.reminderNotes =
-          mujeresSvc.reminderNotes ||
-          'Llevar ropa cómoda y holgada, cojín de meditación o esterilla si lo deseas, cuaderno/diario personal para notas y comida ligera para compartir en el descanso.';
+        if (!mujeresSvc.managerId) mujeresSvc.managerId = manager.id;
+        if (!mujeresSvc.reminderNotes) {
+          mujeresSvc.reminderNotes =
+            'Llevar ropa cómoda y holgada, cojín de meditación o esterilla si lo deseas, cuaderno/diario personal para notas y comida ligera para compartir en el descanso.';
+        }
         mujeresSvc.isActive = true;
         await this.serviceRepo.save(mujeresSvc);
       }
@@ -432,22 +427,19 @@ export class ServicesService implements OnModuleInit {
           }),
         );
       } else {
-        gongSvc.description = gongDesc;
-        gongSvc.eventDatesText = gongDateText;
-        gongSvc.scheduleText = gongScheduleText;
-        gongSvc.eventStartDate = gongStart;
-        gongSvc.eventEndDate = gongEnd;
-        gongSvc.sinfechadefinitiva = 'N';
-        gongSvc.textosinfechadefinitiva = null;
-        gongSvc.flyerParticularUrl = '/flyers/banogongparticular.jpg';
-        gongSvc.flyerParticularPath = 'public/flyers/banogongparticular.jpg';
-        gongSvc.videoParticularUrl = '/videos/Bano-de-Gong_particular.mp4';
-        gongSvc.videoParticularPath = 'media_base/videos/Bano-de-Gong_particular.mp4';
-        gongSvc.textoespecifico = gongTextoEspecifico;
-        gongSvc.managerId = manager.id;
-        gongSvc.reminderNotes =
-          gongSvc.reminderNotes ||
-          'Llevar ropa cómoda de abrigo, calcetines cálidos y, si lo deseas, tu propia manta o cojín para disfrutar de la experiencia sonora con el máximo confort.';
+        if (!gongSvc.managerId) gongSvc.managerId = manager.id;
+        if (!gongSvc.flyerParticularUrl) {
+          gongSvc.flyerParticularUrl = '/flyers/banogongparticular.jpg';
+          gongSvc.flyerParticularPath = 'public/flyers/banogongparticular.jpg';
+        }
+        if (!gongSvc.videoParticularUrl) {
+          gongSvc.videoParticularUrl = '/videos/Bano-de-Gong_particular.mp4';
+          gongSvc.videoParticularPath = 'media_base/videos/Bano-de-Gong_particular.mp4';
+        }
+        if (!gongSvc.reminderNotes) {
+          gongSvc.reminderNotes =
+            'Llevar ropa cómoda de abrigo, calcetines cálidos y, si lo deseas, tu propia manta o cojín para disfrutar de la experiencia sonora con el máximo confort.';
+        }
         gongSvc.isActive = true;
         await this.serviceRepo.save(gongSvc);
       }
@@ -481,17 +473,11 @@ export class ServicesService implements OnModuleInit {
           }),
         );
       } else {
-        pujaSvc.sinfechadefinitiva = 'S';
-        pujaSvc.textosinfechadefinitiva = 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027';
-        pujaSvc.sinpreciodefinitivo = 'S';
-        pujaSvc.textosinpreciodefinitivo = 'el precio se determinara en funcion de las caracteristicas del viaje y alojamiento';
-        pujaSvc.eventDatesText = 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027';
-        pujaSvc.description =
-          'Evento vivencial de inmersión y transformación sonora durante toda la noche (11 horas continuas de sonido). Fechas: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027. Precio: el precio se determinara en funcion de las caracteristicas del viaje y alojamiento.';
-        pujaSvc.managerId = manager.id;
-        pujaSvc.reminderNotes =
-          pujaSvc.reminderNotes ||
-          'Traer esterilla cómoda o colchoneta fina, saco de dormir o mantas, almohada/cojín, botella de agua y ropa cómoda para toda la noche.';
+        if (!pujaSvc.managerId) pujaSvc.managerId = manager.id;
+        if (!pujaSvc.reminderNotes) {
+          pujaSvc.reminderNotes =
+            'Traer esterilla cómoda o colchoneta fina, saco de dormir o mantas, almohada/cojín, botella de agua y ropa cómoda para toda la noche.';
+        }
         pujaSvc.isActive = true;
         await this.serviceRepo.save(pujaSvc);
       }
@@ -530,23 +516,19 @@ export class ServicesService implements OnModuleInit {
           }),
         );
       } else {
-        constelarSvc.managerId = manager.id;
-        constelarSvc.eventStartDate = new Date('2026-11-14T09:00:00.000Z');
-        constelarSvc.eventEndDate = new Date('2026-11-14T13:00:00.000Z');
-        constelarSvc.eventDatesText = 'Sábado 14 de Noviembre de 2026 (10:00 a 14:00)';
-        constelarSvc.scheduleText = 'Sábado 14 de Noviembre (10:00 a 14:00)';
-        constelarSvc.sinfechadefinitiva = 'N';
-        constelarSvc.textosinfechadefinitiva = null;
-        constelarSvc.flyerParticularUrl = '/flyers/constelaciones_familiares_particular.jpg';
-        constelarSvc.flyerParticularPath = 'public/flyers/constelaciones_familiares_particular.jpg';
-        constelarSvc.videoParticularUrl = '/videos/constelacionesparticular.mp4';
-        constelarSvc.videoParticularPath = 'media_base/videos/constelacionesparticular.mp4';
-        constelarSvc.textoespecifico = 'Próxima fecha confirmada: Sábado 14 de Noviembre de 2026 de 10:00 a 14:00 h en el centro.';
-        constelarSvc.description =
-          'Taller vivencial mensual de sanación de vínculos y patrones familiares. Modalidad para trabajar un asunto o síntoma personal propio. Próxima fecha: Sábado 14 de Noviembre de 2026 (10:00 a 14:00). Precio: 60€. Aforo: 25 personas. Pago en el centro.';
-        constelarSvc.reminderNotes =
-          constelarSvc.reminderNotes ||
-          'Llevar ropa cómoda, cuaderno para notas si lo deseas y botella de agua. Rogamos acudir 10 minutos antes para comenzar puntualmente.';
+        if (!constelarSvc.managerId) constelarSvc.managerId = manager.id;
+        if (!constelarSvc.flyerParticularUrl) {
+          constelarSvc.flyerParticularUrl = '/flyers/constelaciones_familiares_particular.jpg';
+          constelarSvc.flyerParticularPath = 'public/flyers/constelaciones_familiares_particular.jpg';
+        }
+        if (!constelarSvc.videoParticularUrl) {
+          constelarSvc.videoParticularUrl = '/videos/constelacionesparticular.mp4';
+          constelarSvc.videoParticularPath = 'media_base/videos/constelacionesparticular.mp4';
+        }
+        if (!constelarSvc.reminderNotes) {
+          constelarSvc.reminderNotes =
+            'Llevar ropa cómoda, cuaderno para notas si lo deseas y botella de agua. Rogamos acudir 10 minutos antes para comenzar puntualmente.';
+        }
         constelarSvc.isActive = true;
         await this.serviceRepo.save(constelarSvc);
       }
@@ -584,23 +566,19 @@ export class ServicesService implements OnModuleInit {
           }),
         );
       } else {
-        participarConstelacionesSvc.managerId = manager.id;
-        participarConstelacionesSvc.eventStartDate = new Date('2026-11-14T09:00:00.000Z');
-        participarConstelacionesSvc.eventEndDate = new Date('2026-11-14T13:00:00.000Z');
-        participarConstelacionesSvc.eventDatesText = 'Sábado 14 de Noviembre de 2026 (10:00 a 14:00)';
-        participarConstelacionesSvc.scheduleText = 'Sábado 14 de Noviembre (10:00 a 14:00)';
-        participarConstelacionesSvc.sinfechadefinitiva = 'N';
-        participarConstelacionesSvc.textosinfechadefinitiva = null;
-        participarConstelacionesSvc.flyerParticularUrl = '/flyers/constelaciones_familiares_particular.jpg';
-        participarConstelacionesSvc.flyerParticularPath = 'public/flyers/constelaciones_familiares_particular.jpg';
-        participarConstelacionesSvc.videoParticularUrl = '/videos/constelacionesparticular.mp4';
-        participarConstelacionesSvc.videoParticularPath = 'media_base/videos/constelacionesparticular.mp4';
-        participarConstelacionesSvc.textoespecifico = 'Próxima fecha confirmada: Sábado 14 de Noviembre de 2026 de 10:00 a 14:00 h en el centro.';
-        participarConstelacionesSvc.description =
-          'Taller vivencial mensual de sanación de vínculos familiares. Modalidad para participar como representante u observador en el campo de trabajo. Próxima fecha: Sábado 14 de Noviembre de 2026 (10:00 a 14:00). Precio: 20€. Aforo: 25 personas. Pago en el centro.';
-        participarConstelacionesSvc.reminderNotes =
-          participarConstelacionesSvc.reminderNotes ||
-          'Llevar ropa cómoda, libreta de notas si lo deseas y botella de agua. Rogamos puntualidad a las 10:00.';
+        if (!participarConstelacionesSvc.managerId) participarConstelacionesSvc.managerId = manager.id;
+        if (!participarConstelacionesSvc.flyerParticularUrl) {
+          participarConstelacionesSvc.flyerParticularUrl = '/flyers/constelaciones_familiares_particular.jpg';
+          participarConstelacionesSvc.flyerParticularPath = 'public/flyers/constelaciones_familiares_particular.jpg';
+        }
+        if (!participarConstelacionesSvc.videoParticularUrl) {
+          participarConstelacionesSvc.videoParticularUrl = '/videos/constelacionesparticular.mp4';
+          participarConstelacionesSvc.videoParticularPath = 'media_base/videos/constelacionesparticular.mp4';
+        }
+        if (!participarConstelacionesSvc.reminderNotes) {
+          participarConstelacionesSvc.reminderNotes =
+            'Llevar ropa cómoda, libreta de notas si lo deseas y botella de agua. Rogamos puntualidad a las 10:00.';
+        }
         participarConstelacionesSvc.isActive = true;
         await this.serviceRepo.save(participarConstelacionesSvc);
       }
@@ -708,23 +686,27 @@ export class ServicesService implements OnModuleInit {
             updated = true;
           }
         } else if (/mujeres|femenino/i.test(s.name)) {
-          s.sinfechadefinitiva = 'S';
-          s.textosinfechadefinitiva = 'fecha por confirmar';
-          s.sinpreciodefinitivo = 'S';
-          s.textosinpreciodefinitivo = 'fecha por confirmar';
-          s.eventDatesText = 'fecha por confirmar';
-          s.description =
-            'Jornada sagrada femenina de empoderamiento, arquetipos, sanación de memorias, meditación, danza y autocuidado. Fecha por confirmar. Precio por confirmar.';
-          updated = true;
+          if (!s.eventDatesText) {
+            s.sinfechadefinitiva = 'S';
+            s.textosinfechadefinitiva = 'fecha por confirmar';
+            s.sinpreciodefinitivo = 'S';
+            s.textosinpreciodefinitivo = 'fecha por confirmar';
+            s.eventDatesText = 'fecha por confirmar';
+            s.description =
+              'Jornada sagrada femenina de empoderamiento, arquetipos, sanación de memorias, meditación, danza y autocuidado. Fecha por confirmar. Precio por confirmar.';
+            updated = true;
+          }
         } else if (/puja/i.test(s.name)) {
-          s.sinfechadefinitiva = 'S';
-          s.textosinfechadefinitiva = 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027';
-          s.sinpreciodefinitivo = 'S';
-          s.textosinpreciodefinitivo = 'el precio se determinara en funcion de las caracteristicas del viaje y alojamiento';
-          s.eventDatesText = 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027';
-          s.description =
-            'Evento vivencial de inmersión y transformación sonora durante toda la noche (11 horas continuas de sonido). Fechas: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027. Precio: el precio se determinara en funcion de las caracteristicas del viaje y alojamiento.';
-          updated = true;
+          if (!s.eventDatesText) {
+            s.sinfechadefinitiva = 'S';
+            s.textosinfechadefinitiva = 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027';
+            s.sinpreciodefinitivo = 'S';
+            s.textosinpreciodefinitivo = 'el precio se determinara en funcion de las caracteristicas del viaje y alojamiento';
+            s.eventDatesText = 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027';
+            s.description =
+              'Evento vivencial de inmersión y transformación sonora durante toda la noche (11 horas continuas de sonido). Fechas: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027. Precio: el precio se determinara en funcion de las caracteristicas del viaje y alojamiento.';
+            updated = true;
+          }
         }
         if (updated) {
           await this.serviceRepo.save(s);
@@ -787,52 +769,15 @@ export class ServicesService implements OnModuleInit {
           }
           if (/mujeres|femenino/i.test(s.name || '')) {
             hasMujeres = true;
-            changed = true;
-            return {
-              ...s,
-              sinfechadefinitiva: 'S',
-              textosinfechadefinitiva: 'fecha por confirmar',
-              sinpreciodefinitivo: 'S',
-              textosinpreciodefinitivo: 'fecha por confirmar',
-              eventDatesText: 'fecha por confirmar',
-              description:
-                'Jornada sagrada femenina de empoderamiento, arquetipos, sanación de memorias, meditación, danza y autocuidado. Fecha por confirmar. Precio por confirmar.',
-            };
           }
           if (/puja/i.test(s.name || '')) {
             hasPuja = true;
-            changed = true;
-            return {
-              ...s,
-              sinfechadefinitiva: 'S',
-              textosinfechadefinitiva: 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
-              sinpreciodefinitivo: 'S',
-              textosinpreciodefinitivo: 'El precio se determinará en función de las características del viaje y alojamiento.',
-              eventDatesText: 'dos encuentros  la primera puja es proximamente y la segunda en marzo 2027',
-              description:
-                'Evento vivencial de inmersión y transformación sonora durante toda la noche (11 horas continuas de sonido). Fechas: dos encuentros  la primera puja es proximamente y la segunda en marzo 2027. El precio se determinará en función de las características del viaje y alojamiento. Se aceptan reservas provisionales.',
-            };
           }
           if (/ayuno/i.test(s.name || '')) {
             hasAyuno = true;
           }
           if (/baño de gong|sonora/i.test(s.name || '')) {
             hasGong = true;
-            changed = true;
-            return {
-              ...s,
-              eventDatesText: 'Sábado 21 de Noviembre de 2026 (18:00 a 20:00)',
-              scheduleText: 'Sábado 21 de Noviembre (18:00 a 20:00)',
-              eventStartDate: '2026-11-21T17:00:00.000Z',
-              eventEndDate: '2026-11-21T19:00:00.000Z',
-              sinfechadefinitiva: 'N',
-              textosinfechadefinitiva: null,
-              flyerParticularUrl: '/flyers/banogongparticular.jpg',
-              textoespecifico:
-                'Próxima sesión confirmada: Sábado 21 de Noviembre de 2026 de 18:00 a 20:00 h. Mejoraremos el Hígado. Precio: 16 € (14 € si vienes acompañado/acompañada).',
-              description:
-                'Un sábado al mes (el último sábado de cada mes). Sesión completa de 2 horas: preparación, baño de sonido envolvente con gongs y meditación integradora. Próxima sesión: Sábado 21 de Noviembre de 2026 (18:00 a 20:00). Aforo máximo: 30 personas. Precio: 16€ (14€ si vienes acompañado/acompañada). Pago en el centro.',
-            };
           }
           if (/constelar|asunto propio/i.test(s.name || '')) {
             hasConstelar = true;
@@ -1071,21 +1016,14 @@ export class ServicesService implements OnModuleInit {
         WHERE name ILIKE '%ayuno%' OR "videoParticularPath" LIKE '%ayunoterapeuticoparticular.mp4%';
       `).catch(() => null);
 
-      // Ensure Constelaciones Familiares media, flyer and date
+      // Ensure Constelaciones Familiares media and flyer if null
       await this.serviceRepo.query(`
         UPDATE services 
         SET "videoParticularUrl" = '/videos/constelacionesparticular.mp4',
             "videoParticularPath" = 'media_base/videos/constelacionesparticular.mp4',
             "flyerParticularUrl" = '/flyers/constelaciones_familiares_particular.jpg',
-            "flyerParticularPath" = 'public/flyers/constelaciones_familiares_particular.jpg',
-            "eventStartDate" = '2026-11-14T09:00:00.000Z',
-            "eventEndDate" = '2026-11-14T13:00:00.000Z',
-            "eventDatesText" = 'Sábado 14 de Noviembre de 2026 (10:00 a 14:00)',
-            "scheduleText" = 'Sábado 14 de Noviembre (10:00 a 14:00)',
-            sinfechadefinitiva = 'N',
-            textosinfechadefinitiva = NULL,
-            textoespecifico = 'Próxima fecha confirmada: Sábado 14 de Noviembre de 2026 de 10:00 a 14:00 h en el centro.'
-        WHERE name ILIKE '%constelaci%';
+            "flyerParticularPath" = 'public/flyers/constelaciones_familiares_particular.jpg'
+        WHERE name ILIKE '%constelaci%' AND ("videoParticularUrl" IS NULL OR "flyerParticularUrl" IS NULL);
       `).catch(() => null);
 
       // Ensure only Terapia Gestalt requires approval; Baño de Gong, Fin de Semana, Talleres, etc. do NOT require approval
