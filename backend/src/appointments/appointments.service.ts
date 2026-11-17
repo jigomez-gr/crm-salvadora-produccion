@@ -3706,6 +3706,136 @@ export class AppointmentsService implements OnModuleInit {
   }
 
   /**
+   * Comprueba la disponibilidad y cupo (aforo máx 20 alumnos) en los horarios
+   * definitivos/fijos de Hatha Yoga Terapéutico.
+   */
+  async checkYogaPermanentCapacity(
+    schedule: Array<{ day: number | string; time: string }>,
+    excludeContactId?: string,
+  ): Promise<{
+    available: boolean;
+    slots: Array<{
+      day: number;
+      dayName: string;
+      time: string;
+      available: boolean;
+      enrolledCount: number;
+      maxCapacity: number;
+      availableSeats: number;
+    }>;
+  }> {
+    const maxCapacity = 20;
+    const allStudents = this.contactsRepo?.find
+      ? await this.contactsRepo.find({ where: { isStudent: true } }).catch(() => [])
+      : [];
+
+    const activeStudents = (allStudents || []).filter(
+      (s: any) =>
+        s.id !== excludeContactId &&
+        s.status !== ContactStatus.INACTIVE &&
+        s.status !== 'inactive',
+    );
+
+    const slotResults: Array<{
+      day: number;
+      dayName: string;
+      time: string;
+      available: boolean;
+      enrolledCount: number;
+      maxCapacity: number;
+      availableSeats: number;
+    }> = [];
+
+    let allAvailable = true;
+    const now = new Date();
+    const todayMadrid = new TZDate(now.getTime(), 'Europe/Madrid');
+
+    for (const slot of schedule) {
+      const dayNum = typeof slot.day === 'number' ? slot.day : parseInt(String(slot.day), 10);
+      const timeStr = String(slot.time || '').trim().padStart(5, '0');
+      const dayName = getSpanishDayName(dayNum);
+
+      // Contar alumnos fijos matriculados en este turno
+      const enrolledCount = activeStudents.filter((s: any) => {
+        if (!s.studentSchedule || !Array.isArray(s.studentSchedule)) return false;
+        return s.studentSchedule.some(
+          (sch: any) =>
+            Number(sch.day) === dayNum && String(sch.time || '').padStart(5, '0') === timeStr,
+        );
+      }).length;
+
+      // Contar citas activas en las próximas 2 semanas para este día y hora
+      let maxApptsInSlot = 0;
+      for (let offset = 0; offset <= 14; offset++) {
+        const checkDate = addDays(todayMadrid, offset);
+        if (checkDate.getDay() !== dayNum) continue;
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        const apptStart = new TZDate(
+          checkDate.getFullYear(),
+          checkDate.getMonth(),
+          checkDate.getDate(),
+          hours,
+          minutes,
+          0,
+          'Europe/Madrid',
+        );
+        if (apptStart.getTime() <= now.getTime()) continue;
+
+        let count = 0;
+        if (this.appointmentsRepo?.count) {
+          count = await this.appointmentsRepo
+            .count({
+              where: {
+                startsAt: apptStart,
+                status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.PENDING_APPROVAL]),
+                contactId: excludeContactId ? Not(excludeContactId) : undefined,
+              },
+            })
+            .catch(() => 0);
+        } else if (this.appointmentsRepo?.find) {
+          const list = await this.appointmentsRepo
+            .find({
+              where: {
+                startsAt: apptStart,
+                status: In([AppointmentStatus.SCHEDULED, AppointmentStatus.PENDING_APPROVAL]),
+                contactId: excludeContactId ? Not(excludeContactId) : undefined,
+              },
+            })
+            .catch(() => []);
+          count = list.length;
+        }
+
+        if (count > maxApptsInSlot) {
+          maxApptsInSlot = count;
+        }
+      }
+
+      const effectiveOccupied = Math.max(enrolledCount, maxApptsInSlot);
+      const availableSeats = Math.max(0, maxCapacity - effectiveOccupied);
+      const isAvailable = effectiveOccupied < maxCapacity;
+
+      if (!isAvailable) {
+        allAvailable = false;
+      }
+
+      slotResults.push({
+        day: dayNum,
+        dayName,
+        time: timeStr,
+        available: isAvailable,
+        enrolledCount: effectiveOccupied,
+        maxCapacity,
+        availableSeats,
+      });
+    }
+
+    return {
+      available: allAvailable,
+      slots: slotResults,
+    };
+  }
+
+  /**
    * Cambia o formaliza la suscripción de yoga de un contacto:
    * - Verifica la coherencia de los días y horas con los horarios oficiales de Hatha Yoga Terapéutico.
    * - Ajusta la modalidad según el número de turnos (1 turno -> 1_clase_semanal / 2 turnos -> 2_clases_semanales).
@@ -3762,6 +3892,15 @@ export class AppointmentsService implements OnModuleInit {
       if (normalizedSlots[0].day === normalizedSlots[1].day && normalizedSlots[0].time === normalizedSlots[1].time) {
         throw new BadRequestException('Los dos turnos semanales no pueden ser el mismo día a la misma hora.');
       }
+    }
+
+    // Verificación estricta de cupo en los horarios definitivos solicitados (máx 20 alumnos)
+    const capacityCheck = await this.checkYogaPermanentCapacity(normalizedSlots, contact.id);
+    if (!capacityCheck.available) {
+      const fullSlot = capacityCheck.slots.find((s) => !s.available) || capacityCheck.slots[0];
+      throw new ConflictException(
+        `No hay cupo disponible para el horario definitivo de ${fullSlot.dayName} a las ${fullSlot.time} (aforo completo de ${fullSlot.maxCapacity} alumnos). Por favor, elige otro día u hora.`,
+      );
     }
 
     const modality = normalizedSlots.length === 2 ? '2_clases_semanales' : '1_clase_semanal';

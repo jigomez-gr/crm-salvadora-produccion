@@ -85,6 +85,10 @@ export interface BookingAgentDeps {
     contactId: string,
     dto: { modality?: string; schedule: Array<{ day: number | string; time: string }>; reason?: string },
   ) => Promise<any>;
+  checkYogaPermanentCapacity?: (
+    schedule: Array<{ day: number | string; time: string }>,
+    contactId?: string,
+  ) => Promise<any>;
   linkThreadContact?: (threadId: string, contactId: string) => Promise<void>;
   getThreadContact?: (threadId: string) => Promise<any>;
   createPaymentLink?: (params: {
@@ -1409,6 +1413,12 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         .describe(
           'Name of the service of the appointment to reschedule (e.g. "Hatha Yoga Terapéutico")',
         ),
+      currentStartsAt: z
+        .string()
+        .optional()
+        .describe(
+          'Fecha u hora actual de la cita concreta que se desea reprogramar (ej. "2026-09-15 09:45" o ISO), útil cuando el cliente tiene varias citas agendadas y quiere mover una específica.',
+        ),
       newStartsAt: z
         .string()
         .describe(
@@ -1469,9 +1479,26 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
             sName.includes((a.service || '').toLowerCase()),
           );
         }
-        const active = matching.length > 0 ? matching[0] : activeList[0];
-        if (active?.id) {
-          apptId = active.id;
+        if (inputData.currentStartsAt) {
+          try {
+            const config = getConfig(context);
+            const timezone = config?.timezone || 'Europe/Madrid';
+            const parsedTarget = new Date(parseFlexibleStartsAt(inputData.currentStartsAt, timezone)).getTime();
+            const foundByTime = matching.find(
+              (a: any) => Math.abs(new Date(a.startsAt).getTime() - parsedTarget) < 45 * 60_000,
+            );
+            if (foundByTime?.id) {
+              apptId = foundByTime.id;
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+        if (!apptId) {
+          const active = matching.length > 0 ? matching[0] : activeList[0];
+          if (active?.id) {
+            apptId = active.id;
+          }
         }
       }
 
@@ -1525,10 +1552,15 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           minute: '2-digit',
         });
 
+        const isYoga = /yoga/i.test(newAppt.service || '');
+        const habitualReminder = isYoga
+          ? ' Ten en cuenta que esta reprogramación es puntual para esta fecha; a partir de la semana que viene sigues con tu horario habitual de siempre.'
+          : '';
+
         return {
           success: true,
           appointment: newAppt,
-          message: `Tu cita de ${newAppt.service} ha sido reprogramada con éxito para el ${localDate} a las ${localTime}. La cita anterior ha quedado cancelada y se ha registrado la nueva en el sistema.`,
+          message: `Tu cita de ${newAppt.service} ha sido reprogramada con éxito para el ${localDate} a las ${localTime}.${habitualReminder} La cita anterior ha quedado cancelada y se ha registrado la nueva en el sistema.`,
         };
       } catch (err: any) {
         const errorMsg =
@@ -1682,10 +1714,60 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     },
   });
 
+  const checkYogaPermanentAvailabilityTool = createTool({
+    id: 'checkYogaPermanentAvailability',
+    description:
+      'Comprobar el cupo y plazas disponibles en los horarios fijos definitivos de Hatha Yoga Terapéutico para un cambio definitivo de suscripción de un alumno (aforo máx 20 alumnos por grupo). Devuelve si hay plazas libres y cuántas por turno.',
+    inputSchema: z.object({
+      slots: z
+        .array(
+          z.object({
+            day: z.union([z.number(), z.string()]).describe('Día de la semana: 2 (Martes), 3 (Miércoles), 4 (Jueves) o nombre del día'),
+            time: z.string().describe('Hora en formato HH:mm (ej: "09:45", "17:00", "20:15", "17:30")'),
+          }),
+        )
+        .min(1)
+        .max(2)
+        .describe('Turnos definitivos a consultar cupo'),
+      customerPhone: z.string().optional().describe('Teléfono del alumno si se conoce'),
+      customerEmail: z.string().optional().describe('Email del alumno si se conoce'),
+    }),
+    execute: async (inputData, context) => {
+      const customer = getCustomer(context);
+      let contactId = customer?.contactId;
+      if (!contactId && (inputData.customerPhone || inputData.customerEmail)) {
+        const found = deps.findContact
+          ? await deps.findContact(inputData.customerPhone, inputData.customerEmail)
+          : inputData.customerPhone
+          ? await deps.findContactByPhone(normalizePhoneLoose(inputData.customerPhone))
+          : null;
+        if (found?.id) contactId = found.id;
+      }
+      if (!deps.checkYogaPermanentCapacity) {
+        return {
+          available: true,
+          message: 'Verificación de cupo no disponible temporalmente.',
+        };
+      }
+      try {
+        const res = await deps.checkYogaPermanentCapacity(
+          inputData.slots as Array<{ day: number | string; time: string }>,
+          contactId,
+        );
+        return res;
+      } catch (err: any) {
+        return {
+          available: false,
+          error: err?.message || 'Error al comprobar cupo definitivo de yoga.',
+        };
+      }
+    },
+  });
+
   const changeYogaSubscriptionTool = createTool({
     id: 'changeYogaSubscription',
     description:
-      'Cambiar la modalidad u horario fijo de la suscripción de Hatha Yoga Terapéutico de un alumno (pasar de 1 clase semanal [25€/mes] a 2 clases semanales [42€/mes], o viceversa, o cambiar de día/hora fija). Horarios oficiales válidos: Martes (09:45, 11:15, 17:00, 18:30, 20:00), Miércoles (20:15) y Jueves (09:45, 11:15, 16:00, 17:30, 19:00). Reorganiza las citas automáticamente a partir de hoy y actualiza el grupo en el CRM.',
+      'Cambiar la modalidad u horario fijo de la suscripción de Hatha Yoga Terapéutico de un alumno de forma DEFINITIVA (pasar de 1 clase semanal [25€/mes] a 2 clases semanales [42€/mes], o viceversa, o cambiar permanentemente sus días/horas fijas). Comprueba estrictamente que haya cupo en los horarios definitivos (máx 20 alumnos). Si no hay cupo en algún turno, devuelve error para pedirle al alumno otro día y hora disponible. Reorganiza las citas automáticamente a partir de hoy y actualiza el grupo en el CRM.',
     inputSchema: z.object({
       customerPhone: z.string().optional().describe('Teléfono móvil del alumno si no se conoce'),
       customerEmail: z.string().optional().describe('Email del alumno si no se conoce'),
@@ -2611,16 +2693,43 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   4. Solicita amablemente el MOTIVO de la cancelación (por ejemplo: "¿Podrías indicarme brevemente el motivo de la cancelación?").
   5. Ejecuta 'cancelAppointment' pasando 'appointmentId' (o 'serviceName' y 'customerEmail'/'customerPhone') y el 'reason'.
   6. Confírmale al cliente que su cita ha quedado cancelada con éxito y que el sistema le envía la confirmación oficial por correo electrónico y/o WhatsApp.
-- REPROGRAMACIÓN O CAMBIO DE FECHA/HORA DE CITAS (OBLIGATORIO):
-  1. Si el alumno o cliente solicita cambiar de día, cambiar de hora o reprogramar una cita (por ejemplo: "quiero reprogramarla para el jueves a la misma hora", "cámbiamela al jueves", "mover mi cita"):
-  2. Si estás en la web/widget y todavía no se conoce el teléfono o correo del cliente, pídeselo cordialmente para localizar su reserva (o pásalos en 'customerPhone' / 'customerEmail' a 'rescheduleAppointment' si ya te los ha facilitado).
-  3. Consulta SIEMPRE primero los huecos disponibles con 'checkAvailability' para confirmar que el nuevo horario es válido y tiene aforo disponible.
-  4. Llama DIRECTAMENTE a la herramienta 'rescheduleAppointment' pasando 'newStartsAt' (con la nueva fecha/hora solicitada), 'serviceName' si aplica, 'customerEmail' / 'customerPhone' si se conocen, y el motivo si lo hay.
-  5. 'rescheduleAppointment' se encarga AUTOMÁTICAMENTE de cancelar la cita previa y dar de alta de inmediato la nueva cita en el sistema en una sola operación atómica.
-  6. NUNCA intentes llamar a 'cancelAppointment' y 'bookAppointment' por separado cuando se trate de un cambio o reprogramación: usa SIEMPRE 'rescheduleAppointment'.
-  7. Si el cliente ya te ha pedido cambiar o reprogramar la cita para un día u hora concreto, NO le vuelvas a preguntar "¿Quieres que cancele la del martes para poner la del jueves?"; EJECÚTALO DIRECTAMENTE con 'rescheduleAppointment' y confírmale que ha quedado reprogramada con éxito.
-  8. Si la cita es para una clase de prueba gratuita (regalo del centro) o modalidad de alumno, 'rescheduleAppointment' mantiene automáticamente la gratuidad y las condiciones originales.
-  9. Para servicios que requieren aprobación previa del instructor/terapeuta (como Terapia Gestalt), al reprogramar la cita entra de nuevo en estado de revisión y avísale al cliente con amabilidad.
+- REPROGRAMACIÓN PUNTUAL VS CAMBIO DEFINITIVO DE HORARIO EN CLASES DE HATHA YOGA TERAPÉUTICO (REGLA FUNDAMENTAL DE AGENTE DE WHATSAPP):
+  * CASO 1: REPROGRAMACIÓN PUNTUAL DE UNA CLASE DE YOGA (SOLO PARA ESE DÍA / ESA SEMANA):
+    1. Se aplica cuando un alumno por cualquier motivo necesita reprogramar el horario de una clase de yoga de un día en concreto (por ejemplo: "este martes no puedo a las 09:45, ¿puedo ir este martes a las 18:30 o el jueves a las 17:30?", "hoy no puedo ir a clase, ¿hay hueco a otra hora?", "necesito cambiar la clase de este martes").
+    2. COMPROBACIÓN DE CUPO EN LA NUEVA HORA PARA ESE DÍA: Comprueba SIEMPRE primero que hay cupo libre en la nueva hora solicitada para ese día usando 'checkAvailability' para la fecha y servicio ("Hatha Yoga Terapéutico").
+    3. Si el nuevo horario para ese día NO tiene cupo (aforo completo de 20 personas): explícaselo con amabilidad y ofrécele los otros turnos oficiales disponibles para ese día o esa semana.
+    4. Si SÍ hay cupo: ejecuta DIRECTAMENTE 'rescheduleAppointment' pasando 'newStartsAt' con la nueva fecha y hora, y 'currentStartsAt' con la fecha/hora de la clase original si la conoces.
+    5. 'rescheduleAppointment' cancela automáticamente la cita de ese día y registra la nueva en el sistema de forma atómica.
+    6. REGLA OBLIGATORIA DE COMUNICACIÓN AL ALUMNO: Confírmale que su clase de esa fecha concreta queda reprogramada, y ACLÁRALE EXPLÍCITAMENTE que este cambio es SOLO PUNTUAL PARA ESA FECHA/SEMANA, y que A PARTIR DE LA SEMANA QUE VIENE SEGUIRÁ CON SU HORARIO HABITUAL DE SIEMPRE (por ejemplo: "Tu clase de este martes queda reprogramada para las 18:30. Te recordamos que la semana que viene continúas con tu horario habitual de siempre a las 09:45").
+    7. ¡ESTÁ ESTRICTAMENTE PROHIBIDO modificar la suscripción o los horarios fijos del alumno con 'changeYogaSubscription' cuando se trate de un cambio puntual de un día!
+
+  * CASO 2: CAMBIO DEFINITIVO DE HORARIO DE SUSCRIPCIÓN (PERMANENTE):
+    1. Se aplica cuando el alumno solicita expresamente cambiarse definitivamente de horario fijo semanal (por ejemplo: "quiero cambiar mi horario habitual", "a partir de ahora quiero venir siempre los jueves por la tarde", "cámbiame definitivamente el turno fijo a las 17:30", "quiero pasar a 2 clases semanales").
+    2. COMPROBACIÓN DE CUPO EN LOS HORARIOS DEFINITIVOS (MÁXIMO 20 ALUMNOS POR GRUPO):
+       - Los grupos oficiales de yoga admiten un aforo máximo de 20 alumnos.
+       - Puedes comprobar cupo con 'checkYogaPermanentAvailability' o llamar directamente a 'changeYogaSubscription', la cual valida automáticamente el aforo definitivo en el sistema.
+    3. SI NO HAY CUPO EN EL HORARIO DEFINITIVO SOLICITADO:
+       - Si 'checkYogaPermanentAvailability' indica que no hay plazas, o si 'changeYogaSubscription' devuelve error de aforo completo:
+       - Explícaselo al alumno con total cercanía y amabilidad (por ejemplo: "En este momento el horario definitivo de [Día] a las [Hora] tiene el aforo completo de 20 alumnos.").
+       - PÍDELE OTRO DÍA Y HORA oficial disponible del centro (recordándole los turnos oficiales de martes mañanas/tardes, miércoles tarde y jueves mañanas/tardes) para ver cuál se adapta mejor a sus necesidades.
+    4. SI SÍ HAY CUPO EN EL HORARIO DEFINITIVO:
+       - Ejecuta 'changeYogaSubscription' pasando 'slots' con los nuevos turnos semanales elegidos, 'customerPhone' / 'customerEmail' y el motivo.
+       - 'changeYogaSubscription' reorganiza automáticamente sus citas a partir de hoy, actualiza el grupo en el CRM y emite las confirmaciones oficiales.
+       - Confírmale el cambio definitivo con calidez indicándole sus nuevos días y horas fijas a partir de ahora.
+
+  * CASO 3: SI EL ALUMNO NO ACLARA SI EL CAMBIO ES PUNTUAL O DEFINITIVO:
+    - Si el mensaje del alumno es ambiguo (por ejemplo: solo dice "quiero cambiar mi clase de yoga de las 09:45 a las 18:30" sin especificar si es solo por hoy/esta semana o para siempre):
+    - Pregúntale con amabilidad: "¿Deseas hacer un cambio puntual solo para la clase de esta semana (manteniendo la semana que viene tu horario habitual) o prefieres cambiar definitivamente tu horario fijo semanal?".
+
+- REPROGRAMACIÓN GENERAL O CAMBIO DE FECHA/HORA DE OTRAS CITAS Y TERAPIAS:
+  1. Si un cliente solicita cambiar de día, hora o reprogramar una cita de otro servicio (Terapia Gestalt, Baño de Gong, Consulta, etc.):
+  2. Consulta SIEMPRE primero los huecos disponibles con 'checkAvailability' para confirmar que el nuevo horario es válido y tiene aforo disponible.
+  3. Llama DIRECTAMENTE a la herramienta 'rescheduleAppointment' pasando 'newStartsAt' (con la nueva fecha/hora solicitada), 'serviceName' si aplica, 'customerEmail' / 'customerPhone' si se conocen, y el motivo si lo hay.
+  4. 'rescheduleAppointment' se encarga AUTOMÁTICAMENTE de cancelar la cita previa y dar de alta de inmediato la nueva cita en el sistema en una sola operación atómica.
+  5. NUNCA intentes llamar a 'cancelAppointment' y 'bookAppointment' por separado cuando se trate de un cambio o reprogramación: usa SIEMPRE 'rescheduleAppointment'.
+  6. Si el cliente ya te ha pedido cambiar o reprogramar la cita para un día u hora concreto, NO le vuelvas a preguntar "¿Quieres que cancele la del martes para poner la del jueves?"; EJECÚTALO DIRECTAMENTE con 'rescheduleAppointment' y confírmale que ha quedado reprogramada con éxito.
+  7. Si la cita es para una clase de prueba gratuita (regalo del centro) o modalidad de alumno, 'rescheduleAppointment' mantiene automáticamente la gratuidad y las condiciones originales.
+  8. Para servicios que requieren aprobación previa del instructor/terapeuta (como Terapia Gestalt), al reprogramar la cita entra de nuevo en estado de revisión y avísale al cliente con amabilidad.
 - GESTIÓN DE SUSCRIPCIONES DE HATHA YOGA TERAPÉUTICO (ANULACIÓN Y CAMBIO DE 1 O 2 CLASES / HORARIOS):
   * ANULACIÓN DE SUSCRIPCIÓN DE YOGA (BAJA DE ALUMNO):
     1. Si un alumno solicita anular o darse de baja de sus clases regulares o suscripción mensual de yoga terapéutico:
@@ -2629,15 +2738,8 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     4. Ejecuta 'cancelYogaSubscription' pasando 'customerPhone' / 'customerEmail' y el 'reason'.
     5. Confírmale que sus citas futuras de yoga quedan dadas de baja, que pasa a condición de exalumno y que siempre será bienvenido si desea volver.
   * CAMBIO DE SUSCRIPCIÓN DE YOGA (1 CLASE <-> 2 CLASES O CAMBIO DE TURNOS FIJOS):
-    1. Si un alumno solicita cambiar de modalidad (por ejemplo: pasar de 1 clase a 2 clases semanales, o de 2 a 1 clase) o cambiar sus días/horas fijas de clase:
-    2. Verifica los turnos elegidos con el horario oficial del centro:
-       - Martes: 09:45, 11:15, 17:00, 18:30, 20:00
-       - Miércoles: 20:15
-       - Jueves: 09:45, 11:15, 16:00, 17:30, 19:00
-    3. Informa de las cuotas mensuales: 1 clase semanal = 25€/mes; 2 clases semanales = 42€/mes.
-    4. Confirma los nuevos turnos semanales y ejecuta 'changeYogaSubscription' pasando 'slots' (con el día y hora de cada turno), 'customerPhone' / 'customerEmail' y el motivo.
-    5. 'changeYogaSubscription' reorganiza automáticamente sus citas a partir de hoy, actualiza el grupo del CRM (YOGA_TERAPEUTICO_1 o YOGA_TERAPEUTICO_2) y envía las notificaciones correspondientes.
-    6. Confírmale el cambio con calidez indicándole sus nuevos días y horas fijas.
+    1. Si un alumno solicita cambiar de modalidad (por ejemplo: pasar de 1 clase a 2 clases semanales, o de 2 a 1 clase) o cambiar sus días/horas fijas de clase de forma definitiva:
+    2. Sigue las instrucciones del CASO 2 de arriba: verifica turnos oficiales, cuotas (1 clase = 25€/mes, 2 clases = 42€/mes), comprueba cupo y ejecuta 'changeYogaSubscription'. Si no hay cupo, pídele otro día u hora.
 - PREVENCIÓN DE DUPLICADOS Y RESERVAS SIMULTÁNEAS PARA LA MISMA PERSONA:
   * Un mismo alumno/contacto NO puede tener dos citas o plazas reservadas simultáneas en el mismo horario con fecha confirmada.
   * Por ejemplo: no puede inscribirse a la vez en 1 clase semanal y 2 clases semanales a la misma hora, ni como 'Constelar' y como 'Participante' en el mismo taller de Constelaciones Familiares, ni en dos servicios distintos en el mismo intervalo de tiempo en una fecha confirmada.
@@ -3004,6 +3106,7 @@ ${flow}`;
       solicitarAtencionHumana: solicitarAtencionHumanaTool,
       solicitarBajaServicios: solicitarBajaServiciosTool,
       cancelYogaSubscription: cancelYogaSubscriptionTool,
+      checkYogaPermanentAvailability: checkYogaPermanentAvailabilityTool,
       changeYogaSubscription: changeYogaSubscriptionTool,
       generarInformeFacturacionCobros: generarInformeFacturacionCobrosTool,
       exportarConversacionesUsuario: exportarConversacionesUsuarioTool,

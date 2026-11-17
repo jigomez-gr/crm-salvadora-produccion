@@ -21,6 +21,7 @@ describe('Yoga Appointments & Student Lifecycle', () => {
   });
 
   const contactsRepoMock: any = {
+    find: jest.fn().mockImplementation(() => Promise.resolve(inMemoryContacts)),
     findOne: jest.fn().mockImplementation(({ where }) => {
       const found = inMemoryContacts.find((c) => c.id === where?.id || c.phone === where?.phone);
       return Promise.resolve(found ? { ...found } : null);
@@ -42,6 +43,7 @@ describe('Yoga Appointments & Student Lifecycle', () => {
   };
 
   const appointmentsRepoMock: any = {
+    count: jest.fn().mockImplementation(() => Promise.resolve(0)),
     find: jest.fn().mockImplementation(({ where }) => {
       return Promise.resolve(
         inMemoryAppointments.filter((a) => {
@@ -177,6 +179,7 @@ describe('Yoga Appointments & Student Lifecycle', () => {
       },
     ];
     inMemoryAppointments = [];
+    contactsRepoMock.find = jest.fn().mockImplementation(() => Promise.resolve(inMemoryContacts));
 
     const settingsRepoMock = {
       find: jest.fn().mockResolvedValue([]),
@@ -469,6 +472,80 @@ describe('Yoga Appointments & Student Lifecycle', () => {
           ],
         }),
       ).rejects.toThrow(/mismo día a la misma hora/i);
+    });
+
+    it('changeYogaSubscription rechaza el cambio si no hay cupo en el horario definitivo (aforo completo de 20 alumnos)', async () => {
+      inMemoryContacts[0].isStudent = true;
+      inMemoryContacts[0].studentModality = '1_clase_semanal';
+      inMemoryContacts[0].studentSchedule = [{ day: 2, time: '09:45' }];
+
+      // Simular 20 alumnos ya inscritos de forma fija en Jueves 17:30
+      for (let i = 1; i <= 20; i++) {
+        inMemoryContacts.push({
+          id: `contact-other-${i}`,
+          name: `Alumno Fijo ${i}`,
+          isStudent: true,
+          status: ContactStatus.ACTIVE,
+          studentSchedule: [{ day: 4, time: '17:30' }],
+        });
+      }
+
+      await expect(
+        appointmentsService.changeYogaSubscription('contact-ana-1', {
+          schedule: [{ day: 4, time: '17:30' }],
+        }),
+      ).rejects.toThrow(/No hay cupo disponible para el horario definitivo de Jueves a las 17:30/i);
+    });
+
+    it('checkYogaPermanentCapacity devuelve el aforo y plazas libres de turnos fijos', async () => {
+      const capacity = await appointmentsService.checkYogaPermanentCapacity([
+        { day: 2, time: '09:45' },
+        { day: 4, time: '17:30' },
+      ]);
+      expect(capacity).toBeDefined();
+      expect(capacity.slots).toHaveLength(2);
+      expect(capacity.slots[0].maxCapacity).toBe(20);
+    });
+
+    it('reprogramar puntualmente una clase de yoga mantiene el horario habitual para la semana que viene', async () => {
+      // Alumno con horario fijo los martes a las 09:45
+      inMemoryContacts[0].isStudent = true;
+      inMemoryContacts[0].studentModality = '1_clase_semanal';
+      inMemoryContacts[0].studentSchedule = [{ day: 2, time: '09:45' }];
+
+      // Cita de este martes 15 de septiembre 09:45 (07:45 UTC)
+      const tuesdayIso = '2026-09-15T07:45:00.000Z';
+      const tuesdayAppt = {
+        id: 'appt-tuesday-puntual',
+        contactId: 'contact-ana-1',
+        service: 'Hatha Yoga Terapéutico (1 clase semanal)',
+        calendarId: 'cal-hatha-yoga',
+        startsAt: new Date(tuesdayIso),
+        endsAt: new Date('2026-09-15T09:15:00.000Z'),
+        status: AppointmentStatus.SCHEDULED,
+        price: '0.00',
+        paymentStatus: PaymentStatus.EXEMPT,
+      };
+      inMemoryAppointments.push(tuesdayAppt);
+
+      // Reprogramación puntual al jueves 17 de septiembre a las 17:30 (15:30 UTC)
+      const thursdayIso = '2026-09-17T15:30:00.000Z';
+      const rescheduled = await appointmentsService.rescheduleAppointment(
+        'appt-tuesday-puntual',
+        thursdayIso,
+        'Cambio puntual esta semana por viaje',
+      );
+
+      expect(rescheduled).toBeDefined();
+      expect(tuesdayAppt.status).toBe(AppointmentStatus.CANCELLED);
+      // El horario fijo habitual del alumno NO se modifica
+      expect(inMemoryContacts[0].studentSchedule).toEqual([{ day: 2, time: '09:45' }]);
+
+      // Al generar la semana siguiente, se respeta su horario habitual (Martes 09:45)
+      contactsRepoMock.find = jest.fn().mockResolvedValue([inMemoryContacts[0]]);
+      const nextWeekSunday = new Date('2026-09-20T18:00:00.000Z');
+      const genResult = await appointmentsService.generateWeeklyStudentAppointments(nextWeekSunday);
+      expect(genResult.createdCount).toBe(1);
     });
 
     it('cancelYogaSubscription da de baja al alumno, cancela citas de yoga y lo traslada a EXALUMNOS', async () => {

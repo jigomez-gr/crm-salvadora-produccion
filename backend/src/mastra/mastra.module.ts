@@ -200,6 +200,12 @@ export { NestMastraModule };
           ) => {
             return appointmentsService.changeYogaSubscription(contactId, dto, 'agent');
           },
+          checkYogaPermanentCapacity: async (
+            schedule: Array<{ day: number | string; time: string }>,
+            contactId?: string,
+          ) => {
+            return appointmentsService.checkYogaPermanentCapacity(schedule, contactId);
+          },
           createPaymentLink: traced('createPaymentLink', async (params) => {
             if (!isPagosOnlineEnabled()) {
               return null;

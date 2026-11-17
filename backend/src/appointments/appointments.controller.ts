@@ -137,6 +137,22 @@ export class AppointmentsController {
     return this.appointmentsService.getYogaSubscription(contactId);
   }
 
+  @Get('yoga-capacity')
+  async getYogaCapacity(
+    @Query('schedule') scheduleJson?: string,
+    @Query('contactId') contactId?: string,
+  ) {
+    let schedule: Array<{ day: number | string; time: string }> = [];
+    if (scheduleJson) {
+      try {
+        schedule = JSON.parse(scheduleJson);
+      } catch {
+        schedule = [];
+      }
+    }
+    return this.appointmentsService.checkYogaPermanentCapacity(schedule, contactId);
+  }
+
   /**
    * Exporta el listado actual de citas según los filtros visualizados en pantalla a XLSX, CSV, PDF o ZIP (con adjuntos de pacientes).
    * Por confidencialidad médica y protección de datos, bajo ninguna circunstancia incluye diagnósticos clínicos.
