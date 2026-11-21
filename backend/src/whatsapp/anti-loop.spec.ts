@@ -168,15 +168,20 @@ describe('Anti-Loop and Circuit Breaker for WhatsApp', () => {
     expect(result.reply).toBeTruthy();
   });
 
-  it('trips circuit breaker and enables handoff when 5+ outbound messages occurred in 3 minutes', async () => {
+  it('trips circuit breaker and enables handoff when 10+ outbound messages occurred in 2 minutes', async () => {
     const now = Date.now();
-    // Simulate 5 outbound messages in the last 2 minutes
+    // Simulate 10 outbound messages in the last 100 seconds
     messagesServiceMock.getRecentMessages.mockResolvedValue([
       { id: '1', direction: MessageDirection.OUTBOUND, createdAt: new Date(now - 10000), body: 'A' },
       { id: '2', direction: MessageDirection.OUTBOUND, createdAt: new Date(now - 20000), body: 'B' },
       { id: '3', direction: MessageDirection.OUTBOUND, createdAt: new Date(now - 30000), body: 'C' },
       { id: '4', direction: MessageDirection.OUTBOUND, createdAt: new Date(now - 40000), body: 'D' },
       { id: '5', direction: MessageDirection.OUTBOUND, createdAt: new Date(now - 50000), body: 'E' },
+      { id: '6', direction: MessageDirection.OUTBOUND, createdAt: new Date(now - 60000), body: 'F' },
+      { id: '7', direction: MessageDirection.OUTBOUND, createdAt: new Date(now - 70000), body: 'G' },
+      { id: '8', direction: MessageDirection.OUTBOUND, createdAt: new Date(now - 80000), body: 'H' },
+      { id: '9', direction: MessageDirection.OUTBOUND, createdAt: new Date(now - 90000), body: 'I' },
+      { id: '10', direction: MessageDirection.OUTBOUND, createdAt: new Date(now - 100000), body: 'J' },
     ]);
 
     const result = await agentRunner.run({

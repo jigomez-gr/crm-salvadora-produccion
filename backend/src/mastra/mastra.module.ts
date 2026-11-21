@@ -166,6 +166,7 @@ export { NestMastraModule };
             serviceId?: string,
             modality?: string,
             reason?: string,
+            isRecovery?: boolean,
           ) => {
             const start = new Date(startsAt);
             const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
@@ -180,6 +181,7 @@ export { NestMastraModule };
               serviceId,
               modality,
               reason,
+              isRecovery,
             });
           }),
           listContactAppointments: async (contactId: string) => {

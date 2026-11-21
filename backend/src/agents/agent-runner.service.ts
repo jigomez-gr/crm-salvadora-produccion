@@ -32,8 +32,8 @@ import {
 const AGENT_MAX_STEPS = 8;
 
 // Safety circuit breaker thresholds to prevent rapid bot-to-bot ping-pong loops
-const RAPID_BURST_WINDOW_MS = 3 * 60 * 1000; // 3 minutes
-const RAPID_BURST_MAX_OUTBOUND = 5;
+const RAPID_BURST_WINDOW_MS = 2 * 60 * 1000; // 2 minutes
+const RAPID_BURST_MAX_OUTBOUND = 10;
 
 // Reasoning models (e.g. minimax-m3) may emit <think> blocks inline in text
 function stripReasoning(text: string): string {
@@ -315,6 +315,7 @@ export class AgentRunnerService {
       const conversation = await this.messagesService
         .getConversation(threadId)
         .catch(() => null);
+      let handoffJustReset = false;
       if (conversation?.handoff) {
         // If the user sends a command to restart or reactivate the bot, clear handoff automatically
         const trimmed = (message || '').trim().toLowerCase();
@@ -325,6 +326,7 @@ export class AgentRunnerService {
           trimmed === '/ia'
         ) {
           await this.messagesService.setHandoff(threadId, false).catch(() => null);
+          handoffJustReset = true;
           this.logger.log(
             `Thread '${threadId}' handoff automatically reset via user command '${trimmed}'.`,
           );
@@ -336,59 +338,61 @@ export class AgentRunnerService {
         }
       }
 
-      // Anti-loop protection for WhatsApp traffic:
-      const recentMessages =
-        typeof this.messagesService.getRecentMessages === 'function'
-          ? await this.messagesService
-              .getRecentMessages(threadId, 12)
-              .catch(() => [])
-          : [];
+      // Anti-loop protection for live messaging traffic (WhatsApp / Telegram):
+      if (!handoffJustReset) {
+        const recentMessages =
+          typeof this.messagesService.getRecentMessages === 'function'
+            ? await this.messagesService
+                .getRecentMessages(threadId, 20)
+                .catch(() => [])
+            : [];
 
-      // 1. Circuit breaker: if the bot has sent 5+ distinct outbound bursts in the last 3 minutes,
-      // trip the circuit breaker and enable handoff to prevent rapid bot-to-bot ping-pong loops.
-      // Messages sent within 2 seconds of each other are considered a single backlog replay batch.
-      const now = Date.now();
-      const outboundTimestamps = recentMessages
-        .filter(
-          (m) =>
-            m.direction === MessageDirection.OUTBOUND &&
-            now - new Date(m.createdAt).getTime() <= RAPID_BURST_WINDOW_MS,
-        )
-        .map((m) => new Date(m.createdAt).getTime())
-        .sort((a, b) => a - b);
+        // 1. Circuit breaker: if the bot has sent 10+ distinct outbound bursts in the last 2 minutes,
+        // trip the circuit breaker and enable handoff to prevent rapid bot-to-bot ping-pong loops.
+        // Messages sent within 2 seconds of each other are considered a single backlog replay batch.
+        const now = Date.now();
+        const outboundTimestamps = recentMessages
+          .filter(
+            (m) =>
+              m.direction === MessageDirection.OUTBOUND &&
+              now - new Date(m.createdAt).getTime() <= RAPID_BURST_WINDOW_MS,
+          )
+          .map((m) => new Date(m.createdAt).getTime())
+          .sort((a, b) => a - b);
 
-      let distinctBursts = 0;
-      let lastBurstTs = -Infinity;
-      for (const ts of outboundTimestamps) {
-        if (ts - lastBurstTs >= 2000) {
-          distinctBursts++;
-          lastBurstTs = ts;
+        let distinctBursts = 0;
+        let lastBurstTs = -Infinity;
+        for (const ts of outboundTimestamps) {
+          if (ts - lastBurstTs >= 2000) {
+            distinctBursts++;
+            lastBurstTs = ts;
+          }
         }
-      }
 
-      if (distinctBursts >= RAPID_BURST_MAX_OUTBOUND) {
-        this.logger.warn(
-          `Circuit breaker triggered on thread '${threadId}': ${distinctBursts} rapid outbound bursts in window. Enabling handoff to stop loop.`,
-        );
-        await this.messagesService.setHandoff(threadId, true).catch(() => null);
-        return { reply: '', outbound: null };
-      }
-
-      // 2. Anti-loop courtesy / farewell suppressor:
-      // If the incoming message is purely a courtesy/farewell/closing message and our bot
-      // has ALREADY issued a farewell in its previous outbound reply, do not reply again.
-      // The incoming message is safely persisted in the CRM for visibility, but auto-reply is suppressed.
-      if (isPureClosingOrFarewell(message)) {
-        const lastOutbound = recentMessages.find(
-          (m) =>
-            m.direction === MessageDirection.OUTBOUND &&
-            m.id !== inbound?.id,
-        );
-        if (lastOutbound && isBotFarewell(lastOutbound.body)) {
-          this.logger.log(
-            `Thread '${threadId}' received subsequent farewell/closing after bot already said farewell. Auto-reply suppressed to prevent loop.`,
+        if (distinctBursts >= RAPID_BURST_MAX_OUTBOUND) {
+          this.logger.warn(
+            `Circuit breaker triggered on thread '${threadId}': ${distinctBursts} rapid outbound bursts in window. Enabling handoff to stop loop.`,
           );
+          await this.messagesService.setHandoff(threadId, true).catch(() => null);
           return { reply: '', outbound: null };
+        }
+
+        // 2. Anti-loop courtesy / farewell suppressor:
+        // If the incoming message is purely a courtesy/farewell/closing message and our bot
+        // has ALREADY issued a farewell in its previous outbound reply, do not reply again.
+        // The incoming message is safely persisted in the CRM for visibility, but auto-reply is suppressed.
+        if (isPureClosingOrFarewell(message)) {
+          const lastOutbound = recentMessages.find(
+            (m) =>
+              m.direction === MessageDirection.OUTBOUND &&
+              m.id !== inbound?.id,
+          );
+          if (lastOutbound && isBotFarewell(lastOutbound.body)) {
+            this.logger.log(
+              `Thread '${threadId}' received subsequent farewell/closing after bot already said farewell. Auto-reply suppressed to prevent loop.`,
+            );
+            return { reply: '', outbound: null };
+          }
         }
       }
     }

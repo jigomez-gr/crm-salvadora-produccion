@@ -72,6 +72,7 @@ export interface BookingAgentDeps {
     serviceId?: string,
     modality?: string,
     reason?: string,
+    isRecovery?: boolean,
   ) => Promise<any>;
   listContactAppointments: (contactId: string) => Promise<any[]>;
   cancelAppointment: (appointmentId: string, reason?: string) => Promise<any>;
@@ -755,6 +756,12 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         .string()
         .optional()
         .describe('Reason or motivation of the customer for this appointment/consultation'),
+      isRecovery: z
+        .boolean()
+        .optional()
+        .describe(
+          'Indicate true if this booking is a yoga recovery class (clase de recuperación) replacing an earlier missed class.',
+        ),
     }),
     execute: async (inputData, context) => {
       const config = getConfig(context);
@@ -1022,6 +1029,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           svc.id,
           effectiveModality,
           inputData.reason,
+          inputData.isRecovery,
         );
 
         const onlinePaymentsAllowed = isPagosOnlineEnabled();
@@ -2611,6 +2619,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
     - **Horario semanal fijo**: El alumno dispone de un horario asignado para el día o días de la semana según su modalidad (1 o 2 clases a la semana) para que **no tenga que reservar cada cita semanalmente**.
     - **Citas automáticas semanales**: A los alumnos se les generan automáticamente sus citas semanales antes de comenzar la nueva semana basándose en sus horarios fijos habituales.
     - **Cambio de horario y recuperación**: Cualquier alumno puede cambiar de horario (reprogramar) o recuperar clases a las que haya faltado (dispone de un plazo de 3 meses / 90 días a partir de la semana siguiente).
+    - **Clases de recuperación**: Si un alumno ya tiene cubiertas sus clases semanales fijas de yoga pero dispone de clases pendientes de recuperar por ausencias pasadas, puedes agendar su clase de recuperación usando 'bookAppointment' con el parámetro 'isRecovery: true'.
     - **Constancia de cambios**: En cada cambio de horario o recuperación se enviará una notificación por correo electrónico o un SMS si la gestión es por voz (o ambos) para dejar constancia formal del cambio.
   * RESERVA DE PLAZA Y MODALIDADES DE YOGA:
     - Las modalidades "1 clase semanal", "2 clases semanales" o "Hatha Yoga Terapéutico" corresponden a la misma clase regular en sus turnos oficiales. Puedes reservar indistintamente bajo cualquiera de esos nombres de servicio. NUNCA le digas al cliente que una modalidad no permite reservar ni discutas sobre el nombre de la modalidad: formaliza directamente la plaza en el turno oficial elegido con 'bookAppointment'.
