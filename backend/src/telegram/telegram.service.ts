@@ -1,7 +1,9 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   Logger,
+  forwardRef,
 } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -57,8 +59,11 @@ export class TelegramService {
 
   constructor(
     private readonly telegramClient: TelegramClientService,
+    @Inject(forwardRef(() => AgentsConfigService))
     private readonly agentsConfigService: AgentsConfigService,
+    @Inject(forwardRef(() => ContactsService))
     private readonly contactsService: ContactsService,
+    @Inject(forwardRef(() => MessagesService))
     private readonly messagesService: MessagesService,
     private readonly eventEmitter: EventEmitter2,
   ) {}

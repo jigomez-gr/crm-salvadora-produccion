@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as crypto from 'crypto';
@@ -50,7 +50,9 @@ export class TelegramLinkService {
   constructor(
     @InjectRepository(TelegramLinkToken)
     private readonly tokensRepo: Repository<TelegramLinkToken>,
+    @Inject(forwardRef(() => ContactsService))
     private readonly contactsService: ContactsService,
+    @Inject(forwardRef(() => MessagesService))
     private readonly messagesService: MessagesService,
     private readonly eventEmitter: EventEmitter2,
   ) {}

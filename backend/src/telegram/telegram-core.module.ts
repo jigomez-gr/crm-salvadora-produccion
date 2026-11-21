@@ -20,10 +20,10 @@ import { TelegramAdminController } from './telegram-admin.controller';
 @Module({
   imports: [
     TypeOrmModule.forFeature([TelegramLinkToken, Contact, AgentConfig]),
-    AgentsConfigModule,
-    ContactsModule,
+    forwardRef(() => AgentsConfigModule),
+    forwardRef(() => ContactsModule),
     forwardRef(() => ConversationsModule),
-    AuthModule,
+    forwardRef(() => AuthModule),
   ],
   controllers: [TelegramAdminController],
   providers: [TelegramClientService, TelegramLinkService, TelegramService],

@@ -4,11 +4,13 @@ import {
   Headers,
   HttpCode,
   HttpStatus,
+  Inject,
   Logger,
   Optional,
   Param,
   Post,
   UnauthorizedException,
+  forwardRef,
 } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -37,14 +39,19 @@ export class TelegramWebhookController {
   private readonly logger = new Logger(TelegramWebhookController.name);
 
   constructor(
+    @Inject(forwardRef(() => AgentsConfigService))
     private readonly agentsConfigService: AgentsConfigService,
+    @Inject(forwardRef(() => ContactsService))
     private readonly contactsService: ContactsService,
+    @Inject(forwardRef(() => MessagesService))
     private readonly messagesService: MessagesService,
     private readonly telegramClient: TelegramClientService,
     private readonly telegramLinkService: TelegramLinkService,
     private readonly telegramService: TelegramService,
     private readonly eventEmitter: EventEmitter2,
-    @Optional() private readonly agentRunnerService?: AgentRunnerService,
+    @Optional()
+    @Inject(forwardRef(() => AgentRunnerService))
+    private readonly agentRunnerService?: AgentRunnerService,
   ) {}
 
   @Post()

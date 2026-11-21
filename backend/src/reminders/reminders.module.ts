@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Appointment } from '../common/entities/appointment.entity';
 import { AppointmentReminder } from '../common/entities/appointment-reminder.entity';
@@ -23,7 +23,7 @@ import { TelegramCoreModule } from '../telegram/telegram-core.module';
     EmailModule,
     ZadarmaSmsModule,
     VapiModule,
-    TelegramCoreModule,
+    forwardRef(() => TelegramCoreModule),
   ],
   providers: [RemindersService],
   exports: [RemindersService],

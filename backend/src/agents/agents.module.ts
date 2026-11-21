@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AgentsConfigModule } from './agents-config.module';
 import { AgentRunnerService } from './agent-runner.service';
 import { OpenRouterService } from './openrouter.service';
@@ -38,7 +38,7 @@ import { TelegramCoreModule } from '../telegram/telegram-core.module';
     UsersModule,
     VapiModule,
     NotificationsModule,
-    TelegramCoreModule,
+    forwardRef(() => TelegramCoreModule),
   ],
   providers: [AgentRunnerService, OpenRouterService, ContactQueryEvaluatorService],
   controllers: [AgentsController, WidgetController],
