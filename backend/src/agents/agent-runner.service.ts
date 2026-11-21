@@ -316,10 +316,24 @@ export class AgentRunnerService {
         .getConversation(threadId)
         .catch(() => null);
       if (conversation?.handoff) {
-        this.logger.log(
-          `Thread '${threadId}' is in human handoff — auto-reply skipped.`,
-        );
-        return { reply: '', outbound: null };
+        // If the user sends a command to restart or reactivate the bot, clear handoff automatically
+        const trimmed = (message || '').trim().toLowerCase();
+        if (
+          trimmed.startsWith('/start') ||
+          trimmed === '/reiniciar' ||
+          trimmed === '/bot' ||
+          trimmed === '/ia'
+        ) {
+          await this.messagesService.setHandoff(threadId, false).catch(() => null);
+          this.logger.log(
+            `Thread '${threadId}' handoff automatically reset via user command '${trimmed}'.`,
+          );
+        } else {
+          this.logger.log(
+            `Thread '${threadId}' is in human handoff — auto-reply skipped.`,
+          );
+          return { reply: '', outbound: null };
+        }
       }
 
       // Anti-loop protection for WhatsApp traffic:
@@ -330,18 +344,31 @@ export class AgentRunnerService {
               .catch(() => [])
           : [];
 
-      // 1. Circuit breaker: if the bot has sent 5+ outbound messages in the last 3 minutes,
+      // 1. Circuit breaker: if the bot has sent 5+ distinct outbound bursts in the last 3 minutes,
       // trip the circuit breaker and enable handoff to prevent rapid bot-to-bot ping-pong loops.
+      // Messages sent within 2 seconds of each other are considered a single backlog replay batch.
       const now = Date.now();
-      const recentOutboundsInWindow = recentMessages.filter(
-        (m) =>
-          m.direction === MessageDirection.OUTBOUND &&
-          now - new Date(m.createdAt).getTime() <= RAPID_BURST_WINDOW_MS,
-      ).length;
+      const outboundTimestamps = recentMessages
+        .filter(
+          (m) =>
+            m.direction === MessageDirection.OUTBOUND &&
+            now - new Date(m.createdAt).getTime() <= RAPID_BURST_WINDOW_MS,
+        )
+        .map((m) => new Date(m.createdAt).getTime())
+        .sort((a, b) => a - b);
 
-      if (recentOutboundsInWindow >= RAPID_BURST_MAX_OUTBOUND) {
+      let distinctBursts = 0;
+      let lastBurstTs = -Infinity;
+      for (const ts of outboundTimestamps) {
+        if (ts - lastBurstTs >= 2000) {
+          distinctBursts++;
+          lastBurstTs = ts;
+        }
+      }
+
+      if (distinctBursts >= RAPID_BURST_MAX_OUTBOUND) {
         this.logger.warn(
-          `Circuit breaker triggered on thread '${threadId}': ${recentOutboundsInWindow} rapid outbound messages in window. Enabling handoff to stop loop.`,
+          `Circuit breaker triggered on thread '${threadId}': ${distinctBursts} rapid outbound bursts in window. Enabling handoff to stop loop.`,
         );
         await this.messagesService.setHandoff(threadId, true).catch(() => null);
         return { reply: '', outbound: null };

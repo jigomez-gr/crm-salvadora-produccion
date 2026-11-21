@@ -128,6 +128,11 @@ export class TelegramWebhookController {
 
     const threadId = `${agentKey}:telegram:${sender.chatId}`;
 
+    // If user sends /start, ensure human handoff is reset so bot is active
+    if (parsed.isStartCommand) {
+      await this.messagesService.setHandoff(threadId, false).catch(() => null);
+    }
+
     // 4. Unlink command (/desvincular or /unlink)
     if (parsed.isUnlinkCommand) {
       if (parsed.externalId) {
@@ -252,6 +257,24 @@ export class TelegramWebhookController {
       const alreadyLinked =
         (await this.contactsService.findByTelegramUserId(sender.userId)) ||
         (await this.contactsService.findByTelegramChatId(sender.chatId));
+
+      if (alreadyLinked) {
+        // Anti-spam deduplication: avoid sending multiple greeting repeats if Telegram replayed updates
+        const recentMessages = await this.messagesService
+          .getRecentMessages(threadId, 5)
+          .catch(() => []);
+        const hasRecentOutbound = recentMessages.some(
+          (m) =>
+            m.direction === MessageDirection.OUTBOUND &&
+            Date.now() - new Date(m.createdAt).getTime() < 60 * 1000,
+        );
+        if (hasRecentOutbound) {
+          this.logger.log(
+            `[Telegram] Skipping duplicate start greeting for already-linked contact ${alreadyLinked.id} on ${threadId}`,
+          );
+          return { ok: true, deduped: true, alreadyLinked: true };
+        }
+      }
 
       const fallbackReply = alreadyLinked
         ? `¡Hola de nuevo, ${alreadyLinked.name}! Tu cuenta de Telegram ya está conectada con el Centro de Yoga y Bienestar Salvadora Conesa. ¿En qué podemos ayudarte hoy?`
