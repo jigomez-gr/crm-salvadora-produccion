@@ -43,6 +43,7 @@ import { ContactStatus } from '../common/entities/contact.entity';
 import { normalizePhoneStrict, normalizePhoneLoose } from '../common/phone';
 import { MAINTENANCE_MESSAGE, BLOCKED_USER_MESSAGE } from '../common/system-messages';
 import { ContactQueryEvaluatorService } from './contact-query-evaluator.service';
+import { TelegramLinkService } from '../telegram/telegram-link.service';
 
 function formatAiDiagnosisToHtml(rawText: string): string {
   if (!rawText) {
@@ -106,6 +107,7 @@ export class WidgetController {
     @Optional() private readonly eventEditionsService?: EventEditionsService,
     @Optional() private readonly humanHandoffNoticeService?: HumanHandoffNotificationService,
     @Optional() private readonly eventEmitter?: EventEmitter2,
+    @Optional() private readonly telegramLinkService?: TelegramLinkService,
   ) {}
 
   @Get('config/:agentKey')
@@ -170,6 +172,9 @@ export class WidgetController {
       mantenimientoMessage: branding?.serviciosEnMantenimiento === 'S' ? MAINTENANCE_MESSAGE : null,
       tone: config.tone || 'cálido, profesional y cercano',
       whatsappNumber: config.whatsappNumber || '34695172625',
+      telegramBotUsername: config.telegramBotUsername || null,
+      telegramBotName: config.telegramBotName || null,
+      telegramEnabled: Boolean(config.telegramEnabled !== false && config.telegramBotUsername),
       services,
       greeting: `¡Hola! 👋 Te damos la bienvenida a ${config.businessName || 'nuestro centro'}. ¿En qué podemos ayudarte hoy? Puedes preguntarme cualquier duda o seleccionar un servicio para reservar tu plaza.`,
     };
@@ -241,6 +246,9 @@ export class WidgetController {
       serviciosEnMantenimiento: branding?.serviciosEnMantenimiento || 'N',
       mantenimientoMessage: branding?.serviciosEnMantenimiento === 'S' ? MAINTENANCE_MESSAGE : null,
       whatsappNumber: whatsappPhone,
+      telegramBotUsername: agentConfig?.telegramBotUsername || null,
+      telegramBotName: agentConfig?.telegramBotName || null,
+      telegramEnabled: Boolean(agentConfig?.telegramEnabled !== false && agentConfig?.telegramBotUsername),
       categories: dbCategories.map((c) => ({
         id: c.id,
         code: c.code,
@@ -301,6 +309,9 @@ export class WidgetController {
           whatsappBookingUrl: `https://wa.me/${cleanWaPhone}?text=${encodeURIComponent(
             `Hola, me gustaría información y disponibilidad para ${s.name}.`,
           )}`,
+          telegramBookingUrl: agentConfig?.telegramBotUsername
+            ? `https://t.me/${agentConfig.telegramBotUsername.replace(/^@/, '')}`
+            : null,
           editions: editionsMap[s.id] || [],
         };
       }),
@@ -492,6 +503,154 @@ export class WidgetController {
         email: dto.email || contact.email,
       },
       whatsappUrl,
+    };
+  }
+
+  /**
+   * Generates a secure single-use deep-link token for Telegram connection from the landing.
+   * When the visitor presses "Conectar con Telegram" and then "Iniciar" in the bot,
+   * Telegram sends `/start <token>` to the CRM webhook, which verifies the token and
+   * sets `conectadotelegram = 'S'` on the linked contact.
+   * If the visitor is anonymous (no phone/email/contactId provided), a token is still
+   * generated so they can chat with the AI agent in Telegram while keeping `conectadotelegram = 'N'`.
+   */
+  @Post('handoff-telegram/:agentKey')
+  async handoffToTelegram(
+    @Param('agentKey') agentKey: string,
+    @Body()
+    dto: {
+      sessionId?: string;
+      name?: string;
+      phone?: string;
+      email?: string;
+      serviceName?: string;
+      note?: string;
+      contactId?: string;
+    },
+  ) {
+    const isMaintenance = await this.settingsService.isMaintenanceActive().catch(() => false);
+    if (isMaintenance) {
+      throw new BadRequestException(MAINTENANCE_MESSAGE);
+    }
+
+    const cleanPhone = dto.phone?.trim() || undefined;
+    const cleanEmail = dto.email?.trim().toLowerCase() || undefined;
+    const cleanName = dto.name?.trim() || undefined;
+
+    if (cleanPhone) {
+      const isBlocked = await this.contactsService.isContactBlocked(cleanPhone).catch(() => false);
+      if (isBlocked) {
+        throw new BadRequestException(BLOCKED_USER_MESSAGE);
+      }
+    }
+    if (cleanEmail) {
+      const isEmailBlocked = await this.contactsService.isContactBlocked(cleanEmail).catch(() => false);
+      if (isEmailBlocked) {
+        throw new BadRequestException(BLOCKED_USER_MESSAGE);
+      }
+    }
+
+    const config = await this.agentsConfigService.findByKeyOrNull(agentKey);
+    const botUsername = (
+      config?.telegramBotUsername ||
+      process.env.TELEGRAM_BOT_USERNAME ||
+      ''
+    )
+      .replace(/^@/, '')
+      .trim();
+
+    if (!botUsername) {
+      throw new BadRequestException(
+        'El bot de Telegram aún no está configurado en Ajustes > Telegram Bot API.',
+      );
+    }
+
+    // 1. Resolve or upsert contact if visitor provided identifying details (phone, email, or contactId).
+    // IMPORTANT: conectadotelegram remains 'N' until the user presses "Iniciar" (/start <token>) inside Telegram!
+    let contact: any = null;
+    if (dto.contactId) {
+      contact = await this.contactsService.findById(dto.contactId).catch(() => null);
+    }
+    if (!contact && cleanPhone) {
+      contact = await this.contactsService.upsertByPhone(cleanPhone, cleanName, {
+        email: cleanEmail,
+        source: 'web_widget_telegram',
+        tags: [
+          'lead_landing_web',
+          'interes_telegram',
+          ...(dto.serviceName ? [dto.serviceName] : []),
+        ],
+      });
+    } else if (!contact && cleanEmail) {
+      contact = await this.contactsService.findByPhoneOrEmail(undefined, cleanEmail);
+    }
+
+    if (contact) {
+      const existingTags = contact.tags || [];
+      const newTags = Array.from(
+        new Set([
+          ...existingTags,
+          'lead_landing_web',
+          'interes_telegram',
+          ...(dto.serviceName ? [dto.serviceName] : []),
+        ]),
+      );
+      await this.contactsService
+        .update(contact.id, {
+          name: cleanName || contact.name,
+          email: cleanEmail || contact.email,
+          tags: newTags,
+          telegramLinkStatus:
+            contact.conectadotelegram === 'S' ? 'linked' : 'pending',
+          notes: dto.note
+            ? `${contact.notes ? contact.notes + '\n' : ''}Conexión Telegram web: ${dto.serviceName || ''} - ${dto.note}`
+            : contact.notes,
+        })
+        .catch(() => null);
+    }
+
+    // 2. Create single-use temporary link token
+    if (this.telegramLinkService) {
+      const linkRes = await this.telegramLinkService.createLinkToken({
+        agentKey,
+        contactId: contact?.id ?? null,
+        sessionId: dto.sessionId ?? null,
+        serviceName: dto.serviceName ?? null,
+        note: dto.note ?? null,
+      });
+
+      return {
+        ok: true,
+        botUsername,
+        token: linkRes.token,
+        expiresAt: linkRes.expiresAt.toISOString(),
+        telegramUrl: `https://t.me/${botUsername}?start=${linkRes.token}`,
+        contact: contact
+          ? {
+              id: contact.id,
+              name: contact.name,
+              phone: contact.phone,
+              email: contact.email,
+              conectadotelegram: contact.conectadotelegram,
+            }
+          : null,
+      };
+    }
+
+    return {
+      ok: true,
+      botUsername,
+      token: null,
+      telegramUrl: `https://t.me/${botUsername}`,
+      contact: contact
+        ? {
+            id: contact.id,
+            name: contact.name,
+            phone: contact.phone,
+            email: contact.email,
+            conectadotelegram: contact.conectadotelegram,
+          }
+        : null,
     };
   }
 
@@ -1127,8 +1286,9 @@ export class WidgetController {
 
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; pt: 10px; border-top: 1px solid #F0ECE1; padding-top: 12px;">
           <span style="font-size: 12.5px; color: #777;">🗓️ ${dateLabel || 'Consultar disponibilidad'}</span>
-          <div style="display: flex; gap: 8px;">
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
             <a href="https://wa.me/${waPhone}?text=${encodeURIComponent('Hola, me gustaría información o reservar para: ' + s.name)}" target="_blank" class="btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: #25D366; color: white;">💬 WhatsApp</a>
+            <button type="button" class="btn" style="background: #0088cc; color: white;" data-crm-telegram-connect="true" data-crm-service="${s.name}">✈️ Conectar con Telegram</button>
             <button class="btn" data-crm-service="${s.name}">${hasProvisional ? 'Reserva Provisional' : 'Reservar Cita'}</button>
           </div>
         </div>
@@ -1476,6 +1636,25 @@ export class WidgetController {
     .crm-action-vapi-btn:hover {
       background: #4338CA;
     }
+    .crm-action-telegram-btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      background: #0088cc;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .crm-action-telegram-btn:hover {
+      background: #0077b5;
+    }
     .crm-modal-backdrop {
       position: absolute;
       inset: 0;
@@ -1593,7 +1772,11 @@ export class WidgetController {
     <div class="crm-widget-action-bar">
       <button type="button" class="crm-action-vapi-btn" id="crm-action-vapi">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-        Pedir por Teléfono (VAPI)
+        Pedir por Teléfono
+      </button>
+      <button type="button" class="crm-action-telegram-btn" id="crm-action-telegram">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+        Conectar con Telegram
       </button>
     </div>
     <div class="crm-widget-footer">
@@ -1622,6 +1805,25 @@ export class WidgetController {
           <div style="font-size:24px; margin-bottom:6px;">📞</div>
           <div style="font-weight:700; color:#065f46; font-size:13px; margin-bottom:4px;">¡Llamada lanzada con éxito!</div>
           <div style="font-size:11.5px; color:#047857;" id="crm-vapi-success-text">En breves segundos sonará tu teléfono.</div>
+        </div>
+      </div>
+    </div>
+    <div class="crm-modal-backdrop" id="crm-telegram-modal" style="display:none;">
+      <div class="crm-modal-box">
+        <div class="crm-modal-head">
+          <div class="crm-modal-title">✈️ Conectar con Telegram</div>
+          <button type="button" class="crm-modal-x" id="crm-telegram-close">×</button>
+        </div>
+        <div class="crm-modal-desc">Vincúlate al bot oficial de Telegram para consultar horarios, reservar plazas y recibir confirmaciones y recordatorios automáticos.</div>
+        <div id="crm-telegram-form-view">
+          <input type="text" class="crm-modal-input" id="crm-telegram-name" placeholder="Tu nombre y apellidos (opcional)" />
+          <input type="tel" class="crm-modal-input" id="crm-telegram-phone" placeholder="Tu teléfono móvil (para vincular tu ficha)" />
+          <input type="email" class="crm-modal-input" id="crm-telegram-email" placeholder="Tu email (opcional)" />
+          <div class="crm-modal-msg" id="crm-telegram-msg" style="display:none;"></div>
+          <div class="crm-modal-foot">
+            <button type="button" class="crm-btn-cancel" id="crm-telegram-btn-cancel">Cancelar</button>
+            <button type="button" class="crm-btn-submit" style="background:#0088cc;" id="crm-telegram-btn-submit">Abrir Bot en Telegram</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1820,6 +2022,77 @@ export class WidgetController {
   if (vapiClose) vapiClose.onclick = closeVapiModal;
   if (vapiCancel) vapiCancel.onclick = closeVapiModal;
 
+  var tgActionBtn = win.querySelector('#crm-action-telegram');
+  var tgModal = win.querySelector('#crm-telegram-modal');
+  var tgClose = win.querySelector('#crm-telegram-close');
+  var tgCancel = win.querySelector('#crm-telegram-btn-cancel');
+  var tgSubmit = win.querySelector('#crm-telegram-btn-submit');
+  var tgNameInput = win.querySelector('#crm-telegram-name');
+  var tgPhoneInput = win.querySelector('#crm-telegram-phone');
+  var tgEmailInput = win.querySelector('#crm-telegram-email');
+  var tgMsg = win.querySelector('#crm-telegram-msg');
+
+  function openTelegramModal(serviceContext) {
+    if (!isOpen) openWidget();
+    tgMsg.style.display = 'none';
+    tgSubmit.disabled = false;
+    tgSubmit.textContent = 'Abrir Bot en Telegram';
+    tgModal.style.display = 'flex';
+    tgModal._service = serviceContext || '';
+  }
+
+  function closeTelegramModal() {
+    tgModal.style.display = 'none';
+  }
+
+  if (tgActionBtn) tgActionBtn.onclick = function() { openTelegramModal(); };
+  if (tgClose) tgClose.onclick = closeTelegramModal;
+  if (tgCancel) tgCancel.onclick = closeTelegramModal;
+
+  if (tgSubmit) {
+    tgSubmit.onclick = function() {
+      var name = (tgNameInput.value || '').trim();
+      var phone = (tgPhoneInput.value || '').trim();
+      var email = (tgEmailInput.value || '').trim();
+      tgSubmit.disabled = true;
+      tgSubmit.textContent = 'Generando enlace seguro...';
+      tgMsg.style.display = 'none';
+
+      fetch(apiUrl + '/api/widget/handoff-telegram/' + agentKey, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: sessionId,
+          name: name || undefined,
+          phone: phone || undefined,
+          email: email || undefined,
+          serviceName: tgModal._service || undefined
+        })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        tgSubmit.disabled = false;
+        tgSubmit.textContent = 'Abrir Bot en Telegram';
+        if (data && data.ok && data.telegramUrl) {
+          window.open(data.telegramUrl, '_blank', 'noopener,noreferrer');
+          appendMessage('✈️ Se ha abierto el bot oficial en Telegram. Pulsa "Iniciar" en Telegram para completar la conexión.', 'outbound');
+          closeTelegramModal();
+        } else {
+          tgMsg.textContent = (data && data.message) ? data.message : 'El bot de Telegram aún no está configurado.';
+          tgMsg.style.display = 'block';
+          tgMsg.style.color = '#dc2626';
+        }
+      })
+      .catch(function() {
+        tgSubmit.disabled = false;
+        tgSubmit.textContent = 'Abrir Bot en Telegram';
+        tgMsg.textContent = 'No se pudo generar el enlace de Telegram en este momento.';
+        tgMsg.style.display = 'block';
+        tgMsg.style.color = '#dc2626';
+      });
+    };
+  }
+
   if (vapiSubmit) {
     vapiSubmit.onclick = function() {
       var phone = (vapiPhoneInput.value || '').trim();
@@ -1897,8 +2170,16 @@ export class WidgetController {
     }
   };
 
-  // Wire automatic click listener for any button or link with data-crm-service or data-crm-vapi-call
+  // Wire automatic click listener for any button or link with data-crm-service, data-crm-vapi-call or data-crm-telegram-connect
   document.addEventListener('click', function (e) {
+    var tgTrigger = e.target.closest('[data-crm-telegram-connect]');
+    if (tgTrigger) {
+      e.preventDefault();
+      var tgSvc = tgTrigger.getAttribute('data-crm-service') || '';
+      openTelegramModal(tgSvc);
+      return;
+    }
+
     var vapiTrigger = e.target.closest('[data-crm-vapi-call]');
     if (vapiTrigger) {
       e.preventDefault();

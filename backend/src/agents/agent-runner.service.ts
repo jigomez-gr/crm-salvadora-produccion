@@ -110,7 +110,8 @@ export class AgentRunnerService {
       channel: params.channel,
       body: reply,
       status:
-        params.channel === MessageChannel.WHATSAPP
+        params.channel === MessageChannel.WHATSAPP ||
+        params.channel === MessageChannel.TELEGRAM
           ? MessageStatus.QUEUED
           : MessageStatus.SENT,
     });
@@ -206,6 +207,18 @@ export class AgentRunnerService {
     if (!contactEntity && phone) {
       contactEntity = await this.contactsService.findByPhone(phone).catch(() => null);
     }
+    if (
+      !contactEntity &&
+      threadId.includes(':telegram:') &&
+      typeof this.contactsService.findByTelegramChatId === 'function'
+    ) {
+      const chatId = threadId.split(':telegram:')[1]?.trim();
+      if (chatId) {
+        contactEntity = await this.contactsService
+          .findByTelegramChatId(chatId)
+          .catch(() => null);
+      }
+    }
     const isBlocked =
       contactEntity?.bloqueado === 'S' ||
       (phone && this.contactsService.isContactBlocked
@@ -223,10 +236,13 @@ export class AgentRunnerService {
     // WhatsApp BEFORE the disabled/handoff checks (a STOP must always be obeyed)
     // and instead of the agent: set the flag, audit it, and send one
     // confirmation. No LLM call.
-    const consent =
-      channel === MessageChannel.WHATSAPP
-        ? detectConsentKeyword(message)
-        : null;
+    const isLiveMessagingChannel =
+      channel === MessageChannel.WHATSAPP ||
+      channel === MessageChannel.TELEGRAM;
+
+    const consent = isLiveMessagingChannel
+      ? detectConsentKeyword(message)
+      : null;
     const targetContactId = contactId || contactEntity?.id;
     if (consent && targetContactId) {
       await this.contactsService
@@ -234,6 +250,8 @@ export class AgentRunnerService {
         .catch((err) =>
           this.logger.error(`Failed to set opt-out for ${targetContactId}: ${err}`),
         );
+      const channelLabel =
+        channel === MessageChannel.TELEGRAM ? 'Telegram' : 'WhatsApp';
       this.eventEmitter.emit(AUDIT_EVENT, {
         actor: { id: null, email: null },
         action:
@@ -242,8 +260,8 @@ export class AgentRunnerService {
             : AuditAction.CONTACT_OPT_IN,
         summary:
           consent === 'opt_out'
-            ? `${contactName || phone} se dio de baja por WhatsApp (solicitó no acceder a más servicios)`
-            : `${contactName || phone} reactivó los mensajes y acceso a servicios por WhatsApp`,
+            ? `${contactName || phone || threadId} se dio de baja por ${channelLabel} (solicitó no acceder a más servicios)`
+            : `${contactName || phone || threadId} reactivó los mensajes y acceso a servicios por ${channelLabel}`,
         targetType: 'contact',
         targetId: targetContactId,
       });
@@ -261,8 +279,8 @@ export class AgentRunnerService {
       (phone && this.contactsService.isContactOptedOut
         ? await Promise.resolve(this.contactsService.isContactOptedOut(phone)).catch(() => false)
         : false);
-    if (channel === MessageChannel.WHATSAPP && isOptedOut) {
-      this.logger.log(`Contact ${contactId || phone} has previously opted out / requested baja from clinic services.`);
+    if (isLiveMessagingChannel && isOptedOut) {
+      this.logger.log(`Contact ${contactId || phone || threadId} has previously opted out / requested baja from clinic services.`);
       const reply =
         'Consta en nuestro sistema que has solicitado no acceder a los servicios ni recibir comunicaciones del Centro de Yoga y Bienestar Salvadora Conesa. Si deseas volver a acceder a nuestros servicios y reactivar la atención automática, escribe ALTA en cualquier momento.';
       const outbound = await this.emitOutbound(params, reply);
@@ -274,17 +292,18 @@ export class AgentRunnerService {
       .findByKeyOrNull(agentKey)
       .catch(() => null);
 
-    // Respect the agent's global on/off switch for live (WhatsApp) traffic. A
+    // Respect the agent's global on/off switch for live (WhatsApp/Telegram) traffic. A
     // disabled agent still records the inbound message (so a human sees it in
     // the inbox) but does NOT auto-reply or spend tokens. The playground
     // bypasses this so config can be validated before the agent goes live.
     if (
-      channel === MessageChannel.WHATSAPP &&
+      isLiveMessagingChannel &&
       agentConfig &&
-      !agentConfig.enabled
+      (!agentConfig.enabled ||
+        (channel === MessageChannel.TELEGRAM && agentConfig.telegramEnabled === false))
     ) {
       this.logger.log(
-        `Agent '${agentKey}' is disabled — inbound recorded, auto-reply skipped.`,
+        `Agent '${agentKey}' is disabled for ${channel} — inbound recorded, auto-reply skipped.`,
       );
       return { reply: '', outbound: null };
     }
@@ -292,7 +311,7 @@ export class AgentRunnerService {
     // Human handoff: if a person has taken over this thread, record the inbound
     // (already done above, so it shows in the inbox + bumps unread) but do NOT
     // auto-reply. The playground is never handed off.
-    if (channel === MessageChannel.WHATSAPP) {
+    if (isLiveMessagingChannel) {
       const conversation = await this.messagesService
         .getConversation(threadId)
         .catch(() => null);
@@ -425,6 +444,8 @@ export class AgentRunnerService {
 
     let effectiveContactadowassap: 'S' | 'N' =
       contactEntity?.contactadowassap === 'S' ? 'S' : 'N';
+    let effectiveConectadotelegram: 'S' | 'N' =
+      contactEntity?.conectadotelegram === 'S' ? 'S' : 'N';
     if (effectiveContactId) {
       const c = await this.contactsService
         .findById(effectiveContactId)
@@ -435,6 +456,7 @@ export class AgentRunnerService {
         effectiveEmail = c.email || undefined;
         effectiveEmailerroneo = c.emailerroneo === 'S' ? 'S' : 'N';
         effectiveContactadowassap = c.contactadowassap === 'S' ? 'S' : 'N';
+        effectiveConectadotelegram = c.conectadotelegram === 'S' ? 'S' : 'N';
       }
     } else if (effectivePhone) {
       const c = await this.contactsService
@@ -446,7 +468,14 @@ export class AgentRunnerService {
         effectiveEmail = c.email || undefined;
         effectiveEmailerroneo = c.emailerroneo === 'S' ? 'S' : 'N';
         effectiveContactadowassap = c.contactadowassap === 'S' ? 'S' : 'N';
+        effectiveConectadotelegram = c.conectadotelegram === 'S' ? 'S' : 'N';
       }
+    } else if (contactEntity?.id) {
+      effectiveContactId = contactEntity.id;
+      effectivePhone = contactEntity.phone;
+      effectiveName = effectiveName || contactEntity.name;
+      effectiveEmail = contactEntity.email || undefined;
+      effectiveEmailerroneo = contactEntity.emailerroneo === 'S' ? 'S' : 'N';
     }
 
     if (channel === MessageChannel.PLAYGROUND && !effectiveContactId) {
@@ -475,7 +504,7 @@ export class AgentRunnerService {
       }
     }
 
-    if (effectiveContactId || effectivePhone) {
+    if (effectiveContactId || effectivePhone || effectiveName) {
       const nameKnown = !!(effectiveName && effectiveName !== effectivePhone);
       requestContext.set('customer', {
         contactId: effectiveContactId,
@@ -484,6 +513,7 @@ export class AgentRunnerService {
         email: effectiveEmail,
         emailerroneo: effectiveEmailerroneo,
         contactadowassap: effectiveContactadowassap,
+        conectadotelegram: effectiveConectadotelegram,
         nameKnown,
       });
     }

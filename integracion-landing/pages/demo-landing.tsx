@@ -150,6 +150,15 @@ export default function DemoLandingPage() {
   const [waLoading, setWaLoading] = useState(false);
   const [waSuccess, setWaSuccess] = useState(false);
 
+  // Telegram Connection Form State
+  const [tgModalOpen, setTgModalOpen] = useState(false);
+  const [tgName, setTgName] = useState("");
+  const [tgPhone, setTgPhone] = useState("");
+  const [tgEmail, setTgEmail] = useState("");
+  const [tgLoading, setTgLoading] = useState(false);
+  const [tgSuccess, setTgSuccess] = useState(false);
+  const [tgError, setTgError] = useState("");
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -563,6 +572,49 @@ export default function DemoLandingPage() {
     }
   };
 
+  const handleTelegramConnect = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTgLoading(true);
+    setTgError("");
+    try {
+      const res = await fetch("/api/widget/handoff-telegram/booking", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: sessionId || "sess_demo",
+          name: tgName.trim() || undefined,
+          phone: tgPhone.trim() || undefined,
+          email: tgEmail.trim() || undefined,
+          serviceName: selectedService || undefined,
+          note: "Conexión con Telegram solicitada desde la landing oficial.",
+        }),
+      });
+      const data = await res.json();
+      setTgLoading(false);
+      if (!res.ok || !data?.ok || !data?.telegramUrl) {
+        setTgError(data?.message || "El bot de Telegram aún no está configurado en el CRM.");
+        return;
+      }
+      setTgSuccess(true);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: "tg_handoff_" + Date.now(),
+          direction: "outbound",
+          body: `✈️ ¡Enlace seguro de Telegram generado! Se abrirá el bot oficial del Centro de Yoga Salvadora Conesa (@${data.botUsername}). Pulsa **Iniciar** en Telegram para completar la conexión.`,
+        },
+      ]);
+      setTimeout(() => {
+        window.open(data.telegramUrl, "_blank", "noopener,noreferrer");
+        setTgModalOpen(false);
+        setTgSuccess(false);
+      }, 900);
+    } catch {
+      setTgLoading(false);
+      setTgError("No se pudo conectar con el servidor. Inténtalo de nuevo.");
+    }
+  };
+
   const resetChat = () => {
     const newSess = "sess_" + Math.random().toString(36).substring(2, 9);
     localStorage.setItem("crm_widget_demo_session", newSess);
@@ -653,6 +705,12 @@ export default function DemoLandingPage() {
         >
           📱 Continuar por WhatsApp
         </button>
+        <button
+          onClick={() => setTgModalOpen(true)}
+          className="inline-flex items-center gap-1 bg-[#0088cc] hover:bg-[#0077b5] px-3 py-0.5 rounded-full text-white font-semibold transition shadow-xs"
+        >
+          ✈️ Conectar con Telegram
+        </button>
       </div>
 
       {/* Main Header */}
@@ -706,6 +764,12 @@ export default function DemoLandingPage() {
               <Phone className="w-3.5 h-3.5" /> WhatsApp Alta Rápida
             </button>
             <button
+              onClick={() => setTgModalOpen(true)}
+              className="bg-[#0088cc] hover:bg-[#0077b5] text-white px-3 py-2 rounded-lg text-xs font-bold transition shadow-xs flex items-center gap-1.5"
+            >
+              <Send className="w-3.5 h-3.5" /> Conectar con Telegram
+            </button>
+            <button
               onClick={() => setIsOpen(true)}
               className="bg-[#800020] text-white px-3.5 py-2 rounded-lg text-xs font-bold hover:bg-[#800020]/90 transition shadow-xs flex items-center gap-1.5"
             >
@@ -739,6 +803,12 @@ export default function DemoLandingPage() {
               className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm"
             >
               <Phone className="w-4 h-4" /> Traspasar Consulta a WhatsApp
+            </button>
+            <button
+              onClick={() => setTgModalOpen(true)}
+              className="bg-[#0088cc] hover:bg-[#0077b5] text-white px-5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm"
+            >
+              <Send className="w-4 h-4" /> Conectar con Telegram
             </button>
           </div>
 
@@ -1473,6 +1543,136 @@ export default function DemoLandingPage() {
         </div>
       )}
 
+      {/* ─── MODAL CONECTAR CON TELEGRAM (VINCULACIÓN SEGURA CON DEEP LINK) ─── */}
+      {tgModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200"
+          onClick={() => setTgModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-stone-200 relative max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setTgModalOpen(false)}
+              className="absolute top-4 right-4 p-1.5 text-stone-400 hover:text-stone-700 rounded-lg"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-2 text-[#0088cc] mb-2">
+              <span className="p-2 rounded-xl bg-sky-100">
+                <Send className="w-5 h-5" />
+              </span>
+              <span className="text-xs font-extrabold uppercase tracking-wider">
+                Vinculación Segura con Telegram
+              </span>
+            </div>
+
+            <h3 className="font-serif text-xl font-bold text-stone-900 mb-1.5">
+              Conectar con Telegram
+            </h3>
+            <p className="text-xs text-stone-600 mb-4 leading-relaxed">
+              Conéctate con el bot oficial del Centro de Yoga Salvadora Conesa. Si indicas tu teléfono o email, vincularemos tu cuenta de Telegram a tu ficha de alumno cuando pulses <strong>Iniciar</strong> en Telegram para que puedas recibir confirmaciones y recordatorios automáticos.
+            </p>
+
+            {selectedService && (
+              <div className="mb-4 p-3 bg-stone-50 rounded-xl border border-stone-200 text-xs flex items-center justify-between">
+                <span className="text-stone-500">Actividad:</span>
+                <span className="font-bold text-[#800020]">{selectedService}</span>
+              </div>
+            )}
+
+            {tgSuccess ? (
+              <div className="p-4 bg-sky-50 border border-sky-200 rounded-xl text-center space-y-2 text-sky-900 animate-in zoom-in-95">
+                <CheckCircle2 className="w-8 h-8 text-[#0088cc] mx-auto" />
+                <p className="text-xs font-bold">¡Enlace seguro de un solo uso generado!</p>
+                <p className="text-[11px] text-sky-700">Abriendo el bot oficial en Telegram... Pulsa «Iniciar» allí.</p>
+              </div>
+            ) : (
+              <form onSubmit={handleTelegramConnect} className="space-y-3.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-stone-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <span>Tu Nombre y Apellidos</span>
+                    <span className="text-stone-400 font-normal lowercase">(opcional)</span>
+                  </label>
+                  <div className="relative">
+                    <User className="w-4 h-4 text-stone-400 absolute left-3.5 top-3" />
+                    <input
+                      type="text"
+                      value={tgName}
+                      onChange={(e) => setTgName(e.target.value)}
+                      placeholder="Ej: Carmen Moreno"
+                      className="w-full bg-stone-50 border border-stone-300 focus:border-[#0088cc] focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-xs text-stone-800 outline-none transition"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-stone-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <span>Teléfono Móvil (para vincular tu ficha)</span>
+                    <span className="text-stone-400 font-normal lowercase">(recomendado)</span>
+                  </label>
+                  <div className="relative">
+                    <Phone className="w-4 h-4 text-stone-400 absolute left-3.5 top-3" />
+                    <input
+                      type="tel"
+                      value={tgPhone}
+                      onChange={(e) => setTgPhone(e.target.value)}
+                      placeholder="Ej: 611 22 33 44"
+                      className="w-full bg-stone-50 border border-stone-300 focus:border-[#0088cc] focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-xs text-stone-800 outline-none transition"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-stone-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <span>Correo Electrónico</span>
+                    <span className="text-stone-400 font-normal lowercase">(opcional)</span>
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-stone-400 absolute left-3.5 top-3" />
+                    <input
+                      type="email"
+                      value={tgEmail}
+                      onChange={(e) => setTgEmail(e.target.value)}
+                      placeholder="Ej: carmen@ejemplo.com"
+                      className="w-full bg-stone-50 border border-stone-300 focus:border-[#0088cc] focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-xs text-stone-800 outline-none transition"
+                    />
+                  </div>
+                </div>
+
+                {tgError && (
+                  <p className="text-xs text-red-600 font-medium">{tgError}</p>
+                )}
+
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    disabled={tgLoading}
+                    className="w-full py-3 bg-[#0088cc] hover:bg-[#0077b5] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {tgLoading ? (
+                      "Generando enlace seguro..."
+                    ) : (
+                      <>
+                        <span>Abrir Bot en Telegram</span>
+                        <ArrowUpRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="text-[10px] text-stone-400 text-center flex items-center justify-center gap-1 pt-1">
+                  <ShieldCheck className="w-3 h-3 text-[#0088cc]" />
+                  <span>Enlace único y temporal verificado por el CRM.</span>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ─── FLOATING ANALIZAIA SIMULATOR BUBBLE ─── */}
       <button
         onClick={() => setSimuladorOpen(true)}
@@ -1525,6 +1725,13 @@ export default function DemoLandingPage() {
                 <Phone className="w-3 h-3" /> WhatsApp
               </button>
               <button
+                onClick={() => setTgModalOpen(true)}
+                title="Conectar con Telegram"
+                className="bg-[#0088cc] hover:bg-[#0077b5] text-white text-[11px] font-bold px-2 py-1 rounded-lg flex items-center gap-1 transition mr-1"
+              >
+                <Send className="w-3 h-3" /> Telegram
+              </button>
+              <button
                 onClick={resetChat}
                 title="Reiniciar conversación"
                 className="p-1.5 hover:bg-white/15 rounded-lg text-white/80 hover:text-white transition"
@@ -1555,17 +1762,25 @@ export default function DemoLandingPage() {
             ))}
           </div>
 
-          {/* WhatsApp Handoff Bar */}
+          {/* WhatsApp & Telegram Handoff Bar */}
           <div className="bg-emerald-50 border-b border-emerald-200 px-3 py-1.5 flex items-center justify-between text-xs text-emerald-900">
             <span className="text-[11px] font-medium flex items-center gap-1">
-              <Phone className="w-3 h-3 text-emerald-600" /> ¿Prefieres continuar en tu móvil?
+              <Phone className="w-3 h-3 text-emerald-600" /> ¿Prefieres tu móvil?
             </span>
-            <button
-              onClick={() => setWaModalOpen(true)}
-              className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 underline"
-            >
-              Pasar a WhatsApp
-            </button>
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={() => setWaModalOpen(true)}
+                className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 underline"
+              >
+                WhatsApp
+              </button>
+              <button
+                onClick={() => setTgModalOpen(true)}
+                className="text-[11px] font-bold text-[#0088cc] hover:text-[#0077b5] underline"
+              >
+                Conectar con Telegram
+              </button>
+            </div>
           </div>
 
           {/* Message Feed */}

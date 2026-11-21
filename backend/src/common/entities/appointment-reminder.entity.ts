@@ -21,6 +21,7 @@ export enum ReminderChannel {
   EMAIL = 'email',
   VOICE = 'voice',
   SMS = 'sms',
+  TELEGRAM = 'telegram',
 }
 
 /**

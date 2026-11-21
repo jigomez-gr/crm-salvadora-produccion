@@ -25,6 +25,7 @@ import { WhatsappGatewayService } from '../whatsapp/whatsapp-gateway.service';
 import { EmailService } from '../email/email.service';
 import { ZadarmaSmsService } from '../sms/zadarma-sms.service';
 import { VapiService } from '../vapi/vapi.service';
+import { TelegramService } from '../telegram/telegram.service';
 import {
   REMINDER_OFFSETS,
   ReminderOffset,
@@ -54,6 +55,7 @@ export class RemindersService implements OnModuleInit {
     private readonly zadarmaSmsService: ZadarmaSmsService,
     private readonly vapiService: VapiService,
     @Optional() private readonly whatsappGateway?: WhatsappGatewayService,
+    @Optional() private readonly telegramService?: TelegramService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -190,6 +192,7 @@ export class RemindersService implements OnModuleInit {
     if (svc.reminderEmail !== false) channels.push(ReminderChannel.EMAIL);
     if (svc.reminderVoice) channels.push(ReminderChannel.VOICE);
     if (svc.reminderSms) channels.push(ReminderChannel.SMS);
+    if (svc.reminderTelegram) channels.push(ReminderChannel.TELEGRAM);
 
     return channels;
   }
@@ -251,6 +254,35 @@ export class RemindersService implements OnModuleInit {
         `Reminder skipped for appointment ${appt.id} (whatsapp) — global WhatsApp automation is PAUSED.`,
       );
       return;
+    }
+
+    // REGLA OBLIGATORIA: NO SE ENVIARÁ NINGÚN RECORDATORIO, CONFIRMACIÓN NI NOTIFICACIÓN
+    // AUTOMÁTICA POR TELEGRAM A UN CONTACTO QUE NO TENGA conectadotelegram = 'S'.
+    if (channel === ReminderChannel.TELEGRAM) {
+      if (appt.contact?.conectadotelegram !== 'S') {
+        this.logger.log(
+          `Reminder skipped for appointment ${appt.id} (telegram) — contact ${appt.contact?.id} has conectadotelegram='${appt.contact?.conectadotelegram || 'N'}' (!== 'S').`,
+        );
+        return;
+      }
+      if (!appt.contact?.telegramChatId) {
+        this.logger.log(
+          `Reminder skipped for appointment ${appt.id} (telegram) — contact ${appt.contact?.id} has no telegramChatId.`,
+        );
+        return;
+      }
+      if (appt.contact?.telegramBlocked || appt.contact?.bloqueado === 'S') {
+        this.logger.log(
+          `Reminder skipped for appointment ${appt.id} (telegram) — contact ${appt.contact?.id} blocked bot or is blocked.`,
+        );
+        return;
+      }
+      if (!this.telegramService) {
+        this.logger.warn(
+          `Reminder skipped for appointment ${appt.id} (telegram) — TelegramService not injected.`,
+        );
+        return;
+      }
     }
 
     // Atomic claim: insert the idempotency row first.
@@ -446,6 +478,26 @@ export class RemindersService implements OnModuleInit {
             ok: callRes.ok,
             providerMessageId: callRes.callId,
             error: callRes.error,
+          };
+          break;
+        }
+
+        case ReminderChannel.TELEGRAM: {
+          if (!this.telegramService || !appt.contact) {
+            result = { ok: false, error: 'Servicio de Telegram o contacto no disponible' };
+            break;
+          }
+          const tgReminderText = `Hola ${contactName}, te recordamos tu cita de *${appt.service}* programada para el *${whenDateStr}* a las *${whenTimeStr}*.${svc?.reminderNotes ? `\n\n💡 *Indicaciones:* ${svc.reminderNotes}` : ''}\n\nCentro de Yoga Salvadora Conesa.`;
+          const tgRes = await this.telegramService.sendAutomatedTextMessage({
+            config,
+            agentKey,
+            contact: appt.contact,
+            body: tgReminderText,
+          });
+          result = {
+            ok: tgRes.ok,
+            providerMessageId: tgRes.providerMessageId,
+            error: tgRes.error,
           };
           break;
         }

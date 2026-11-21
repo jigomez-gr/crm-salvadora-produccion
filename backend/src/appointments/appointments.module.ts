@@ -17,6 +17,7 @@ import { YCloudModule } from '../whatsapp/ycloud.module';
 import { AgentsConfigModule } from '../agents/agents-config.module';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { ZadarmaSmsModule } from '../sms/zadarma-sms.module';
+import { TelegramCoreModule } from '../telegram/telegram-core.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { ZadarmaSmsModule } from '../sms/zadarma-sms.module';
     AgentsConfigModule,
     forwardRef(() => ConversationsModule),
     ZadarmaSmsModule,
+    forwardRef(() => TelegramCoreModule),
   ],
   providers: [AppointmentsService, AnalizaIaService],
   controllers: [AppointmentsController],

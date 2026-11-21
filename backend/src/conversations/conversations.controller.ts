@@ -46,6 +46,7 @@ import {
 import { EmailService } from '../email/email.service';
 import { ContactsService } from '../contacts/contacts.service';
 import { AppointmentsService } from '../appointments/appointments.service';
+import { TelegramService } from '../telegram/telegram.service';
 import {
   generateConversationPdf,
   generateConversationXlsx,
@@ -84,6 +85,8 @@ export class ConversationsController {
     @Optional()
     @Inject(forwardRef(() => AppointmentsService))
     private readonly appointmentsService?: AppointmentsService,
+    @Optional()
+    private readonly telegramService?: TelegramService,
   ) {}
 
   @Get()
@@ -293,7 +296,21 @@ export class ConversationsController {
           .findByKeyOrNull(this.agentKeyOf(message.threadId))
           .catch(() => null);
 
-        if (this.whatsappGateway) {
+        const isTelegramMedia =
+          message.channel === MessageChannel.TELEGRAM ||
+          message.threadId.includes(':telegram:') ||
+          message.mediaUrl?.includes('telegram-media/');
+
+        if (isTelegramMedia && message.mediaId && this.telegramService) {
+          const mediaRes = await this.telegramService.fetchInboundMedia({
+            config,
+            agentKey: this.agentKeyOf(message.threadId),
+            fileId: message.mediaId,
+            signal: controller.signal,
+          });
+          bytes = mediaRes.buffer;
+          upstreamContentType = mediaRes.contentType;
+        } else if (this.whatsappGateway) {
           const mediaRes = await this.whatsappGateway.fetchInboundMedia({
             config,
             mediaUrl: message.mediaUrl,
@@ -567,9 +584,61 @@ export class ConversationsController {
       return this.replyEmail(threadId, { body: dto.body, subject: dto.subject });
     }
 
+    const isTelegramThread =
+      conv.channel === MessageChannel.TELEGRAM ||
+      conv.channel === 'telegram' ||
+      threadId.includes(':telegram:') ||
+      threadId.startsWith('telegram:');
+
+    if (isTelegramThread) {
+      const cleanBody = typeof dto.body === 'string' ? dto.body.trim() : '';
+      if (!cleanBody && !file) {
+        throw new BadRequestException(
+          'Debes indicar un mensaje de texto, un archivo adjunto o ambos.',
+        );
+      }
+      if (!this.telegramService) {
+        throw new BadRequestException(
+          'El servicio de Telegram no está disponible en este momento.',
+        );
+      }
+      let chatId = '';
+      if (threadId.includes(':telegram:')) {
+        chatId = threadId.split(':telegram:')[1]?.trim() || '';
+      } else if (threadId.startsWith('telegram:')) {
+        chatId = threadId.slice('telegram:'.length).trim();
+      }
+      if (!chatId && conv.contactId) {
+        const contact = await this.contactsService
+          .findById(conv.contactId)
+          .catch(() => null);
+        chatId = contact?.telegramChatId || '';
+      }
+      if (!chatId) {
+        throw new BadRequestException(
+          'No se pudo determinar el chat_id de Telegram para esta conversación.',
+        );
+      }
+      const saved = await this.telegramService.sendManualFromInbox({
+        agentKey: conv.agentKey || this.agentKeyOf(threadId) || 'booking',
+        threadId,
+        chatId,
+        contactId: conv.contactId ?? undefined,
+        body: cleanBody || undefined,
+        file: file
+          ? {
+              buffer: file.buffer,
+              filename: file.originalname,
+              mimeType: file.mimetype,
+            }
+          : null,
+      });
+      return toMessageView(saved);
+    }
+
     if (conv.channel !== MessageChannel.WHATSAPP) {
       throw new BadRequestException(
-        'Solo se pueden enviar mensajes manuales en conversaciones de WhatsApp o Email',
+        'Solo se pueden enviar mensajes manuales en conversaciones de WhatsApp, Telegram o Email',
       );
     }
 

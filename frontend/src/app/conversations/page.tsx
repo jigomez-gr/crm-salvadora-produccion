@@ -409,7 +409,7 @@ function ConversationsPageInner() {
   // Multi-criteria filters & search
   const [days, setDays] = useState<"all" | "7">("all");
   const [readStatus, setReadStatus] = useState<"all" | "unread" | "read">("all");
-  const [channelFilter, setChannelFilter] = useState<"all" | "whatsapp" | "email" | "widget" | "call" | "sms">("all");
+  const [channelFilter, setChannelFilter] = useState<"all" | "whatsapp" | "telegram" | "email" | "widget" | "call" | "sms">("all");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [searchField, setSearchField] = useState<"all" | "phone" | "email" | "name">("all");
@@ -542,7 +542,7 @@ function ConversationsPageInner() {
     async (overrides?: {
       days?: "all" | "7";
       readStatus?: "all" | "unread" | "read";
-      channel?: "all" | "whatsapp" | "email" | "widget" | "call" | "sms";
+      channel?: "all" | "whatsapp" | "telegram" | "email" | "widget" | "call" | "sms";
       search?: string;
       searchField?: "all" | "phone" | "email" | "name";
       offset?: number;
@@ -744,10 +744,18 @@ function ConversationsPageInner() {
     !isSms &&
     (selectedThread?.channel === "email" ||
       Boolean(selectedThread?.threadId?.includes(":email:")));
+  const isTelegram =
+    !isCall &&
+    !isSms &&
+    !isEmail &&
+    (selectedThread?.channel === "telegram" ||
+      Boolean(selectedThread?.threadId?.includes(":telegram:")) ||
+      Boolean(selectedThread?.threadId?.startsWith("telegram:")));
   const isWhatsapp =
     !isCall &&
     !isSms &&
     !isEmail &&
+    !isTelegram &&
     (selectedThread?.channel === "whatsapp" || !selectedThread?.channel);
 
   const from = total === 0 ? 0 : offset + 1;
@@ -779,6 +787,13 @@ function ConversationsPageInner() {
       return (
         <Badge variant="success" className="gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200">
           <MessageSquare className="h-3 w-3 text-emerald-600" /> WhatsApp
+        </Badge>
+      );
+    }
+    if (channel === "telegram" || threadId?.includes(":telegram:") || threadId?.startsWith("telegram:")) {
+      return (
+        <Badge variant="info" className="gap-1 bg-sky-50 text-sky-700 border border-sky-200">
+          <Send className="h-3 w-3 text-sky-600" /> Telegram
         </Badge>
       );
     }
@@ -1172,6 +1187,7 @@ function ConversationsPageInner() {
                 [
                   { id: "all", label: "Todas" },
                   { id: "whatsapp", label: "WhatsApp" },
+                  { id: "telegram", label: "Telegram" },
                   { id: "email", label: "Email" },
                   { id: "widget", label: "Web Landing" },
                   { id: "call", label: "Llamadas" },
@@ -1475,7 +1491,7 @@ function ConversationsPageInner() {
                     <Smartphone className="h-3 w-3 text-teal-700" /> Saliente
                   </Badge>
                 )}
-                {isWhatsapp && selectedThread && (
+                {(isWhatsapp || isTelegram) && selectedThread && (
                   <Button
                     variant={selectedThread.handoff ? "primary" : "secondary"}
                     size="sm"
@@ -1637,7 +1653,7 @@ function ConversationsPageInner() {
             )}
 
             {/* Handoff banner */}
-            {isWhatsapp && selectedThread?.handoff && (
+            {(isWhatsapp || isTelegram) && selectedThread?.handoff && (
               <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-800">
                 <UserCog className="h-3.5 w-3.5" />
                 Estás atendiendo tú esta conversación. El agente no responderá
@@ -1888,7 +1904,7 @@ function ConversationsPageInner() {
                         <span className="font-medium">
                           {formatMessageDateWithDay(m.createdAt)}
                         </span>
-                        {m.direction === "outbound" && isWhatsapp && (
+                        {m.direction === "outbound" && (isWhatsapp || isTelegram) && (
                           <StatusTicks status={m.status} />
                         )}
                         {m.direction === "inbound" && selectedThread && (
@@ -2031,8 +2047,8 @@ function ConversationsPageInner() {
               </div>
             )}
 
-            {/* Composer — manual reply (WhatsApp threads only) */}
-            {isWhatsapp && (
+            {/* Composer — manual reply (WhatsApp and Telegram threads) */}
+            {(isWhatsapp || isTelegram) && (
               <div className="border-t border-neutral-200 bg-white px-4 py-3">
                 {selectedFile && (
                   <div className="mb-2 flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs text-neutral-800">
@@ -2104,8 +2120,9 @@ function ConversationsPageInner() {
                   </Button>
                 </div>
                 <p className="mt-1 text-[10px] text-neutral-400">
-                  Los mensajes manuales solo se entregan dentro de la ventana de
-                  24 h de WhatsApp. Formatos admitidos: imágenes, PDF, Word, Excel, audio, vídeo y texto (máx. 101 MB).
+                  {isTelegram
+                    ? "Respuesta directa por Telegram Bot API. Formatos admitidos: imágenes, PDF, Word, Excel, audio, vídeo y texto."
+                    : "Los mensajes manuales solo se entregan dentro de la ventana de 24 h de WhatsApp. Formatos admitidos: imágenes, PDF, Word, Excel, audio, vídeo y texto (máx. 101 MB)."}
                 </p>
               </div>
             )}

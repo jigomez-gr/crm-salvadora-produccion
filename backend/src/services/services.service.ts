@@ -84,10 +84,12 @@ export class ServicesService implements OnModuleInit {
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "notifyByEmail" boolean DEFAULT true;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "notifyByWhatsapp" boolean DEFAULT true;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "notifyBySms" boolean DEFAULT false;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "notifyByTelegram" boolean DEFAULT false;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "reminderWhatsapp" boolean DEFAULT true;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "reminderEmail" boolean DEFAULT true;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "reminderVoice" boolean DEFAULT false;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "reminderSms" boolean DEFAULT false;
+          ALTER TABLE services ADD COLUMN IF NOT EXISTS "reminderTelegram" boolean DEFAULT false;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "reminderHoursEnabled" boolean DEFAULT true;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "reminderHours" integer DEFAULT 24;
           ALTER TABLE services ADD COLUMN IF NOT EXISTS "reminderMinutesEnabled" boolean DEFAULT true;
@@ -1412,10 +1414,12 @@ export class ServicesService implements OnModuleInit {
       notifyByEmail: dto.notifyByEmail !== undefined ? dto.notifyByEmail : true,
       notifyByWhatsapp: dto.notifyByWhatsapp !== undefined ? dto.notifyByWhatsapp : true,
       notifyBySms: dto.notifyBySms !== undefined ? dto.notifyBySms : true,
+      notifyByTelegram: dto.notifyByTelegram !== undefined ? dto.notifyByTelegram : false,
       reminderWhatsapp: dto.reminderWhatsapp !== undefined ? dto.reminderWhatsapp : true,
       reminderEmail: dto.reminderEmail !== undefined ? dto.reminderEmail : true,
       reminderVoice: dto.reminderVoice !== undefined ? dto.reminderVoice : false,
       reminderSms: dto.reminderSms !== undefined ? dto.reminderSms : false,
+      reminderTelegram: dto.reminderTelegram !== undefined ? dto.reminderTelegram : false,
       reminderHoursEnabled: dto.reminderHoursEnabled !== undefined ? dto.reminderHoursEnabled : true,
       reminderHours: dto.reminderHours !== undefined ? dto.reminderHours : 24,
       reminderMinutesEnabled: dto.reminderMinutesEnabled !== undefined ? dto.reminderMinutesEnabled : true,
@@ -1503,10 +1507,12 @@ export class ServicesService implements OnModuleInit {
     if (dto.notifyByEmail !== undefined) service.notifyByEmail = dto.notifyByEmail;
     if (dto.notifyByWhatsapp !== undefined) service.notifyByWhatsapp = dto.notifyByWhatsapp;
     if (dto.notifyBySms !== undefined) service.notifyBySms = dto.notifyBySms;
+    if (dto.notifyByTelegram !== undefined) service.notifyByTelegram = dto.notifyByTelegram;
     if (dto.reminderWhatsapp !== undefined) service.reminderWhatsapp = dto.reminderWhatsapp;
     if (dto.reminderEmail !== undefined) service.reminderEmail = dto.reminderEmail;
     if (dto.reminderVoice !== undefined) service.reminderVoice = dto.reminderVoice;
     if (dto.reminderSms !== undefined) service.reminderSms = dto.reminderSms;
+    if (dto.reminderTelegram !== undefined) service.reminderTelegram = dto.reminderTelegram;
     if (dto.reminderHoursEnabled !== undefined) service.reminderHoursEnabled = dto.reminderHoursEnabled;
     if (dto.reminderHours !== undefined) service.reminderHours = dto.reminderHours;
     if (dto.reminderMinutesEnabled !== undefined) service.reminderMinutesEnabled = dto.reminderMinutesEnabled;
@@ -1711,10 +1717,12 @@ export class ServicesService implements OnModuleInit {
       notifyByEmail: source.notifyByEmail,
       notifyByWhatsapp: source.notifyByWhatsapp,
       notifyBySms: source.notifyBySms,
+      notifyByTelegram: source.notifyByTelegram,
       reminderWhatsapp: source.reminderWhatsapp,
       reminderEmail: source.reminderEmail,
       reminderVoice: source.reminderVoice,
       reminderSms: source.reminderSms,
+      reminderTelegram: source.reminderTelegram,
       reminderHoursEnabled: source.reminderHoursEnabled,
       reminderHours: source.reminderHours,
       reminderMinutesEnabled: source.reminderMinutesEnabled,

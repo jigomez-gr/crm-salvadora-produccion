@@ -165,6 +165,31 @@ export class AgentConfig {
   @Column({ type: 'varchar', length: 500, nullable: true })
   transcriptionApiKey: string | null;
 
+  // ─── Telegram Bot API configuration ───
+  @Column({ default: true })
+  telegramEnabled: boolean;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  telegramBotToken: string | null;
+
+  @Column({ type: 'varchar', length: 256, nullable: true })
+  telegramWebhookSecret: string | null;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  telegramBotUsername: string | null;
+
+  @Column({ type: 'varchar', length: 256, nullable: true })
+  telegramBotName: string | null;
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  telegramBotId: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  telegramLastError: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  telegramConnectedAt: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }

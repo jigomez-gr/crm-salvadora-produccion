@@ -124,6 +124,31 @@ export class CreateAgentConfigDto {
   @IsString()
   @MaxLength(500)
   transcriptionApiKey?: string;
+
+  // ─── Telegram Bot API configuration ───
+  @IsOptional()
+  @IsBoolean()
+  telegramEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  telegramBotToken?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(256)
+  telegramWebhookSecret?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  telegramBotUsername?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(256)
+  telegramBotName?: string;
 }
 
 export class UpdateAgentConfigDto {
@@ -328,4 +353,29 @@ export class UpdateAgentConfigDto {
   @IsString()
   @MaxLength(500)
   transcriptionApiKey?: string;
+
+  // ─── Telegram Bot API configuration ───
+  @IsOptional()
+  @IsBoolean()
+  telegramEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  telegramBotToken?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(256)
+  telegramWebhookSecret?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  telegramBotUsername?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(256)
+  telegramBotName?: string;
 }

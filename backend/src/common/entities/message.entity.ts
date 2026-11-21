@@ -19,6 +19,7 @@ export enum MessageChannel {
   PLAYGROUND = 'playground',
   WIDGET = 'widget',
   EMAIL = 'email',
+  TELEGRAM = 'telegram',
 }
 
 /**

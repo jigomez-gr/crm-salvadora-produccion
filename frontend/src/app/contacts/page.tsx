@@ -250,6 +250,10 @@ function ContactsPageInner() {
       bloqueado: data.bloqueado || "N",
       emailerroneo: data.emailerroneo || "N",
       contactadowassap: data.contactadowassap || "N",
+      conectadotelegram: data.conectadotelegram || "N",
+      telegramUsername: data.telegramUsername ? data.telegramUsername.replace(/^@/, "").trim() : null,
+      telegramChatId: data.telegramChatId ? data.telegramChatId.trim() : null,
+      telegramUserId: data.telegramUserId ? data.telegramUserId.trim() : null,
       inhibiryoga: data.inhibiryoga || "N",
     };
     if (editingContact) {
@@ -494,7 +498,7 @@ function ContactsPageInner() {
                       <Phone className="h-3.5 w-3.5 text-neutral-400" />
                       {c.phone}
                     </span>
-                    <div className="mt-1 flex items-center gap-1">
+                    <div className="mt-1 flex items-center gap-1 flex-wrap">
                       {c.contactadowassap === "S" ? (
                         <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200" title="Contactado por WhatsApp">
                           WA: Sí
@@ -502,6 +506,15 @@ function ContactsPageInner() {
                       ) : (
                         <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium bg-neutral-100 text-neutral-600 border border-neutral-200" title="No contactado por WhatsApp">
                           WA: No
+                        </span>
+                      )}
+                      {c.conectadotelegram === "S" ? (
+                        <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-sky-100 text-sky-800 border border-sky-200" title={`Conectado a Telegram${c.telegramUsername ? ` (@${c.telegramUsername})` : ""}`}>
+                          ✈️ TG: Sí{c.telegramUsername ? ` (@${c.telegramUsername})` : ""}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium bg-neutral-100 text-neutral-600 border border-neutral-200" title="No conectado a Telegram">
+                          TG: No
                         </span>
                       )}
                       {c.inhibiryoga === "S" && (

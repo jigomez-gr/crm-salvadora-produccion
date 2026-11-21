@@ -314,6 +314,24 @@ export class ContactsController {
     return contact;
   }
 
+  @Post(':id/unlink-telegram')
+  async unlinkTelegram(
+    @Param('id') id: string,
+    @CurrentUser() actor: AuthUser,
+    @Ip() ip: string,
+  ) {
+    const contact = await this.contactsService.unlinkTelegramFromContact(id);
+    this.audit({
+      actor: { id: actor.id, email: actor.email },
+      action: AuditAction.CONTACT_UPDATE,
+      summary: `Desvinculó la cuenta de Telegram del contacto ${contact.name}`,
+      targetType: 'contact',
+      targetId: contact.id,
+      ip,
+    });
+    return contact;
+  }
+
   @Post(':id/anonymize')
   async anonymize(
     @Param('id') id: string,

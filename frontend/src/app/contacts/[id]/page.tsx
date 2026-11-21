@@ -319,6 +319,48 @@ export default function ContactDetailPage({
     }
   }
 
+  async function handleToggleConectadotelegram() {
+    if (!contact) return;
+    const newStatus = contact.conectadotelegram === "S" ? "N" : "S";
+    setBusy(true);
+    try {
+      await apiFetch(`/api/contacts/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          conectadotelegram: newStatus,
+          telegramLinkStatus: newStatus === "S" ? "linked" : "unlinked",
+        }),
+      });
+      await refresh();
+      toast.success(
+        newStatus === "S"
+          ? "✈️ Contacto marcado como conectado a Telegram (S)."
+          : "ℹ️ Contacto marcado como NO conectado a Telegram (N)."
+      );
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Error al actualizar estado de Telegram.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleUnlinkTelegram() {
+    if (!contact) return;
+    if (!confirm("¿Desvincular la cuenta de Telegram de este contacto? Su estado conectadotelegram pasará a 'N' y no recibirá confirmaciones ni recordatorios automáticos por Telegram.")) return;
+    setBusy(true);
+    try {
+      await apiFetch(`/api/contacts/${id}/unlink-telegram`, {
+        method: "POST",
+      });
+      await refresh();
+      toast.success("Cuenta de Telegram desvinculada correctamente (conectadotelegram = 'N').");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Error al desvincular Telegram.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleSendWhatsapp(e?: React.FormEvent) {
     if (e) e.preventDefault();
     if (!contact?.phone) {
@@ -509,6 +551,10 @@ export default function ContactDetailPage({
       bloqueado: data.bloqueado || "N",
       emailerroneo: data.emailerroneo || "N",
       contactadowassap: data.contactadowassap || "N",
+      conectadotelegram: data.conectadotelegram || "N",
+      telegramUsername: data.telegramUsername ? data.telegramUsername.replace(/^@/, "").trim() : null,
+      telegramChatId: data.telegramChatId ? data.telegramChatId.trim() : null,
+      telegramUserId: data.telegramUserId ? data.telegramUserId.trim() : null,
     };
     await apiFetch(`/api/contacts/${id}`, {
       method: "PATCH",
@@ -690,6 +736,15 @@ export default function ContactDetailPage({
             ) : (
               <Badge variant="default" className="text-neutral-600 bg-neutral-100 border-neutral-200">
                 💬 WhatsApp: No
+              </Badge>
+            )}
+            {contact.conectadotelegram === "S" ? (
+              <Badge variant="info" className="bg-sky-100 text-sky-800 border-sky-300 font-medium">
+                ✈️ Telegram: Sí{contact.telegramUsername ? ` (@${contact.telegramUsername})` : ""}
+              </Badge>
+            ) : (
+              <Badge variant="default" className="text-neutral-600 bg-neutral-100 border-neutral-200">
+                ✈️ Telegram: No
               </Badge>
             )}
             {contact.anonymizedAt && (
@@ -980,6 +1035,77 @@ export default function ContactDetailPage({
               >
                 + Añadir correo ahora
               </button>
+            </div>
+          )}
+        </div>
+        <div className="rounded-xl border border-neutral-200 bg-white p-4 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs font-medium text-neutral-500">
+                <Send className="h-3.5 w-3.5 text-sky-600" />
+                Telegram Bot
+              </div>
+              <button
+                type="button"
+                onClick={handleToggleConectadotelegram}
+                disabled={busy}
+                title="Pulsa para cambiar el estado conectadotelegram (S / N)"
+                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${
+                  contact.conectadotelegram === "S"
+                    ? "bg-sky-100 text-sky-800 border-sky-300 hover:bg-sky-200"
+                    : "bg-neutral-100 text-neutral-600 border-neutral-200 hover:bg-neutral-200"
+                }`}
+              >
+                conectadotelegram: {contact.conectadotelegram === "S" ? "Sí (S)" : "No (N)"}
+              </button>
+            </div>
+            <div className="mt-1.5 space-y-0.5 text-xs text-neutral-700">
+              {contact.telegramUsername && (
+                <div>
+                  <span className="text-neutral-500">Usuario:</span>{" "}
+                  <span className="font-medium text-sky-700">@{contact.telegramUsername.replace(/^@/, "")}</span>
+                </div>
+              )}
+              {contact.telegramChatId && (
+                <div>
+                  <span className="text-neutral-500">Chat ID:</span>{" "}
+                  <span className="font-mono text-[11px]">{contact.telegramChatId}</span>
+                </div>
+              )}
+              {contact.telegramUserId && (
+                <div>
+                  <span className="text-neutral-500">User ID:</span>{" "}
+                  <span className="font-mono text-[11px]">{contact.telegramUserId}</span>
+                </div>
+              )}
+              {contact.telegramConnectedAt && (
+                <div className="text-[11px] text-neutral-500">
+                  Vinculado: {format(parseISO(contact.telegramConnectedAt), "d MMM yyyy, HH:mm", { locale: es })}
+                </div>
+              )}
+              {contact.telegramBlocked && (
+                <div className="text-[11px] font-semibold text-red-600">
+                  🚫 Bot bloqueado por el usuario
+                </div>
+              )}
+              {!contact.telegramChatId && !contact.telegramUsername && (
+                <p className="text-xs text-neutral-400 italic">
+                  Sin cuenta de Telegram vinculada
+                </p>
+              )}
+            </div>
+          </div>
+          {(contact.conectadotelegram === "S" || contact.telegramChatId || contact.telegramUserId) && (
+            <div className="mt-3 flex items-center gap-2 pt-2 border-t border-neutral-100">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={busy}
+                className="text-xs w-full justify-center border-sky-200 text-sky-800 hover:bg-sky-50 py-1 h-8"
+                onClick={handleUnlinkTelegram}
+              >
+                Desvincular Telegram
+              </Button>
             </div>
           )}
         </div>

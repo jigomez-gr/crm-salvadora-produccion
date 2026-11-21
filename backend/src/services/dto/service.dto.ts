@@ -174,6 +174,10 @@ export class CreateServiceDto {
 
   @IsBoolean()
   @IsOptional()
+  notifyByTelegram?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
   reminderWhatsapp?: boolean;
 
   @IsBoolean()
@@ -187,6 +191,10 @@ export class CreateServiceDto {
   @IsBoolean()
   @IsOptional()
   reminderSms?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  reminderTelegram?: boolean;
 
   @IsBoolean()
   @IsOptional()
@@ -379,6 +387,10 @@ export class UpdateServiceDto {
 
   @IsBoolean()
   @IsOptional()
+  notifyByTelegram?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
   reminderWhatsapp?: boolean;
 
   @IsBoolean()
@@ -392,6 +404,10 @@ export class UpdateServiceDto {
   @IsBoolean()
   @IsOptional()
   reminderSms?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  reminderTelegram?: boolean;
 
   @IsBoolean()
   @IsOptional()

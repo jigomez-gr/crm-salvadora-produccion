@@ -83,6 +83,31 @@ export class CreateContactDto {
   @IsString()
   @MaxLength(1)
   inhibiryoga?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1)
+  conectadotelegram?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  telegramUserId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  telegramChatId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  telegramUsername?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  telegramLinkStatus?: string;
 }
 
 export class UpdateContactDto {
@@ -168,6 +193,31 @@ export class UpdateContactDto {
   @IsString()
   @MaxLength(1)
   inhibiryoga?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1)
+  conectadotelegram?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  telegramUserId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  telegramChatId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  telegramUsername?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  telegramLinkStatus?: string;
 }
 
 export class ConvertToStudentDto {

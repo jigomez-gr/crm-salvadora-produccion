@@ -202,6 +202,9 @@ export class Service {
   @Column({ default: false })
   notifyBySms: boolean;
 
+  @Column({ default: false })
+  notifyByTelegram: boolean;
+
   // Appointment reminder channels prior to the appointment
   @Column({ default: true })
   reminderWhatsapp: boolean;
@@ -214,6 +217,9 @@ export class Service {
 
   @Column({ default: false })
   reminderSms: boolean;
+
+  @Column({ default: false })
+  reminderTelegram: boolean;
 
   // Customizable advance reminder times
   @Column({ default: true })

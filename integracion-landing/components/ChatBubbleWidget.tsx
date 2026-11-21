@@ -29,6 +29,7 @@ export function ChatBubbleWidget({
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [sessionId, setSessionId] = useState("");
+  const [tgConnecting, setTgConnecting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -140,6 +141,52 @@ export function ChatBubbleWidget({
     ]);
   };
 
+  const handleConnectTelegram = async () => {
+    if (tgConnecting) return;
+    setTgConnecting(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/widget/handoff-telegram/${agentKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: sessionId || "web_guest",
+        }),
+      });
+      const data = await res.json();
+      if (data?.ok && data?.telegramUrl) {
+        window.open(data.telegramUrl, "_blank", "noopener,noreferrer");
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: "tg-" + Date.now(),
+            direction: "inbound",
+            body: "✈️ Se ha abierto nuestro bot oficial en Telegram. Pulsa «Iniciar» en Telegram para vincular tu conversación.",
+          },
+        ]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: "tg-err-" + Date.now(),
+            direction: "inbound",
+            body: data?.message || "El bot de Telegram aún no está disponible.",
+          },
+        ]);
+      }
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: "tg-err-" + Date.now(),
+          direction: "inbound",
+          body: "No se pudo abrir la conexión con Telegram en este momento.",
+        },
+      ]);
+    } finally {
+      setTgConnecting(false);
+    }
+  };
+
   return (
     <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end">
       {/* Ventana de Chat */}
@@ -179,6 +226,20 @@ export function ChatBubbleWidget({
                 <X className="h-4 w-4" />
               </button>
             </div>
+          </div>
+
+          {/* Barra rápida: Conectar con Telegram */}
+          <div className="flex items-center justify-between border-b border-sky-100 bg-sky-50/80 px-3.5 py-1.5 text-xs text-sky-900">
+            <span className="text-[11px] font-medium">¿Prefieres usar Telegram?</span>
+            <button
+              type="button"
+              onClick={handleConnectTelegram}
+              disabled={tgConnecting}
+              className="inline-flex items-center gap-1 rounded-full bg-[#0088cc] px-2.5 py-0.5 text-[11px] font-bold text-white shadow-xs transition hover:bg-[#0077b5] disabled:opacity-50"
+            >
+              <Send className="h-3 w-3" />
+              {tgConnecting ? "Abriendo…" : "Conectar con Telegram"}
+            </button>
           </div>
 
           {/* Mensajes */}

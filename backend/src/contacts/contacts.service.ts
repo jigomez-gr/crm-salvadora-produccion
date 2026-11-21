@@ -180,6 +180,29 @@ export class ContactsService {
         ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "emailerroneo" character varying(1) NOT NULL DEFAULT 'N';
         ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "contactadowassap" character varying(1) NOT NULL DEFAULT 'N';
         ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "inhibiryoga" character varying(1) NOT NULL DEFAULT 'N';
+        ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "conectadotelegram" character varying(1) NOT NULL DEFAULT 'N';
+        ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "telegramUserId" character varying;
+        ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "telegramChatId" character varying;
+        ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "telegramUsername" character varying;
+        ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "telegramConnectedAt" timestamptz;
+        ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "telegramLinkStatus" character varying(32) NOT NULL DEFAULT 'unlinked';
+        ALTER TABLE contacts ADD COLUMN IF NOT EXISTS "telegramBlocked" boolean NOT NULL DEFAULT false;
+        CREATE TABLE IF NOT EXISTS "telegram_link_tokens" (
+          "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+          "token" character varying(128) NOT NULL,
+          "contactId" uuid REFERENCES contacts(id) ON DELETE CASCADE,
+          "agentKey" character varying NOT NULL DEFAULT 'booking',
+          "sessionId" character varying,
+          "serviceName" character varying,
+          "note" text,
+          "expiresAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+          "usedAt" TIMESTAMP WITH TIME ZONE,
+          "usedByTelegramUserId" character varying,
+          "usedByTelegramChatId" character varying,
+          "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+          CONSTRAINT "PK_telegram_link_tokens_id" PRIMARY KEY ("id"),
+          CONSTRAINT "UQ_telegram_link_tokens_token" UNIQUE ("token")
+        );
         CREATE TABLE IF NOT EXISTS "contact_identity_changes" (
           "id" uuid NOT NULL DEFAULT gen_random_uuid(),
           "contactId" uuid REFERENCES contacts(id) ON DELETE CASCADE,
@@ -541,6 +564,128 @@ export class ContactsService {
     return null;
   }
 
+  async findByTelegramUserId(telegramUserId: string): Promise<Contact | null> {
+    if (!telegramUserId) return null;
+    return this.contactsRepo.findOne({
+      where: { telegramUserId: String(telegramUserId).trim() },
+      order: { updatedAt: 'DESC' },
+    });
+  }
+
+  async findByTelegramChatId(telegramChatId: string): Promise<Contact | null> {
+    if (!telegramChatId) return null;
+    return this.contactsRepo.findOne({
+      where: { telegramChatId: String(telegramChatId).trim() },
+      order: { updatedAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Securely link a verified Telegram user/chat to an existing CRM Contact.
+   * Sets conectadotelegram = 'S', saves identifiers and timestamp, and ensures
+   * no other contact holds the same telegramUserId/telegramChatId.
+   */
+  async linkTelegramToContact(
+    contactId: string,
+    tg: {
+      userId: string;
+      chatId: string;
+      username?: string | null;
+    },
+  ): Promise<Contact> {
+    const contact = await this.findOne(contactId);
+    const cleanUserId = String(tg.userId).trim();
+    const cleanChatId = String(tg.chatId).trim();
+    const cleanUsername = tg.username
+      ? tg.username.trim().replace(/^@/, '')
+      : contact.telegramUsername;
+
+    // Unlink any previous contact that held this telegramUserId or telegramChatId
+    const existingWithSameTg = await this.contactsRepo
+      .createQueryBuilder('c')
+      .where('(c.telegramUserId = :uid OR c.telegramChatId = :cid) AND c.id != :id', {
+        uid: cleanUserId,
+        cid: cleanChatId,
+        id: contact.id,
+      })
+      .getMany();
+
+    for (const prev of existingWithSameTg) {
+      prev.conectadotelegram = 'N';
+      prev.telegramUserId = null;
+      prev.telegramChatId = null;
+      prev.telegramUsername = null;
+      prev.telegramConnectedAt = null;
+      prev.telegramLinkStatus = 'unlinked';
+      await this.contactsRepo.save(prev);
+      this.emitUpdated(prev);
+    }
+
+    contact.telegramUserId = cleanUserId;
+    contact.telegramChatId = cleanChatId;
+    contact.telegramUsername = cleanUsername || null;
+    contact.telegramConnectedAt = new Date();
+    contact.telegramLinkStatus = 'linked';
+    contact.telegramBlocked = false;
+    contact.conectadotelegram = 'S';
+
+    const existingTags = new Set(contact.tags || []);
+    existingTags.add('telegram');
+    contact.tags = Array.from(existingTags);
+
+    const saved = await this.contactsRepo.save(contact);
+    this.emitUpdated(saved);
+    return saved;
+  }
+
+  /**
+   * Unlink Telegram from a CRM Contact. Resets conectadotelegram to 'N' and
+   * clears the active chat_id/user_id so no automatic notifications are sent.
+   */
+  async unlinkTelegramFromContact(contactId: string): Promise<Contact> {
+    const contact = await this.findOne(contactId);
+    contact.conectadotelegram = 'N';
+    contact.telegramUserId = null;
+    contact.telegramChatId = null;
+    contact.telegramUsername = null;
+    contact.telegramConnectedAt = null;
+    contact.telegramLinkStatus = 'unlinked';
+    contact.telegramBlocked = false;
+    const saved = await this.contactsRepo.save(contact);
+    this.emitUpdated(saved);
+    return saved;
+  }
+
+  /**
+   * Handle Telegram user blocking or unblocking the bot (my_chat_member or 403 Forbidden).
+   * When blocked = true, marks telegramBlocked = true and conectadotelegram = 'N'
+   * so no automated confirmations or reminders are attempted.
+   */
+  async setTelegramBlocked(
+    telegramUserIdOrChatId: string,
+    blocked: boolean,
+  ): Promise<void> {
+    if (!telegramUserIdOrChatId) return;
+    const clean = String(telegramUserIdOrChatId).trim();
+    const matches = await this.contactsRepo
+      .createQueryBuilder('c')
+      .where('c.telegramUserId = :id OR c.telegramChatId = :id', { id: clean })
+      .getMany();
+
+    for (const c of matches) {
+      c.telegramBlocked = blocked;
+      if (blocked) {
+        c.conectadotelegram = 'N';
+        c.telegramLinkStatus = 'blocked';
+      } else if (c.telegramChatId && c.telegramUserId) {
+        c.conectadotelegram = 'S';
+        c.telegramLinkStatus = 'linked';
+      }
+      await this.contactsRepo.save(c);
+      this.emitUpdated(c);
+    }
+  }
+
   async upsertByPhone(
     phone: string,
     name?: string,
@@ -621,6 +766,7 @@ export class ContactsService {
       emailerroneo: dto.emailerroneo?.toUpperCase() === 'S' ? 'S' : 'N',
       contactadowassap: dto.contactadowassap?.toUpperCase() === 'S' ? 'S' : 'N',
       inhibiryoga: dto.inhibiryoga?.toUpperCase() === 'S' ? 'S' : 'N',
+      conectadotelegram: dto.conectadotelegram?.toUpperCase() === 'S' ? 'S' : 'N',
       // New contacts land at the top of their column (newest first).
       boardPosition: Date.now(),
     });
@@ -651,15 +797,33 @@ export class ContactsService {
       'emailerroneo',
       'contactadowassap',
       'inhibiryoga',
+      'conectadotelegram',
+      'telegramUserId',
+      'telegramChatId',
+      'telegramUsername',
     ] as const;
     const target = contact as unknown as Record<string, unknown>;
     for (const key of simpleFields) {
       if (dto[key] !== undefined) {
-        if (key === 'bloqueado' || key === 'emailerroneo' || key === 'contactadowassap' || key === 'inhibiryoga') {
+        if (
+          key === 'bloqueado' ||
+          key === 'emailerroneo' ||
+          key === 'contactadowassap' ||
+          key === 'inhibiryoga' ||
+          key === 'conectadotelegram'
+        ) {
           target[key] = dto[key]?.toUpperCase() === 'S' ? 'S' : 'N';
         } else {
           target[key] = dto[key];
         }
+      }
+    }
+    if (dto.conectadotelegram !== undefined) {
+      if (contact.conectadotelegram === 'S') {
+        if (!contact.telegramConnectedAt) contact.telegramConnectedAt = new Date();
+        contact.telegramLinkStatus = 'linked';
+      } else {
+        contact.telegramLinkStatus = 'unlinked';
       }
     }
 
@@ -852,6 +1016,12 @@ export class ContactsService {
     contact.optedOut = true;
     contact.optedOutAt = contact.optedOutAt ?? new Date();
     contact.anonymizedAt = new Date();
+    contact.conectadotelegram = 'N';
+    contact.telegramUserId = null;
+    contact.telegramChatId = null;
+    contact.telegramUsername = null;
+    contact.telegramConnectedAt = null;
+    contact.telegramLinkStatus = 'unlinked';
     const saved = await this.contactsRepo.save(contact);
     this.emitUpdated(saved);
     return saved;

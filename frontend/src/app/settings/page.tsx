@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ShieldAlert, Upload, Trash2, Bot, Mail, Send, CreditCard, Copy, Check, Video, PhoneCall, RefreshCw, FileText, UserCheck, Bell, Sparkles, MessageSquare, QrCode } from "lucide-react";
 import { apiFetch, apiUrl, ApiError } from "@/lib/api";
 import { readableTextColor } from "@/lib/color";
-import { Agent, AppSettings, EmailConfig, EvolutionConnectionStatus, PaymentConfig, CalcomConfig, VapiAccountConfig } from "@/lib/types";
+import { Agent, AppSettings, EmailConfig, EvolutionConnectionStatus, PaymentConfig, CalcomConfig, VapiAccountConfig, TelegramConnectionStatus } from "@/lib/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranding } from "@/contexts/BrandingContext";
 import { useToast } from "@/contexts/ToastContext";
@@ -2572,6 +2572,500 @@ function WhatsappAdminSenderCard() {
   );
 }
 
+// ─── Telegram Bot API Configuration ─────────────────────────────────────────────
+
+function TelegramBotCard() {
+  const toast = useToast();
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [selectedKey, setSelectedKey] = useState<string>("booking");
+  const [status, setStatus] = useState<TelegramConnectionStatus | null>(null);
+  const [botToken, setBotToken] = useState<string | null>(null);
+  const [webhookSecret, setWebhookSecret] = useState<string | null>(null);
+  const [enabled, setEnabled] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [savedTick, setSavedTick] = useState<number>(0);
+  const [copiedWebhook, setCopiedWebhook] = useState<boolean>(false);
+  const [errorMsg, setErrorMsg] = useState<string>("");
+  const [noticeMsg, setNoticeMsg] = useState<string>("");
+
+  async function loadTelegramStatus(agentKey: string, silent = false) {
+    if (!silent) {
+      setActionLoading("check");
+      setErrorMsg("");
+    }
+    try {
+      const res = await apiFetch<TelegramConnectionStatus>(
+        `/api/agents/${agentKey}/telegram/status`
+      );
+      setStatus(res);
+      setEnabled(res.enabled);
+      if (res.lastError) {
+        setErrorMsg(res.lastError);
+      }
+    } catch (err) {
+      if (!silent) {
+        setErrorMsg(
+          err instanceof ApiError
+            ? err.message
+            : "No se pudo consultar el estado de Telegram Bot API."
+        );
+      }
+    } finally {
+      if (!silent) setActionLoading(null);
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<Agent[]>("/api/agents")
+      .then((list) => {
+        if (cancelled) return;
+        setAgents(list);
+        const initial =
+          list.find((a) => a.agentKey === "booking") || list[0] || null;
+        const key = initial?.agentKey || "booking";
+        setSelectedKey(key);
+        return loadTelegramStatus(key, true);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleSelectAgent(agentKey: string) {
+    setSelectedKey(agentKey);
+    setBotToken(null);
+    setWebhookSecret(null);
+    setErrorMsg("");
+    setNoticeMsg("");
+    await loadTelegramStatus(agentKey, false);
+  }
+
+  async function handleConnectAndSave() {
+    setActionLoading("connect");
+    setErrorMsg("");
+    setNoticeMsg("");
+    try {
+      const payload: Record<string, any> = {
+        enabled,
+      };
+      if (botToken && botToken.trim()) {
+        payload.botToken = botToken.trim();
+      }
+      if (webhookSecret && webhookSecret.trim()) {
+        payload.webhookSecret = webhookSecret.trim();
+      }
+      const res = await apiFetch<TelegramConnectionStatus>(
+        `/api/agents/${selectedKey}/telegram/connect`,
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+        }
+      );
+      setStatus(res);
+      setEnabled(res.enabled);
+      setBotToken(null);
+      setWebhookSecret(null);
+      setSavedTick((t) => t + 1);
+      if (res.connected) {
+        const msg = `Bot @${res.botUsername} (${res.botName}) conectado y webhook registrado.`;
+        setNoticeMsg(msg);
+        toast.success(msg);
+      } else if (res.lastError) {
+        setErrorMsg(res.lastError);
+        toast.error(res.lastError);
+      } else {
+        setNoticeMsg("Configuración de Telegram Bot API guardada.");
+        toast.success("Configuración de Telegram Bot API guardada.");
+      }
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo conectar con Telegram Bot API.";
+      setErrorMsg(msg);
+      toast.error(msg);
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleCheckConnection() {
+    setActionLoading("check");
+    setErrorMsg("");
+    setNoticeMsg("");
+    try {
+      const res = await apiFetch<TelegramConnectionStatus>(
+        `/api/agents/${selectedKey}/telegram/check`,
+        { method: "POST" }
+      );
+      setStatus(res);
+      setEnabled(res.enabled);
+      if (res.connected) {
+        const msg = `Conexión verificada con @${res.botUsername} (${res.botName}).`;
+        setNoticeMsg(msg);
+        toast.success(msg);
+      } else {
+        const msg = res.lastError || "El bot no está conectado.";
+        setErrorMsg(msg);
+        toast.error(msg);
+      }
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : "Error al comprobar la conexión con Telegram.";
+      setErrorMsg(msg);
+      toast.error(msg);
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleConfigureWebhook() {
+    setActionLoading("webhook");
+    setErrorMsg("");
+    setNoticeMsg("");
+    try {
+      const res = await apiFetch<TelegramConnectionStatus>(
+        `/api/agents/${selectedKey}/telegram/configure-webhook`,
+        { method: "POST" }
+      );
+      setStatus(res);
+      if (res.webhookConfigured) {
+        const msg = `Webhook HTTPS registrado en Telegram (${res.expectedWebhookUrl}).`;
+        setNoticeMsg(msg);
+        toast.success("Webhook de Telegram registrado correctamente.");
+      } else if (res.lastError) {
+        setErrorMsg(res.lastError);
+        toast.error(res.lastError);
+      }
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo registrar el webhook en Telegram.";
+      setErrorMsg(msg);
+      toast.error(msg);
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleToggleEnabled(nextEnabled: boolean) {
+    setEnabled(nextEnabled);
+    setActionLoading("toggle");
+    setErrorMsg("");
+    try {
+      const res = await apiFetch<TelegramConnectionStatus>(
+        `/api/agents/${selectedKey}/telegram/toggle`,
+        {
+          method: "POST",
+          body: JSON.stringify({ enabled: nextEnabled }),
+        }
+      );
+      setStatus(res);
+      setEnabled(res.enabled);
+      toast.success(
+        res.enabled
+          ? "Canal Telegram ACTIVADO para este agente."
+          : "Canal Telegram DESACTIVADO."
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo cambiar el estado del canal Telegram."
+      );
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleDisconnect() {
+    if (!confirm("¿Desconectar el bot de Telegram y eliminar su webhook activo?")) return;
+    setActionLoading("disconnect");
+    setErrorMsg("");
+    setNoticeMsg("");
+    try {
+      const res = await apiFetch<TelegramConnectionStatus>(
+        `/api/agents/${selectedKey}/telegram/disconnect`,
+        {
+          method: "POST",
+          body: JSON.stringify({ clearToken: false }),
+        }
+      );
+      setStatus(res);
+      setEnabled(res.enabled);
+      setNoticeMsg("Bot de Telegram desconectado y webhook desactivado.");
+      toast.success("Bot de Telegram desconectado.");
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo desconectar el bot de Telegram.";
+      setErrorMsg(msg);
+      toast.error(msg);
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  if (loading) return null;
+
+  const webhookEndpoint =
+    status?.expectedWebhookUrl ||
+    apiUrl(`/api/webhooks/telegram/${selectedKey}`);
+
+  return (
+    <div className="mt-6 max-w-xl rounded-xl border border-sky-200 bg-white p-6 shadow-xs space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <Send className="h-5 w-5 text-sky-600" />
+            <h2 className="text-sm font-semibold text-neutral-900">
+              Telegram Bot API
+            </h2>
+          </div>
+          <p className="mt-1 text-xs text-neutral-500">
+            Conecta el bot oficial de Telegram del Centro de Yoga Salvadora Conesa con el agente de IA, conversaciones, confirmaciones, recordatorios y vinculación desde la landing.
+          </p>
+        </div>
+
+        {agents.length > 0 && (
+          <div className="sm:w-48 shrink-0">
+            <label className="mb-1 block text-[11px] font-medium text-neutral-600">
+              Agente de IA asociado
+            </label>
+            <select
+              className="block w-full rounded-lg border border-neutral-300 bg-white px-2.5 py-1.5 text-xs font-medium text-neutral-800 focus:border-sky-500 focus:outline-none"
+              value={selectedKey}
+              onChange={(e) => handleSelectAgent(e.target.value)}
+            >
+              {agents.map((a) => (
+                <option key={a.agentKey} value={a.agentKey}>
+                  {a.businessName} ({a.agentKey})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* Estado de conexión y controles */}
+      <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3.5 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-neutral-700">
+              Estado del Bot:
+            </span>
+            {status?.connected ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 border border-emerald-200">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                CONECTADO
+              </span>
+            ) : status?.state === "error" ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700 border border-red-200">
+                <span className="h-2 w-2 rounded-full bg-red-500" />
+                ERROR DE CONEXIÓN
+              </span>
+            ) : status?.hasBotToken ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 border border-amber-200">
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                DESCONECTADO
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-semibold text-neutral-600">
+                <span className="h-2 w-2 rounded-full bg-neutral-400" />
+                SIN CONFIGURAR
+              </span>
+            )}
+          </div>
+
+          <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-neutral-800">
+            <input
+              type="checkbox"
+              checked={enabled}
+              disabled={!!actionLoading}
+              onChange={(e) => handleToggleEnabled(e.target.checked)}
+              className="h-4 w-4 rounded border-neutral-300 text-sky-600 focus:ring-sky-500"
+            />
+            <span>Canal Activo</span>
+          </label>
+        </div>
+
+        {(status?.botName || status?.botUsername) && (
+          <div className="rounded-lg border border-sky-200 bg-sky-50/70 p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="space-y-0.5">
+              <div className="font-semibold text-sky-950">
+                🤖 {status.botName || "Bot de Telegram"}{" "}
+                {status.botUsername && (
+                  <a
+                    href={`https://t.me/${status.botUsername}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-sky-700 hover:underline"
+                  >
+                    @{status.botUsername} ↗
+                  </a>
+                )}
+              </div>
+              <div className="text-[11px] text-sky-800">
+                Webhook:{" "}
+                {status.webhookConfigured ? (
+                  <span className="font-semibold text-emerald-700">
+                    ✓ Registrado y activo
+                  </span>
+                ) : (
+                  <span className="font-semibold text-amber-700">
+                    ⚠️ Pendiente de registrar
+                  </span>
+                )}
+                {typeof status.pendingUpdateCount === "number" && (
+                  <span> · Cola pendiente: {status.pendingUpdateCount}</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleConnectAndSave}
+            disabled={!!actionLoading}
+          >
+            <Upload className="h-3.5 w-3.5" />
+            {actionLoading === "connect"
+              ? "Conectando…"
+              : "Guardar y Conectar Bot"}
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={handleCheckConnection}
+            disabled={!!actionLoading || (!status?.hasBotToken && !botToken)}
+          >
+            <RefreshCw
+              className={cn(
+                "h-3.5 w-3.5",
+                actionLoading === "check" && "animate-spin"
+              )}
+            />
+            Comprobar conexión
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={handleConfigureWebhook}
+            disabled={!!actionLoading || !status?.hasBotToken}
+          >
+            {actionLoading === "webhook"
+              ? "Registrando…"
+              : "Registrar / Actualizar Webhook"}
+          </Button>
+
+          {status?.hasBotToken && (
+            <Button
+              type="button"
+              size="sm"
+              variant="danger"
+              onClick={handleDisconnect}
+              disabled={!!actionLoading}
+            >
+              {actionLoading === "disconnect"
+                ? "Desconectando…"
+                : "Desconectar"}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {noticeMsg && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+          {noticeMsg}
+        </div>
+      )}
+
+      {(errorMsg || status?.lastError) && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 space-y-1">
+          <div className="font-semibold">Error de conexión con Telegram:</div>
+          <div>{errorMsg || status?.lastError}</div>
+        </div>
+      )}
+
+      {/* Token y Secret */}
+      <div className="space-y-4 pt-1">
+        <SecretInput
+          key={`tg-bot-token-${savedTick}-${selectedKey}`}
+          label="Token del Bot de Telegram (@BotFather)"
+          placeholder="123456789:AAH..."
+          hasValue={!!status?.hasBotToken}
+          value={botToken}
+          onChange={setBotToken}
+          hint="Introduce el token obtenido en @BotFather para el bot del Centro de Yoga Salvadora Conesa. Se almacena de forma segura y nunca se expone en pantalla tras guardar."
+        />
+
+        <SecretInput
+          key={`tg-webhook-secret-${savedTick}-${selectedKey}`}
+          label="Webhook Secret Token (X-Telegram-Bot-Api-Secret-Token)"
+          placeholder="Se genera automáticamente si lo dejas en blanco"
+          hasValue={!!status?.hasWebhookSecret}
+          value={webhookSecret}
+          onChange={setWebhookSecret}
+          hint="Secreto criptográfico para autenticar los webhooks entrantes desde Telegram (cabecera X-Telegram-Bot-Api-Secret-Token)."
+        />
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-neutral-700">
+            Endpoint de Webhook HTTPS para Telegram Bot API
+          </label>
+          <div className="flex gap-2">
+            <Input
+              readOnly
+              value={webhookEndpoint}
+              onFocus={(e) => e.currentTarget.select()}
+              className="font-mono text-xs"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                navigator.clipboard.writeText(webhookEndpoint);
+                setCopiedWebhook(true);
+                setTimeout(() => setCopiedWebhook(false), 2000);
+              }}
+            >
+              {copiedWebhook ? (
+                <>
+                  <Check className="h-3.5 w-3.5" /> Copiado
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3.5 w-3.5" /> Copiar
+                </>
+              )}
+            </Button>
+          </div>
+          <p className="mt-1 text-[11px] text-neutral-500">
+            Al pulsar «Guardar y Conectar Bot» o «Registrar / Actualizar Webhook», el CRM registra automáticamente esta URL HTTPS en Telegram junto con el Secret Token.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { user } = useAuth();
   const branding = useBranding();
@@ -2913,6 +3407,9 @@ export default function SettingsPage() {
 
       {/* Utilidad Admin: Enviar WhatsApp Manual (Texto y Archivos) */}
       <WhatsappAdminSenderCard />
+
+      {/* Telegram Bot API */}
+      <TelegramBotCard />
 
       {/* Branding */}
       <div className="mt-6 max-w-xl rounded-xl border border-neutral-200 bg-white p-6">

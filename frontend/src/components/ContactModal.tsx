@@ -34,6 +34,10 @@ export interface ContactFormData {
   emailerroneo: string;
   contactadowassap: string;
   inhibiryoga: string;
+  conectadotelegram: string;
+  telegramUsername: string;
+  telegramChatId: string;
+  telegramUserId: string;
 }
 
 export function toForm(c?: Partial<Contact>): ContactFormData {
@@ -55,6 +59,10 @@ export function toForm(c?: Partial<Contact>): ContactFormData {
     emailerroneo: c?.emailerroneo === "S" ? "S" : "N",
     contactadowassap: c?.contactadowassap === "S" ? "S" : "N",
     inhibiryoga: c?.inhibiryoga === "S" ? "S" : "N",
+    conectadotelegram: c?.conectadotelegram === "S" ? "S" : "N",
+    telegramUsername: c?.telegramUsername ?? "",
+    telegramChatId: c?.telegramChatId ?? "",
+    telegramUserId: c?.telegramUserId ?? "",
   };
 }
 
@@ -279,6 +287,67 @@ export function ContactModal({
               <span>Indica si ya se ha contactado o conversado por WhatsApp con este número.</span>
             )}
           </p>
+        </div>
+        <div className={`rounded-lg border p-3 space-y-2 ${form.conectadotelegram === "S" ? "border-sky-300 bg-sky-50/70" : "border-neutral-200 bg-neutral-50/70"}`}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-neutral-800">
+              Conectado a Telegram (conectadotelegram)
+            </span>
+            <select
+              className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs font-medium focus:border-sky-500 focus:outline-none"
+              value={form.conectadotelegram}
+              onChange={(e) => setField("conectadotelegram", e.target.value)}
+            >
+              <option value="N">N (No conectado)</option>
+              <option value="S">S (Conectado y vinculado)</option>
+            </select>
+          </div>
+          <p className="text-[11px] leading-relaxed text-neutral-600">
+            {form.conectadotelegram === "S" ? (
+              <span className="text-sky-700 font-medium">
+                ✈️ Conectado al bot de Telegram (recibirá confirmaciones y recordatorios automáticos si el servicio lo tiene activo).
+              </span>
+            ) : (
+              <span>
+                Ningún recordatorio o confirmación automática por Telegram se enviará si <code>conectadotelegram = &apos;N&apos;</code>.
+              </span>
+            )}
+          </p>
+          <div className="grid grid-cols-3 gap-2 pt-1">
+            <div>
+              <label className="mb-0.5 block text-[10px] font-medium text-neutral-500">
+                @username
+              </label>
+              <Input
+                value={form.telegramUsername}
+                onChange={(e) => setField("telegramUsername", e.target.value)}
+                placeholder="usuario"
+                className="text-xs py-1 h-7"
+              />
+            </div>
+            <div>
+              <label className="mb-0.5 block text-[10px] font-medium text-neutral-500">
+                telegram_chat_id
+              </label>
+              <Input
+                value={form.telegramChatId}
+                onChange={(e) => setField("telegramChatId", e.target.value)}
+                placeholder="123456789"
+                className="text-xs py-1 h-7"
+              />
+            </div>
+            <div>
+              <label className="mb-0.5 block text-[10px] font-medium text-neutral-500">
+                telegram_user_id
+              </label>
+              <Input
+                value={form.telegramUserId}
+                onChange={(e) => setField("telegramUserId", e.target.value)}
+                placeholder="123456789"
+                className="text-xs py-1 h-7"
+              />
+            </div>
+          </div>
         </div>
         <div className={`rounded-lg border p-3 space-y-2 ${form.inhibiryoga === "S" ? "border-amber-300 bg-amber-50/70" : "border-neutral-200 bg-neutral-50/70"}`}>
           <div className="flex items-center justify-between">

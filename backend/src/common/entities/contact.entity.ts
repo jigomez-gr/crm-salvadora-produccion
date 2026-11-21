@@ -114,6 +114,30 @@ export class Contact {
   @Column({ type: 'varchar', length: 1, default: 'N' })
   inhibiryoga: string;
 
+  // Telegram connected flag: 'S' = connected, identified and linked to this CRM contact; 'N' = not connected (default)
+  @Column({ type: 'varchar', length: 1, default: 'N' })
+  conectadotelegram: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  telegramUserId: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  telegramChatId: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  telegramUsername: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  telegramConnectedAt: Date | null;
+
+  // 'unlinked' | 'pending' | 'linked' | 'blocked'
+  @Column({ type: 'varchar', length: 32, default: 'unlinked' })
+  telegramLinkStatus: string;
+
+  // True when the user has blocked/kicked the Telegram bot
+  @Column({ type: 'boolean', default: false })
+  telegramBlocked: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

@@ -25,6 +25,7 @@ import { CalcomAccount } from './common/entities/calcom-account.entity';
 import { ZadarmaSmsLog } from './sms/zadarma-sms-log.entity';
 import { GrupoContacto } from './contact-groups/grupo-contacto.entity';
 import { MiembroGrupo } from './contact-groups/miembro-grupo.entity';
+import { TelegramLinkToken } from './common/entities/telegram-link-token.entity';
 
 /**
  * Standalone TypeORM DataSource used ONLY by the migration CLI
@@ -62,6 +63,7 @@ export const AppDataSource = new DataSource({
     ZadarmaSmsLog,
     GrupoContacto,
     MiembroGrupo,
+    TelegramLinkToken,
   ],
   // When run through ts-node (CLI) __dirname is src/, matching *.ts; at runtime
   // it is dist/, matching the compiled *.js.

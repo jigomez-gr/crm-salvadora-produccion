@@ -50,10 +50,12 @@ interface ServiceFormData {
   notifyByEmail: boolean;
   notifyByWhatsapp: boolean;
   notifyBySms: boolean;
+  notifyByTelegram: boolean;
   reminderWhatsapp: boolean;
   reminderEmail: boolean;
   reminderVoice: boolean;
   reminderSms: boolean;
+  reminderTelegram: boolean;
   reminderHoursEnabled: boolean;
   reminderHours: number | string;
   reminderMinutesEnabled: boolean;
@@ -154,10 +156,12 @@ export default function ServicesPage() {
     notifyByEmail: true,
     notifyByWhatsapp: true,
     notifyBySms: false,
+    notifyByTelegram: false,
     reminderWhatsapp: true,
     reminderEmail: true,
     reminderVoice: false,
     reminderSms: false,
+    reminderTelegram: false,
     reminderHoursEnabled: true,
     reminderHours: 24,
     reminderMinutesEnabled: true,
@@ -301,10 +305,12 @@ export default function ServicesPage() {
       notifyByEmail: true,
       notifyByWhatsapp: true,
       notifyBySms: false,
+      notifyByTelegram: false,
       reminderWhatsapp: true,
       reminderEmail: true,
       reminderVoice: false,
       reminderSms: false,
+      reminderTelegram: false,
       reminderHoursEnabled: true,
       reminderHours: 24,
       reminderMinutesEnabled: true,
@@ -356,10 +362,12 @@ export default function ServicesPage() {
       notifyByEmail: svc.notifyByEmail !== false,
       notifyByWhatsapp: svc.notifyByWhatsapp !== false,
       notifyBySms: Boolean(svc.notifyBySms),
+      notifyByTelegram: Boolean(svc.notifyByTelegram),
       reminderWhatsapp: svc.reminderWhatsapp !== false,
       reminderEmail: svc.reminderEmail !== false,
       reminderVoice: Boolean(svc.reminderVoice),
       reminderSms: Boolean(svc.reminderSms),
+      reminderTelegram: Boolean(svc.reminderTelegram),
       reminderHoursEnabled: svc.reminderHoursEnabled !== false,
       reminderHours: svc.reminderHours ?? 24,
       reminderMinutesEnabled: svc.reminderMinutesEnabled !== false,
@@ -934,10 +942,12 @@ export default function ServicesPage() {
         notifyByEmail: form.notifyByEmail,
         notifyByWhatsapp: form.notifyByWhatsapp,
         notifyBySms: form.notifyBySms,
+        notifyByTelegram: form.notifyByTelegram,
         reminderWhatsapp: form.reminderWhatsapp,
         reminderEmail: form.reminderEmail,
         reminderVoice: form.reminderVoice,
         reminderSms: form.reminderSms,
+        reminderTelegram: form.reminderTelegram,
         reminderHoursEnabled: form.reminderHoursEnabled,
         reminderHours: Number(form.reminderHours) || 24,
         reminderMinutesEnabled: form.reminderMinutesEnabled,
@@ -1436,6 +1446,11 @@ export default function ServicesPage() {
                         📱 SMS
                       </span>
                     )}
+                    {s.notifyByTelegram && (
+                      <span className="inline-flex items-center rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 border border-sky-200" title="Confirmación por Telegram activa">
+                        ✈️ Telegram
+                      </span>
+                    )}
                   </div>
 
                   <div className="mt-1 flex items-center gap-1.5 flex-wrap">
@@ -1458,6 +1473,11 @@ export default function ServicesPage() {
                     {s.reminderSms && (
                       <span className="inline-flex items-center rounded bg-purple-50 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 border border-purple-200" title="Recordatorio por SMS">
                         📱 SMS
+                      </span>
+                    )}
+                    {s.reminderTelegram && (
+                      <span className="inline-flex items-center rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 border border-sky-200" title="Recordatorio por Telegram">
+                        ✈️ Telegram
                       </span>
                     )}
                     <span className="text-[10px] text-neutral-400 font-mono">
@@ -2693,7 +2713,7 @@ export default function ServicesPage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
               <label className="flex items-center gap-2 text-xs font-medium text-neutral-700 cursor-pointer bg-white p-2.5 rounded-md border border-neutral-200 hover:border-indigo-400 hover:bg-indigo-50/20 transition shadow-sm">
                 <input
                   type="checkbox"
@@ -2723,6 +2743,16 @@ export default function ServicesPage() {
                 />
                 <span>📱 Confirmar por SMS</span>
               </label>
+
+              <label className="flex items-center gap-2 text-xs font-medium text-neutral-700 cursor-pointer bg-white p-2.5 rounded-md border border-neutral-200 hover:border-sky-400 hover:bg-sky-50/20 transition shadow-sm">
+                <input
+                  type="checkbox"
+                  className="rounded border-neutral-300 text-sky-600 focus:ring-sky-500"
+                  checked={form.notifyByTelegram}
+                  onChange={(e) => setForm((f) => ({ ...f, notifyByTelegram: e.target.checked }))}
+                />
+                <span>✈️ Confirmar por Telegram</span>
+              </label>
             </div>
           </div>
 
@@ -2740,7 +2770,7 @@ export default function ServicesPage() {
             {/* Canales de recordatorio */}
             <div className="space-y-1.5">
               <span className="text-[11px] font-semibold text-neutral-700 block">Vías de recordatorio:</span>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                 <label className="flex items-center gap-2 text-xs font-medium text-neutral-700 cursor-pointer bg-white p-2 rounded-md border border-neutral-200 hover:border-emerald-400 hover:bg-emerald-50/20 transition shadow-sm">
                   <input
                     type="checkbox"
@@ -2779,6 +2809,16 @@ export default function ServicesPage() {
                     onChange={(e) => setForm((f) => ({ ...f, reminderSms: e.target.checked }))}
                   />
                   <span>📱 SMS</span>
+                </label>
+
+                <label className="flex items-center gap-2 text-xs font-medium text-neutral-700 cursor-pointer bg-white p-2 rounded-md border border-neutral-200 hover:border-sky-400 hover:bg-sky-50/20 transition shadow-sm">
+                  <input
+                    type="checkbox"
+                    className="rounded border-neutral-300 text-sky-600 focus:ring-sky-500"
+                    checked={form.reminderTelegram}
+                    onChange={(e) => setForm((f) => ({ ...f, reminderTelegram: e.target.checked }))}
+                  />
+                  <span>✈️ Recordar por Telegram</span>
                 </label>
               </div>
             </div>

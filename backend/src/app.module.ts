@@ -31,6 +31,7 @@ import { VapiAccount } from './common/entities/vapi-account.entity';
 import { ZadarmaSmsLog } from './sms/zadarma-sms-log.entity';
 import { GrupoContacto } from './contact-groups/grupo-contacto.entity';
 import { MiembroGrupo } from './contact-groups/miembro-grupo.entity';
+import { TelegramLinkToken } from './common/entities/telegram-link-token.entity';
 import { ZadarmaSmsModule } from './sms/zadarma-sms.module';
 import { ContactGroupsModule } from './contact-groups/contact-groups.module';
 import { ContactsModule } from './contacts/contacts.module';
@@ -55,6 +56,7 @@ import { EmailModule } from './email/email.module';
 import { PaymentsModule } from './payments/payments.module';
 import { CalcomModule } from './calcom/calcom.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { TelegramModule } from './telegram/telegram.module';
 import { AgentsModule } from './agents/agents.module';
 
 @Module({
@@ -93,6 +95,7 @@ import { AgentsModule } from './agents/agents.module';
         ZadarmaSmsLog,
         GrupoContacto,
         MiembroGrupo,
+        TelegramLinkToken,
       ],
       synchronize: false,
       migrationsRun: false,
@@ -131,6 +134,7 @@ import { AgentsModule } from './agents/agents.module';
     AuthModule,
     UsersModule,
     WhatsappModule,
+    TelegramModule,
     AgentsModule,
   ],
   providers: [

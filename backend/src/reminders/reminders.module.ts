@@ -9,9 +9,10 @@ import { YCloudModule } from '../whatsapp/ycloud.module';
 import { EmailModule } from '../email/email.module';
 import { ZadarmaSmsModule } from '../sms/zadarma-sms.module';
 import { VapiModule } from '../vapi/vapi.module';
+import { TelegramCoreModule } from '../telegram/telegram-core.module';
 
 /**
- * Scheduled appointment reminders across WhatsApp, Email, Voice and SMS.
+ * Scheduled appointment reminders across WhatsApp, Email, Voice, SMS and Telegram.
  * Channel preferences and reminder offsets (hours/minutes) are resolved per Service.
  */
 @Module({
@@ -22,6 +23,7 @@ import { VapiModule } from '../vapi/vapi.module';
     EmailModule,
     ZadarmaSmsModule,
     VapiModule,
+    TelegramCoreModule,
   ],
   providers: [RemindersService],
   exports: [RemindersService],

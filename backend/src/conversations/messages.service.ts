@@ -168,6 +168,20 @@ export class MessagesService implements OnModuleInit {
           WHEN others THEN NULL;
         END $$;
       `);
+      await this.messagesRepo.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_enum e
+            JOIN pg_type t ON e.enumtypid = t.oid
+            WHERE t.typname = 'messages_channel_enum' AND e.enumlabel = 'telegram'
+          ) THEN
+            ALTER TYPE "public"."messages_channel_enum" ADD VALUE 'telegram';
+          END IF;
+        EXCEPTION
+          WHEN others THEN NULL;
+        END $$;
+      `);
     } catch {
       // Ignore if DB does not use enum or running under test
     }
@@ -494,7 +508,7 @@ export class MessagesService implements OnModuleInit {
     const wantsConversations =
       isAllChannels ||
       channels.some((c) =>
-        ['whatsapp', 'wassap', 'email', 'widget', 'web landing', 'web', 'playground'].includes(c),
+        ['whatsapp', 'wassap', 'email', 'widget', 'web landing', 'web', 'playground', 'telegram'].includes(c),
       );
 
     let convItems: ThreadSummary[] = [];
@@ -511,6 +525,7 @@ export class MessagesService implements OnModuleInit {
         if (channels.some((c) => c === 'email')) allowedChannels.push('email');
         if (channels.some((c) => c === 'widget' || c === 'web landing' || c === 'web')) allowedChannels.push('widget');
         if (channels.some((c) => c === 'playground')) allowedChannels.push('playground');
+        if (channels.some((c) => c === 'telegram')) allowedChannels.push('telegram');
 
         if (allowedChannels.length > 0) {
           qb.andWhere('c.channel IN (:...allowedChannels)', { allowedChannels });

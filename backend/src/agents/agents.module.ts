@@ -18,6 +18,7 @@ import { EmailModule } from '../email/email.module';
 import { UsersModule } from '../users/users.module';
 import { VapiModule } from '../vapi/vapi.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { TelegramCoreModule } from '../telegram/telegram-core.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     UsersModule,
     VapiModule,
     NotificationsModule,
+    TelegramCoreModule,
   ],
   providers: [AgentRunnerService, OpenRouterService, ContactQueryEvaluatorService],
   controllers: [AgentsController, WidgetController],

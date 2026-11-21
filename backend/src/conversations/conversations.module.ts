@@ -14,6 +14,7 @@ import { EmailModule } from '../email/email.module';
 import { ContactsModule } from '../contacts/contacts.module';
 import { AppointmentsModule } from '../appointments/appointments.module';
 import { WhatsappAdminSendService } from '../whatsapp/whatsapp-admin-send.service';
+import { TelegramCoreModule } from '../telegram/telegram-core.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { WhatsappAdminSendService } from '../whatsapp/whatsapp-admin-send.servic
     forwardRef(() => EmailModule),
     forwardRef(() => ContactsModule),
     forwardRef(() => AppointmentsModule),
+    forwardRef(() => TelegramCoreModule),
   ],
   providers: [MessagesService, WhatsappAdminSendService],
   controllers: [ConversationsController],

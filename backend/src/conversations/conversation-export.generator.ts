@@ -12,6 +12,9 @@ export function formatChannelName(channel?: string | null, threadId?: string | n
   if (ch === 'whatsapp' || th.includes('whatsapp') || (!ch && th.includes(':+'))) {
     return 'WhatsApp';
   }
+  if (ch === 'telegram' || th.includes(':telegram:') || th.startsWith('telegram:')) {
+    return 'Telegram';
+  }
   if (ch === 'widget' || th.includes('widget') || th.includes('landing')) {
     return 'Web Landing';
   }

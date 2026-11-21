@@ -71,6 +71,7 @@ import { AnalizaIaService, AiAnalysisResponse } from './analiza-ia.service';
 import { EmailService } from '../email/email.service';
 import { YCloudClient } from '../whatsapp/ycloud-client.service';
 import { WhatsappGatewayService } from '../whatsapp/whatsapp-gateway.service';
+import { TelegramService } from '../telegram/telegram.service';
 import { AgentsConfigService } from '../agents/agents-config.service';
 import { MessagesService } from '../conversations/messages.service';
 import { Conversation } from '../common/entities/conversation.entity';
@@ -172,6 +173,8 @@ export class AppointmentsService implements OnModuleInit {
     private readonly eventEditionsRepo?: Repository<EventEdition>,
     @Optional()
     private readonly whatsappGateway?: WhatsappGatewayService,
+    @Optional()
+    private readonly telegramService?: TelegramService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -1437,7 +1440,7 @@ export class AppointmentsService implements OnModuleInit {
    */
   async sendAppointmentConfirmationNotification(
     appointmentId: string,
-    channelOverrides?: { email?: boolean; whatsapp?: boolean; sms?: boolean },
+    channelOverrides?: { email?: boolean; whatsapp?: boolean; sms?: boolean; telegram?: boolean },
     isRescheduled: boolean = false,
   ): Promise<boolean> {
     const appt = await this.findOne(appointmentId);
@@ -1502,7 +1505,7 @@ export class AppointmentsService implements OnModuleInit {
     rejectionReason?: string,
     proposedTimes?: string,
     isRescheduled: boolean = false,
-    channelOverrides?: { email?: boolean; whatsapp?: boolean; sms?: boolean },
+    channelOverrides?: { email?: boolean; whatsapp?: boolean; sms?: boolean; telegram?: boolean },
   ): Promise<void> {
     try {
       const contact =
@@ -1986,6 +1989,12 @@ export class AppointmentsService implements OnModuleInit {
           : serviceEntity
           ? Boolean(serviceEntity.notifyBySms)
           : false;
+      const shouldTelegram =
+        channelOverrides?.telegram !== undefined
+          ? channelOverrides.telegram
+          : serviceEntity
+          ? Boolean(serviceEntity.notifyByTelegram)
+          : false;
 
       // 1. Dispatch Email notification if enabled for this service
       if (shouldEmail) {
@@ -2088,6 +2097,52 @@ export class AppointmentsService implements OnModuleInit {
         }
       } else {
         this.logger.log(`[WhatsApp] Service "${appt.service}" has notifyByWhatsapp=false. Skipping WhatsApp notification.`);
+      }
+
+      // 2.5 Dispatch Telegram notification if enabled for this service AND contact has conectadotelegram = 'S'
+      if (shouldTelegram) {
+        if (contact.conectadotelegram !== 'S') {
+          this.logger.log(
+            `[Telegram] Contact ${contact.id} (${contact.name}) has conectadotelegram='${contact.conectadotelegram || 'N'}' (!== 'S'). REGLA OBLIGATORIA: skipping Telegram confirmation for appt ${appt.id}.`,
+          );
+        } else if (!contact.telegramChatId) {
+          this.logger.warn(
+            `[Telegram] Contact ${contact.id} (${contact.name}) has conectadotelegram='S' but NO telegramChatId. Skipping Telegram confirmation.`,
+          );
+        } else if (contact.telegramBlocked || contact.bloqueado === 'S' || contact.optedOut || contact.anonymizedAt) {
+          this.logger.log(
+            `[Telegram] Contact ${contact.id} (${contact.name}) is blocked or opted out. Skipping Telegram confirmation for appt ${appt.id}.`,
+          );
+        } else if (this.telegramService) {
+          const tgDebounceKey = `telegram:${appt.id}:${decision}:${contact.telegramChatId}`;
+          const lastTgSent = this.recentDispatches.get(tgDebounceKey);
+          if (lastTgSent && Date.now() - lastTgSent < 15000) {
+            this.logger.log(
+              `[Telegram] Skipping duplicate ${decision} Telegram message to ${contact.telegramChatId} for appt ${appt.id} (sent < 15s ago).`,
+            );
+          } else {
+            this.recentDispatches.set(tgDebounceKey, Date.now());
+            const tgRes = await this.telegramService
+              .sendAutomatedTextMessage({
+                agentKey: appt.agentKey || 'booking',
+                contact,
+                body: chatMessageText,
+              })
+              .catch((err) => {
+                this.logger.warn(
+                  `[Telegram] Error sending Telegram notification to ${contact.telegramChatId} for appt ${appt.id}: ${err}`,
+                );
+                return { ok: false, error: String(err) };
+              });
+            this.logger.log(
+              `[Telegram] Notification result for appt ${appt.id} (contact ${contact.id}): ${JSON.stringify(tgRes)}`,
+            );
+          }
+        }
+      } else {
+        this.logger.log(
+          `[Telegram] Service "${appt.service}" has notifyByTelegram=false. Skipping Telegram notification.`,
+        );
       }
 
       // Sincronizar y registrar el mensaje en la conversación del CRM / Inbox

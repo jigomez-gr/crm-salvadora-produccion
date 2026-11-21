@@ -30,6 +30,8 @@ export const SECRET_FIELDS = [
   'metaAppSecret',
   'metaVerifyToken',
   'transcriptionApiKey',
+  'telegramBotToken',
+  'telegramWebhookSecret',
 ] as const;
 
 /**
@@ -86,6 +88,14 @@ export class AgentsConfigService implements OnModuleInit {
         ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "maxVideoSizeMb" integer NOT NULL DEFAULT 100;
         ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "transcriptionProvider" character varying(50) NOT NULL DEFAULT 'auto';
         ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "transcriptionApiKey" character varying;
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "telegramEnabled" boolean NOT NULL DEFAULT true;
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "telegramBotToken" character varying(500);
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "telegramWebhookSecret" character varying(256);
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "telegramBotUsername" character varying(128);
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "telegramBotName" character varying(256);
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "telegramBotId" character varying(64);
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "telegramLastError" text;
+        ALTER TABLE "agent_configs" ADD COLUMN IF NOT EXISTS "telegramConnectedAt" timestamptz;
       `);
     } catch (err: any) {
       this.logger.warn(`Could not ensure agent_configs columns: ${err?.message || err}`);
@@ -292,6 +302,10 @@ export class AgentsConfigService implements OnModuleInit {
       }
     }
     Object.assign(config, patch);
+    return this.configRepo.save(config);
+  }
+
+  async saveRaw(config: AgentConfig): Promise<AgentConfig> {
     return this.configRepo.save(config);
   }
 

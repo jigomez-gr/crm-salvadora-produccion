@@ -349,13 +349,19 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       const normalizedPhone = normalizePhoneLoose(inputData.phone);
       const threadId = (context as any)?.requestContext?.get?.('threadId');
       const channel = (context as any)?.requestContext?.get?.('channel');
+      const isTelegram =
+        channel === 'telegram' ||
+        (typeof threadId === 'string' && threadId.includes(':telegram:'));
       const isWhatsapp =
-        channel === 'whatsapp' ||
-        (typeof threadId === 'string' &&
-          (threadId.startsWith('booking:+') ||
-            (threadId.includes(':+') && !threadId.includes('widget-web'))));
-      const source = isWhatsapp ? 'whatsapp' : 'landing';
-      const tags = isWhatsapp
+        !isTelegram &&
+        (channel === 'whatsapp' ||
+          (typeof threadId === 'string' &&
+            (threadId.startsWith('booking:+') ||
+              (threadId.includes(':+') && !threadId.includes('widget-web')))));
+      const source = isTelegram ? 'telegram' : isWhatsapp ? 'whatsapp' : 'landing';
+      const tags = isTelegram
+        ? ['lead_telegram', 'telegram']
+        : isWhatsapp
         ? ['lead_whatsapp', 'whatsapp']
         : ['lead_landing_web'];
       const contact = await deps.createContact(
@@ -418,13 +424,19 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       if (!contactId && (normalizedPhone || customer?.phone)) {
         const phoneToUse = normalizedPhone || customer?.phone;
         const channel = (context as any)?.requestContext?.get?.('channel');
+        const isTelegram =
+          channel === 'telegram' ||
+          (typeof threadId === 'string' && threadId.includes(':telegram:'));
         const isWhatsapp =
-          channel === 'whatsapp' ||
-          (typeof threadId === 'string' &&
-            (threadId.startsWith('booking:+') ||
-              (threadId.includes(':+') && !threadId.includes('widget-web'))));
-        const source = isWhatsapp ? 'whatsapp' : 'landing';
-        const tags = isWhatsapp
+          !isTelegram &&
+          (channel === 'whatsapp' ||
+            (typeof threadId === 'string' &&
+              (threadId.startsWith('booking:+') ||
+                (threadId.includes(':+') && !threadId.includes('widget-web')))));
+        const source = isTelegram ? 'telegram' : isWhatsapp ? 'whatsapp' : 'landing';
+        const tags = isTelegram
+          ? ['lead_telegram', 'telegram']
+          : isWhatsapp
           ? ['lead_whatsapp', 'whatsapp']
           : ['lead_landing_web'];
         const contact = await deps.createContact(
@@ -775,13 +787,19 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       if (!contactId && phoneToUse) {
         try {
           const channel = (context as any)?.requestContext?.get?.('channel');
+          const isTelegram =
+            channel === 'telegram' ||
+            (typeof threadId === 'string' && threadId.includes(':telegram:'));
           const isWhatsapp =
-            channel === 'whatsapp' ||
-            (typeof threadId === 'string' &&
-              (threadId.startsWith('booking:+') ||
-                (threadId.includes(':+') && !threadId.includes('widget-web'))));
-          const source = isWhatsapp ? 'whatsapp' : 'landing';
-          const tags = isWhatsapp
+            !isTelegram &&
+            (channel === 'whatsapp' ||
+              (typeof threadId === 'string' &&
+                (threadId.startsWith('booking:+') ||
+                  (threadId.includes(':+') && !threadId.includes('widget-web')))));
+          const source = isTelegram ? 'telegram' : isWhatsapp ? 'whatsapp' : 'landing';
+          const tags = isTelegram
+            ? ['lead_telegram', 'telegram']
+            : isWhatsapp
             ? ['lead_whatsapp', 'whatsapp']
             : ['lead_landing_web'];
           const fallback = await deps.createContact(

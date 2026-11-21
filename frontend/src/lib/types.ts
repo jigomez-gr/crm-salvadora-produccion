@@ -96,6 +96,8 @@ export interface Service {
   reminderEmail?: boolean;
   reminderVoice?: boolean;
   reminderSms?: boolean;
+  reminderTelegram?: boolean;
+  notifyByTelegram?: boolean;
   reminderHoursEnabled?: boolean;
   reminderHours?: number;
   reminderMinutesEnabled?: boolean;
@@ -160,6 +162,13 @@ export interface Contact {
   emailerroneo?: string;
   contactadowassap?: string;
   inhibiryoga?: string;
+  conectadotelegram?: string;
+  telegramUserId?: string | null;
+  telegramChatId?: string | null;
+  telegramUsername?: string | null;
+  telegramConnectedAt?: string | null;
+  telegramLinkStatus?: string | null;
+  telegramBlocked?: boolean;
   optedOut: boolean;
   optedOutAt?: string | null;
   anonymizedAt?: string | null;
@@ -400,6 +409,33 @@ export interface Agent {
   hasMetaAccessToken?: boolean;
   hasMetaAppSecret?: boolean;
   hasMetaVerifyToken?: boolean;
+  telegramEnabled?: boolean;
+  telegramBotToken?: string | null;
+  telegramWebhookSecret?: string | null;
+  telegramBotUsername?: string | null;
+  telegramBotName?: string | null;
+  telegramBotId?: string | null;
+  telegramLastError?: string | null;
+  telegramConnectedAt?: string | null;
+  hasTelegramBotToken?: boolean;
+  hasTelegramWebhookSecret?: boolean;
+}
+export interface TelegramConnectionStatus {
+  agentKey: string;
+  enabled: boolean;
+  hasBotToken: boolean;
+  hasWebhookSecret: boolean;
+  connected: boolean;
+  state: "connected" | "disconnected" | "unconfigured" | "error";
+  botId: string | null;
+  botUsername: string | null;
+  botName: string | null;
+  webhookUrl: string | null;
+  expectedWebhookUrl: string;
+  webhookConfigured: boolean;
+  pendingUpdateCount?: number;
+  lastError: string | null;
+  connectedAt: string | null;
 }
 
 export interface EvolutionConnectionStatus {
@@ -456,7 +492,7 @@ export type MessageStatus =
 
 export interface Conversation {
   threadId: string;
-  channel: "whatsapp" | "playground" | "widget" | "email" | "call" | "sms" | string;
+  channel: "whatsapp" | "telegram" | "playground" | "widget" | "email" | "call" | "sms" | string;
   // Human handoff: the agent stops auto-replying on this thread.
   handoff: boolean;
   // Inbound messages the operator hasn't opened yet (inbox badge).
