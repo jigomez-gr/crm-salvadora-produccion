@@ -19,13 +19,14 @@ import { UsersModule } from '../users/users.module';
 import { VapiModule } from '../vapi/vapi.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { TelegramCoreModule } from '../telegram/telegram-core.module';
+import { TelegramModule } from '../telegram/telegram.module';
+import { WhatsappModule } from '../whatsapp/whatsapp.module';
 
 @Module({
   imports: [
     AgentsConfigModule,
     ConversationsModule,
     ContactsModule,
-    AppMastraModule,
     AuthModule,
     // The agent runner injects KnowledgeService to resolve each agent's knowledge
     // base into the prompt (both WhatsApp and playground go through the runner).
@@ -39,6 +40,11 @@ import { TelegramCoreModule } from '../telegram/telegram-core.module';
     VapiModule,
     NotificationsModule,
     forwardRef(() => TelegramCoreModule),
+    forwardRef(() => TelegramModule),
+    forwardRef(() => WhatsappModule),
+    // IMPORTANT: AppMastraModule registers MastraController with a catch-all
+    // `/api/*` route, so it MUST be imported last after all other controllers.
+    AppMastraModule,
   ],
   providers: [AgentRunnerService, OpenRouterService, ContactQueryEvaluatorService],
   controllers: [AgentsController, WidgetController],

@@ -133,8 +133,8 @@ import { AgentsModule } from './agents/agents.module';
     HealthModule,
     AuthModule,
     UsersModule,
-    WhatsappModule,
     TelegramModule,
+    WhatsappModule,
     AgentsModule,
   ],
   providers: [

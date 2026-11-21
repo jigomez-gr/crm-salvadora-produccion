@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { YCloudModule } from './ycloud.module';
 import { YCloudWebhookController } from './ycloud-webhook.controller';
 import { EvolutionWebhookController } from './evolution-webhook.controller';
@@ -15,7 +15,7 @@ import { AuthModule } from '../auth/auth.module';
     YCloudModule,
     ConversationsModule,
     ContactsModule,
-    AgentsModule,
+    forwardRef(() => AgentsModule),
     AuthModule,
   ],
   controllers: [
