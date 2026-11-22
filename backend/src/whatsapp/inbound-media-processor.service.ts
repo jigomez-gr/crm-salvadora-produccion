@@ -54,6 +54,21 @@ function isOpenAiKey(key?: string | null): boolean {
   return typeof key === 'string' && key.startsWith('sk-') && !key.startsWith('sk-or-');
 }
 
+const WHISPER_HALLUCINATION_PATTERNS = [
+  /subt[ií]tulos\s+realizados\s+por\s+(la\s+comunidad\s+de\s+)?amara\.org/i,
+  /subt[ií]tulos\s+por\s+(la\s+comunidad\s+de\s+)?amara\.org/i,
+  /amara\.org/i,
+  /gracias\s+por\s+ver\s+(este\s+)?v[ií]deo/i,
+  /suscr[ií]bete\s+al\s+canal/i,
+  /transcripci[oó]n\s+por\s+amara/i,
+];
+
+export function isWhisperHallucination(text?: string | null): boolean {
+  if (!text || !text.trim()) return true;
+  const clean = text.trim();
+  return WHISPER_HALLUCINATION_PATTERNS.some((pat) => pat.test(clean));
+}
+
 export function sanitizeAudioFilenameForWhisper(filename?: string | null, mimeType?: string | null): string {
   const cleanMime = (mimeType || '').split(';')[0].trim().toLowerCase();
   const lowerName = (filename || '').toLowerCase().trim();
@@ -143,7 +158,7 @@ export class InboundMediaProcessorService {
       }
 
       if (effectiveType === MediaType.VIDEO) {
-        return this.processVideo(media, caption, sizeMb);
+        return await this.processVideo(mediaBuffer, media, config, caption, sizeMb);
       }
 
       if (effectiveType === MediaType.IMAGE) {
@@ -291,7 +306,7 @@ export class InboundMediaProcessorService {
 
     const transcription = await this.transcribeAudio(buffer, filename, mimeType, config);
 
-    if (transcription && transcription.trim()) {
+    if (transcription && transcription.trim() && !isWhisperHallucination(transcription)) {
       const cleanTranscription = transcription.trim();
       const preview =
         cleanTranscription.length > 80
@@ -311,17 +326,41 @@ export class InboundMediaProcessorService {
     };
   }
 
-  private processVideo(
+  private async processVideo(
+    buffer: Buffer | null,
     media: InboundMedia,
+    config?: AgentConfig | null,
     caption?: string | null,
     sizeMb?: number,
-  ): ProcessedMediaResult {
+  ): Promise<ProcessedMediaResult> {
     const filename = media.filename || 'video.mp4';
     const roundedSize = sizeMb ? ` (${Math.round(sizeMb * 10) / 10} MB)` : '';
-    const body = caption ? `${caption} (🎬 Vídeo${roundedSize})` : `🎬 Vídeo: ${filename}${roundedSize}`;
+
+    // If video has a buffer and is within limits (<= 25 MB), transcribe its speech track
+    if (buffer && buffer.length > 0 && buffer.length <= 25 * 1024 * 1024) {
+      try {
+        const transcription = await this.transcribeAudio(buffer, filename, 'video/mp4', config);
+        if (transcription && transcription.trim() && !isWhisperHallucination(transcription)) {
+          const cleanTranscription = transcription.trim();
+          const preview =
+            cleanTranscription.length > 80
+              ? `${cleanTranscription.slice(0, 77)}...`
+              : cleanTranscription;
+          return {
+            enrichedBody: `📹 Vídeo: "${preview}"`,
+            enrichedAgentPrompt: `[Videomensaje enviado por el cliente ("${filename}"${roundedSize})${caption ? ` con comentario: "${caption}"` : ''}. Transcripción del audio del vídeo:\n"${cleanTranscription}"\nResponde directamente y con naturalidad atendiendo a lo que dice o pregunta el cliente en su vídeo.]`,
+            transcription: cleanTranscription,
+          };
+        }
+      } catch (err: any) {
+        this.logger.warn(`Could not transcribe video audio: ${err?.message || err}`);
+      }
+    }
+
+    const body = caption ? `${caption} (📹 Vídeo${roundedSize})` : `📹 Vídeo: ${filename}${roundedSize}`;
     const prompt = caption
-      ? `[El cliente ha enviado un vídeo ("${filename}"${roundedSize}) con el comentario: "${caption}". Acoge su consulta y responde a lo que indica.]`
-      : `[El cliente ha enviado un archivo de vídeo ("${filename}"${roundedSize}). Explícale que has recibido su vídeo y pregúntale con amabilidad en qué puedes ayudarle o si desea información de alguna actividad o consulta.]`;
+      ? `[El cliente ha enviado un videomensaje ("${filename}"${roundedSize}) con el comentario: "${caption}". Acoge su consulta y responde a lo que indica.]`
+      : `[El cliente ha enviado un videomensaje ("${filename}"${roundedSize}). Explícale que has recibido su vídeo y pregúntale con amabilidad en qué puedes ayudarle o si desea información de alguna actividad o consulta.]`;
 
     return { enrichedBody: body, enrichedAgentPrompt: prompt };
   }

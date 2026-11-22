@@ -651,6 +651,41 @@ describe('Telegram Complete Integration Suite (29 Mandatory Scenarios)', () => {
           channel: MessageChannel.TELEGRAM,
         }),
       );
+
+      // Scenario 13c: Video note (circular instant video) transcription & AI response
+      await webhookControllerWithVoice.handleAgentWebhook(
+        'booking',
+        {
+          update_id: 2003,
+          message: {
+            message_id: 79,
+            chat: { id: 888111222, type: 'private' },
+            from: { id: 888111222, is_bot: false, first_name: 'Sofía' },
+            video_note: {
+              file_id: 'video_note_123',
+              length: 360,
+              duration: 9,
+              file_size: 45000,
+            },
+          },
+        },
+        'secret_salvadora_123',
+      );
+
+      expect((mockTelegramClient as any).downloadFileById).toHaveBeenCalledWith(
+        mockAgentConfig.telegramBotToken,
+        'video_note_123',
+      );
+      expect(mockMediaProcessor.processMedia).toHaveBeenCalledWith(
+        'telegram',
+        expect.objectContaining({
+          type: MediaType.VIDEO,
+          mediaId: 'video_note_123',
+          filename: 'video_nota.mp4',
+        }),
+        expect.anything(),
+        expect.anything(),
+      );
     });
   });
 

@@ -290,6 +290,27 @@ export function parseTelegramUpdate(raw: unknown): ParsedTelegramUpdate | null {
     };
   }
 
+  // Video note (circular instant video message / videomensaje redondo)
+  if (msg.video_note && typeof msg.video_note === 'object' && msg.video_note.file_id) {
+    return {
+      updateId,
+      kind: 'message',
+      externalId,
+      sender,
+      body: caption || '📹 Mensaje de vídeo',
+      agentPrompt: caption
+        ? `[El cliente ha enviado un videomensaje con comentario: "${caption}"]`
+        : '[El cliente ha enviado un videomensaje por Telegram]',
+      media: {
+        mediaType: MediaType.VIDEO,
+        fileId: String(msg.video_note.file_id),
+        mimeType: 'video/mp4',
+        filename: 'video_nota.mp4',
+        fileSize: msg.video_note.file_size,
+      },
+    };
+  }
+
   // Document
   if (msg.document && typeof msg.document === 'object' && msg.document.file_id) {
     const filename = msg.document.file_name || 'documento';
