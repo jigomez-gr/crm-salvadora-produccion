@@ -22,6 +22,7 @@ import {
   MessageChannel,
   MessageDirection,
   MessageStatus,
+  MediaType,
 } from '../common/entities/message.entity';
 import {
   ReminderChannel,
@@ -577,6 +578,78 @@ describe('Telegram Complete Integration Suite (29 Mandatory Scenarios)', () => {
       // Scenario 13: Export channel name formatting
       expect(formatChannelName('telegram', 'booking:telegram:888111222')).toBe(
         'Telegram',
+      );
+
+      // Scenario 13b: Voice note transcription & AI audio response (Paridad con WhatsApp)
+      const mockMediaProcessor = {
+        processMedia: jest.fn(async (_provider: string, media: any, _config: any) => ({
+          enrichedBody: '🎤 Audio: "Hola, ¿hay clase de yoga mañana a las 18:30?"',
+          enrichedAgentPrompt:
+            '[Mensaje de voz / audio enviado por el cliente ("nota_voz.ogg"). Transcripción exacta del audio:\n"Hola, ¿hay clase de yoga mañana a las 18:30?"\nResponde directamente y con naturalidad atendiendo a lo que dice o pregunta el cliente en su audio.]',
+          transcription: 'Hola, ¿hay clase de yoga mañana a las 18:30?',
+        })),
+      };
+
+      (mockTelegramClient as any).downloadFileById = jest.fn(async () => ({
+        ok: true,
+        buffer: Buffer.from('fake_ogg_audio_bytes'),
+        contentType: 'audio/ogg',
+      }));
+
+      const webhookControllerWithVoice = new TelegramWebhookController(
+        mockAgentsConfigService as any,
+        mockContactsService as any,
+        mockMessagesService as any,
+        mockTelegramClient as any,
+        {} as any,
+        telegramService,
+        { emit: jest.fn() } as any,
+        mockAgentRunner as any,
+        mockMediaProcessor as any,
+      );
+
+      await webhookControllerWithVoice.handleAgentWebhook(
+        'booking',
+        {
+          update_id: 2002,
+          message: {
+            message_id: 78,
+            chat: { id: 888111222, type: 'private' },
+            from: { id: 888111222, is_bot: false, first_name: 'Sofía' },
+            voice: {
+              file_id: 'voice_file_999',
+              mime_type: 'audio/ogg',
+              file_size: 15420,
+            },
+          },
+        },
+        'secret_salvadora_123',
+      );
+
+      expect((mockTelegramClient as any).downloadFileById).toHaveBeenCalledWith(
+        mockAgentConfig.telegramBotToken,
+        'voice_file_999',
+      );
+      expect(mockMediaProcessor.processMedia).toHaveBeenCalledWith(
+        'telegram',
+        expect.objectContaining({
+          type: MediaType.AUDIO,
+          mediaId: 'voice_file_999',
+          buffer: expect.any(Buffer),
+        }),
+        expect.anything(),
+        expect.anything(),
+      );
+      expect(mockAgentRunner.run).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentKey: 'booking',
+          threadId: 'booking:telegram:888111222',
+          message: '🎤 Audio: "Hola, ¿hay clase de yoga mañana a las 18:30?"',
+          agentPrompt: expect.stringContaining(
+            'Hola, ¿hay clase de yoga mañana a las 18:30?',
+          ),
+          channel: MessageChannel.TELEGRAM,
+        }),
       );
     });
   });

@@ -32,6 +32,8 @@ export interface InboundMedia {
   filename: string | null;
   /** Base64 buffer when provided directly by webhook provider. */
   base64?: string | null;
+  /** Binary buffer when pre-downloaded by webhook provider (e.g. Telegram). */
+  buffer?: Buffer | null;
   /** Raw webhook object/payload for providers that require it. */
   rawPayload?: Record<string, any>;
 }

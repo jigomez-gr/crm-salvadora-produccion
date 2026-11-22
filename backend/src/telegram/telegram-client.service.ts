@@ -302,8 +302,13 @@ export class TelegramClientService {
       method = 'sendPhoto';
       field = 'photo';
     } else if (mime.startsWith('audio/')) {
-      method = 'sendAudio';
-      field = 'audio';
+      if (mime.includes('ogg') || mime.includes('opus')) {
+        method = 'sendVoice';
+        field = 'voice';
+      } else {
+        method = 'sendAudio';
+        field = 'audio';
+      }
     } else if (mime.startsWith('video/')) {
       method = 'sendVideo';
       field = 'video';

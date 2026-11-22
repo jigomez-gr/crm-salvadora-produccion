@@ -6,6 +6,7 @@ import { ContactsModule } from '../contacts/contacts.module';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { AgentsModule } from '../agents/agents.module';
 import { AuthModule } from '../auth/auth.module';
+import { YCloudModule } from '../whatsapp/ycloud.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { AuthModule } from '../auth/auth.module';
     forwardRef(() => ConversationsModule),
     forwardRef(() => AgentsModule),
     forwardRef(() => AuthModule),
+    forwardRef(() => YCloudModule),
   ],
   controllers: [TelegramWebhookController],
   exports: [TelegramCoreModule],

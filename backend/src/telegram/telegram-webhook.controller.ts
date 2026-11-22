@@ -27,6 +27,8 @@ import { Contact } from '../common/entities/contact.entity';
 import { TelegramClientService } from './telegram-client.service';
 import { TelegramLinkService } from './telegram-link.service';
 import { TelegramService } from './telegram.service';
+import { InboundMediaProcessorService } from '../whatsapp/inbound-media-processor.service';
+import { InboundMedia } from '../whatsapp/inbound-parser';
 import {
   parseTelegramUpdate,
   TELEGRAM_SECRET_HEADER,
@@ -52,6 +54,9 @@ export class TelegramWebhookController {
     @Optional()
     @Inject(forwardRef(() => AgentRunnerService))
     private readonly agentRunnerService?: AgentRunnerService,
+    @Optional()
+    @Inject(forwardRef(() => InboundMediaProcessorService))
+    private readonly mediaProcessor?: InboundMediaProcessorService,
   ) {}
 
   @Post()
@@ -353,6 +358,9 @@ export class TelegramWebhookController {
         .catch(() => null);
     }
 
+    let finalBody = parsed.body || '';
+    let finalPrompt = parsed.agentPrompt || parsed.body || '';
+
     // Build media reference if the message carries a file
     let mediaInput: InboundMediaInput | undefined;
     if (parsed.media) {
@@ -365,6 +373,32 @@ export class TelegramWebhookController {
         mediaMimeType: parsed.media.mimeType,
         mediaFilename: parsed.media.filename,
       };
+
+      if (token) {
+        try {
+          const dl = await this.telegramClient.downloadFileById(token, parsed.media.fileId);
+          if (dl.ok && dl.buffer && this.mediaProcessor) {
+            const inboundMedia: InboundMedia = {
+              type: parsed.media.mediaType,
+              url: mediaInput.mediaUrl,
+              mediaId: parsed.media.fileId,
+              mimeType: parsed.media.mimeType,
+              filename: parsed.media.filename,
+              buffer: dl.buffer,
+            };
+            const processed = await this.mediaProcessor.processMedia(
+              'telegram',
+              inboundMedia,
+              config,
+              parsed.body || null,
+            );
+            finalBody = processed.enrichedBody;
+            finalPrompt = processed.enrichedAgentPrompt;
+          }
+        } catch (err: any) {
+          this.logger.warn(`Could not process Telegram inbound media: ${err?.message || err}`);
+        }
+      }
     }
 
     // Respect telegramEnabled switch on AgentConfig: if disabled, record inbound but skip AI reply
@@ -375,7 +409,7 @@ export class TelegramWebhookController {
             threadId,
             direction: MessageDirection.INBOUND,
             channel: MessageChannel.TELEGRAM,
-            body: parsed.body || '',
+            body: finalBody,
             externalId: parsed.externalId,
             ...(mediaInput || {}),
           })
@@ -384,7 +418,7 @@ export class TelegramWebhookController {
             threadId,
             direction: MessageDirection.INBOUND,
             channel: MessageChannel.TELEGRAM,
-            body: parsed.body || '',
+            body: finalBody,
             ...(mediaInput || {}),
           });
       if (saved) {
@@ -408,7 +442,7 @@ export class TelegramWebhookController {
             threadId,
             direction: MessageDirection.INBOUND,
             channel: MessageChannel.TELEGRAM,
-            body: parsed.body || '',
+            body: finalBody,
             externalId: parsed.externalId,
             ...(mediaInput || {}),
           })
@@ -417,7 +451,7 @@ export class TelegramWebhookController {
             threadId,
             direction: MessageDirection.INBOUND,
             channel: MessageChannel.TELEGRAM,
-            body: parsed.body || '',
+            body: finalBody,
             ...(mediaInput || {}),
           });
       return { ok: true, inboundId: saved?.id ?? null };
@@ -425,8 +459,8 @@ export class TelegramWebhookController {
 
     const { reply, outbound } = await this.agentRunnerService.run({
       agentKey,
-      message: parsed.body || '',
-      agentPrompt: parsed.agentPrompt || parsed.body || '',
+      message: finalBody,
+      agentPrompt: finalPrompt,
       threadId,
       contactId: linkedContact?.id,
       phone: linkedContact?.phone,

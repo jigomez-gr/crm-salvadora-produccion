@@ -100,7 +100,7 @@ export class InboundMediaProcessorService {
    * and builds conversational prompts for the agent.
    */
   async processMedia(
-    provider: 'ycloud' | 'evolution' | 'meta',
+    provider: 'ycloud' | 'evolution' | 'meta' | 'telegram',
     media: InboundMedia,
     config?: AgentConfig | null,
     caption?: string | null,
@@ -191,10 +191,15 @@ export class InboundMediaProcessorService {
   }
 
   private async downloadMediaBuffer(
-    provider: 'ycloud' | 'evolution' | 'meta',
+    provider: 'ycloud' | 'evolution' | 'meta' | 'telegram',
     media: InboundMedia,
     config?: AgentConfig | null,
   ): Promise<Buffer | null> {
+    // 0. Binary buffer directly provided (e.g. pre-fetched by Telegram provider)
+    if (media.buffer && media.buffer.length > 0) {
+      return media.buffer;
+    }
+
     // A. Base64 directly provided in webhook (common in Evolution or attachments)
     if (media.base64) {
       const clean = media.base64.replace(/^data:.*?;base64,/, '');
