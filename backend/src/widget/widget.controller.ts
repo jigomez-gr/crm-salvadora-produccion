@@ -310,7 +310,9 @@ export class WidgetController {
             `Hola, me gustaría información y disponibilidad para ${s.name}.`,
           )}`,
           telegramBookingUrl: agentConfig?.telegramBotUsername
-            ? `https://t.me/${agentConfig.telegramBotUsername.replace(/^@/, '')}`
+            ? `https://t.me/${agentConfig.telegramBotUsername.replace(/^@/, '')}?text=${encodeURIComponent(
+                `Hola, me gustaría información y disponibilidad para ${s.name}.`,
+              )}`
             : null,
           editions: editionsMap[s.id] || [],
         };
