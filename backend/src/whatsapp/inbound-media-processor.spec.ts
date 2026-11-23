@@ -229,7 +229,7 @@ describe('InboundMediaProcessorService — Multi-format & Limit Testing', () => 
       const result = await service.processMedia('evolution', media, mockAgentConfig, 'Mira la postura de asana');
 
       expect(result.enrichedBody).toContain('Mira la postura de asana');
-      expect(result.enrichedBody).toContain('🎬 Vídeo');
+      expect(result.enrichedBody).toContain('📹 Vídeo');
       expect(result.enrichedAgentPrompt).toContain('Mira la postura de asana');
       expect(result.enrichedAgentPrompt).toContain('consulta_postura.mp4');
     });
