@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Headers,
+  Ip,
   Post,
   Put,
   Req,
@@ -17,6 +18,7 @@ import { CreatePaymentLinkDto } from './dto/create-payment-link.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { CurrentUser, AuthUser } from '../auth/current-user.decorator';
 import { UserRole } from '../common/entities/user.entity';
 
 @Controller('payments')
@@ -44,8 +46,14 @@ export class PaymentsController {
   @Roles(UserRole.ADMIN)
   async updateConfig(
     @Body() dto: UpdatePaymentConfigDto,
+    @CurrentUser() actor: AuthUser,
+    @Ip() ip: string,
   ): Promise<SanitizedPaymentConfig> {
-    return this.paymentsService.updateConfig(dto);
+    return this.paymentsService.updateConfig(
+      dto,
+      { id: actor?.id ?? null, email: actor?.email ?? null },
+      ip,
+    );
   }
 
   /**

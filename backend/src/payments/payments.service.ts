@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -16,6 +17,7 @@ import {
 } from '../common/entities/appointment.entity';
 import { Contact } from '../common/entities/contact.entity';
 import { PipelineStage } from '../contacts/pipeline';
+import { AUDIT_EVENT, AuditAction } from '../audit/audit.types';
 import {
   SanitizedPaymentConfig,
   UpdatePaymentConfigDto,
@@ -23,7 +25,7 @@ import {
 import { CreatePaymentLinkDto } from './dto/create-payment-link.dto';
 
 @Injectable()
-export class PaymentsService {
+export class PaymentsService implements OnModuleInit {
   private readonly logger = new Logger(PaymentsService.name);
 
   constructor(
@@ -35,6 +37,18 @@ export class PaymentsService {
     private readonly contactsRepo: Repository<Contact>,
     private readonly eventEmitter: EventEmitter2,
   ) {}
+
+  async onModuleInit() {
+    try {
+      await this.paymentAccountRepo.query(`
+        ALTER TABLE "payment_account" ADD COLUMN IF NOT EXISTS "enabled" boolean NOT NULL DEFAULT true;
+        ALTER TABLE "payment_account" ADD COLUMN IF NOT EXISTS "enableBizum" boolean NOT NULL DEFAULT true;
+        ALTER TABLE "payment_account" ADD COLUMN IF NOT EXISTS "enableCard" boolean NOT NULL DEFAULT true;
+      `);
+    } catch (err: any) {
+      this.logger.warn(`Could not ensure payment_account columns: ${err?.message}`);
+    }
+  }
 
   /**
    * Return the single PaymentAccount row, creating it with fallback values from
@@ -48,6 +62,7 @@ export class PaymentsService {
         secretKey: process.env.STRIPE_SECRET_KEY || null,
         webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || null,
         currency: 'eur',
+        enabled: true,
         enableBizum: true,
         enableCard: true,
       });
@@ -77,6 +92,7 @@ export class PaymentsService {
       hasSecretKey: !!effectiveSecret,
       hasWebhookSecret: !!effectiveWebhook,
       currency: account.currency || 'eur',
+      enabled: account.enabled ?? true,
       enableBizum: account.enableBizum ?? true,
       enableCard: account.enableCard ?? true,
       webhookUrl,
@@ -85,9 +101,18 @@ export class PaymentsService {
 
   /**
    * Update payment config settings. Secret keys are only updated if non-empty strings are passed.
+   * Records audit trail entries with user, date/timestamp and specific actions.
    */
-  async updateConfig(dto: UpdatePaymentConfigDto): Promise<SanitizedPaymentConfig> {
+  async updateConfig(
+    dto: UpdatePaymentConfigDto,
+    actor?: { id: string | null; email: string | null },
+    ip?: string,
+  ): Promise<SanitizedPaymentConfig> {
     const account = await this.getOrCreateAccount();
+
+    const prevEnabled = account.enabled ?? true;
+    const prevBizum = account.enableBizum ?? true;
+    const prevCard = account.enableCard ?? true;
 
     if (dto.publishableKey !== undefined) {
       account.publishableKey = dto.publishableKey.trim() || null;
@@ -101,6 +126,9 @@ export class PaymentsService {
     if (dto.currency !== undefined) {
       account.currency = dto.currency.toLowerCase().trim() || 'eur';
     }
+    if (dto.enabled !== undefined) {
+      account.enabled = dto.enabled;
+    }
     if (dto.enableBizum !== undefined) {
       account.enableBizum = dto.enableBizum;
     }
@@ -109,6 +137,79 @@ export class PaymentsService {
     }
 
     await this.paymentAccountRepo.save(account);
+
+    const actorPayload = {
+      id: actor?.id ?? null,
+      email: actor?.email ?? null,
+    };
+
+    // 1. Audit gateway enabled/disabled
+    if (dto.enabled !== undefined && prevEnabled !== account.enabled) {
+      this.eventEmitter.emit(AUDIT_EVENT, {
+        actor: actorPayload,
+        action: account.enabled
+          ? AuditAction.PAYMENT_GATEWAY_ENABLED
+          : AuditAction.PAYMENT_GATEWAY_DISABLED,
+        summary: account.enabled
+          ? 'Habilitó la pasarela de pago (Stripe / Bizum)'
+          : 'Deshabilitó la pasarela de pago (Stripe / Bizum)',
+        targetType: 'payment_account',
+        targetId: account.id,
+        ip: ip ?? null,
+        metadata: {
+          previousEnabled: prevEnabled,
+          enabled: account.enabled,
+          enableBizum: account.enableBizum,
+          enableCard: account.enableCard,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+
+    // 2. Audit Bizum enabled/disabled (when gateway itself didn't just toggle)
+    if (dto.enableBizum !== undefined && prevBizum !== account.enableBizum) {
+      this.eventEmitter.emit(AUDIT_EVENT, {
+        actor: actorPayload,
+        action: account.enableBizum
+          ? AuditAction.PAYMENT_BIZUM_ENABLED
+          : AuditAction.PAYMENT_BIZUM_DISABLED,
+        summary: account.enableBizum
+          ? 'Habilitó Bizum en la pasarela de pago'
+          : 'Deshabilitó Bizum en la pasarela de pago',
+        targetType: 'payment_account',
+        targetId: account.id,
+        ip: ip ?? null,
+        metadata: {
+          previousEnableBizum: prevBizum,
+          enableBizum: account.enableBizum,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+
+    // 3. Audit technical/credential updates
+    const technicalChanges: string[] = [];
+    if (dto.publishableKey !== undefined) technicalChanges.push('publishableKey');
+    if (dto.secretKey !== undefined && dto.secretKey.trim() !== '') technicalChanges.push('secretKey');
+    if (dto.webhookSecret !== undefined && dto.webhookSecret.trim() !== '') technicalChanges.push('webhookSecret');
+    if (dto.currency !== undefined) technicalChanges.push('currency');
+    if (dto.enableCard !== undefined && prevCard !== account.enableCard) technicalChanges.push('enableCard');
+
+    if (technicalChanges.length > 0) {
+      this.eventEmitter.emit(AUDIT_EVENT, {
+        actor: actorPayload,
+        action: AuditAction.PAYMENT_CONFIG_UPDATE,
+        summary: 'Actualizó claves y configuración técnica de la pasarela de pago',
+        targetType: 'payment_account',
+        targetId: account.id,
+        ip: ip ?? null,
+        metadata: {
+          changed: technicalChanges,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+
     return this.getSanitizedConfig();
   }
 
@@ -140,6 +241,12 @@ export class PaymentsService {
     originUrl?: string,
   ): Promise<{ url: string; sessionId: string }> {
     const { stripe, account } = await this.getStripeClient();
+
+    if (account.enabled === false) {
+      throw new BadRequestException(
+        'La pasarela de pago online (Stripe / Bizum) está deshabilitada actualmente.',
+      );
+    }
 
     let contact: Contact | null = null;
     let appointment: Appointment | null = null;

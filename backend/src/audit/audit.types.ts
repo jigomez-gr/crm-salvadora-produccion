@@ -29,6 +29,11 @@ export const AuditAction = {
   ONBOARDING_COMPLETE: 'onboarding.complete',
   EMAIL_CONFIG_UPDATE: 'email.config_update',
   EMAIL_SENT: 'email.sent',
+  PAYMENT_GATEWAY_ENABLED: 'payment.gateway_enabled',
+  PAYMENT_GATEWAY_DISABLED: 'payment.gateway_disabled',
+  PAYMENT_BIZUM_ENABLED: 'payment.bizum_enabled',
+  PAYMENT_BIZUM_DISABLED: 'payment.bizum_disabled',
+  PAYMENT_CONFIG_UPDATE: 'payment.config_update',
 } as const;
 
 export interface AuditActor {

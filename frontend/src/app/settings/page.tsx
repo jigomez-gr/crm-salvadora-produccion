@@ -330,6 +330,7 @@ function PaymentCard() {
   const [secretKey, setSecretKey] = useState<string | null>(null);
   const [webhookSecret, setWebhookSecret] = useState<string | null>(null);
   const [currency, setCurrency] = useState("eur");
+  const [enabled, setEnabled] = useState(true);
   const [enableBizum, setEnableBizum] = useState(true);
   const [enableCard, setEnableCard] = useState(true);
 
@@ -346,6 +347,7 @@ function PaymentCard() {
         setHasSecretKey(data.hasSecretKey);
         setHasWebhookSecret(data.hasWebhookSecret);
         setCurrency(data.currency || "eur");
+        setEnabled(data.enabled ?? true);
         setEnableBizum(data.enableBizum ?? true);
         setEnableCard(data.enableCard ?? true);
         setWebhookUrl(data.webhookUrl || "");
@@ -367,11 +369,13 @@ function PaymentCard() {
         secretKey: string;
         webhookSecret: string;
         currency: string;
+        enabled: boolean;
         enableBizum: boolean;
         enableCard: boolean;
       }> = {
         publishableKey,
         currency,
+        enabled,
         enableBizum,
         enableCard,
       };
@@ -423,6 +427,45 @@ function PaymentCard() {
         Permite el cobro de citas y servicios con Tarjeta, Apple Pay, Google Pay y Bizum. El agente de IA puede enviar enlaces de pago automáticos por WhatsApp.
       </p>
 
+      {/* Estado y Toggle Principal de la Pasarela */}
+      <div className={`mt-3 rounded-xl border p-4 transition-colors ${
+        enabled
+          ? "border-emerald-200 bg-emerald-50/50"
+          : "border-rose-200 bg-rose-50/50"
+      }`}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+              enabled
+                ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                : "bg-rose-100 text-rose-800 border border-rose-300"
+            }`}>
+              {enabled ? "● Pasarela Habilitada" : "○ Pasarela Deshabilitada"}
+            </span>
+            <span className="text-xs text-neutral-600 font-medium">
+              {enabled
+                ? "Cobros online activos (Stripe & Bizum)"
+                : "Cobros online desactivados temporalmente"}
+            </span>
+          </div>
+
+          <label className="relative inline-flex items-center cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(e) => setEnabled(e.target.checked)}
+              className="sr-only peer"
+            />
+            <div className="w-11 h-6 bg-neutral-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+          </label>
+        </div>
+        <p className="mt-2 text-xs text-neutral-500">
+          {enabled
+            ? "Los clientes y el asistente de IA pueden generar enlaces seguros de pago online. Todo cambio de estado quedará registrado en Auditoría con tu usuario y fecha."
+            : "Al estar deshabilitada, ningún cliente ni asistente podrá procesar pagos online. El cambio quedará registrado en Auditoría con fecha y hora exacta."}
+        </p>
+      </div>
+
       <div className="mt-4 space-y-4">
         <div>
           <label className={labelCls}>Clave Pública (Publishable Key)</label>
@@ -472,23 +515,26 @@ function PaymentCard() {
         </div>
 
         <div className="pt-2 space-y-2 border-t border-neutral-100">
+          <p className="text-xs font-semibold text-neutral-700">Métodos de cobro admitidos:</p>
           <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
             <input
               type="checkbox"
               checked={enableCard}
               onChange={(e) => setEnableCard(e.target.checked)}
-              className="h-4 w-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+              disabled={!enabled}
+              className="h-4 w-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50"
             />
-            <span>Aceptar Tarjetas, Apple Pay y Google Pay</span>
+            <span className={!enabled ? "text-neutral-400" : ""}>Aceptar Tarjetas, Apple Pay y Google Pay</span>
           </label>
           <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
             <input
               type="checkbox"
               checked={enableBizum}
               onChange={(e) => setEnableBizum(e.target.checked)}
-              className="h-4 w-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+              disabled={!enabled}
+              className="h-4 w-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50"
             />
-            <span>Aceptar Bizum (requiere moneda EUR y activación en Stripe)</span>
+            <span className={!enabled ? "text-neutral-400" : ""}>Aceptar Bizum (requiere moneda EUR y activación en Stripe)</span>
           </label>
         </div>
 

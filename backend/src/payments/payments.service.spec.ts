@@ -23,6 +23,7 @@ describe('PaymentsService', () => {
     secretKey: 'sk_test_123',
     webhookSecret: 'whsec_123',
     currency: 'eur',
+    enabled: true,
     enableBizum: true,
     enableCard: true,
   };
@@ -79,25 +80,69 @@ describe('PaymentsService', () => {
     expect(config.publishableKey).toBe('pk_test_123');
     expect(config.hasSecretKey).toBe(true);
     expect(config.hasWebhookSecret).toBe(true);
+    expect(config.enabled).toBe(true);
+    expect(config.enableBizum).toBe(true);
     expect((config as any).secretKey).toBeUndefined();
     expect(config.webhookUrl).toBe('https://api.test.com/api/webhooks/stripe');
   });
 
-  it('should update config without overwriting secrets if empty', async () => {
-    await service.updateConfig({
-      publishableKey: 'pk_test_updated',
-      secretKey: '',
-      currency: 'EUR',
-      enableBizum: false,
-    });
+  it('should update config without overwriting secrets if empty and emit audit events', async () => {
+    await service.updateConfig(
+      {
+        publishableKey: 'pk_test_updated',
+        secretKey: '',
+        currency: 'EUR',
+        enabled: false,
+        enableBizum: false,
+      },
+      { id: 'admin-id', email: 'admin@salvadora.es' },
+      '127.0.0.1',
+    );
 
     expect(paymentAccountRepo.save).toHaveBeenCalledWith(
       expect.objectContaining({
         publishableKey: 'pk_test_updated',
         secretKey: 'sk_test_123',
         currency: 'eur',
+        enabled: false,
         enableBizum: false,
       }),
     );
+
+    // Verify gateway disabled audit event
+    expect(eventEmitter.emit).toHaveBeenCalledWith(
+      'audit.record',
+      expect.objectContaining({
+        action: 'payment.gateway_disabled',
+        summary: 'Deshabilitó la pasarela de pago (Stripe / Bizum)',
+        actor: { id: 'admin-id', email: 'admin@salvadora.es' },
+        ip: '127.0.0.1',
+      }),
+    );
+
+    // Verify bizum disabled audit event
+    expect(eventEmitter.emit).toHaveBeenCalledWith(
+      'audit.record',
+      expect.objectContaining({
+        action: 'payment.bizum_disabled',
+        summary: 'Deshabilitó Bizum en la pasarela de pago',
+        actor: { id: 'admin-id', email: 'admin@salvadora.es' },
+        ip: '127.0.0.1',
+      }),
+    );
+  });
+
+  it('should reject createCheckoutSession when payment gateway is disabled', async () => {
+    paymentAccountRepo.findOne.mockResolvedValueOnce({
+      ...mockAccount,
+      enabled: false,
+    });
+
+    await expect(
+      service.createCheckoutSession({
+        amount: 50,
+        title: 'Clase de Yoga',
+      }),
+    ).rejects.toThrow('deshabilitada');
   });
 });

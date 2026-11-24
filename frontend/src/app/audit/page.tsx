@@ -31,14 +31,20 @@ const ACTION_LABELS: Record<string, string> = {
   "settings.update": "Configuración actualizada",
   "data.clear_demo": "Datos de demo vaciados",
   "onboarding.complete": "Onboarding completado",
+  "payment.gateway_enabled": "Pasarela Stripe/Bizum habilitada",
+  "payment.gateway_disabled": "Pasarela Stripe/Bizum deshabilitada",
+  "payment.bizum_enabled": "Bizum habilitado",
+  "payment.bizum_disabled": "Bizum deshabilitado",
+  "payment.config_update": "Configuración de pagos actualizada",
 };
 
 const ACTION_FILTERS = Object.keys(ACTION_LABELS);
 
 function actionVariant(action: string): "info" | "success" | "danger" | "default" {
-  if (action.endsWith(".delete")) return "danger";
-  if (action.endsWith(".create")) return "success";
+  if (action.endsWith(".delete") || action.endsWith(".disabled") || action.endsWith("_paused")) return "danger";
+  if (action.endsWith(".create") || action.endsWith(".enabled") || action.endsWith("_resumed")) return "success";
   if (action.startsWith("auth.")) return "info";
+  if (action.startsWith("payment.")) return "info";
   return "default";
 }
 

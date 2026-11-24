@@ -328,6 +328,7 @@ export interface PaymentConfig {
   hasSecretKey: boolean;
   hasWebhookSecret: boolean;
   currency: string;
+  enabled: boolean;
   enableBizum: boolean;
   enableCard: boolean;
   webhookUrl: string;

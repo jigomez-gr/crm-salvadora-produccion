@@ -19,6 +19,10 @@ export class UpdatePaymentConfigDto {
 
   @IsOptional()
   @IsBoolean()
+  enabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   enableBizum?: boolean;
 
   @IsOptional()
@@ -32,6 +36,7 @@ export interface SanitizedPaymentConfig {
   hasSecretKey: boolean;
   hasWebhookSecret: boolean;
   currency: string;
+  enabled: boolean;
   enableBizum: boolean;
   enableCard: boolean;
   webhookUrl: string;

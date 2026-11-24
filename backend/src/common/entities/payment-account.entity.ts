@@ -35,6 +35,10 @@ export class PaymentAccount {
   @Column({ type: 'varchar', default: 'eur' })
   currency: string;
 
+  // Master toggle: enable/disable Stripe & Bizum payment gateway entirely
+  @Column({ default: true })
+  enabled: boolean;
+
   // Enable payment methods in Checkout
   @Column({ default: true })
   enableCard: boolean;
